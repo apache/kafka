@@ -188,9 +188,8 @@ public class UnionSet<T> implements Set<T> {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Set)) return false;
+        if (!(o instanceof Set<?> set)) return false;
 
-        Set<?> set = (Set<?>) o;
         if (set.size() != size()) return false;
         return containsAll(set);
     }

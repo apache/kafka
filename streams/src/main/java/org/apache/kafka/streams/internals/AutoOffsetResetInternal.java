@@ -31,8 +31,15 @@ public class AutoOffsetResetInternal extends AutoOffsetReset {
         return offsetResetStrategy;
     }
 
-    @SuppressWarnings("all")
     public Duration duration() {
+        if (duration.isEmpty()) {
+            throw new IllegalStateException(String.format(
+                "Duration is only available for reset strategy '%s', but reset strategy is '%s'. "
+                    + "Please check the reset strategy before calling duration() via offsetResetStrategy().",
+                StrategyType.BY_DURATION,
+                offsetResetStrategy
+            ));
+        }
         return duration.get();
     }
 }

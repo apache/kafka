@@ -27,7 +27,7 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
     private static final StrictBufferConfigImpl DEFAULT_BUFFER_CONFIG = (StrictBufferConfigImpl) BufferConfig.unbounded();
 
     private final String name;
-    private final BufferConfigInternal bufferConfig;
+    private final BufferConfigInternal<?> bufferConfig;
     private final Duration timeToWaitForMoreEvents;
     private final TimeDefinition<K> timeDefinition;
     private final boolean safeToDropTombstones;
@@ -39,7 +39,7 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
      *                             idempotent and correct). We decided that the unnecessary tombstones would not be
      *                             desirable in the output stream, though, hence the ability to drop them.
      *
-     *                             A alternative is to remember whether a result has previously been emitted
+     *                             <p>A alternative is to remember whether a result has previously been emitted
      *                             for a key and drop tombstones in that case, but it would be a little complicated to
      *                             figure out when to forget the fact that we have emitted some result (currently, the
      *                             buffer immediately forgets all about a key when we emit, which helps to keep it
@@ -47,13 +47,13 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
      */
     public SuppressedInternal(final String name,
                               final Duration suppressionTime,
-                              final BufferConfig bufferConfig,
+                              final BufferConfig<?> bufferConfig,
                               final TimeDefinition<K> timeDefinition,
                               final boolean safeToDropTombstones) {
         this.name = name;
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
         this.timeDefinition = timeDefinition == null ? TimeDefinitions.RecordTimeDefinition.instance() : timeDefinition;
-        this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : (BufferConfigInternal) bufferConfig;
+        this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : (BufferConfigInternal<?>) bufferConfig;
         this.safeToDropTombstones = safeToDropTombstones;
     }
 
@@ -69,7 +69,7 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
 
     @SuppressWarnings("unchecked")
     public <BC extends Suppressed.BufferConfig<BC>> BufferConfigInternal<BC> bufferConfig() {
-        return bufferConfig;
+        return (BufferConfigInternal<BC>) bufferConfig;
     }
 
     TimeDefinition<K> timeDefinition() {

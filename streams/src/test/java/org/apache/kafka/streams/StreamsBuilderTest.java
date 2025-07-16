@@ -22,9 +22,11 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Topology.AutoOffsetReset;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Branched;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Joined;
@@ -35,10 +37,14 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -52,6 +58,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionStore;
@@ -88,6 +95,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
@@ -101,6 +109,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -136,7 +145,7 @@ public class StreamsBuilderTest {
             ),
             "topic",
             Consumed.with(Serdes.String(), Serdes.String()),
-            () -> new Processor<String, String, Void, Void>() {
+            () -> new Processor<>() {
                 private KeyValueStore<String, String> store;
 
                 @Override
@@ -445,7 +454,7 @@ public class StreamsBuilderTest {
 
         builder.stream(topic)
                 .groupByKey()
-                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store"))
+                .count(Materialized.as("store"))
                 .toStream();
 
         builder.build();
@@ -465,7 +474,7 @@ public class StreamsBuilderTest {
 
         builder.stream(topic)
                 .groupByKey()
-                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store"))
+                .count(Materialized.as("store"))
                 .toStream();
 
         builder.build();
@@ -1517,6 +1526,30 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldWrapProcessorsForSuppress() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        builder.stream("input", Consumed.as("source"))
+                .groupByKey()
+                .count(Named.as("count"))// wrapped 1
+                .suppress(Suppressed.untilTimeLimit(Duration.ofSeconds(10), Suppressed.BufferConfig.unbounded()).withName("suppressed")) // wrapped 2
+                .toStream(Named.as("toStream"))// wrapped 3
+                .to("output", Produced.as("sink"));
+
+        builder.build();
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(3));
+        assertThat(counter.wrappedProcessorNames(), Matchers.containsInAnyOrder("count", "toStream", "suppressed"));
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
+    }
+
+    @Test
     public void shouldWrapProcessorsForTimeWindowStreamAggregate() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
         props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
@@ -1642,6 +1675,26 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldWrapProcessorAndStoreForFilterTable() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        builder.table("input", Consumed.as("source-table"))
+            .filter((k, v) -> true, Named.as("filter"), Materialized.as("filter"))
+            .toStream(Named.as("to-stream"))
+            .to("output-topic", Produced.as("sink"));
+        builder.build();
+
+        assertThat(counter.wrappedProcessorNames(),
+            Matchers.containsInAnyOrder("source-table", "filter", "to-stream"));
+        assertThat(counter.numUniqueStateStores(), is(1));
+        assertThat(counter.numConnectedStateStores(), is(1));
+    }
+
+    @Test
     public void shouldWrapProcessorsForTableAggregate() {
         final Map<Object, Object> props = dummyStreamsConfigMap();
         props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
@@ -1743,8 +1796,8 @@ public class StreamsBuilderTest {
             "to-table", "map-values", "map-values-stateful",
             "filter-table", "filter-table-stateful", "to-stream"
         ));
-        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(1));
-        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(1));
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(2));
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(2));
     }
 
     @Test
@@ -2154,6 +2207,84 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldWrapProcessorsForForeignKeyInnerJoin() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KTable<String, String> left = builder.table("input1", Consumed.as("input1"));
+        final KTable<String, String> right = builder.table("input2", Consumed.as("input2"));
+
+        left.join(right,
+                  value -> value,
+                  (v1, v2) -> v1 + v2,
+                  TableJoined.as("join"),
+                  Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("materialized-store").withValueSerde(Serdes.String()))
+            .toStream(Named.as("toStream"))
+            .to("output", Produced.as("sink"));
+
+        builder.build();
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(9));
+        assertThat(counter.wrappedProcessorNames().toString(), counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+            "input1",
+            "input2",
+            "join-foreign-join-subscription",
+            "join-subscription-join-foreign",
+            "join-subscription-registration-processor",
+            "join-subscription-receive",
+            "join-result",
+            "join-subscription-response-resolver",
+            "toStream"
+        ));
+
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(4)); // table1, table2, subscription store, and join materialized
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(5));
+    }
+
+    @Test
+    public void shouldWrapProcessorsForForeignKeyLeftJoin() {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(PROCESSOR_WRAPPER_CLASS_CONFIG, RecordingProcessorWrapper.class);
+
+        final WrapperRecorder counter = new WrapperRecorder();
+        props.put(PROCESSOR_WRAPPER_COUNTER_CONFIG, counter);
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KTable<String, String> left = builder.table("input1", Consumed.as("input1"));
+        final KTable<String, String> right = builder.table("input2", Consumed.as("input2"));
+
+        left.leftJoin(right,
+                  value -> value,
+                  (v1, v2) -> v1 + v2,
+                  TableJoined.as("l-join"),
+                  Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("materialized-store").withValueSerde(Serdes.String()))
+            .toStream(Named.as("toStream")) // 6
+            .to("output", Produced.as("sink"));
+
+        builder.build();
+        assertThat(counter.numWrappedProcessors(), CoreMatchers.is(9));
+        assertThat(counter.wrappedProcessorNames().toString(), counter.wrappedProcessorNames(), Matchers.containsInAnyOrder(
+            "input1",
+            "input2",
+            "l-join-foreign-join-subscription",
+            "l-join-subscription-join-foreign",
+            "l-join-subscription-registration-processor",
+            "l-join-subscription-receive",
+            "l-join-result",
+            "l-join-subscription-response-resolver",
+            "toStream"
+        ));
+
+        assertThat(counter.numUniqueStateStores(), CoreMatchers.is(4)); // table1, table2, subscription store, and join materialized
+        assertThat(counter.numConnectedStateStores(), CoreMatchers.is(5));
+    }
+
+    @Test
     public void shouldAllowStreamsFromSameTopic() {
         builder.stream("topic");
         builder.stream("topic");
@@ -2228,6 +2359,552 @@ public class StreamsBuilderTest {
         builder.stream("topic");
         builder.table("topic");
         assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    void shouldThrowWhenGroupByAggregationWithRepartitionNameAndLoggingEnabled() {
+        final StreamsBuilder builder = buildWithGroupByAggregationTopology(
+            Grouped.with("repartition-name", Serdes.String(), Serdes.String()),
+            Materialized.with(Serdes.String(), Serdes.Long())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldThrowWhenGroupByAggregationWithRepartitionNameAndLoggingDisabled() {
+        final StreamsBuilder builder = buildWithGroupByAggregationTopology(
+                Grouped.with("repartition-name", Serdes.String(), Serdes.String()),
+                Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>with(Serdes.String(), Serdes.Long())
+                    .withLoggingDisabled()
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldNotThrowWhenGroupByAggregationWithMaterializedName() {
+        final StreamsBuilder builder = buildWithGroupByAggregationTopology(
+            Grouped.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("materialized-name")
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.Long())
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldNotThrowWhenGroupByAggregationWithRepartitionNameAndMaterialized() {
+        final StreamsBuilder builder = buildWithGroupByAggregationTopology(
+            Grouped.with("repartition-name", Serdes.String(), Serdes.String()),
+            Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("materialized-name")
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.Long())
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldThrowWhenGroupByAggregationWithoutRepartitionNameAndMaterializedName() {
+        final StreamsBuilder builder = buildWithGroupByAggregationTopology(
+            Grouped.with(Serdes.String(), Serdes.String()),
+            Materialized.with(Serdes.String(), Serdes.Long())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003"));
+        assertTrue(e.getMessage().contains("Following repartition topic(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition"));
+    }
+
+    private StreamsBuilder buildWithGroupByAggregationTopology(final Grouped<String, String> grouped,
+                                                               final Materialized<String, Long, KeyValueStore<Bytes, byte[]>> materialized) {
+
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+        final KStream<String, String> stream = builder.stream("input1");
+        stream
+            .groupBy((k, v) -> v, grouped)
+            .count(materialized)
+            .toStream()
+            .to("output", Produced.as("sink"));
+        return builder;
+    }
+
+    @Test
+    void shouldThrowWhenGroupByKeyAggregationWithRepartitionNameAndLoggingEnabled() {
+        final StreamsBuilder builder = buildWithGroupByKeyAggregationTopology(
+            Grouped.with("repartition-name", Serdes.String(), Serdes.String()),
+            Materialized.with(Serdes.String(), Serdes.Long())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldThrowWhenGroupByKeyAggregationWithRepartitionNameAndLoggingDisabled() {
+        final StreamsBuilder builder = buildWithGroupByKeyAggregationTopology(
+                Grouped.with("repartition-name", Serdes.String(), Serdes.String()),
+                Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>with(Serdes.String(), Serdes.Long())
+                    .withLoggingDisabled()
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldNotThrowWhenGroupByKeyAggregationWithMaterializedName() {
+        final StreamsBuilder builder = buildWithGroupByKeyAggregationTopology(
+             Grouped.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("materialized-name")
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.Long())
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldNotThrowWhenGroupByKeyAggregationWithRepartitionNameAndMaterializedName() {
+        final StreamsBuilder builder = buildWithGroupByKeyAggregationTopology(
+            Grouped.with("repartition-name", Serdes.String(), Serdes.String()),
+            Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("materialized-name")
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.Long())
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldThrowWhenGroupByKeyAggregationWithoutRepartitionNameAndMaterializedName() {
+        final StreamsBuilder builder = buildWithGroupByKeyAggregationTopology(
+             Grouped.with(Serdes.String(), Serdes.String()),
+            Materialized.with(Serdes.String(), Serdes.Long())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003"));
+        assertTrue(e.getMessage().contains("Following repartition topic(s) has not been named: KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition"));
+    }
+
+    private StreamsBuilder buildWithGroupByKeyAggregationTopology(final Grouped<String, String> grouped,
+                                                                  final Materialized<String, Long, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+        final KStream<String, String> stream = builder.stream("input1");
+        stream
+            .selectKey((k, v) -> v)
+            .groupByKey(grouped)
+            .count(materialized)
+            .toStream()
+            .to("output", Produced.as("sink"));
+        return builder;
+    }
+
+    @Test
+    void shouldNotThrowWhenSuppressWithSuppressName() {
+        final StreamsBuilder builder = buildAggregationWithSuppressTopology(true, true);
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldThrowWhenSuppressWithoutSuppressName() {
+        final StreamsBuilder builder = buildAggregationWithSuppressTopology(false, true);
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: KTABLE-SUPPRESS-STATE-STORE-0000000003-changelog"));
+        assertFalse(e.getMessage().contains("Following state store(s) has not been named"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldThrowWhenSuppressWithoutSuppressNameAndLoggingDisabled() {
+        final StreamsBuilder builder = buildAggregationWithSuppressTopology(false, false);
+        assertBuildDoesNotThrow(builder);
+    }
+
+    private StreamsBuilder buildAggregationWithSuppressTopology(final boolean isSuppressNamed,
+                                                                final boolean isLoggingEnabled) {
+
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KStream<String, String> stream = builder.stream("input1");
+        final KTable<Windowed<String>, Long> table = stream
+            .groupByKey()
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofHours(1)))
+            .count(Materialized.as("materialized-name"));
+        if (isSuppressNamed) {
+            table.suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded())
+                    .withName("suppressed-name"))
+                .toStream()
+                .to("output", Produced.as("sink"));
+        } else {
+            if (isLoggingEnabled) {
+                table.suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+                    .toStream()
+                    .to("output", Produced.as("sink"));
+            } else {
+                table.suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded().withLoggingDisabled()))
+                    .toStream()
+                    .to("output", Produced.as("sink"));
+            }
+        }
+        return builder;
+    }
+
+    @Test
+    void shouldThrowWhenKStreamKStreamJoinWithRepartitionNameAndLoggingEnabled() {
+        final StreamsBuilder builder = buildKStreamKStreamJoinTopology(
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+                .withName("repartition-name")
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: KSTREAM-JOINTHIS-0000000012-store-changelog, KSTREAM-OUTEROTHER-0000000013-store-changelog, KSTREAM-OUTERSHARED-0000000012-store-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: KSTREAM-JOINTHIS-0000000012-store, KSTREAM-OUTEROTHER-0000000013-store, KSTREAM-OUTERSHARED-0000000012-store"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldThrowWhenKStreamKStreamJoinWithRepartitionNameAndLoggingDisabled() {
+        final StreamsBuilder builder = buildKStreamKStreamJoinTopology(
+                StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+                    .withName("repartition-name").withLoggingDisabled()
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: KSTREAM-JOINTHIS-0000000012-store, KSTREAM-OUTEROTHER-0000000013-store, KSTREAM-OUTERSHARED-0000000012-store"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldThrowWhenKStreamKStreamJoinWithMaterializedName() {
+        final StreamsBuilder builder = buildKStreamKStreamJoinTopology(
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+                .withStoreName("store-name")
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertFalse(e.getMessage().contains("Following changelog topic(s) has not been named"));
+        assertFalse(e.getMessage().contains("Following state store(s) has not been named"));
+        assertTrue(e.getMessage().contains("Following repartition topic(s) has not been named: KSTREAM-KEY-SELECT-0000000002-repartition, KSTREAM-KEY-SELECT-0000000003-repartition"));
+    }
+
+    @Test
+    void shouldNotThrowWhenKStreamKStreamJoinWithRepartitionNameAndMaterializedName() {
+        final StreamsBuilder builder = buildKStreamKStreamJoinTopology(
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+                .withName("repartition-name")
+                .withStoreName("store-name")
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldThrowWhenKStreamKStreamJoinWithoutRepartitionNameAndMaterializedName() {
+        final StreamsBuilder builder = buildKStreamKStreamJoinTopology(
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: KSTREAM-JOINTHIS-0000000012-store-changelog, KSTREAM-OUTEROTHER-0000000013-store-changelog, KSTREAM-OUTERSHARED-0000000012-store-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: KSTREAM-JOINTHIS-0000000012-store, KSTREAM-OUTEROTHER-0000000013-store, KSTREAM-OUTERSHARED-0000000012-store"));
+        assertTrue(e.getMessage().contains("Following repartition topic(s) has not been named: KSTREAM-KEY-SELECT-0000000002-repartition, KSTREAM-KEY-SELECT-0000000003-repartition"));
+    }
+
+    private StreamsBuilder buildKStreamKStreamJoinTopology(final StreamJoined<String, String, String> streamJoined) {
+
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+        streamOne
+            .selectKey((k, v) -> v)
+            .leftJoin(
+                streamTwo.selectKey((k, v) -> v),
+                (value1, value2) -> value1,
+                JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1)),
+                streamJoined
+            );
+        return builder;
+    }
+
+    @Test
+    void shouldThrowWhenKStreamKTableJoinWithRepartitionNameAndLoggingEnabled() {
+        final StreamsBuilder builder = buildKStreamKTableJoinTopology(
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName("repartition-name"),
+            Materialized.with(Serdes.String(), Serdes.String())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: stream-topic-two-STATE-STORE-0000000001-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: stream-topic-two-STATE-STORE-0000000001"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldThrowWhenKStreamKTableJoinWithRepartitionNameAndLoggingDisabled() {
+        final StreamsBuilder builder = buildKStreamKTableJoinTopology(
+                Joined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName("repartition-name"),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(Serdes.String(), Serdes.String())
+                    .withLoggingDisabled()
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: stream-topic-two-STATE-STORE-0000000001"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldThrowWhenKStreamKTableJoinWithMaterializedName() {
+        final StreamsBuilder builder = buildKStreamKTableJoinTopology(
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String()),
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("materialized-name")
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertFalse(e.getMessage().contains("Following changelog topic(s) has not been named"));
+        assertFalse(e.getMessage().contains("Following state store(s) has not been named"));
+        assertTrue(e.getMessage().contains("Following repartition topic(s) has not been named: KSTREAM-KEY-SELECT-0000000003-repartition"));
+    }
+
+    @Test
+    void shouldNotThrowWhenKStreamKTableJoinWithRepartitionNameAndMaterializedName() {
+        final StreamsBuilder builder = buildKStreamKTableJoinTopology(
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName("repartition-name"),
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("materialized-name")
+                    .withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldThrowWhenKStreamKTableJoinWithoutRepartitionNameAndMaterializedName() {
+        final StreamsBuilder builder = buildKStreamKTableJoinTopology(
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String()),
+            Materialized.with(Serdes.String(), Serdes.String())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: stream-topic-two-STATE-STORE-0000000001-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: stream-topic-two-STATE-STORE-0000000001"));
+        assertTrue(e.getMessage().contains("Following repartition topic(s) has not been named: KSTREAM-KEY-SELECT-0000000004-repartition"));
+    }
+
+    private StreamsBuilder buildKStreamKTableJoinTopology(final Joined<String, String, String> joined, 
+                                                          final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
+
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+        final KStream<String, String> stream = builder.stream(STREAM_TOPIC);
+        final KTable<String, String> table = builder.table(STREAM_TOPIC_TWO, materialized);
+        stream
+            .selectKey((k, v) -> v)
+            .join(
+                table,
+                (value1, value2) -> value1,
+                joined
+            );
+        return builder;
+    }
+
+
+    @Test
+    void shouldNotThrowWhenKStreamVersionedKTableJoinWithRepartitionName() {
+        final StreamsBuilder builder = buildKStreamVersionedKTableJoinTopology(
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName("repartition-name")
+
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldThrowWhenKStreamVersionedKTableJoinWithoutRepartitionName() {
+        final StreamsBuilder builder = buildKStreamVersionedKTableJoinTopology(
+            Joined.with(Serdes.String(), Serdes.String(), Serdes.String())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: KSTREAM-JOIN-0000000007-Buffer-changelog"));
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: KSTREAM-JOIN-0000000007-Buffer"));
+        assertTrue(e.getMessage().contains("Following repartition topic(s) has not been named: KSTREAM-KEY-SELECT-0000000003-repartition"));
+    }
+
+    private StreamsBuilder buildKStreamVersionedKTableJoinTopology(final Joined<String, String, String> joined) {
+
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+        final VersionedBytesStoreSupplier versionedStoreSupplier =
+                Stores.persistentVersionedKeyValueStore("versioned-ktable-store",
+                        Duration.ofDays(1));
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized =
+            Materialized.<String, String>as(versionedStoreSupplier)
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.String());
+        final KStream<String, String> stream = builder.stream(STREAM_TOPIC);
+        final KTable<String, String> table = builder.table(STREAM_TOPIC_TWO, materialized);
+        stream
+            .selectKey((k, v) -> v)
+            .join(
+                table,
+                (value1, value2) -> value1,
+                joined.withGracePeriod(Duration.ofHours(1))
+            )
+                .to("test-topic");
+        return builder;
+    }
+
+    @Test
+    void shouldNotThrowWhenKStreamGlobalKTableJoinWithMaterializedName() {
+        final StreamsBuilder builder = buildKStreamGlobalKTableJoinTopology(
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("materialized-name")
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldThrowWhenKStreamGlobalKTableJoinWithoutStoreName() {
+        final StreamsBuilder builder = buildKStreamGlobalKTableJoinTopology(null);
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertFalse(e.getMessage().contains("Following changelog topic(s) has not been named"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: stream-topic-two-STATE-STORE-0000000001"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+
+    }
+
+    private StreamsBuilder buildKStreamGlobalKTableJoinTopology(final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
+
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+        final KStream<String, String> stream = builder.stream(STREAM_TOPIC);
+        final GlobalKTable<String, String> globalTable;
+        if (materialized != null) {
+            globalTable = builder.globalTable(STREAM_TOPIC_TWO, materialized);
+        } else {
+            globalTable = builder.globalTable(STREAM_TOPIC_TWO);
+        }
+        stream
+            .selectKey((k, v) -> v)
+            .join(
+                globalTable,
+                (k, v) -> k,
+                (value1, value2) -> value1
+            );
+        return builder;
+    }
+
+    @Test
+    void shouldNotThrowWhenRepartitionWithRepartitionName() {
+        final StreamsBuilder builder = buildRepartitionTopology(
+            Repartitioned.with(Serdes.String(), Serdes.String())
+                .withName("repartition-name")
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldThrowWhenRepartitionWithoutRepartition() {
+        final StreamsBuilder builder = buildRepartitionTopology(
+            Repartitioned.with(Serdes.String(), Serdes.String())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertFalse(e.getMessage().contains("Following changelog topic(s) has not been named"));
+        assertFalse(e.getMessage().contains("Following state store(s) has not been named"));
+        assertTrue(e.getMessage().contains("Following repartition topic(s) has not been named: KSTREAM-REPARTITION-0000000001-repartition"));
+    }
+
+    private StreamsBuilder buildRepartitionTopology(final Repartitioned<String, String> repartitioned) {
+
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KStream<String, String> stream = builder.stream("input1");
+        stream
+            .repartition(repartitioned)
+            .to("output", Produced.as("sink"));
+        return builder;
+    }
+
+    @Test
+    void shouldThrowWhenCoGroupWithRepartitionNameAndLoggingEnabled() {
+        final StreamsBuilder builder = buildCoGroupTopology(
+            Grouped.with("repartition-name", Serdes.String(), Serdes.String()),
+            Materialized.with(Serdes.String(), Serdes.String())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldThrowWhenCoGroupWithRepartitionNameAndLoggingDisabled() {
+        final StreamsBuilder builder = buildCoGroupTopology(
+                Grouped.with("repartition-name", Serdes.String(), Serdes.String()),
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(Serdes.String(), Serdes.String())
+                    .withLoggingDisabled()
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003"));
+        assertFalse(e.getMessage().contains("Following repartition topic(s) has not been named"));
+    }
+
+    @Test
+    void shouldNotThrowWhenCoGroupWithMaterializedName() {
+        final StreamsBuilder builder = buildCoGroupTopology(
+            Grouped.with(Serdes.String(), Serdes.String()),
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("materialized-name")
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldNotThrowWhenCoGroupWithRepartitionNameAndMaterializedName() {
+        final StreamsBuilder builder = buildCoGroupTopology(
+            Grouped.with("repartition-name", Serdes.String(), Serdes.String()),
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("materialized-name")
+                .withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+        );
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    void shouldThrowWhenCoGroupWithoutRepartitionNameAndMaterializedName() {
+        final StreamsBuilder builder = buildCoGroupTopology(
+            Grouped.with(Serdes.String(), Serdes.String()),
+            Materialized.with(Serdes.String(), Serdes.String())
+        );
+        final TopologyException e = assertThrows(TopologyException.class, builder::build);
+        assertTrue(e.getMessage().contains("Following changelog topic(s) has not been named: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-changelog"));
+        assertTrue(e.getMessage().contains("Following state store(s) has not been named: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003"));
+        assertTrue(e.getMessage().contains("Following repartition topic(s) has not been named: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition"));
+    }
+
+    private StreamsBuilder buildCoGroupTopology(final Grouped<String, String> grouped,
+                                                final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
+
+        final Map<Object, Object> props = dummyStreamsConfigMap();
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+
+        final KGroupedStream<String, String> groupedOne = streamOne.groupBy((k, v) -> v, grouped);
+        final KGroupedStream<String, String> groupedTwo = streamTwo.groupByKey();
+
+        final Aggregator<String, String, String> agg1 = (key, value, aggregate) -> aggregate + value;
+        final Aggregator<String, String, String> agg2 = (key, value, aggregate) -> aggregate + value;
+
+        final KTable<String, String> coGroupedStream = groupedOne
+            .cogroup(agg1)
+            .cogroup(groupedTwo, agg2)
+            .aggregate(() -> "", materialized);
+
+        coGroupedStream.toStream().to("output");
+
+        return builder;
     }
 
     private static void assertBuildDoesNotThrow(final StreamsBuilder builder) {

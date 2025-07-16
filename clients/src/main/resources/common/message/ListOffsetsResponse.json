@@ -17,6 +17,8 @@
   "apiKey": 2,
   "type": "response",
   "name": "ListOffsetsResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Version 1 removes the offsets array in favor of returning a single offset.
   // Version 1 also adds the timestamp associated with the returned offset.
   //
@@ -38,7 +40,7 @@
   // Version 9 enables listing offsets by last tiered offset (KIP-1005).
   //
   // Version 10 enables async remote list offsets support (KIP-1075)
-  "validVersions": "0-10",
+  "validVersions": "1-10",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,
@@ -53,8 +55,6 @@
           "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The partition error code, or 0 if there was no error." },
-        { "name": "OldStyleOffsets", "type": "[]int64", "versions": "0", "ignorable": false,
-          "about": "The result offsets." },
         { "name": "Timestamp", "type": "int64", "versions": "1+", "default": "-1", "ignorable": false,
           "about": "The timestamp associated with the returned offset." },
         { "name": "Offset", "type": "int64", "versions": "1+", "default": "-1", "ignorable": false,

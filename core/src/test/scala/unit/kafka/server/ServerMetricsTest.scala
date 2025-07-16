@@ -29,7 +29,7 @@ class ServerMetricsTest {
   def testMetricsConfig(): Unit = {
     val recordingLevels = List(Sensor.RecordingLevel.DEBUG, Sensor.RecordingLevel.INFO)
     val illegalNames = List("IllegalName", "")
-    val props = TestUtils.createBrokerConfig(0, "localhost:2818")
+    val props = TestUtils.createBrokerConfig(0)
 
     for (recordingLevel <- recordingLevels) {
       props.put(MetricConfigs.METRIC_RECORDING_LEVEL_CONFIG, recordingLevel.name)

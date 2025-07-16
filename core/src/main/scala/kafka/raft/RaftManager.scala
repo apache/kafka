@@ -24,8 +24,6 @@ import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 import java.util.{Map => JMap}
 import java.util.{Collection => JCollection}
-import kafka.log.LogManager
-import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.Logging
@@ -34,7 +32,6 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.ApiMessage
@@ -43,13 +40,14 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog}
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, MetadataLogConfig, QuorumConfig, RaftClient, ReplicatedLog, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
+import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
@@ -63,7 +61,7 @@ object KafkaRaftManager {
   }
 
   private def lockDataDir(dataDir: File): FileLock = {
-    val lock = new FileLock(new File(dataDir, LogManager.LockFileName))
+    val lock = new FileLock(new File(dataDir, LogManager.LOCK_FILE_NAME))
 
     if (!lock.tryLock()) {
       throw new KafkaException(
@@ -81,41 +79,9 @@ object KafkaRaftManager {
   private def hasDifferentLogDir(config: KafkaConfig): Boolean = {
     !config
       .logDirs
+      .asScala
       .map(Paths.get(_).toAbsolutePath)
       .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
-  }
-
-  /**
-   * Obtain the file lock and delete the metadata log directory completely.
-   *
-   * This is only used by ZK brokers that are in pre-migration or hybrid mode of the ZK to KRaft migration.
-   * The rationale for deleting the metadata log in these cases is that it is safe to do on brokers and it
-   * makes recovery from a failed migration much easier. See KAFKA-16463.
-   *
-   * @param config  The broker config
-   */
-  def maybeDeleteMetadataLogDir(config: KafkaConfig): Unit = {
-    // These constraints are enforced in KafkaServer, but repeating them here to guard against future callers
-    if (config.processRoles.nonEmpty) {
-      throw new RuntimeException("Not deleting metadata log dir since this node is in KRaft mode.")
-    } else {
-      val metadataDir = new File(config.metadataLogDir)
-      val logDirName = UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)
-      val metadataPartitionDir = KafkaRaftManager.createLogDirectory(metadataDir, logDirName)
-      val deletionLock = if (hasDifferentLogDir(config)) {
-        Some(KafkaRaftManager.lockDataDir(metadataDir))
-      } else {
-        None
-      }
-
-      try {
-        Utils.delete(metadataPartitionDir)
-      } catch {
-        case t: Throwable => throw new RuntimeException("Failed to delete metadata log", t)
-      } finally {
-        deletionLock.foreach(_.destroy())
-      }
-    }
   }
 }
 
@@ -138,17 +104,20 @@ trait RaftManager[T] {
   def replicatedLog: ReplicatedLog
 
   def voterNode(id: Int, listener: ListenerName): Option[Node]
+
+  def recordSerde: RecordSerde[T]
 }
 
 class KafkaRaftManager[T](
   clusterId: String,
   config: KafkaConfig,
   metadataLogDirUuid: Uuid,
-  recordSerde: RecordSerde[T],
+  serde: RecordSerde[T],
   topicPartition: TopicPartition,
   topicId: Uuid,
   time: Time,
   metrics: Metrics,
+  externalKRaftMetrics: ExternalKRaftMetrics,
   threadNamePrefixOpt: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   bootstrapServers: JCollection[InetSocketAddress],
@@ -192,7 +161,8 @@ class KafkaRaftManager[T](
     client.initialize(
       controllerQuorumVotersFuture.get(),
       new FileQuorumStateStore(new File(dataDir, FileQuorumStateStore.DEFAULT_FILE_NAME)),
-      metrics
+      metrics,
+      externalKRaftMetrics
     )
     netChannel.start()
     clientDriver.start()
@@ -260,16 +230,15 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
+      config = new MetadataLogConfig(config),
+      config.nodeId
     )
   }
 
   private def buildNetworkClient(): (ListenerName, NetworkClient) = {
-    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(
-      controllerListenerName,
-      SecurityProtocol.forName(controllerListenerName.value())
-    )
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.get(0))
+    val controllerSecurityProtocol = Option(config.effectiveListenerSecurityProtocolMap.get(controllerListenerName))
+      .getOrElse(SecurityProtocol.forName(controllerListenerName.value()))
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       controllerSecurityProtocol,
       JaasContext.Type.SERVER,
@@ -277,7 +246,6 @@ class KafkaRaftManager[T](
       controllerListenerName,
       config.saslMechanismControllerProtocol,
       time,
-      config.saslInterBrokerHandshakeRequestEnable,
       logContext
     )
 
@@ -331,4 +299,6 @@ class KafkaRaftManager[T](
   override def voterNode(id: Int, listener: ListenerName): Option[Node] = {
     client.voterNode(id, listener).toScala
   }
+
+  override def recordSerde: RecordSerde[T] = serde
 }

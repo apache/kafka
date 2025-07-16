@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -102,7 +101,7 @@ public class MeteredSessionStoreTest {
     @Mock
     private SessionStore<Bytes, byte[]> innerStore;
     @Mock
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
 
     private Map<String, String> tags;
     
@@ -134,7 +133,7 @@ public class MeteredSessionStoreTest {
     }
 
     private void init() {
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
     @Test
@@ -147,8 +146,8 @@ public class MeteredSessionStoreTest {
             Serdes.String(),
             new MockTime()
         );
-        doNothing().when(innerStore).init((StateStoreContext) context, outer);
-        outer.init((StateStoreContext) context, outer);
+        doNothing().when(innerStore).init(context, outer);
+        outer.init(context, outer);
     }
 
     @Test
@@ -187,7 +186,7 @@ public class MeteredSessionStoreTest {
             valueSerde,
             new MockTime()
         );
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         store.fetchSession(KEY, START_TIMESTAMP, END_TIMESTAMP);
         store.put(WINDOWED_KEY, VALUE);
@@ -514,6 +513,7 @@ public class MeteredSessionStoreTest {
         assertThrows(NullPointerException.class, () -> store.remove(new Windowed<>(KEY, null)));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnFetchIfKeyIsNull() {
         setUpWithoutContext();
@@ -526,66 +526,77 @@ public class MeteredSessionStoreTest {
         assertThrows(NullPointerException.class, () -> store.fetchSession(null, 0, Long.MAX_VALUE));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnFetchRangeIfFromIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.fetch(null, "to"));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnFetchRangeIfToIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.fetch("from", null));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.backwardFetch(null));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnBackwardFetchIfFromIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.backwardFetch(null, "to"));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnBackwardFetchIfToIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.backwardFetch("from", null));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnFindSessionsIfKeyIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.findSessions(null, 0, 0));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnFindSessionsRangeIfFromIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.findSessions(null, "a", 0, 0));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnFindSessionsRangeIfToIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.findSessions("a", null, 0, 0));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnBackwardFindSessionsIfKeyIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.backwardFindSessions(null, 0, 0));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnBackwardFindSessionsRangeIfFromIsNull() {
         setUpWithoutContext();
         assertThrows(NullPointerException.class, () -> store.backwardFindSessions(null, "a", 0, 0));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnBackwardFindSessionsRangeIfToIsNull() {
         setUpWithoutContext();
@@ -640,6 +651,7 @@ public class MeteredSessionStoreTest {
         assertThat(storeMetrics(), empty());
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOpenIteratorsMetric() {
         setUp();
@@ -651,13 +663,14 @@ public class MeteredSessionStoreTest {
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
 
-        try (final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFetch(KEY)) {
+        try (final KeyValueIterator<Windowed<String>, String> unused = store.backwardFetch(KEY)) {
             assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
         }
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTimeIteratorDuration() {
         setUp();
@@ -672,7 +685,7 @@ public class MeteredSessionStoreTest {
         assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
         assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
 
-        try (final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFetch(KEY)) {
+        try (final KeyValueIterator<Windowed<String>, String> unused = store.backwardFetch(KEY)) {
             // nothing to do, just close immediately
             mockTime.sleep(2);
         }
@@ -689,6 +702,7 @@ public class MeteredSessionStoreTest {
         assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOldestOpenIteratorTimestamp() {
         setUp();
@@ -703,7 +717,7 @@ public class MeteredSessionStoreTest {
         KeyValueIterator<Windowed<String>, String> second = null;
         final long secondTimestamp;
         try {
-            try (final KeyValueIterator<Windowed<String>, String> first = store.backwardFetch(KEY)) {
+            try (final KeyValueIterator<Windowed<String>, String> unused = store.backwardFetch(KEY)) {
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
                 mockTime.sleep(100);

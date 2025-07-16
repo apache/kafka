@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -106,12 +105,12 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         idToRemoteLogMetadataCache.remove(topicIdPartition);
     }
 
-    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
+    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).listAllRemoteLogSegments();
     }
 
-    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition, int leaderEpoch)
+    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition, int leaderEpoch)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).listRemoteLogSegments(leaderEpoch);
     }
@@ -130,21 +129,21 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         return remoteLogMetadataCache;
     }
 
-    public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                       long offset,
-                                                                       int epochForOffset)
+    Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
+                                                                long offset,
+                                                                int epochForOffset)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).remoteLogSegmentMetadata(epochForOffset, offset);
     }
 
-    public Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
-                                                                      int epoch,
-                                                                      long offset) throws RemoteStorageException {
+    Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
+                                                               int epoch,
+                                                               long offset) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).nextSegmentWithTxnIndex(epoch, offset);
     }
 
-    public Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
-                                           int leaderEpoch) throws RemoteStorageException {
+    Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
+                                    int leaderEpoch) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).highestOffsetForEpoch(leaderEpoch);
     }
 
@@ -154,8 +153,8 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
 
         // Clear the entries by creating unmodifiable empty maps.
         // Practically, we do not use the same instances that are closed.
-        idToPartitionDeleteMetadata = Collections.emptyMap();
-        idToRemoteLogMetadataCache = Collections.emptyMap();
+        idToPartitionDeleteMetadata = Map.of();
+        idToRemoteLogMetadataCache = Map.of();
     }
 
     @Override

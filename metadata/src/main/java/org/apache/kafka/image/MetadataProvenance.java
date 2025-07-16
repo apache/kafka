@@ -17,7 +17,7 @@
 
 package org.apache.kafka.image;
 
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.Snapshots;
 
 import java.util.Objects;

@@ -232,8 +232,15 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String description,
                                                 final String threadId,
                                                 final Gauge<T> valueProvider) {
+        addThreadLevelMutableMetric(name, description, threadId, Collections.emptyMap(), valueProvider);
+    }
+    public <T> void addThreadLevelMutableMetric(final String name,
+                                                final String description,
+                                                final String threadId,
+                                                final Map<String, String> additionalTags,
+                                                final Gauge<T> valueProvider) {
         final MetricName metricName = metrics.metricName(
-            name, THREAD_LEVEL_GROUP, description, threadLevelTagMap(threadId));
+            name, THREAD_LEVEL_GROUP, description, threadLevelTagMap(threadId, additionalTags));
         synchronized (threadLevelMetrics) {
             threadLevelMetrics.computeIfAbsent(
                 threadSensorPrefix(threadId),
@@ -279,7 +286,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     public Map<String, String> threadLevelTagMap(final String threadId) {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+        return threadLevelTagMap(threadId, Collections.emptyMap());
+    }
+
+    public Map<String, String> threadLevelTagMap(final String threadId, final Map<String, String> additionalTags) {
+        final Map<String, String> tagMap = new LinkedHashMap<>(additionalTags);
         tagMap.put(THREAD_ID_TAG, threadId);
         return tagMap;
     }
@@ -324,33 +335,45 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
+    public void removeMetric(final MetricName metricName) {
+        metrics.removeMetric(metricName);
+    }
+
     public Map<String, String> taskLevelTagMap(final String threadId, final String taskId) {
-        final Map<String, String> tagMap = threadLevelTagMap(threadId);
+        final Map<String, String> tagMap = new LinkedHashMap<>();
+        tagMap.put(THREAD_ID_TAG, threadId);
         tagMap.put(TASK_ID_TAG, taskId);
         return tagMap;
     }
 
     public Map<String, String> nodeLevelTagMap(final String threadId,
-                                               final String taskName,
+                                               final String taskId,
                                                final String processorNodeName) {
-        final Map<String, String> tagMap = taskLevelTagMap(threadId, taskName);
+        final Map<String, String> tagMap = new LinkedHashMap<>();
+        tagMap.put(THREAD_ID_TAG, threadId);
+        tagMap.put(TASK_ID_TAG, taskId);
         tagMap.put(PROCESSOR_NODE_ID_TAG, processorNodeName);
         return tagMap;
     }
 
     public Map<String, String> topicLevelTagMap(final String threadId,
-                                                final String taskName,
+                                                final String taskId,
                                                 final String processorNodeName,
                                                 final String topicName) {
-        final Map<String, String> tagMap = nodeLevelTagMap(threadId, taskName, processorNodeName);
+        final Map<String, String> tagMap = new LinkedHashMap<>();
+        tagMap.put(THREAD_ID_TAG, threadId);
+        tagMap.put(TASK_ID_TAG, taskId);
+        tagMap.put(PROCESSOR_NODE_ID_TAG, processorNodeName);
         tagMap.put(TOPIC_NAME_TAG, topicName);
         return tagMap;
     }
 
-    public Map<String, String> storeLevelTagMap(final String taskName,
+    public Map<String, String> storeLevelTagMap(final String taskId,
                                                 final String storeType,
                                                 final String storeName) {
-        final Map<String, String> tagMap = taskLevelTagMap(Thread.currentThread().getName(), taskName);
+        final Map<String, String> tagMap = new LinkedHashMap<>();
+        tagMap.put(THREAD_ID_TAG, Thread.currentThread().getName());
+        tagMap.put(TASK_ID_TAG, taskId);
         tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
         return tagMap;
     }
@@ -498,13 +521,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return getSensors(storeLevelSensors, sensorSuffix, sensorPrefix, recordingLevel, parents);
     }
 
-    public <T> void addStoreLevelMutableMetric(final String taskId,
-                                               final String metricsScope,
-                                               final String storeName,
-                                               final String name,
-                                               final String description,
-                                               final RecordingLevel recordingLevel,
-                                               final Gauge<T> valueProvider) {
+    public <T> MetricName addStoreLevelMutableMetric(final String taskId,
+                                                     final String metricsScope,
+                                                     final String storeName,
+                                                     final String name,
+                                                     final String description,
+                                                     final RecordingLevel recordingLevel,
+                                                     final Gauge<T> valueProvider) {
         final MetricName metricName = metrics.metricName(
             name,
             STATE_STORE_LEVEL_GROUP,
@@ -516,6 +539,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             final String key = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
             storeLevelMetrics.computeIfAbsent(key, ignored -> new LinkedList<>()).push(metricName);
         }
+
+        return metricName;
     }
 
     public final void removeAllStoreLevelSensorsAndMetrics(final String taskId,

@@ -202,6 +202,7 @@ public class UtilsTest {
         assertEquals(10, Utils.abs(10));
         assertEquals(0, Utils.abs(0));
         assertEquals(1, Utils.abs(-1));
+        assertEquals(Integer.MAX_VALUE, Utils.abs(Integer.MAX_VALUE));
     }
 
     @Test

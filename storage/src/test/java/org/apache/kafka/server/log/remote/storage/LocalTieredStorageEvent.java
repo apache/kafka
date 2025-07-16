@@ -73,7 +73,7 @@ public final class LocalTieredStorageEvent implements Comparable<LocalTieredStor
         if (!exception.map(e -> condition.failed).orElseGet(() -> !condition.failed)) {
             return false;
         }
-        if (condition.baseOffset != null && !metadata.isPresent()) {
+        if (condition.baseOffset != null && metadata.isEmpty()) {
             return false;
         }
         return condition.baseOffset == null || metadata.get().startOffset() == condition.baseOffset;

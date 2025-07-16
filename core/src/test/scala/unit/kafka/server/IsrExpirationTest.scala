@@ -19,17 +19,19 @@ package kafka.server
 import java.io.File
 import java.util.Properties
 import kafka.cluster.Partition
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils.MockAlterPartitionManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogOffsetMetadata, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{atLeastOnce, mock, verify, when}
@@ -47,7 +49,7 @@ class IsrExpirationTest {
   val overridingProps = new Properties()
   overridingProps.put(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, replicaLagTimeMaxMs.toString)
   overridingProps.put(ReplicationConfigs.REPLICA_FETCH_WAIT_MAX_MS_CONFIG, replicaFetchWaitMaxMs.toString)
-  val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, overridingProps))
+  val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps(_, overridingProps))
   val topic = "foo"
 
   val time = new MockTime
@@ -64,7 +66,7 @@ class IsrExpirationTest {
     when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     alterIsrManager = TestUtils.createAlterIsrManager()
-    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")
     replicaManager = new ReplicaManager(
       metrics = metrics,
       config = configs.head,
@@ -72,7 +74,7 @@ class IsrExpirationTest {
       scheduler = null,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion),
+      metadataCache = new KRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
       alterPartitionManager = alterIsrManager)
   }
@@ -98,11 +100,11 @@ class IsrExpirationTest {
     // let the follower catch up to the Leader logEndOffset - 1
     for (replica <- partition0.remoteReplicas)
       replica.updateFetchStateOrThrow(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 1),
-        followerStartOffset = 0L,
-        followerFetchTimeMs= time.milliseconds,
-        leaderEndOffset = leaderLogEndOffset,
-        brokerEpoch = 1L)
+        new LogOffsetMetadata(leaderLogEndOffset - 1),
+        0L,
+        time.milliseconds,
+        leaderLogEndOffset,
+        1L)
     var partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
     assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
 
@@ -148,11 +150,11 @@ class IsrExpirationTest {
     // Make the remote replica not read to the end of log. It should be not be out of sync for at least 100 ms
     for (replica <- partition0.remoteReplicas)
       replica.updateFetchStateOrThrow(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 2),
-        followerStartOffset = 0L,
-        followerFetchTimeMs= time.milliseconds,
-        leaderEndOffset = leaderLogEndOffset,
-        brokerEpoch = 1L)
+        new LogOffsetMetadata(leaderLogEndOffset - 2),
+        0L,
+        time.milliseconds,
+        leaderLogEndOffset,
+        1L)
 
     // Simulate 2 fetch requests spanning more than 100 ms which do not read to the end of the log.
     // The replicas will no longer be in ISR. We do 2 fetches because we want to simulate the case where the replica is lagging but is not stuck
@@ -163,11 +165,11 @@ class IsrExpirationTest {
 
     partition0.remoteReplicas.foreach { r =>
       r.updateFetchStateOrThrow(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 1),
-        followerStartOffset = 0L,
-        followerFetchTimeMs= time.milliseconds,
-        leaderEndOffset = leaderLogEndOffset,
-        brokerEpoch = 1L)
+        new LogOffsetMetadata(leaderLogEndOffset - 1),
+        0L,
+        time.milliseconds,
+        leaderLogEndOffset,
+        1L)
     }
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
     assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
@@ -181,11 +183,11 @@ class IsrExpirationTest {
     // Now actually make a fetch to the end of the log. The replicas should be back in ISR
     partition0.remoteReplicas.foreach { r =>
       r.updateFetchStateOrThrow(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset),
-        followerStartOffset = 0L,
-        followerFetchTimeMs= time.milliseconds,
-        leaderEndOffset = leaderLogEndOffset,
-        brokerEpoch = 1L)
+        new LogOffsetMetadata(leaderLogEndOffset),
+        0L,
+        time.milliseconds,
+        leaderLogEndOffset,
+        1L)
     }
     partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
     assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
@@ -206,11 +208,11 @@ class IsrExpirationTest {
     // let the follower catch up to the Leader logEndOffset
     for (replica <- partition0.remoteReplicas)
       replica.updateFetchStateOrThrow(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset),
-        followerStartOffset = 0L,
-        followerFetchTimeMs= time.milliseconds,
-        leaderEndOffset = leaderLogEndOffset,
-        brokerEpoch = 1L)
+        new LogOffsetMetadata(leaderLogEndOffset),
+        0L,
+        time.milliseconds,
+        leaderLogEndOffset,
+        1L)
 
     var partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaLagTimeMaxMs)
     assertEquals(Set.empty[Int], partition0OSR, "No replica should be out of sync")
@@ -243,11 +245,11 @@ class IsrExpirationTest {
     // set lastCaughtUpTime to current time
     for (replica <- partition.remoteReplicas)
       replica.updateFetchStateOrThrow(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(0L),
-        followerStartOffset = 0L,
-        followerFetchTimeMs= time.milliseconds,
-        leaderEndOffset = 0L,
-        brokerEpoch = 1L)
+        new LogOffsetMetadata(0L),
+        0L,
+        time.milliseconds,
+        0L,
+        1L)
 
     // set the leader and its hw and the hw update time
     partition.leaderReplicaIdOpt = Some(leaderId)

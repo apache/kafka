@@ -25,7 +25,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -117,7 +116,7 @@ public class ShareGroupMemberTest {
 
         updatedMember = new ShareGroupMember.Builder(member)
             .maybeUpdateRackId(Optional.of("new-rack-id"))
-            .maybeUpdateSubscribedTopicNames(Optional.of(Collections.singletonList("zar")))
+            .maybeUpdateSubscribedTopicNames(Optional.of(List.of("zar")))
             .build();
 
         assertNull(member.instanceId());
@@ -180,7 +179,7 @@ public class ShareGroupMemberTest {
             .setSubscribedTopicNames(subscribedTopicNames)
             .setAssignment(
                 new ShareGroupDescribeResponseData.Assignment()
-                    .setTopicPartitions(Collections.singletonList(new ShareGroupDescribeResponseData.TopicPartitions()
+                    .setTopicPartitions(List.of(new ShareGroupDescribeResponseData.TopicPartitions()
                         .setTopicId(topicId1)
                         .setTopicName("topic1")
                         .setPartitions(assignedPartitions)

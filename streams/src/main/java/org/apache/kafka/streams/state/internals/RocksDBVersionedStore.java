@@ -23,7 +23,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -102,7 +101,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     private final RocksDBVersionedStoreClient versionedStoreClient;
     private final RocksDBVersionedStoreRestoreWriteBuffer restoreWriteBuffer;
 
-    private InternalProcessorContext internalProcessorContext;
+    private InternalProcessorContext<?, ?> internalProcessorContext;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
@@ -489,7 +488,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         /**
          * @return the segment with the provided id, or {@code null} if the segment is expired
          */
-        T getOrCreateSegmentIfLive(long segmentId, ProcessorContext context, long streamTime);
+        T getOrCreateSegmentIfLive(long segmentId, StateStoreContext context, long streamTime);
 
         /**
          * @return all segments in the store which contain timestamps at least the provided
@@ -525,7 +524,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         }
 
         @Override
-        public LogicalKeyValueSegment getOrCreateSegmentIfLive(final long segmentId, final ProcessorContext context, final long streamTime) {
+        public LogicalKeyValueSegment getOrCreateSegmentIfLive(final long segmentId, final StateStoreContext context, final long streamTime) {
             return segmentStores.getOrCreateSegmentIfLive(segmentId, context, streamTime);
         }
 

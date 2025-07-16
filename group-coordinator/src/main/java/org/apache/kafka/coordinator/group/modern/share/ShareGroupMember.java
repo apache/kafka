@@ -27,7 +27,6 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,8 +55,8 @@ public class ShareGroupMember extends ModernGroupMember {
         private String rackId = null;
         private String clientId = "";
         private String clientHost = "";
-        private Set<String> subscribedTopicNames = Collections.emptySet();
-        private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
+        private Set<String> subscribedTopicNames = Set.of();
+        private Map<Uuid, Set<Integer>> assignedPartitions = Map.of();
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);

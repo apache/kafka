@@ -20,7 +20,7 @@ package kafka.network
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{Callable, ExecutorService, Executors, TimeUnit}
-import java.util.{Collections, Properties}
+import java.util.Properties
 import com.yammer.metrics.core.Meter
 import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
@@ -37,7 +37,6 @@ import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 
-import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
 import scala.concurrent.TimeoutException
 
@@ -66,11 +65,12 @@ class ConnectionQuotasTest {
   }
 
   def brokerPropsWithDefaultConnectionLimits: Properties = {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    val props = TestUtils.createBrokerConfig(0, port = 0)
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0,REPLICATION://localhost:1,ADMIN://localhost:2")
     // ConnectionQuotas does not limit inter-broker listener even when broker-wide connection limit is reached
     props.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "REPLICATION")
-    props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
+    props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "REPLICATION://localhost:1")
+    props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
     props.put(QuotaConfig.NUM_QUOTA_SAMPLES_CONFIG, numQuotaSamples.toString)
     props.put(QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_CONFIG, quotaWindowSizeSeconds.toString)
     props
@@ -90,12 +90,12 @@ class ConnectionQuotasTest {
 
     listeners.keys.foreach { name =>
         blockedPercentMeters.put(name, new KafkaMetricsGroup(this.getClass).newMeter(
-          s"${name}BlockedPercent", "blocked time", TimeUnit.NANOSECONDS, Map(ListenerMetricTag -> name).asJava))
+          s"${name}BlockedPercent", "blocked time", TimeUnit.NANOSECONDS, util.Map.of(ListenerMetricTag, name)))
     }
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on
     // system time; so using mock time will likely result in test flakiness due to a mixed use of mock and system time
     time = Time.SYSTEM
-    metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
+    metrics = new Metrics(new MetricConfig(), util.List.of, time)
     executor = Executors.newFixedThreadPool(listeners.size)
   }
 
@@ -281,7 +281,7 @@ class ConnectionQuotasTest {
 
     addListenersAndVerify(config, connectionQuotas)
 
-    val listenerConfig = Map(SocketServerConfigs.MAX_CONNECTIONS_CONFIG -> listenerMaxConnections.toString).asJava
+    val listenerConfig = util.Map.of(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, listenerMaxConnections.toString)
     listeners.values.foreach { listener =>
       connectionQuotas.maxConnectionsPerListener(listener.listenerName).configure(listenerConfig)
     }
@@ -373,7 +373,7 @@ class ConnectionQuotasTest {
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
-    val listenerConfig = Map(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG -> listenerRateLimit.toString).asJava
+    val listenerConfig = util.Map.of(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, listenerRateLimit.toString)
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
 
     // create connections with the rate < listener quota on every listener, and verify there is no throttling
@@ -399,7 +399,7 @@ class ConnectionQuotasTest {
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
-    val listenerConfig = Map(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG -> listenerRateLimit.toString).asJava
+    val listenerConfig = util.Map.of(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, listenerRateLimit.toString)
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
 
     // create connections with the rate > listener quota on every listener
@@ -497,7 +497,7 @@ class ConnectionQuotasTest {
     // with a default per-IP limit of 25 and a listener rate of 30, only one IP should be able to saturate their IP rate
     // limit, the other IP will hit listener rate limits and block
     connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
-    val listenerConfig = Map(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG -> listenerRateLimit.toString).asJava
+    val listenerConfig = util.Map.of(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, listenerRateLimit.toString)
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
     val listener = listeners("EXTERNAL").listenerName
     // use a small number of connections because a longer-running test will have both IPs throttle at different times
@@ -555,7 +555,7 @@ class ConnectionQuotasTest {
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     val maxListenerConnectionRate = 0
-    val listenerConfig = Map(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG -> maxListenerConnectionRate.toString).asJava
+    val listenerConfig = util.Map.of(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, maxListenerConnectionRate.toString)
     assertThrows(classOf[ConfigException],
       () => connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).validateReconfiguration(listenerConfig)
     )
@@ -568,11 +568,11 @@ class ConnectionQuotasTest {
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     val listenerRateLimit = 20
-    val listenerConfig = Map(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG -> listenerRateLimit.toString).asJava
+    val listenerConfig = util.Map.of(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, listenerRateLimit.toString)
     connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).configure(listenerConfig)
 
     // remove connection rate limit
-    connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).reconfigure(Map.empty.asJava)
+    connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).reconfigure(util.Map.of)
 
     // create connections as fast as possible, will timeout if connections get throttled with previous rate
     // (50s to create 1000 connections)
@@ -585,7 +585,7 @@ class ConnectionQuotasTest {
 
     // configure 100 connection/second rate limit
     val newMaxListenerConnectionRate = 10
-    val newListenerConfig = Map(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG -> newMaxListenerConnectionRate.toString).asJava
+    val newListenerConfig = util.Map.of(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, newMaxListenerConnectionRate.toString)
     connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).reconfigure(newListenerConfig)
 
     // verify rate limit
@@ -749,7 +749,7 @@ class ConnectionQuotasTest {
   }
 
   private def addListenersAndVerify(config: KafkaConfig, connectionQuotas: ConnectionQuotas) : Unit = {
-    addListenersAndVerify(config, Map.empty.asJava, connectionQuotas)
+    addListenersAndVerify(config, util.Map.of, connectionQuotas)
   }
 
   private def addListenersAndVerify(config: KafkaConfig,
@@ -828,7 +828,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "connection-accept-throttle-time",
       SocketServer.MetricsGroup,
-      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+      util.Map.of(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
 
@@ -836,7 +836,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "ip-connection-accept-throttle-time",
       SocketServer.MetricsGroup,
-      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+      util.Map.of(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
 
@@ -844,7 +844,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "connection-accept-rate",
       SocketServer.MetricsGroup,
-      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+      util.Map.of(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
 
@@ -859,7 +859,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       s"connection-accept-rate",
       SocketServer.MetricsGroup,
-      Collections.singletonMap("ip", ip))
+      util.Map.of("ip", ip))
     metrics.metric(metricName)
   }
 

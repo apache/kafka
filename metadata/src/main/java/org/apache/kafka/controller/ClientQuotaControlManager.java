@@ -38,7 +38,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -182,7 +181,7 @@ public class ClientQuotaControlManager {
 
         List<ApiMessageAndVersion> newRecords = new ArrayList<>(newQuotaConfigs.size());
         Map<String, Double> currentQuotas = clientQuotaData.containsKey(entity) ?
-                clientQuotaData.get(entity) : Collections.emptyMap();
+                clientQuotaData.get(entity) : Map.of();
         for (Map.Entry<String, Double> entry : newQuotaConfigs.entrySet()) {
             String key = entry.getKey();
             Double newValue = entry.getValue();

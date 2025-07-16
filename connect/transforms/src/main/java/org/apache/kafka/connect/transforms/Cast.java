@@ -386,14 +386,11 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     }
 
     private static String castToString(Object value) {
-        if (value instanceof java.util.Date) {
-            java.util.Date dateValue = (java.util.Date) value;
+        if (value instanceof java.util.Date dateValue) {
             return Values.dateFormatFor(dateValue).format(dateValue);
-        } else if (value instanceof ByteBuffer) {
-            ByteBuffer byteBuffer = (ByteBuffer) value;
+        } else if (value instanceof ByteBuffer byteBuffer) {
             return Base64.getEncoder().encodeToString(Utils.readBytes(byteBuffer));
-        } else if (value instanceof byte[]) {
-            byte[] rawBytes = (byte[]) value;
+        } else if (value instanceof byte[] rawBytes) {
             return Base64.getEncoder().encodeToString(rawBytes);
         } else {
             return value.toString();

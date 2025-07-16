@@ -18,8 +18,6 @@ package kafka.server
 
 import kafka.cluster.Partition
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.UnifiedLog
-import kafka.log.remote.RemoteLogManager
 import kafka.utils.TestUtils.random
 import kafka.utils._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -34,13 +32,14 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.{QuotaConfig, ServerLogConfigs}
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.server.log.remote.TopicPartitionLog
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager
+import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
@@ -56,13 +55,12 @@ import scala.jdk.CollectionConverters._
 @Timeout(100)
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   override def generateConfigs: Seq[KafkaConfig] = {
-    val cfg = TestUtils.createBrokerConfig(0, null)
+    val cfg = TestUtils.createBrokerConfig(0)
     List(KafkaConfig.fromProps(cfg))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testConfigChange(quorum: String): Unit = {
+  @Test
+  def testConfigChange(): Unit = {
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = new TopicPartition("test", 0)
@@ -94,21 +92,20 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicTopicConfigChange(quorum: String): Unit = {
+  @Test
+  def testDynamicTopicConfigChange(): Unit = {
     val tp = new TopicPartition("test", 0)
-    val oldSegmentSize = 1000
+    val oldSegmentSize = 2 * 1024 * 1024
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
       assertTrue(logOpt.isDefined)
-      assertEquals(oldSegmentSize, logOpt.get.config.segmentSize)
+      assertEquals(oldSegmentSize, logOpt.get.config.segmentSize())
     }
 
-    val newSegmentSize = 2000
+    val newSegmentSize = 2 * 1024 * 1024
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
@@ -120,7 +117,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
     val log = brokers.head.logManager.getLog(tp).get
     TestUtils.retry(10000) {
-      assertEquals(newSegmentSize, log.config.segmentSize)
+      assertEquals(newSegmentSize, log.config.segmentSize())
     }
 
     (1 to 50).foreach(i => TestUtils.produceMessage(brokers, tp.topic, i.toString))
@@ -179,59 +176,52 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testClientIdQuotaConfigChange(quorum: String): Unit = {
+  @Test
+  def testClientIdQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(CLIENT_ID, "testClient")
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUserQuotaConfigChange(quorum: String): Unit = {
+  @Test
+  def testUserQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(USER, "ANONYMOUS")
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testUserClientIdQuotaChange(quorum: String): Unit = {
+  @Test
+  def testUserClientIdQuotaChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(USER, "ANONYMOUS")
     m.put(CLIENT_ID, "testClient")
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDefaultClientIdQuotaConfigChange(quorum: String): Unit = {
+  @Test
+  def testDefaultClientIdQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(CLIENT_ID, null)
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDefaultUserQuotaConfigChange(quorum: String): Unit = {
+  @Test
+  def testDefaultUserQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(USER, null)
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDefaultUserClientIdQuotaConfigChange(quorum: String): Unit = {
+  @Test
+  def testDefaultUserClientIdQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(USER, null)
     m.put(CLIENT_ID, null)
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testIpQuotaInitialization(quorum: String): Unit = {
+  @Test
+  def testIpQuotaInitialization(): Unit = {
     val broker = brokers.head
     val admin = createAdminClient()
     try {
@@ -251,9 +241,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testIpQuotaConfigChange(quorum: String): Unit = {
+  @Test
+  def testIpQuotaConfigChange(): Unit = {
     val admin = createAdminClient()
     try {
       val alterations = util.Arrays.asList(
@@ -295,9 +284,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   private def tempTopic() : String = "testTopic" + random.nextInt(1000000)
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testConfigChangeOnNonExistingTopicWithAdminClient(quorum: String): Unit = {
+  @Test
+  def testConfigChangeOnNonExistingTopicWithAdminClient(): Unit = {
     val topic = tempTopic()
     val admin = createAdminClient()
     try {
@@ -313,15 +301,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testIncrementalAlterDefaultTopicConfig(quorum: String): Unit = {
+  @Test
+  def testIncrementalAlterDefaultTopicConfig(): Unit = {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
       val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "200000"), OpType.SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
-      assertFutureThrows(future, classOf[InvalidRequestException])
+      assertFutureThrows(classOf[InvalidRequestException], future)
     } finally {
       admin.close()
     }
@@ -345,9 +332,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testBrokerIdConfigChangeAndDelete(quorum: String): Unit = {
+  @Test
+  def testBrokerIdConfigChangeAndDelete(): Unit = {
     val newValue: Long = 100000L
     val brokerId: String = this.brokers.head.config.brokerId.toString
     setBrokerConfigs(brokerId, newValue)
@@ -369,9 +355,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDefaultBrokerIdConfigChangeAndDelete(quorum: String): Unit = {
+  @Test
+  def testDefaultBrokerIdConfigChangeAndDelete(): Unit = {
     val newValue: Long = 100000L
     val brokerId: String = ""
     setBrokerConfigs(brokerId, newValue)
@@ -392,9 +377,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDefaultAndBrokerIdConfigChange(quorum: String): Unit = {
+  @Test
+  def testDefaultAndBrokerIdConfigChange(): Unit = {
     val newValue: Long = 100000L
     val brokerId: String = this.brokers.head.config.brokerId.toString
     setBrokerConfigs(brokerId, newValue)
@@ -410,9 +394,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDynamicGroupConfigChange(quorum: String): Unit = {
+  @Test
+  def testDynamicGroupConfigChange(): Unit = {
     val newSessionTimeoutMs = 50000
     val consumerGroupId = "group-foo"
     val admin = createAdminClient()
@@ -437,9 +420,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(newSessionTimeoutMs, groupConfig.consumerSessionTimeoutMs())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip848"))
-  def testDynamicShareGroupConfigChange(quorum: String): Unit = {
+  @Test
+  def testDynamicShareGroupConfigChange(): Unit = {
     val newRecordLockDurationMs = 50000
     val shareGroupId = "group-foo"
     val admin = createAdminClient()
@@ -464,15 +446,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(newRecordLockDurationMs, groupConfig.shareRecordLockDurationMs)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testIncrementalAlterDefaultGroupConfig(quorum: String): Unit = {
+  @Test
+  def testIncrementalAlterDefaultGroupConfig(): Unit = {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.GROUP, "")
       val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "200000"), OpType.SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
-      assertFutureThrows(future, classOf[InvalidRequestException])
+      assertFutureThrows(classOf[InvalidRequestException], future)
     } finally {
       admin.close()
     }
@@ -486,18 +467,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 }
 
 class DynamicConfigChangeUnitTest {
-  @Test
-  def testIpHandlerUnresolvableAddress(): Unit = {
-    val configHandler = new IpConfigHandler(null)
-    val props: Properties = new Properties()
-    props.put(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "1")
-
-    assertThrows(classOf[IllegalArgumentException], () => configHandler.processConfigChanges("illegal-hostname", props))
-  }
 
   @Test
   def shouldParseReplicationQuotaProperties(): Unit = {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     val props: Properties = new Properties()
 
     //Given
@@ -510,7 +483,7 @@ class DynamicConfigChangeUnitTest {
 
   @Test
   def shouldParseWildcardReplicationQuotaProperties(): Unit = {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     val props: Properties = new Properties()
 
     //Given
@@ -526,11 +499,11 @@ class DynamicConfigChangeUnitTest {
   @Test
   def shouldParseRegardlessOfWhitespaceAroundValues(): Unit = {
     def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
-      configHandler.parseThrottledPartitions(
-        CoreUtils.propsWith(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, value),
-        102, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
+      val props = new Properties()
+      props.put(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, value)
+      configHandler.parseThrottledPartitions(props, 102, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
     }
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     assertEquals(ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq, parse(configHandler, "* "))
     assertEquals(Seq(), parse(configHandler, " "))
     assertEquals(Seq(6), parse(configHandler, "6:102"))
@@ -540,7 +513,7 @@ class DynamicConfigChangeUnitTest {
 
   @Test
   def shouldParseReplicationQuotaReset(): Unit = {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     val props: Properties = new Properties()
 
     //Given
@@ -582,12 +555,12 @@ class DynamicConfigChangeUnitTest {
     when(replicaManager.onlinePartition(tp1)).thenReturn(Some(partition1))
     when(log1.config).thenReturn(new LogConfig(Collections.emptyMap()))
 
-    val leaderPartitionsArg: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
-    val followerPartitionsArg: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
+    val leaderPartitionsArg: ArgumentCaptor[util.Set[TopicPartitionLog]] = ArgumentCaptor.forClass(classOf[util.Set[TopicPartitionLog]])
+    val followerPartitionsArg: ArgumentCaptor[util.Set[TopicPartitionLog]] = ArgumentCaptor.forClass(classOf[util.Set[TopicPartitionLog]])
     doNothing().when(rlm).onLeadershipChange(leaderPartitionsArg.capture(), followerPartitionsArg.capture(), any())
 
     val isRemoteLogEnabledBeforeUpdate = false
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null)
     configHandler.maybeUpdateRemoteLogComponents(topic, Seq(log0, log1), isRemoteLogEnabledBeforeUpdate, false)
     assertEquals(Collections.singleton(partition0), leaderPartitionsArg.getValue)
     assertEquals(Collections.singleton(partition1), followerPartitionsArg.getValue)
@@ -611,7 +584,7 @@ class DynamicConfigChangeUnitTest {
     when(partition.isLeader).thenReturn(true)
 
     val isRemoteLogEnabledBeforeUpdate = true
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null)
     configHandler.maybeUpdateRemoteLogComponents(topic, Seq(log0), isRemoteLogEnabledBeforeUpdate, false)
     verify(rlm, never()).onLeadershipChange(any(), any(), any())
   }

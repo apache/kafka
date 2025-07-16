@@ -228,7 +228,7 @@ public class LagFetchIntegrationTest {
             assertThat(lagInfo.currentOffsetPosition(), equalTo(0L));
             assertThat(lagInfo.endOffsetPosition(), equalTo(5L));
             assertThat(lagInfo.offsetLag(), equalTo(5L));
-            // standby thread wont proceed to RUNNING before this barrier is crossed
+            // standby thread won't proceed to RUNNING before this barrier is crossed
             lagCheckBarrier.await(60, TimeUnit.SECONDS);
 
             // wait till the lag goes down to 0, on the standby

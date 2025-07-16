@@ -45,6 +45,9 @@ public class RecordDeserializationException extends SerializationException {
     private final ByteBuffer valueBuffer;
     private final Headers headers;
 
+    /**
+     * @deprecated Since 3.9. Use {@link #RecordDeserializationException(DeserializationExceptionOrigin, TopicPartition, long, long, TimestampType, ByteBuffer, ByteBuffer, Headers, String, Throwable)} instead.
+     */
     @Deprecated
     public RecordDeserializationException(TopicPartition partition,
                                           long offset,

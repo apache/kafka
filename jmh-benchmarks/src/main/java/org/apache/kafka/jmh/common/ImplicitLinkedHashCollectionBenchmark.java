@@ -83,8 +83,7 @@ public class ImplicitLinkedHashCollectionBenchmark {
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof TestElement)) return false;
-            TestElement other = (TestElement) o;
+            if (!(o instanceof TestElement other)) return false;
             return value.equals(other.value);
         }
     }

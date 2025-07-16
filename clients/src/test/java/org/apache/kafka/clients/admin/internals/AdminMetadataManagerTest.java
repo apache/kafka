@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 
@@ -94,6 +95,16 @@ public class AdminMetadataManagerTest {
         mgr.updateFailed(new AuthenticationException("Authentication failed"));
         assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
         assertThrows(AuthenticationException.class, mgr::isReady);
+        mgr.update(mockCluster(), time.milliseconds());
+        assertTrue(mgr.isReady());
+    }
+
+    @Test
+    public void testAuthorizationFailure() {
+        mgr.transitionToUpdatePending(time.milliseconds());
+        mgr.updateFailed(new AuthorizationException("Authorization failed"));
+        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertThrows(AuthorizationException.class, mgr::isReady);
         mgr.update(mockCluster(), time.milliseconds());
         assertTrue(mgr.isReady());
     }

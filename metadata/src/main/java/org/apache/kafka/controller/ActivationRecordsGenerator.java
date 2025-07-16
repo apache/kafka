@@ -17,16 +17,22 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
+
+import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 
 
 public class ActivationRecordsGenerator {
@@ -35,7 +41,8 @@ public class ActivationRecordsGenerator {
         Consumer<String> activationMessageConsumer,
         long transactionStartOffset,
         BootstrapMetadata bootstrapMetadata,
-        MetadataVersion metadataVersion
+        MetadataVersion metadataVersion,
+        int defaultMinInSyncReplicas
     ) {
         StringBuilder logMessageBuilder = new StringBuilder("Performing controller activation. ");
         List<ApiMessageAndVersion> records = new ArrayList<>();
@@ -87,6 +94,15 @@ public class ActivationRecordsGenerator {
         // initialization, etc.
         records.addAll(bootstrapMetadata.records());
 
+        // If ELR is enabled, we need to set a cluster-level min.insync.replicas.
+        if (bootstrapMetadata.featureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME) > 0) {
+            records.add(new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(BROKER.id()).
+                setResourceName("").
+                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                setValue(Integer.toString(defaultMinInSyncReplicas)), (short) 0));
+        }
+
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
         if (metadataVersion.isMetadataTransactionSupported()) {
             records.add(new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
@@ -122,13 +138,6 @@ public class ActivationRecordsGenerator {
             }
         }
 
-        if (curMetadataVersion.equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
-            logMessageBuilder.append("No metadata.version feature level record was found in the log. ")
-                .append("Treating the log as version ")
-                .append(MetadataVersion.MINIMUM_KRAFT_VERSION)
-                .append(". ");
-        }
-
         activationMessageConsumer.accept(logMessageBuilder.toString().trim());
         return ControllerResult.atomicOf(records, null);
     }
@@ -136,25 +145,29 @@ public class ActivationRecordsGenerator {
     /**
      * Generate the set of activation records.
      * </p>
-     * If the log is empty, write the bootstrap records. If the log is not empty, do some validation and
+     * If the metadata version is empty, write the bootstrap records. If the metadata version is not empty, do some validation and
      * possibly write some records to put the log into a valid state. For bootstrap records, if KIP-868
-     * metadata transactions are supported, ues them. Otherwise, write the bootstrap records as an
+     * metadata transactions are supported, use them. Otherwise, write the bootstrap records as an
      * atomic batch. The single atomic batch can be problematic if the bootstrap records are too large
-     * (e.g., lots of SCRAM credentials). If ZK migrations are enabled, the activation records will
-     * include a ZkMigrationState record regardless of whether the log was empty or not.
+     * (e.g., lots of SCRAM credentials).
      */
     static ControllerResult<Void> generate(
         Consumer<String> activationMessageConsumer,
-        boolean isEmpty,
         long transactionStartOffset,
         BootstrapMetadata bootstrapMetadata,
-        MetadataVersion curMetadataVersion
+        Optional<MetadataVersion> curMetadataVersion,
+        int defaultMinInSyncReplicas
     ) {
-        if (isEmpty) {
-            return recordsForEmptyLog(activationMessageConsumer, transactionStartOffset,
-                    bootstrapMetadata, bootstrapMetadata.metadataVersion());
+        if (curMetadataVersion.isEmpty()) {
+            return recordsForEmptyLog(activationMessageConsumer,
+                    transactionStartOffset,
+                    bootstrapMetadata,
+                    bootstrapMetadata.metadataVersion(),
+                    defaultMinInSyncReplicas);
         } else {
-            return recordsForNonEmptyLog(activationMessageConsumer, transactionStartOffset, curMetadataVersion);
+            return recordsForNonEmptyLog(activationMessageConsumer,
+                    transactionStartOffset,
+                    curMetadataVersion.get());
         }
     }
 }

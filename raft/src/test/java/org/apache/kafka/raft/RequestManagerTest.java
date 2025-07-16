@@ -223,7 +223,7 @@ public class RequestManagerTest {
     }
 
     @Test
-    public void testFindReadyWithRequestTimedout() {
+    public void testFindReadyWithRequestTimedOut() {
         Node otherNode = new Node(1, "other-node", 1234);
         List<Node> bootstrapList = makeBootstrapList(3);
         RequestManager cache = new RequestManager(

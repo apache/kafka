@@ -19,7 +19,6 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 
 import java.util.Collection;
@@ -28,10 +27,7 @@ import java.util.stream.Collectors;
 
 /**
  * The result of the {@link Admin#fenceProducers(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class FenceProducersResult {
 
     private final Map<CoordinatorKey, KafkaFuture<ProducerIdAndEpoch>> futures;
@@ -69,7 +65,7 @@ public class FenceProducersResult {
      * Return a future which succeeds only if all the producer fencings succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 
     private <T> KafkaFuture<T> findAndApply(String transactionalId, KafkaFuture.BaseFunction<ProducerIdAndEpoch, T> followup) {

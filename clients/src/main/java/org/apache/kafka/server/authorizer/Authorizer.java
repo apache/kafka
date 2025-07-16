@@ -24,7 +24,6 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -60,6 +59,10 @@ import java.util.concurrent.CompletionStage;
  *
  * Authorizer implementation class may optionally implement @{@link org.apache.kafka.common.Reconfigurable}
  * to enable dynamic reconfiguration without restarting the broker.
+ * <p>Authorizer implementation class may also optionally implement {@link org.apache.kafka.common.metrics.Monitorable}
+ * to enable the authorizer to register metrics. The following tags are automatically added to all metrics registered:
+ * <code>config</code> set to <code>authorizer.class.name</code>, <code>class</code> set to the Authorizer class name,
+ * and <code>role</code> set to either <code>broker</code> or <code>controller</code>.
  * <p>
  * <b>Threading model:</b>
  * <ul>
@@ -75,7 +78,6 @@ import java.util.concurrent.CompletionStage;
  * </ul>
  * </p>
  */
-@InterfaceStability.Evolving
 public interface Authorizer extends Configurable, Closeable {
 
     /**

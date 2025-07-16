@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.api.AbstractSaslTest;
-import kafka.api.Both$;
 import kafka.security.JaasTestUtils;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -113,7 +112,8 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     @BeforeEach
     @Override
     public void setUp(TestInfo testInfo) {
-        startSasl(jaasSections(KAFKA_SERVER_SASL_MECHANISMS, Some$.MODULE$.apply(KAFKA_CLIENT_SASL_MECHANISM), Both$.MODULE$,
+        startSasl(jaasSections(KAFKA_SERVER_SASL_MECHANISMS,
+            Some$.MODULE$.apply(KAFKA_CLIENT_SASL_MECHANISM),
             JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME));
         String superuserLoginContext = jaasAdminLoginModule(KAFKA_CLIENT_SASL_MECHANISM, Option.empty());
         this.superuserClientConfig().put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext);
@@ -134,26 +134,28 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         closeSasl();
     }
 
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly")
-    public void testConsumerGroupServiceWithAuthenticationFailure(String quorum, String groupProtocol) throws Exception {
-        ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
-        try (Consumer<byte[], byte[]> consumer = createConsumer()) {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void testConsumerGroupServiceWithAuthenticationFailure(String groupProtocol) throws Exception {
+        try (
+            ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
+            Consumer<byte[], byte[]> consumer = createConsumer()
+        ) {
             consumer.subscribe(Collections.singletonList(TOPIC));
-
             verifyAuthenticationException(consumerGroupService::listGroups);
-        } finally {
-            consumerGroupService.close();
         }
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly")
-    public void testConsumerGroupServiceWithAuthenticationSuccess(String quorum, String groupProtocol) throws Exception {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void testConsumerGroupServiceWithAuthenticationSuccess(String groupProtocol) throws Exception {
         createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2);
-        ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
-        try (Consumer<byte[], byte[]> consumer = createConsumer()) {
+        try (
+            ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
+            Consumer<byte[], byte[]> consumer = createConsumer()
+        ) {
             consumer.subscribe(Collections.singletonList(TOPIC));
 
             TestUtils.waitForCondition(() -> {
@@ -165,8 +167,6 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
                 }
             }, "failed to poll data with authentication");
             assertEquals(1, consumerGroupService.listConsumerGroups().size());
-        } finally {
-            consumerGroupService.close();
         }
     }
 

@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
-import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 
 import java.util.Objects;
@@ -66,12 +66,18 @@ public class OffsetAndMetadata {
      */
     public final long recordOffset;
 
+    /**
+     * The topic id used to commit the offset.
+     */
+    public final Uuid topicId;
+
     public OffsetAndMetadata(
         long committedOffset,
         OptionalInt leaderEpoch,
         String metadata,
         long commitTimestampMs,
-        OptionalLong expireTimestampMs
+        OptionalLong expireTimestampMs,
+        Uuid topicId
     ) {
         this(
             -1L,
@@ -79,7 +85,8 @@ public class OffsetAndMetadata {
             leaderEpoch,
             metadata,
             commitTimestampMs,
-            expireTimestampMs
+            expireTimestampMs,
+            topicId
         );
     }
 
@@ -89,7 +96,8 @@ public class OffsetAndMetadata {
         OptionalInt leaderEpoch,
         String metadata,
         long commitTimestampMs,
-        OptionalLong expireTimestampMs
+        OptionalLong expireTimestampMs,
+        Uuid topicId
     ) {
         this.recordOffset = recordOffset;
         this.committedOffset = committedOffset;
@@ -97,6 +105,7 @@ public class OffsetAndMetadata {
         this.metadata = Objects.requireNonNull(metadata);
         this.commitTimestampMs = commitTimestampMs;
         this.expireTimestampMs = Objects.requireNonNull(expireTimestampMs);
+        this.topicId = topicId;
     }
 
     @Override
@@ -106,6 +115,7 @@ public class OffsetAndMetadata {
             ", metadata=" + metadata +
             ", commitTimestampMs=" + commitTimestampMs +
             ", expireTimestampMs=" + expireTimestampMs +
+            ", topicId=" + topicId +
             ", recordOffset=" + recordOffset +
             ')';
     }
@@ -122,6 +132,7 @@ public class OffsetAndMetadata {
         if (recordOffset != that.recordOffset) return false;
         if (!Objects.equals(leaderEpoch, that.leaderEpoch)) return false;
         if (!Objects.equals(metadata, that.metadata)) return false;
+        if (!Objects.equals(topicId, that.topicId)) return false;
         return Objects.equals(expireTimestampMs, that.expireTimestampMs);
     }
 
@@ -130,6 +141,7 @@ public class OffsetAndMetadata {
         int result = (int) (committedOffset ^ (committedOffset >>> 32));
         result = 31 * result + (leaderEpoch != null ? leaderEpoch.hashCode() : 0);
         result = 31 * result + (metadata != null ? metadata.hashCode() : 0);
+        result = 31 * result + (topicId != null ? topicId.hashCode() : 0);
         result = 31 * result + (int) (commitTimestampMs ^ (commitTimestampMs >>> 32));
         result = 31 * result + (expireTimestampMs != null ? expireTimestampMs.hashCode() : 0);
         result = 31 * result + (int) (recordOffset ^ (recordOffset >>> 32));
@@ -149,7 +161,8 @@ public class OffsetAndMetadata {
             ofSentinel(record.leaderEpoch()),
             record.metadata(),
             record.commitTimestamp(),
-            ofSentinel(record.expireTimestamp())
+            ofSentinel(record.expireTimestamp()),
+            record.topicId()
         );
     }
 
@@ -157,6 +170,7 @@ public class OffsetAndMetadata {
      * @return An OffsetAndMetadata created from an OffsetCommitRequestPartition request.
      */
     public static OffsetAndMetadata fromRequest(
+        Uuid topicId,
         OffsetCommitRequestData.OffsetCommitRequestPartition partition,
         long currentTimeMs,
         OptionalLong expireTimestampMs
@@ -166,9 +180,9 @@ public class OffsetAndMetadata {
             ofSentinel(partition.committedLeaderEpoch()),
             partition.committedMetadata() == null ?
                 OffsetAndMetadata.NO_METADATA : partition.committedMetadata(),
-            partition.commitTimestamp() == OffsetCommitRequest.DEFAULT_TIMESTAMP ?
-                currentTimeMs : partition.commitTimestamp(),
-            expireTimestampMs
+            currentTimeMs,
+            expireTimestampMs,
+            topicId
         );
     }
 
@@ -185,7 +199,8 @@ public class OffsetAndMetadata {
             partition.committedMetadata() == null ?
                 OffsetAndMetadata.NO_METADATA : partition.committedMetadata(),
             currentTimeMs,
-            OptionalLong.empty()
+            OptionalLong.empty(),
+            Uuid.ZERO_UUID
         );
     }
 }

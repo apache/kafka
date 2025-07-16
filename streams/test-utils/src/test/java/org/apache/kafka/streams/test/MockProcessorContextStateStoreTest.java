@@ -178,7 +178,7 @@ public class MockProcessorContextStateStoreTest {
                     () -> store.init(context.getStateStoreContext(), store)
                 );
             } else {
-                final InternalProcessorContext internalProcessorContext = mock(InternalProcessorContext.class);
+                final InternalProcessorContext<?, ?> internalProcessorContext = mock(InternalProcessorContext.class);
                 when(internalProcessorContext.taskId()).thenReturn(context.taskId());
                 when(internalProcessorContext.stateDir()).thenReturn(stateDir);
                 when(internalProcessorContext.metrics()).thenReturn((StreamsMetricsImpl) context.metrics());

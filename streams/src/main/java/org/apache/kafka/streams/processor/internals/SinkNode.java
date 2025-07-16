@@ -30,13 +30,13 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
     private Serializer<KIn> keySerializer;
     private Serializer<VIn> valSerializer;
-    private final TopicNameExtractor<KIn, VIn> topicExtractor;
+    private final TopicNameExtractor<? super KIn, ? super VIn> topicExtractor;
     private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
 
     private InternalProcessorContext<Void, Void> context;
 
     SinkNode(final String name,
-             final TopicNameExtractor<KIn, VIn> topicExtractor,
+             final TopicNameExtractor<? super KIn, ? super VIn> topicExtractor,
              final Serializer<KIn> keySerializer,
              final Serializer<VIn> valSerializer,
              final StreamPartitioner<? super KIn, ? super VIn> partitioner) {
@@ -61,13 +61,13 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
         super.init(context);
         this.context = context;
         try {
-            keySerializer = prepareKeySerializer(keySerializer, context, this.name());
+            keySerializer = prepareKeySerializer(keySerializer, context);
         } catch (ConfigException | StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize key serdes for sink node %s", name()), e, context.taskId());
         }
 
         try {
-            valSerializer = prepareValueSerializer(valSerializer, context, this.name());
+            valSerializer = prepareValueSerializer(valSerializer, context);
         } catch (final ConfigException | StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize value serdes for sink node %s", name()), e, context.taskId());
         }
@@ -85,9 +85,9 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
         final ProcessorRecordContext contextForExtraction =
             new ProcessorRecordContext(
                 timestamp,
-                context.offset(),
-                context.partition(),
-                context.topic(),
+                context.recordContext().offset(),
+                context.recordContext().partition(),
+                context.recordContext().topic(),
                 record.headers()
             );
 

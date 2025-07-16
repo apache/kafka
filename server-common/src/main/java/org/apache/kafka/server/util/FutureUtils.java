@@ -65,8 +65,7 @@ public class FutureUtils {
             timeout.setStackTrace(t.getStackTrace());
             throw timeout;
         } catch (Throwable t)  {
-            if (t instanceof ExecutionException) {
-                ExecutionException executionException = (ExecutionException) t;
+            if (t instanceof ExecutionException executionException) {
                 t = executionException.getCause();
             }
             log.error("{}Received a fatal error while waiting for {}", prefix, action, t);
@@ -121,7 +120,7 @@ public class FutureUtils {
         Supplier<T> init,
         BiConsumer<T, T> add
     ) {
-        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]));
         return allFutures.thenApply(v -> {
             final T res = init.get();
             futures.forEach(future -> add.accept(res, future.join()));

@@ -29,7 +29,7 @@ public interface EpochState extends Closeable {
      * Decide whether to grant a vote to a replica.
      *
      * It is the responsibility of the caller to invoke
-     * {@link QuorumState#transitionToUnattachedVotedState(int, ReplicaKey)} if a standard vote is granted.
+     * {@link QuorumState#unattachedAddVotedState(int, ReplicaKey)} if a standard vote is granted.
      *
      * @param replicaKey the id and directory of the replica requesting the vote
      * @param isLogUpToDate whether the replica's log is at least as up-to-date as receiver’s log

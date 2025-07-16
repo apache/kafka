@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -33,7 +34,7 @@ import java.util.Set;
  * any other candidate in this epoch.
  *
  * A resigned leader may initiate a new election by sending `EndQuorumEpoch`
- * requests to all of the voters. This state tracks delivery of this request
+ * requests to all the voters. This state tracks delivery of this request
  * in order to prevent unnecessary retries.
  *
  * A voter will remain in the `Resigned` state until we either learn about
@@ -75,7 +76,7 @@ public class ResignedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, localId, voters);
+        return ElectionState.withElectedLeader(epoch, localId, Optional.empty(), voters);
     }
 
     @Override

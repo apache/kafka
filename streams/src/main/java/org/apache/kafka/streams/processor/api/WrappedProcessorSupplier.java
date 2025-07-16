@@ -24,6 +24,7 @@ package org.apache.kafka.streams.processor.api;
  * To convert a {@link ProcessorSupplier} instance into a {@link WrappedProcessorSupplier},
  * use the {@link ProcessorWrapper#asWrapped(ProcessorSupplier)} method
  */
+@FunctionalInterface
 public interface WrappedProcessorSupplier<KIn, VIn, KOut, VOut> extends ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
 }

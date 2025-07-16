@@ -18,11 +18,16 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.provider.DirectoryConfigProvider;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
@@ -62,6 +67,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -72,6 +78,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -559,12 +566,14 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testConfigValidationTransformsExtendResults() {
+    @SuppressWarnings("rawtypes")
+    public void testConfigValidationTransformsExtendResults() throws ClassNotFoundException {
         final Class<? extends Connector> connectorClass = SampleSourceConnector.class;
         AbstractHerder herder = createConfigValidationHerder(connectorClass, noneConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
-        when(plugins.transformations()).thenReturn(Collections.singleton(transformationPluginDesc()));
+        Mockito.lenient().when(plugins.transformations()).thenReturn(Collections.singleton(transformationPluginDesc()));
+        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
 
         // Define 2 transformations. One has a class defined and so can get embedded configs, the other is missing
         // class info that should generate an error.
@@ -575,7 +584,8 @@ public class AbstractHerderTest {
         config.put(ConnectorConfig.TRANSFORMS_CONFIG + ".xformA.type", SampleTransformation.class.getName());
         config.put("required", "value"); // connector required config
         ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
-        assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
+
+        assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -596,7 +606,7 @@ public class AbstractHerderTest {
         assertEquals(1, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
-        assertEquals(31, infos.size());
+        assertEquals(33, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
         assertEquals("transforms.xformA.type",
                 infos.get("transforms.xformA.type").configValue().name());
@@ -611,12 +621,15 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testConfigValidationPredicatesExtendResults() {
+    @SuppressWarnings("rawtypes")
+    public void testConfigValidationPredicatesExtendResults() throws ClassNotFoundException {
         final Class<? extends Connector> connectorClass = SampleSourceConnector.class;
         AbstractHerder herder = createConfigValidationHerder(connectorClass, noneConnectorClientConfigOverridePolicy);
 
-        when(plugins.transformations()).thenReturn(Collections.singleton(transformationPluginDesc()));
-        when(plugins.predicates()).thenReturn(Collections.singleton(predicatePluginDesc()));
+        Mockito.lenient().when(plugins.transformations()).thenReturn(Collections.singleton(transformationPluginDesc()));
+        Mockito.lenient().when(plugins.predicates()).thenReturn(Collections.singleton(predicatePluginDesc()));
+        Mockito.lenient().when(plugins.newPlugin(SampleTransformation.class.getName(), null, classLoader)).thenReturn(new SampleTransformation());
+        Mockito.lenient().when(plugins.newPlugin(SamplePredicate.class.getName(), null, classLoader)).thenReturn(new SamplePredicate());
 
         // Define 2 predicates. One has a class defined and so can get embedded configs, the other is missing
         // class info that should generate an error.
@@ -653,7 +666,7 @@ public class AbstractHerderTest {
         assertEquals(1, result.errorCount());
         Map<String, ConfigInfo> infos = result.values().stream()
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
-        assertEquals(33, infos.size());
+        assertEquals(36, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
         assertEquals("transforms.xformA.type", infos.get("transforms.xformA.type").configValue().name());
         assertTrue(infos.get("transforms.xformA.type").configValue().errors().isEmpty());
@@ -697,7 +710,7 @@ public class AbstractHerderTest {
         config.put(saslConfigKey, "jaas_config");
 
         ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
-        assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
+        assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
         // We expect there to be errors due to now allowed override policy for ACKS.... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -756,7 +769,7 @@ public class AbstractHerderTest {
         overriddenClientConfigs.add(loginCallbackHandlerConfigKey);
 
         ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
-        assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
+        assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
         Map<String, String> validatedOverriddenClientConfigs = new HashMap<>();
         for (ConfigInfo configInfo : result.values()) {
@@ -772,6 +785,51 @@ public class AbstractHerderTest {
         assertEquals(rawOverriddenClientConfigs, validatedOverriddenClientConfigs);
 
         verifyValidationIsolation();
+    }
+
+    static final class TestClientConfigOverridePolicy extends AllConnectorClientConfigOverridePolicy implements Monitorable {
+
+        private static MetricName metricName = null;
+        private int count = 0;
+
+        @Override
+        protected boolean isAllowed(ConfigValue configValue) {
+            count++;
+            return super.isAllowed(configValue);
+        }
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            metricName = metrics.metricName("name", "description", new LinkedHashMap<>());
+            metrics.addMetric(metricName, (Measurable) (config, now) -> count);
+        }
+    }
+
+    @Test
+    public void testClientConfigOverridePolicyWithMetrics() {
+        final Class<? extends Connector> connectorClass = SampleSourceConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(connectorClass, new TestClientConfigOverridePolicy());
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
+        config.put(ConnectorConfig.NAME_CONFIG, "connector-name");
+        config.put("required", "value");
+
+        Map<String, String> overrides = Map.of(
+            producerOverrideKey(ProducerConfig.MAX_REQUEST_SIZE_CONFIG), "420",
+            producerOverrideKey(ProducerConfig.MAX_BLOCK_MS_CONFIG), "28980",
+            producerOverrideKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), "true");
+        config.putAll(overrides);
+
+        herder.validateConnectorConfig(config, s -> null, false);
+
+        Map<MetricName, KafkaMetric> metrics = herder.worker.metrics().metrics().metrics();
+        assertTrue(metrics.containsKey(TestClientConfigOverridePolicy.metricName));
+        assertEquals((double) overrides.size(), metrics.get(TestClientConfigOverridePolicy.metricName).metricValue());
+
+        herder.stopServices();
+        metrics = herder.worker.metrics().metrics().metrics();
+        assertFalse(metrics.containsKey(TestClientConfigOverridePolicy.metricName));
     }
 
     @Test
@@ -803,7 +861,7 @@ public class AbstractHerderTest {
                 .filter(configValue -> configValue.name().equals(testKey))
                 .map(ConfigValueInfo::errors)
                 .flatMap(Collection::stream)
-                .collect(Collectors.toList());
+                .toList();
 
         assertEquals(1, errorsForKey.size());
     }
@@ -1273,6 +1331,8 @@ public class AbstractHerderTest {
     }
 
     private AbstractHerder testHerder(ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        ConnectMetrics connectMetrics = new MockConnectMetrics();
+        when(worker.metrics()).thenReturn(connectMetrics);
         return mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, connectorClientConfigOverridePolicy, Time.SYSTEM)
                 .defaultAnswer(CALLS_REAL_METHODS));

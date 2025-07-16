@@ -57,7 +57,7 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
@@ -66,10 +66,8 @@ import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -452,7 +450,7 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldThrottleEmitNonJoinedOuterRecordsEvenWhenClockDrift() {
-        /**
+        /*
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
         final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();
@@ -480,7 +478,7 @@ public class KStreamKStreamJoinTest {
             Optional.of(StoreBuilderWrapper.wrapStoreBuilder(outerStoreBuilder)));
 
         final Processor<String, String, String, String> joinProcessor = join.get();
-        final MockInternalNewProcessorContext<String, String> procCtx = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, String> procCtx = new MockInternalProcessorContext<>();
         final WindowStore<String, String> otherStore = otherStoreBuilder.build();
 
         final KeyValueStore<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStore =
@@ -585,7 +583,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -707,7 +705,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -830,7 +828,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -1395,7 +1393,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -1662,7 +1660,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =

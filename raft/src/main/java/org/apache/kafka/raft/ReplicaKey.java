@@ -70,7 +70,7 @@ public final class ReplicaKey implements Comparable<ReplicaKey> {
 
     @Override
     public String toString() {
-        return String.format("ReplicaKey(id=%d, directoryId=%s)", id, directoryId);
+        return String.format("ReplicaKey(id=%d, directoryId=%s)", id, directoryId.map(Uuid::toString).orElse("<undefined>"));
     }
 
     public static ReplicaKey of(int id, Uuid directoryId) {

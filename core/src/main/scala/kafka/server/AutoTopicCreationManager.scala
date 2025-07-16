@@ -18,9 +18,7 @@
 package kafka.server
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
-import kafka.controller.KafkaController
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
@@ -31,10 +29,12 @@ import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicConfig, CreatableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{CreateTopicsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.quota.ControllerMutationQuota
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -47,36 +47,21 @@ trait AutoTopicCreationManager {
     controllerMutationQuota: ControllerMutationQuota,
     metadataRequestContext: Option[RequestContext]
   ): Seq[MetadataResponseTopic]
-}
 
-object AutoTopicCreationManager {
+  def createStreamsInternalTopics(
+    topics: Map[String, CreatableTopic],
+    requestContext: RequestContext
+  ): Unit
 
-  def apply(
-   config: KafkaConfig,
-   channelManager: Option[NodeToControllerChannelManager],
-   adminManager: Option[ZkAdminManager],
-   controller: Option[KafkaController],
-   groupCoordinator: GroupCoordinator,
-   txnCoordinator: TransactionCoordinator,
-   shareCoordinator: Option[ShareCoordinator],
- ): AutoTopicCreationManager = {
-    new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
-      controller, groupCoordinator, txnCoordinator, shareCoordinator)
-  }
 }
 
 class DefaultAutoTopicCreationManager(
   config: KafkaConfig,
-  channelManager: Option[NodeToControllerChannelManager],
-  adminManager: Option[ZkAdminManager],
-  controller: Option[KafkaController],
+  channelManager: NodeToControllerChannelManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
-  shareCoordinator: Option[ShareCoordinator]
+  shareCoordinator: ShareCoordinator
 ) extends AutoTopicCreationManager with Logging {
-  if (controller.isEmpty && channelManager.isEmpty) {
-    throw new IllegalArgumentException("Must supply a channel manager if not supplying a controller")
-  }
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
 
@@ -99,68 +84,37 @@ class DefaultAutoTopicCreationManager(
 
     val creatableTopicResponses = if (creatableTopics.isEmpty) {
       Seq.empty
-    } else if (controller.isEmpty || !controller.get.isActive && channelManager.isDefined) {
-      sendCreateTopicRequest(creatableTopics, metadataRequestContext)
     } else {
-      createTopicsInZk(creatableTopics, controllerMutationQuota)
+      sendCreateTopicRequest(creatableTopics, metadataRequestContext)
     }
 
     uncreatableTopicResponses ++ creatableTopicResponses
   }
 
-  private def createTopicsInZk(
-    creatableTopics: Map[String, CreatableTopic],
-    controllerMutationQuota: ControllerMutationQuota
-  ): Seq[MetadataResponseTopic] = {
-    val topicErrors = new AtomicReference[Map[String, ApiError]]()
-    try {
-      // Note that we use timeout = 0 since we do not need to wait for metadata propagation
-      // and we want to get the response error immediately.
-      adminManager.get.createTopics(
-        timeout = 0,
-        validateOnly = false,
-        creatableTopics,
-        Map.empty,
-        controllerMutationQuota,
-        topicErrors.set
-      )
+  override def createStreamsInternalTopics(
+    topics: Map[String, CreatableTopic],
+    requestContext: RequestContext
+  ): Unit = {
 
-      val creatableTopicResponses = Option(topicErrors.get) match {
-        case Some(errors) =>
-          errors.toSeq.map { case (topic, apiError) =>
-            val error = apiError.error match {
-              case Errors.TOPIC_ALREADY_EXISTS | Errors.REQUEST_TIMED_OUT =>
-                // The timeout error is expected because we set timeout=0. This
-                // nevertheless indicates that the topic metadata was created
-                // successfully, so we return LEADER_NOT_AVAILABLE.
-                Errors.LEADER_NOT_AVAILABLE
-              case error => error
-            }
-
-            new MetadataResponseTopic()
-              .setErrorCode(error.code)
-              .setName(topic)
-              .setIsInternal(Topic.isInternal(topic))
-          }
-
-        case None =>
-          creatableTopics.keySet.toSeq.map { topic =>
-            new MetadataResponseTopic()
-              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-              .setName(topic)
-              .setIsInternal(Topic.isInternal(topic))
-          }
+    for ((_, creatableTopic) <- topics) {
+      if (creatableTopic.numPartitions() == -1) {
+        creatableTopic
+          .setNumPartitions(config.numPartitions)
       }
+      if (creatableTopic.replicationFactor() == -1) {
+        creatableTopic
+          .setReplicationFactor(config.defaultReplicationFactor.shortValue)
+      }
+    }
 
-      creatableTopicResponses
-    } finally {
-      clearInflightRequests(creatableTopics)
+    if (topics.nonEmpty) {
+      sendCreateTopicRequest(topics, Some(requestContext))
     }
   }
 
   private def sendCreateTopicRequest(
     creatableTopics: Map[String, CreatableTopic],
-    metadataRequestContext: Option[RequestContext]
+    requestContext: Option[RequestContext]
   ): Seq[MetadataResponseTopic] = {
     val topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size)
     topicsToCreate.addAll(creatableTopics.values.asJavaCollection)
@@ -189,11 +143,7 @@ class DefaultAutoTopicCreationManager(
       }
     }
 
-    val channelManager = this.channelManager.getOrElse {
-      throw new IllegalStateException("Channel manager must be defined in order to send CreateTopic requests.")
-    }
-
-    val request = metadataRequestContext.map { context =>
+    val request = requestContext.map { context =>
       val requestVersion =
         channelManager.controllerApiVersions.toScala match {
           case None =>
@@ -241,22 +191,19 @@ class DefaultAutoTopicCreationManager(
           .setReplicationFactor(config.groupCoordinatorConfig.offsetsTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(groupCoordinator.groupMetadataTopicConfigs))
       case TRANSACTION_STATE_TOPIC_NAME =>
+        val transactionLogConfig = new TransactionLogConfig(config)
         new CreatableTopic()
           .setName(topic)
-          .setNumPartitions(config.transactionLogConfig.transactionTopicPartitions)
-          .setReplicationFactor(config.transactionLogConfig.transactionTopicReplicationFactor)
+          .setNumPartitions(transactionLogConfig.transactionTopicPartitions)
+          .setReplicationFactor(transactionLogConfig.transactionTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(
             txnCoordinator.transactionTopicConfigs))
       case SHARE_GROUP_STATE_TOPIC_NAME =>
-        val props = shareCoordinator match {
-          case Some(coordinator) => coordinator.shareGroupStateTopicConfigs()
-          case None => new Properties()
-        }
         new CreatableTopic()
           .setName(topic)
           .setNumPartitions(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())
           .setReplicationFactor(config.shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
-          .setConfigs(convertToTopicConfigCollections(props))
+          .setConfigs(convertToTopicConfigCollections(shareCoordinator.shareGroupStateTopicConfigs()))
       case topicName =>
         new CreatableTopic()
           .setName(topicName)

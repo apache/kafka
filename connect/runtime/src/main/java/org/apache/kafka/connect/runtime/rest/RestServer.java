@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterDetails;
@@ -96,7 +97,7 @@ public abstract class RestServer {
     private final Server jettyServer;
     private final RequestTimeout requestTimeout;
 
-    private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
+    private List<Plugin<ConnectRestExtension>> connectRestExtensionPlugins = Collections.emptyList();
 
     /**
      * Create a REST server for this herder using the specified configs.
@@ -217,10 +218,10 @@ public abstract class RestServer {
             throw new ConnectException("Unable to initialize REST server", e);
         }
 
-        log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
+        log.info("REST server listening at {}, advertising URL {}", jettyServer.getURI(), advertisedUrl());
         URI adminUrl = adminUrl();
         if (adminUrl != null)
-            log.info("REST admin endpoints at " + adminUrl);
+            log.info("REST admin endpoints at {}", adminUrl);
     }
 
     protected final void initializeResources() {
@@ -370,11 +371,11 @@ public abstract class RestServer {
                     }
                 }
             }
-            for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
+            for (Plugin<ConnectRestExtension> connectRestExtensionPlugin : connectRestExtensionPlugins) {
                 try {
-                    connectRestExtension.close();
+                    connectRestExtensionPlugin.close();
                 } catch (IOException e) {
-                    log.warn("Error while invoking close on " + connectRestExtension.getClass(), e);
+                    log.warn("Error while invoking close on {}", connectRestExtensionPlugin.get().getClass(), e);
                 }
             }
             jettyServer.stop();
@@ -504,9 +505,14 @@ public abstract class RestServer {
     }
 
     protected final void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
-        connectRestExtensions = herder.plugins().newPlugins(
-            config.restExtensions(),
-            config, ConnectRestExtension.class);
+        connectRestExtensionPlugins = Plugin.wrapInstances(
+                herder.plugins().newPlugins(
+                    config.restExtensions(),
+                    config,
+                    ConnectRestExtension.class
+                ),
+                herder.connectMetrics().metrics(),
+                RestServerConfig.REST_EXTENSION_CLASSES_CONFIG);
 
         long herderRequestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
@@ -525,8 +531,8 @@ public abstract class RestServer {
                 new ConnectRestConfigurable(resourceConfig),
                 new ConnectClusterStateImpl(herderRequestTimeoutMs, connectClusterDetails, herder)
             );
-        for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
-            connectRestExtension.register(connectRestExtensionContext);
+        for (Plugin<ConnectRestExtension> connectRestExtensionPlugin : connectRestExtensionPlugins) {
+            connectRestExtensionPlugin.get().register(connectRestExtensionContext);
         }
 
     }

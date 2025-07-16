@@ -43,6 +43,7 @@
       <property name="tokens" value="IDENT, NUM_DOUBLE, LAMBDA, TEXT_BLOCK_LITERAL_BEGIN, UNARY_MINUS, UNARY_PLUS, INC, DEC, POST_INC, POST_DEC" />
     </module>
     <module name="SimplifyBooleanReturn"/>
+    <module name="UnusedLocalVariable"/>
 
     <!-- style -->
     <module name="DefaultComesLast"/>

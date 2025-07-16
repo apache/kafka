@@ -44,6 +44,7 @@ LOG_SEGMENT_BYTES = "log.segment.bytes"
 LOG_RETENTION_CHECK_INTERVAL_MS = "log.retention.check.interval.ms"
 LOG_RETENTION_MS = "log.retention.ms"
 LOG_CLEANER_ENABLE = "log.cleaner.enable"
+LOG_INITIAL_TASK_DELAY = "log.initial.task.delay.ms"
 
 METADATA_LOG_DIR = "metadata.log.dir"
 METADATA_LOG_SEGMENT_BYTES = "metadata.log.segment.bytes"
@@ -73,9 +74,14 @@ DELEGATION_TOKEN_EXPIRY_TIME_MS="delegation.token.expiry.time.ms"
 DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
-NEW_GROUP_COORDINATOR_ENABLE="group.coordinator.new.enable"
-GROUP_COORDINATOR_REBALANCE_PROTOCOLS="group.coordinator.rebalance.protocols"
 CONSUMER_GROUP_MIGRATION_POLICY = "group.consumer.migration.policy"
+
+SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR ="share.coordinator.state.topic.replication.factor"
+SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR = "share.coordinator.state.topic.min.isr"
+SHARE_GROUP_ENABLE = "group.share.enable"
+
+UNSTABLE_API_VERSIONS_ENABLE = "unstable.api.versions.enable"
+UNSTABLE_FEATURE_VERSIONS_ENABLE = "unstable.feature.versions.enable"
 
 """
 From KafkaConfig.scala
@@ -157,8 +163,6 @@ From KafkaConfig.scala
   val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
   val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
   /** ********* Controlled shutdown configuration ***********/
-  val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
-  val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
   val ControlledShutdownEnableProp = "controlled.shutdown.enable"
   /** ********* Consumer coordinator configuration ***********/
   val ConsumerMinSessionTimeoutMsProp = "consumer.min.session.timeout.ms"
@@ -205,9 +209,6 @@ From KafkaConfig.scala
   val SSLEndpointIdentificationAlgorithmProp = SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
   val SSLSecureRandomImplementationProp = SSLConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG
   val SSLClientAuthProp = SSLConfigs.SSL_CLIENT_AUTH_CONFIG
-
-  /** New group coordinator configs */
-  val NewGroupCoordinatorEnableProp = "group.coordinator.new.enable"
 """
 
 

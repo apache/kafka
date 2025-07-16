@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -28,38 +27,46 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SubscriptionReceiveProcessorSupplier<K, KO>
-    implements ProcessorSupplier<KO, SubscriptionWrapper<K>, CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> {
+import java.util.Collections;
+import java.util.Set;
+
+public class SubscriptionReceiveProcessorSupplier<KLeft, KRight>
+    implements ProcessorSupplier<KRight, SubscriptionWrapper<KLeft>, CombinedKey<KRight, KLeft>, Change<ValueAndTimestamp<SubscriptionWrapper<KLeft>>>> {
+
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionReceiveProcessorSupplier.class);
 
-    private final String storeName;
-    private final CombinedKeySchema<KO, K> keySchema;
+    private final StoreFactory subscriptionStoreFactory;
+    private final CombinedKeySchema<KRight, KLeft> keySchema;
 
-    public SubscriptionReceiveProcessorSupplier(
-        final String storeName,
-        final CombinedKeySchema<KO, K> keySchema) {
-
-        this.storeName = storeName;
+    public SubscriptionReceiveProcessorSupplier(final StoreFactory subscriptionStoreFactory,
+                                                final CombinedKeySchema<KRight, KLeft> keySchema) {
+        this.subscriptionStoreFactory = subscriptionStoreFactory;
         this.keySchema = keySchema;
     }
 
     @Override
-    public Processor<KO, SubscriptionWrapper<K>, CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> get() {
+    public Set<StoreBuilder<?>> stores() {
+        return Collections.singleton(new FactoryWrappingStoreBuilder<>(subscriptionStoreFactory));
+    }
 
-        return new ContextualProcessor<KO, SubscriptionWrapper<K>, CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>>() {
-
-            private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
+    @Override
+    public Processor<KRight, SubscriptionWrapper<KLeft>, CombinedKey<KRight, KLeft>, Change<ValueAndTimestamp<SubscriptionWrapper<KLeft>>>> get() {
+        return new ContextualProcessor<>() {
+            private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<KLeft>> store;
             private Sensor droppedRecordsSensor;
 
             @Override
-            public void init(final ProcessorContext<CombinedKey<KO, K>, Change<ValueAndTimestamp<SubscriptionWrapper<K>>>> context) {
+            public void init(final ProcessorContext<CombinedKey<KRight, KLeft>, Change<ValueAndTimestamp<SubscriptionWrapper<KLeft>>>> context) {
                 super.init(context);
                 final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
 
@@ -68,13 +75,13 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
                     internalProcessorContext.taskId().toString(),
                     internalProcessorContext.metrics()
                 );
-                store = internalProcessorContext.getStateStore(storeName);
+                store = internalProcessorContext.getStateStore(subscriptionStoreFactory.storeName());
 
                 keySchema.init(context);
             }
 
             @Override
-            public void process(final Record<KO, SubscriptionWrapper<K>> record) {
+            public void process(final Record<KRight, SubscriptionWrapper<KLeft>> record) {
                 if (record.key() == null && !SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE.equals(record.value().instruction())) {
                     dropRecord();
                     return;
@@ -92,7 +99,7 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
                 );
             }
 
-            private Change<ValueAndTimestamp<SubscriptionWrapper<K>>> inferChange(final Record<KO, SubscriptionWrapper<K>> record) {
+            private Change<ValueAndTimestamp<SubscriptionWrapper<KLeft>>> inferChange(final Record<KRight, SubscriptionWrapper<KLeft>> record) {
                 if (record.key() == null) {
                     return new Change<>(ValueAndTimestamp.make(record.value(), record.timestamp()), null);
                 } else {
@@ -100,11 +107,11 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
                 }
             }
 
-            private Change<ValueAndTimestamp<SubscriptionWrapper<K>>> inferBasedOnState(final Record<KO, SubscriptionWrapper<K>> record) {
+            private Change<ValueAndTimestamp<SubscriptionWrapper<KLeft>>> inferBasedOnState(final Record<KRight, SubscriptionWrapper<KLeft>> record) {
                 final Bytes subscriptionKey = keySchema.toBytes(record.key(), record.value().primaryKey());
 
-                final ValueAndTimestamp<SubscriptionWrapper<K>> newValue = ValueAndTimestamp.make(record.value(), record.timestamp());
-                final ValueAndTimestamp<SubscriptionWrapper<K>> oldValue = store.get(subscriptionKey);
+                final ValueAndTimestamp<SubscriptionWrapper<KLeft>> newValue = ValueAndTimestamp.make(record.value(), record.timestamp());
+                final ValueAndTimestamp<SubscriptionWrapper<KLeft>> oldValue = store.get(subscriptionKey);
 
                 //This store is used by the prefix scanner in ForeignTableJoinProcessorSupplier
                 if (record.value().instruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE) ||

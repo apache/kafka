@@ -20,7 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.image.node.MetadataImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.util.Objects;
 
@@ -156,7 +156,7 @@ public final class MetadataImage {
         configs.write(writer, options);
         clientQuotas.write(writer, options);
         producerIds.write(writer, options);
-        acls.write(writer, options);
+        acls.write(writer);
         scram.write(writer, options);
         delegationTokens.write(writer, options);
         writer.close(true);

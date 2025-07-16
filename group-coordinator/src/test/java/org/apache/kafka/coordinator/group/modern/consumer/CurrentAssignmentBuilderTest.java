@@ -25,7 +25,7 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -194,7 +194,7 @@ public class CurrentAssignmentBuilderTest {
             .withCurrentPartitionEpoch((topicId, __) ->
                 topicId2.equals(topicId) ? 10 : -1
             )
-            .withOwnedTopicPartitions(Collections.emptyList())
+            .withOwnedTopicPartitions(List.of())
             .build();
 
         assertEquals(
@@ -560,7 +560,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> 11)
-            .withOwnedTopicPartitions(Collections.emptyList())
+            .withOwnedTopicPartitions(List.of())
             .build();
 
         assertEquals(

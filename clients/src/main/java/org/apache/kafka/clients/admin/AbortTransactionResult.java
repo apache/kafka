@@ -18,16 +18,12 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
 /**
  * The result of {@link Admin#abortTransaction(AbortTransactionSpec, AbortTransactionOptions)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class AbortTransactionResult {
     private final Map<TopicPartition, KafkaFuture<Void>> futures;
 
@@ -43,7 +39,7 @@ public class AbortTransactionResult {
      * @return the future
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 
 }

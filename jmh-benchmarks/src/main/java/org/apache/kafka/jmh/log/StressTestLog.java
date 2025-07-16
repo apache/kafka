@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.log;
 
-import kafka.log.UnifiedLog;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
@@ -29,7 +28,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
@@ -40,17 +38,17 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogOffsetsListener;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import scala.Option;
 
 
 public class StressTestLog {
@@ -65,7 +63,7 @@ public class StressTestLog {
         logProperties.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024 * 1024);
 
         int fiveMinutesInMillis = (int) Duration.ofMinutes(5).toMillis();
-        UnifiedLog log = UnifiedLog.apply(
+        UnifiedLog log = UnifiedLog.create(
             dir,
             new LogConfig(logProperties),
             0L,
@@ -78,8 +76,7 @@ public class StressTestLog {
             fiveMinutesInMillis,
             new LogDirFailureChannel(10),
             true,
-            Option.empty(),
-            true,
+            Optional.empty(),
             new ConcurrentHashMap<>(),
             false,
             LogOffsetsListener.NO_OP_OFFSETS_LISTENER
@@ -90,7 +87,7 @@ public class StressTestLog {
         ReaderThread reader = new ReaderThread(log);
         reader.start();
 
-        Exit.addShutdownHook("strees-test-shudtodwn-hook", () -> {
+        Exit.addShutdownHook("stress-test-shutdown-hook", () -> {
             try {
                 RUNNING.set(false);
                 writer.join();
@@ -166,7 +163,6 @@ public class StressTestLog {
             LogAppendInfo logAppendInfo = log.appendAsLeader(records,
                     0,
                     AppendOrigin.CLIENT,
-                    MetadataVersion.LATEST_PRODUCTION,
                     RequestLocal.noCaching(),
                     VerificationGuard.SENTINEL);
 

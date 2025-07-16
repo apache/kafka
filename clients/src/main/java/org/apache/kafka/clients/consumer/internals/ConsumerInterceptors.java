@@ -17,10 +17,13 @@
 package org.apache.kafka.clients.consumer.internals;
 
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.metrics.Metrics;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,15 +38,15 @@ import java.util.Map;
  */
 public class ConsumerInterceptors<K, V> implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerInterceptors.class);
-    private final List<ConsumerInterceptor<K, V>> interceptors;
+    private final List<Plugin<ConsumerInterceptor<K, V>>> interceptorPlugins;
 
-    public ConsumerInterceptors(List<ConsumerInterceptor<K, V>> interceptors) {
-        this.interceptors = interceptors;
+    public ConsumerInterceptors(List<ConsumerInterceptor<K, V>> interceptors, Metrics metrics) {
+        this.interceptorPlugins = Plugin.wrapInstances(interceptors, metrics, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG);
     }
 
     /** Returns true if no interceptors are defined. All other methods will be no-ops in this case. */
     public boolean isEmpty() {
-        return interceptors.isEmpty();
+        return interceptorPlugins.isEmpty();
     }
 
     /**
@@ -62,9 +65,9 @@ public class ConsumerInterceptors<K, V> implements Closeable {
      */
     public ConsumerRecords<K, V> onConsume(ConsumerRecords<K, V> records) {
         ConsumerRecords<K, V> interceptRecords = records;
-        for (ConsumerInterceptor<K, V> interceptor : this.interceptors) {
+        for (Plugin<ConsumerInterceptor<K, V>> interceptorPlugin : this.interceptorPlugins) {
             try {
-                interceptRecords = interceptor.onConsume(interceptRecords);
+                interceptRecords = interceptorPlugin.get().onConsume(interceptRecords);
             } catch (Exception e) {
                 // do not propagate interceptor exception, log and continue calling other interceptors
                 log.warn("Error executing interceptor onConsume callback", e);
@@ -83,9 +86,9 @@ public class ConsumerInterceptors<K, V> implements Closeable {
      * @param offsets A map of offsets by partition with associated metadata
      */
     public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        for (ConsumerInterceptor<K, V> interceptor : this.interceptors) {
+        for (Plugin<ConsumerInterceptor<K, V>> interceptorPlugin : this.interceptorPlugins) {
             try {
-                interceptor.onCommit(offsets);
+                interceptorPlugin.get().onCommit(offsets);
             } catch (Exception e) {
                 // do not propagate interceptor exception, just log
                 log.warn("Error executing interceptor onCommit callback", e);
@@ -98,9 +101,9 @@ public class ConsumerInterceptors<K, V> implements Closeable {
      */
     @Override
     public void close() {
-        for (ConsumerInterceptor<K, V> interceptor : this.interceptors) {
+        for (Plugin<ConsumerInterceptor<K, V>> interceptorPlugin : this.interceptorPlugins) {
             try {
-                interceptor.close();
+                interceptorPlugin.close();
             } catch (Exception e) {
                 log.error("Failed to close consumer interceptor ", e);
             }

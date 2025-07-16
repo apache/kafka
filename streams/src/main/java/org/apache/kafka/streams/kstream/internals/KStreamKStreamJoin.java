@@ -171,7 +171,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                     //
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
-                    if (!outerJoinStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
+                    if (outerJoinStore.isEmpty() || timeTo < sharedTimeTracker.streamTime) {
                         context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);

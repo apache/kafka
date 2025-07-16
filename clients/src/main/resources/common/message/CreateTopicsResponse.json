@@ -17,6 +17,8 @@
   "apiKey": 19,
   "type": "response",
   "name": "CreateTopicsResponse",
+  // Versions 0-1 were removed in Apache Kafka 4.0, Version 2 is the new baseline.
+  //
   // Version 1 adds a per-topic error message string.
   //
   // Version 2 adds the throttle time.
@@ -32,7 +34,7 @@
   // in the response if the topics creation is throttled (KIP-599).
   //
   // Version 7 returns the topic ID of the newly created topic if creation is successful.
-  "validVersions": "0-7",
+  "validVersions": "2-7",
   "flexibleVersions": "5+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,

@@ -17,16 +17,16 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.kafka import quorum
-from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
+from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
-class StreamsSmokeTest(KafkaTest):
+class StreamsSmokeTest(BaseStreamsTest):
     """
     Simple test of Kafka Streams.
     """
 
     def __init__(self, test_context):
-        super(StreamsSmokeTest, self).__init__(test_context, num_zk=1, num_brokers=3, topics={
+        super(StreamsSmokeTest, self).__init__(test_context, topics={
             'echo' : { 'partitions': 5, 'replication-factor': 1 },
             'data' : { 'partitions': 5, 'replication-factor': 1 },
             'min' : { 'partitions': 5, 'replication-factor': 1 },
@@ -49,11 +49,12 @@ class StreamsSmokeTest(KafkaTest):
     @cluster(num_nodes=8)
     @matrix(processing_guarantee=['exactly_once_v2', 'at_least_once'],
             crash=[True, False],
-            metadata_quorum=[quorum.combined_kraft])
-    def test_streams(self, processing_guarantee, crash, metadata_quorum):
-        processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee)
-        processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee)
-        processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee)
+            metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_streams(self, processing_guarantee, crash, metadata_quorum, group_protocol):
+        processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, group_protocol)
+        processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, group_protocol)
+        processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, group_protocol)
 
         with processor1.node.account.monitor_log(processor1.STDOUT_FILE) as monitor1:
             processor1.start()
@@ -107,7 +108,4 @@ class StreamsSmokeTest(KafkaTest):
 
         processor3.stop()
 
-        if crash and processing_guarantee == 'at_least_once':
-            self.driver.node.account.ssh("grep -E 'SUCCESS|PROCESSED-MORE-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
-        else:
-            self.driver.node.account.ssh("grep SUCCESS %s" % self.driver.STDOUT_FILE, allow_fail=False)
+        self.driver.node.account.ssh("grep SUCCESS %s" % self.driver.STDOUT_FILE, allow_fail=False)

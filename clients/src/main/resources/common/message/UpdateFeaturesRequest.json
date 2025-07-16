@@ -16,7 +16,7 @@
 {
   "apiKey": 57,
   "type": "request",
-  "listeners": ["zkBroker", "broker", "controller"],
+  "listeners": ["broker", "controller"],
   "name": "UpdateFeaturesRequest",
   // Version 1 adds validate only field.
   //

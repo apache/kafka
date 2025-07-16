@@ -62,6 +62,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
@@ -410,6 +411,8 @@ public class KTableTransformValuesTest {
 
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is(3));
+        assertThat(driver.getAllStateStores().keySet(),
+            equalTo(Set.of(QUERYABLE_NAME, "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
     @Test
@@ -434,6 +437,36 @@ public class KTableTransformValuesTest {
         assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
                 new KeyValueTimestamp<>("A", "2", 15),
                 new KeyValueTimestamp<>("A", "3", 15))));
+        assertThat(driver.getAllStateStores().keySet(),
+            equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
+    }
+
+    @Test
+    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenNotMaterializedNoQueryableName() {
+        builder
+            .table(INPUT_TOPIC, CONSUMED)
+            .transformValues(new StatelessTransformerSupplier(),
+                Materialized.with(Serdes.String(), Serdes.Integer())
+            )
+            .groupBy(toForceSendingOfOldValues(), Grouped.with(Serdes.String(), Serdes.Integer()))
+            .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
+            .mapValues(mapBackToStrings())
+            .toStream()
+            .process(capture);
+
+        driver = new TopologyTestDriver(builder.build(), props());
+        final TestInputTopic<String, String> inputTopic =
+            driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+
+        inputTopic.pipeInput("A", "a", 5L);
+        inputTopic.pipeInput("A", "aa", 15L);
+        inputTopic.pipeInput("A", "aaa", 10);
+
+        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
+            new KeyValueTimestamp<>("A", "2", 15),
+            new KeyValueTimestamp<>("A", "3", 15))));
+        assertThat(driver.getAllStateStores().keySet(),
+            equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
     private ArrayList<KeyValueTimestamp<String, String>> output() {

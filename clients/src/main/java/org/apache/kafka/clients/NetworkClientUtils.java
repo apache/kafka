@@ -71,6 +71,17 @@ public final class NetworkClientUtils {
                 throw new IOException("Connection to " + node + " failed.");
             }
             long pollTimeout = timeoutMs - (attemptStartTime - startTime); // initialize in this order to avoid overflow
+
+            // If the network client is waiting to send data for some reason (eg. throttling or retry backoff),
+            // polling longer than that is potentially dangerous as the producer will not attempt to send
+            // any pending requests.
+            long waitingTime = client.pollDelayMs(node, startTime);
+            if (waitingTime > 0 && pollTimeout > waitingTime) {
+                // Block only until the next-scheduled time that it's okay to send data to the producer,
+                // wake up, and try again. This is the way.
+                pollTimeout = waitingTime;
+            }
+
             client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);

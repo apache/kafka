@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -69,7 +68,7 @@ public class MeteredTimestampedWindowStoreTest {
     private static final byte[] VALUE_AND_TIMESTAMP_BYTES = "\0\0\0\0\0\0\0avalue".getBytes();
     private static final int WINDOW_SIZE_MS = 10;
 
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<String, Long> context;
     private final TaskId taskId = new TaskId(0, 0, "My-Topology");
     @Mock
     private WindowStore<Bytes, byte[]> innerStoreMock;
@@ -145,9 +144,9 @@ public class MeteredTimestampedWindowStoreTest {
         );
         when(inner.name()).thenReturn("store");
 
-        outer.init((StateStoreContext) context, outer);
+        outer.init(context, outer);
 
-        verify(inner).init((StateStoreContext) context, outer);
+        verify(inner).init(context, outer);
     }
 
     @Test
@@ -192,7 +191,7 @@ public class MeteredTimestampedWindowStoreTest {
             valueSerde
         );
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.fetch(KEY, TIMESTAMP);
         store.put(KEY, VALUE_AND_TIMESTAMP, TIMESTAMP);
 
@@ -203,7 +202,7 @@ public class MeteredTimestampedWindowStoreTest {
     @Test
     public void shouldCloseUnderlyingStore() {
         setUp();
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.close();
 
         verify(innerStoreMock).close();
@@ -214,7 +213,7 @@ public class MeteredTimestampedWindowStoreTest {
         setUp();
         when(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).thenReturn(null);
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         assertNull(store.fetch("a", 0));
     }
 
@@ -230,7 +229,7 @@ public class MeteredTimestampedWindowStoreTest {
             null,
             null
         );
-        store.init((StateStoreContext) context, innerStoreMock);
+        store.init(context, innerStoreMock);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000), 60000L);
@@ -254,7 +253,7 @@ public class MeteredTimestampedWindowStoreTest {
             Serdes.String(),
             new ValueAndTimestampSerde<>(Serdes.Long())
         );
-        store.init((StateStoreContext) context, innerStoreMock);
+        store.init(context, innerStoreMock);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000), 60000L);

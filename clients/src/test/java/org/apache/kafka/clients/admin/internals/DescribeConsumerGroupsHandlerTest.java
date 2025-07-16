@@ -30,6 +30,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -52,7 +53,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -81,10 +81,10 @@ public class DescribeConsumerGroupsHandlerTest {
         CoordinatorKey.byGroupId(groupId2)
     ));
     private final Node coordinator = new Node(1, "host", 1234);
-    private final Set<TopicPartition> tps = new HashSet<>(Arrays.asList(
+    private final Set<TopicPartition> tps = Set.of(
         new TopicPartition("foo", 0),
         new TopicPartition("bar",  1)
-    ));
+    );
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
@@ -321,6 +321,7 @@ public class DescribeConsumerGroupsHandlerTest {
     @Test
     public void testFailedHandleConsumerGroupResponse() {
         assertFailed(GroupAuthorizationException.class, handleConsumerGroupWithError(Errors.GROUP_AUTHORIZATION_FAILED));
+        assertFailed(TopicAuthorizationException.class, handleConsumerGroupWithError(Errors.TOPIC_AUTHORIZATION_FAILED));
         assertFailed(InvalidGroupIdException.class, handleConsumerGroupWithError(Errors.INVALID_GROUP_ID));
     }
 

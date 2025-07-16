@@ -21,8 +21,6 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.zookeeper import ZookeeperService
-
 
 class TestBounce(Test):
     """Sanity checks on verifiable producer service class with cluster roll."""
@@ -35,9 +33,8 @@ class TestBounce(Test):
         if quorum_size < 1:
             raise Exception("Illegal %s value provided for the test: %s" % (quorum_size_arg_name, quorum_size))
         self.topic = "topic"
-        self.zk = ZookeeperService(test_context, num_nodes=quorum_size) if quorum.for_test(test_context) == quorum.zk else None
         num_kafka_nodes = quorum_size if quorum.for_test(test_context) == quorum.combined_kraft else 1
-        self.kafka = KafkaService(test_context, num_nodes=num_kafka_nodes, zk=self.zk,
+        self.kafka = KafkaService(test_context, num_nodes=num_kafka_nodes, zk=None,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}},
                                   controller_num_nodes_override=quorum_size)
         self.num_messages = 1000
@@ -46,13 +43,10 @@ class TestBounce(Test):
         # This will produce to source kafka cluster
         self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
                                            max_messages=self.num_messages, throughput=self.num_messages // 10)
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
 
-    # ZooKeeper and KRaft, quorum size = 1
+    # Isolated and Combined KRaft, quorum size = 3
     @cluster(num_nodes=4)
-    @matrix(metadata_quorum=quorum.all, quorum_size=[1])
+    @matrix(metadata_quorum=quorum.all_kraft, quorum_size=[1])
     # Isolated and Combined KRaft, quorum size = 3
     @cluster(num_nodes=6)
     @matrix(metadata_quorum=quorum.all_kraft, quorum_size=[3])

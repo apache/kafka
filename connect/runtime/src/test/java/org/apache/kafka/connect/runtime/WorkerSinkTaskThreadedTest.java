@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -34,6 +35,7 @@ import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -63,7 +65,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -109,8 +110,8 @@ public class WorkerSinkTaskThreadedTest {
     private static final TopicPartition TOPIC_PARTITION2 = new TopicPartition(TOPIC, PARTITION2);
     private static final TopicPartition TOPIC_PARTITION3 = new TopicPartition(TOPIC, PARTITION3);
     private static final TopicPartition UNASSIGNED_TOPIC_PARTITION = new TopicPartition(TOPIC, 200);
-    private static final Set<TopicPartition> INITIAL_ASSIGNMENT = new HashSet<>(Arrays.asList(
-            TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3));
+    private static final Set<TopicPartition> INITIAL_ASSIGNMENT = Set.of(
+            TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
     private static final long TIMESTAMP = 42L;
@@ -174,11 +175,14 @@ public class WorkerSinkTaskThreadedTest {
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerTask = new WorkerSinkTask(
-                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
-                valueConverter, errorHandlingMetrics, headerConverter, transformationChain,
-                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore,
-                Collections::emptyList);
+                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverterPlugin,
+                valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin, transformationChain,
+                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.noneOperator(), null, statusBackingStore,
+                Collections::emptyList, null, TestPlugins.noOpLoaderSwap());
         recordsReturned = 0;
     }
 
@@ -434,7 +438,7 @@ public class WorkerSinkTaskThreadedTest {
         doAnswer(invocation -> {
             return null; // initial assignment
         }).doAnswer(invocation -> {
-            assertEquals(new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3)), sinkTaskContext.getValue().assignment());
+            assertEquals(Set.of(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3), sinkTaskContext.getValue().assignment());
             return null;
         }).doAnswer(invocation -> {
             try {

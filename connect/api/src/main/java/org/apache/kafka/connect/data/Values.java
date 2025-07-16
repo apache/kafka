@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.text.CharacterIterator;
 import java.text.DateFormat;
@@ -431,33 +430,20 @@ public class Values {
             }
             throw new DataException("Unable to convert a null value to a schema that requires a value");
         }
-        switch (toSchema.type()) {
-            case BYTES:
-                return convertMaybeLogicalBytes(toSchema, value);
-            case STRING:
-                return convertToString(fromSchema, value);
-            case BOOLEAN:
-                return convertToBoolean(fromSchema, value);
-            case INT8:
-                return convertToByte(fromSchema, value);
-            case INT16:
-                return convertToShort(fromSchema, value);
-            case INT32:
-                return convertMaybeLogicalInteger(toSchema, fromSchema, value);
-            case INT64:
-                return convertMaybeLogicalLong(toSchema, fromSchema, value);
-            case FLOAT32:
-                return convertToFloat(fromSchema, value);
-            case FLOAT64:
-                return convertToDouble(fromSchema, value);
-            case ARRAY:
-                return convertToArray(toSchema, value);
-            case MAP:
-                return convertToMapInternal(toSchema, value);
-            case STRUCT:
-                return convertToStructInternal(toSchema, value);
-        }
-        throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
+        return switch (toSchema.type()) {
+            case BYTES -> convertMaybeLogicalBytes(toSchema, value);
+            case STRING -> convertToString(fromSchema, value);
+            case BOOLEAN -> convertToBoolean(fromSchema, value);
+            case INT8 -> convertToByte(fromSchema, value);
+            case INT16 -> convertToShort(fromSchema, value);
+            case INT32 -> convertMaybeLogicalInteger(toSchema, fromSchema, value);
+            case INT64 -> convertMaybeLogicalLong(toSchema, fromSchema, value);
+            case FLOAT32 -> convertToFloat(fromSchema, value);
+            case FLOAT64 -> convertToDouble(fromSchema, value);
+            case ARRAY -> convertToArray(toSchema, value);
+            case MAP -> convertToMapInternal(toSchema, value);
+            case STRUCT -> convertToStructInternal(toSchema, value);
+        };
     }
 
     private static Serializable convertMaybeLogicalBytes(Schema toSchema, Object value) {
@@ -584,8 +570,7 @@ public class Values {
             SchemaAndValue parsed = parseString(value.toString());
             value = parsed.value();
         }
-        if (value instanceof java.util.Date) {
-            java.util.Date date = (java.util.Date) value;
+        if (value instanceof java.util.Date date) {
             if (fromSchema != null) {
                 String fromSchemaName = fromSchema.name();
                 if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
@@ -655,8 +640,7 @@ public class Values {
      */
     protected static long asLong(Object value, Schema fromSchema, Throwable error) {
         try {
-            if (value instanceof Number) {
-                Number number = (Number) value;
+            if (value instanceof Number number) {
                 return number.longValue();
             }
             if (value instanceof String) {
@@ -695,8 +679,7 @@ public class Values {
      */
     protected static double asDouble(Object value, Schema schema, Throwable error) {
         try {
-            if (value instanceof Number) {
-                Number number = (Number) value;
+            if (value instanceof Number number) {
                 return number.doubleValue();
             }
             if (value instanceof String) {
@@ -733,18 +716,15 @@ public class Values {
         } else if (value instanceof ByteBuffer) {
             byte[] bytes = Utils.readBytes((ByteBuffer) value);
             append(sb, bytes, embedded);
-        } else if (value instanceof List) {
-            List<?> list = (List<?>) value;
+        } else if (value instanceof List<?> list) {
             sb.append('[');
             appendIterable(sb, list.iterator());
             sb.append(']');
-        } else if (value instanceof Map) {
-            Map<?, ?> map = (Map<?, ?>) value;
+        } else if (value instanceof Map<?, ?> map) {
             sb.append('{');
             appendIterable(sb, map.entrySet().iterator());
             sb.append('}');
-        } else if (value instanceof Struct) {
-            Struct struct = (Struct) value;
+        } else if (value instanceof Struct struct) {
             Schema schema = struct.schema();
             boolean first = true;
             sb.append('{');
@@ -759,13 +739,11 @@ public class Values {
                 append(sb, struct.get(field), true);
             }
             sb.append('}');
-        } else if (value instanceof Map.Entry) {
-            Map.Entry<?, ?> entry = (Map.Entry<?, ?>) value;
+        } else if (value instanceof Map.Entry<?, ?> entry) {
             append(sb, entry.getKey(), true);
             sb.append(':');
             append(sb, entry.getValue(), true);
-        } else if (value instanceof java.util.Date) {
-            java.util.Date dateValue = (java.util.Date) value;
+        } else if (value instanceof java.util.Date dateValue) {
             String formatted = dateFormatFor(dateValue).format(dateValue);
             sb.append(formatted);
         } else {
@@ -1020,6 +998,7 @@ public class Values {
             return parseAsTemporal(token);
         }
 
+
         private static SchemaAndValue parseAsNumber(String token) {
             // Try to parse as a number ...
             BigDecimal decimal = new BigDecimal(token);
@@ -1040,12 +1019,20 @@ public class Values {
             }
         }
 
+        private static boolean isWholeNumber(BigDecimal bd) {
+            return bd.signum() == 0 || bd.scale() <= 0 || bd.stripTrailingZeros().scale() <= 0;
+        }
+
+        private static final BigDecimal BIGGER_THAN_LONG = new BigDecimal("1e19");
+
         private static SchemaAndValue parseAsExactDecimal(BigDecimal decimal) {
-            BigDecimal ceil = decimal.setScale(0, RoundingMode.CEILING);
-            BigDecimal floor = decimal.setScale(0, RoundingMode.FLOOR);
-            if (ceil.equals(floor)) {
-                BigInteger num = ceil.toBigIntegerExact();
-                if (ceil.precision() >= 19 && (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0)) {
+            BigDecimal abs = decimal.abs();
+            if (abs.compareTo(BIGGER_THAN_LONG) > 0 || (abs.compareTo(BigDecimal.ONE) < 0 && abs.compareTo(BigDecimal.ZERO) != 0)) {
+                return null;
+            }
+            if (isWholeNumber(decimal)) {
+                BigInteger num = decimal.toBigIntegerExact();
+                if (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0) {
                     return null;
                 }
                 long integral = num.longValue();
@@ -1144,21 +1131,15 @@ public class Values {
         Type previousType = previous.type();
         Type newType = newSchema.type();
         if (previousType != newType) {
-            switch (previous.type()) {
-                case INT8:
-                    return commonSchemaForInt8(newSchema, newType);
-                case INT16:
-                    return commonSchemaForInt16(previous, newSchema, newType);
-                case INT32:
-                    return commonSchemaForInt32(previous, newSchema, newType);
-                case INT64:
-                    return commonSchemaForInt64(previous, newSchema, newType);
-                case FLOAT32:
-                    return commonSchemaForFloat32(previous, newSchema, newType);
-                case FLOAT64:
-                    return commonSchemaForFloat64(previous, newType);
-            }
-            return null;
+            return switch (previous.type()) {
+                case INT8 -> commonSchemaForInt8(newSchema, newType);
+                case INT16 -> commonSchemaForInt16(previous, newSchema, newType);
+                case INT32 -> commonSchemaForInt32(previous, newSchema, newType);
+                case INT64 -> commonSchemaForInt64(previous, newSchema, newType);
+                case FLOAT32 -> commonSchemaForFloat32(previous, newSchema, newType);
+                case FLOAT64 -> commonSchemaForFloat64(previous, newType);
+                default -> null;
+            };
         }
         if (previous.isOptional() == newSchema.isOptional()) {
             // Use the optional one
@@ -1273,10 +1254,8 @@ public class Values {
             }
             if (knownType == null) {
                 knownType = schema.type();
-            } else if (knownType != schema.type()) {
-                return false;
             }
-            return true;
+            return knownType == schema.type();
         }
 
         public Schema schema() {

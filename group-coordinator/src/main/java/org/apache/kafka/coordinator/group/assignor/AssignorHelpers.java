@@ -51,4 +51,22 @@ public final class AssignorHelpers {
         }
         return copy;
     }
+
+    /**
+     * Constructs a HashNap with a known capacity. This is equivalent to HashMap.newHashMap which is introduced in Java 19.
+     * @param numMappings The expected number of mappings.
+     * @return The newly created map.
+     */
+    static <K, V> HashMap<K, V> newHashMap(int numMappings) {
+        return new HashMap<>((int) (((numMappings + 1) / 0.75f) + 1));
+    }
+
+    /**
+     * Constructs a HashSet with a known capacity. This is equivalent to HashSet.newHashSet which is introduced in Java 19.
+     * @param numElements The expected number of elements.
+     * @return The newly created set.
+     */
+    static <K> HashSet<K> newHashSet(int numElements) {
+        return new HashSet<>((int) (((numElements + 1) / 0.75f) + 1));
+    }
 }

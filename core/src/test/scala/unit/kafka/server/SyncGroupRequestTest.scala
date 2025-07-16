@@ -16,47 +16,32 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.Collections
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(types = Array(Type.KRAFT))
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
+  )
+)
 class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
-  ))
-  def testSyncGroupWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testSyncGroup()
-  }
-
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
-  ))
-  def testSyncGroupWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
-    testSyncGroup()
-  }
-
-  private def testSyncGroup(): Unit = {
+  @ClusterTest
+  def testSyncGroupWithOldConsumerGroupProtocol(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -76,6 +61,17 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         expectedProtocolType = null,
         expectedProtocolName = null,
         expectedError = Errors.UNKNOWN_MEMBER_ID,
+        version = version.toShort
+      )
+
+      // Sync with empty group id.
+      verifySyncGroupWithOldProtocol(
+        groupId = "",
+        memberId = "member-id",
+        generationId = -1,
+        expectedProtocolType = null,
+        expectedProtocolName = null,
+        expectedError = Errors.INVALID_GROUP_ID,
         version = version.toShort
       )
 

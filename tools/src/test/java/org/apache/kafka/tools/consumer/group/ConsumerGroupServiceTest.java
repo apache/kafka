@@ -91,6 +91,8 @@ public class ConsumerGroupServiceTest {
                 .thenReturn(listGroupOffsetsResult(GROUP));
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
+        when(admin.describeTopics(ArgumentMatchers.anySet()))
+                .thenReturn(describeTopicsResult());
 
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
         assertEquals(Optional.of(GroupState.STABLE), statesAndAssignments.getKey());
@@ -134,8 +136,8 @@ public class ConsumerGroupServiceTest {
         endOffsets.put(testTopicPartition4, KafkaFuture.completedFuture(resultInfo));
         endOffsets.put(testTopicPartition5, KafkaFuture.completedFuture(resultInfo));
 
-        Set<TopicPartition> assignedTopicPartitions = new HashSet<>(Arrays.asList(testTopicPartition0, testTopicPartition1, testTopicPartition2));
-        Set<TopicPartition> unassignedTopicPartitions = new HashSet<>(Arrays.asList(testTopicPartition3, testTopicPartition4, testTopicPartition5));
+        Set<TopicPartition> assignedTopicPartitions = Set.of(testTopicPartition0, testTopicPartition1, testTopicPartition2);
+        Set<TopicPartition> unassignedTopicPartitions = Set.of(testTopicPartition3, testTopicPartition4, testTopicPartition5);
 
         ConsumerGroupDescription consumerGroupDescription = new ConsumerGroupDescription(GROUP,
                 true,
@@ -174,6 +176,7 @@ public class ConsumerGroupServiceTest {
                 any()
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
                 .collect(Collectors.toMap(Entry::getKey, Entry::getValue))));
+        when(admin.describeTopics(ArgumentMatchers.anySet())).thenReturn(describeTopicsResult());
 
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
         Optional<GroupState> state = statesAndAssignments.getKey();
@@ -287,6 +290,18 @@ public class ConsumerGroupServiceTest {
         return ArgumentMatchers.argThat(map ->
                 Objects.equals(map.keySet(), expectedOffsets.keySet()) && map.values().stream().allMatch(v -> v instanceof OffsetSpec.LatestSpec)
         );
+    }
+
+    private DescribeTopicsResult describeTopicsResult() {
+        Map<String, TopicDescription> topicDescriptionMap = TOPICS.stream().collect(Collectors.toMap(
+                Function.identity(),
+                topic -> new TopicDescription(
+                        topic,
+                        false,
+                        IntStream.range(0, NUM_PARTITIONS)
+                                .mapToObj(i -> new TopicPartitionInfo(i, Node.noNode(), List.of(), List.of()))
+                                .toList())));
+        return AdminClientTestUtils.describeTopicsResult(topicDescriptionMap);
     }
 
     private ListOffsetsResult listOffsetsResult() {

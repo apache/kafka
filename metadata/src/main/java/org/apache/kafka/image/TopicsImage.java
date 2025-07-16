@@ -87,8 +87,7 @@ public final class TopicsImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TopicsImage)) return false;
-        TopicsImage other = (TopicsImage) o;
+        if (!(o instanceof TopicsImage other)) return false;
         return topicsById.equals(other.topicsById) &&
             topicsByName.equals(other.topicsByName);
     }

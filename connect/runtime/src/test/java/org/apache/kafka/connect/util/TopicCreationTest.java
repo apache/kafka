@@ -19,6 +19,8 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
+import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TransformationStage;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -31,12 +33,11 @@ import org.apache.kafka.connect.transforms.RegexRouter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.TopicConfig.CLEANUP_POLICY_COMPACT;
@@ -80,6 +81,8 @@ public class TopicCreationTest {
 
     private static final short DEFAULT_REPLICATION_FACTOR = -1;
     private static final int DEFAULT_PARTITIONS = -1;
+    private static final ConnectMetrics METRICS = new MockConnectMetrics();
+    private static final ConnectorTaskId CONNECTOR_TASK_ID = new ConnectorTaskId("test", 0);
 
     Map<String, String> workerProps;
     WorkerConfig workerConfig;
@@ -132,7 +135,7 @@ public class TopicCreationTest {
         assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
         assertEquals(topicCreation.defaultTopicGroup(), groups.get(DEFAULT_TOPIC_CREATION_GROUP));
         assertEquals(2, topicCreation.topicGroups().size());
-        assertEquals(new HashSet<>(Arrays.asList(FOO_GROUP, BAR_GROUP)), topicCreation.topicGroups().keySet());
+        assertEquals(Set.of(FOO_GROUP, BAR_GROUP), topicCreation.topicGroups().keySet());
         assertEquals(topicCreation.defaultTopicGroup(), topicCreation.findFirstGroup(FOO_TOPIC));
         topicCreation.addTopic(FOO_TOPIC);
         assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
@@ -296,7 +299,7 @@ public class TopicCreationTest {
         // verify topic creation group is instantiated correctly
         Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
         assertEquals(2, groups.size());
-        assertEquals(new HashSet<>(Arrays.asList(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP)), groups.keySet());
+        assertEquals(Set.of(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP), groups.keySet());
 
         // verify topic creation
         TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
@@ -361,7 +364,7 @@ public class TopicCreationTest {
         // verify topic creation group is instantiated correctly
         Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
         assertEquals(2, groups.size());
-        assertEquals(new HashSet<>(Arrays.asList(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP)), groups.keySet());
+        assertEquals(Set.of(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP), groups.keySet());
 
         // verify topic creation
         TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
@@ -438,7 +441,7 @@ public class TopicCreationTest {
         // verify topic creation group is instantiated correctly
         Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
         assertEquals(3, groups.size());
-        assertEquals(new HashSet<>(Arrays.asList(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP, BAR_GROUP)), groups.keySet());
+        assertEquals(Set.of(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP, BAR_GROUP), groups.keySet());
 
         // verify topic creation
         TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
@@ -462,7 +465,7 @@ public class TopicCreationTest {
         assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
         assertTrue(topicCreation.isTopicCreationRequired(BAR_TOPIC));
         assertEquals(2, topicCreation.topicGroups().size());
-        assertEquals(new HashSet<>(Arrays.asList(FOO_GROUP, BAR_GROUP)), topicCreation.topicGroups().keySet());
+        assertEquals(Set.of(FOO_GROUP, BAR_GROUP), topicCreation.topicGroups().keySet());
         assertEquals(fooGroup, topicCreation.findFirstGroup(FOO_TOPIC));
         assertEquals(barGroup, topicCreation.findFirstGroup(BAR_TOPIC));
         topicCreation.addTopic(FOO_TOPIC);
@@ -510,12 +513,12 @@ public class TopicCreationTest {
         assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
         assertEquals(groups.get(DEFAULT_TOPIC_CREATION_GROUP), topicCreation.defaultTopicGroup());
         assertEquals(2, topicCreation.topicGroups().size());
-        assertEquals(new HashSet<>(Arrays.asList(FOO_GROUP, BAR_GROUP)), topicCreation.topicGroups().keySet());
+        assertEquals(Set.of(FOO_GROUP, BAR_GROUP), topicCreation.topicGroups().keySet());
         assertEquals(topicCreation.defaultTopicGroup(), topicCreation.findFirstGroup(FOO_TOPIC));
         topicCreation.addTopic(FOO_TOPIC);
         assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
 
-        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages();
+        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages(MOCK_PLUGINS, CONNECTOR_TASK_ID, METRICS);
         assertEquals(1, transformationStages.size());
         TransformationStage<SourceRecord> xform = transformationStages.get(0);
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
@@ -570,7 +573,7 @@ public class TopicCreationTest {
         // verify topic creation group is instantiated correctly
         Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
         assertEquals(3, groups.size());
-        assertEquals(new HashSet<>(Arrays.asList(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP, BAR_GROUP)), groups.keySet());
+        assertEquals(Set.of(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP, BAR_GROUP), groups.keySet());
 
         // verify topic creation
         TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
@@ -594,7 +597,7 @@ public class TopicCreationTest {
         assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
         assertTrue(topicCreation.isTopicCreationRequired(BAR_TOPIC));
         assertEquals(2, topicCreation.topicGroups().size());
-        assertEquals(new HashSet<>(Arrays.asList(FOO_GROUP, BAR_GROUP)), topicCreation.topicGroups().keySet());
+        assertEquals(Set.of(FOO_GROUP, BAR_GROUP), topicCreation.topicGroups().keySet());
         assertEquals(fooGroup, topicCreation.findFirstGroup(FOO_TOPIC));
         assertEquals(barGroup, topicCreation.findFirstGroup(BAR_TOPIC));
         topicCreation.addTopic(FOO_TOPIC);
@@ -622,7 +625,7 @@ public class TopicCreationTest {
         assertEquals(barPartitions, barTopicSpec.numPartitions());
         assertEquals(barTopicProps, barTopicSpec.configs());
 
-        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages();
+        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages(MOCK_PLUGINS, CONNECTOR_TASK_ID, METRICS);
         assertEquals(2, transformationStages.size());
 
         TransformationStage<SourceRecord> castXForm = transformationStages.get(0);

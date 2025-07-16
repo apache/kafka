@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -65,7 +64,7 @@ public class LogicalKeyValueSegmentTest {
     @BeforeEach
     public void setUp() {
         physicalStore = new RocksDBStore(STORE_NAME, DB_FILE_DIR, new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME), false);
-        physicalStore.init((StateStoreContext) new InternalMockProcessorContext<>(
+        physicalStore.init(new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),

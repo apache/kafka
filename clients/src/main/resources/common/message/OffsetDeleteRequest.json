@@ -16,7 +16,7 @@
 {
   "apiKey": 47,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "OffsetDeleteRequest",
   "validVersions": "0",
   "flexibleVersions": "none",

@@ -109,7 +109,7 @@ public class OffsetUtils {
             return;
         }
 
-        if (!(keyList.get(0) instanceof String)) {
+        if (!(keyList.get(0) instanceof String connectorName)) {
             log.warn("Ignoring offset partition key with an unexpected format for the first element in the partition key list. " +
                     "Expected type: {}, actual type: {}", String.class.getName(), className(keyList.get(0)));
             return;
@@ -123,7 +123,6 @@ public class OffsetUtils {
             return;
         }
 
-        String connectorName = (String) keyList.get(0);
         Map<String, Object> partition = (Map<String, Object>) keyList.get(1);
         connectorPartitions.computeIfAbsent(connectorName, ignored -> new HashSet<>());
         if (offsetValue == null) {

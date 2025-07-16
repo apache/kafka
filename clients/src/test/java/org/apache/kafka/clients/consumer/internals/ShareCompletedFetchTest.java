@@ -367,6 +367,7 @@ public class ShareCompletedFetchTest {
         return new ShareCompletedFetch(
                 logContext,
                 BufferSupplier.create(),
+                0,
                 TIP,
                 partitionData,
                 shareFetchMetricsAggregator,
@@ -374,11 +375,11 @@ public class ShareCompletedFetchTest {
     }
 
     private static Deserializers<UUID, UUID> newUuidDeserializers() {
-        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer());
+        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer(), null);
     }
 
     private static Deserializers<String, String> newStringDeserializers() {
-        return new Deserializers<>(new StringDeserializer(), new StringDeserializer());
+        return new Deserializers<>(new StringDeserializer(), new StringDeserializer(), null);
     }
 
     private Records newRecords(long baseOffset, int count) {

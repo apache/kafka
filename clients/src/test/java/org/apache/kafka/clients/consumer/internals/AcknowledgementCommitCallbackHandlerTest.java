@@ -85,7 +85,7 @@ class AcknowledgementCommitCallbackHandlerTest {
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(0L, AcknowledgeType.ACCEPT);
         acknowledgements.add(1L, AcknowledgeType.REJECT);
-        acknowledgements.setAcknowledgeErrorCode(Errors.INVALID_RECORD_STATE);
+        acknowledgements.complete(Errors.INVALID_RECORD_STATE.exception());
         acknowledgementsMap.put(tip0, acknowledgements);
 
         acknowledgementCommitCallbackHandler.onComplete(Collections.singletonList(acknowledgementsMap));
@@ -101,7 +101,7 @@ class AcknowledgementCommitCallbackHandlerTest {
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(0L, AcknowledgeType.ACCEPT);
         acknowledgements.add(1L, AcknowledgeType.REJECT);
-        acknowledgements.setAcknowledgeErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED);
+        acknowledgements.complete(Errors.TOPIC_AUTHORIZATION_FAILED.exception());
         acknowledgementsMap.put(tip0, acknowledgements);
 
         acknowledgementCommitCallbackHandler.onComplete(Collections.singletonList(acknowledgementsMap));
@@ -116,12 +116,12 @@ class AcknowledgementCommitCallbackHandlerTest {
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(0L, AcknowledgeType.ACCEPT);
         acknowledgements.add(1L, AcknowledgeType.REJECT);
-        acknowledgements.setAcknowledgeErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED);
+        acknowledgements.complete(Errors.TOPIC_AUTHORIZATION_FAILED.exception());
         acknowledgementsMap.put(tip0, acknowledgements);
 
         Acknowledgements acknowledgements1 = Acknowledgements.empty();
         acknowledgements1.add(0L, AcknowledgeType.RELEASE);
-        acknowledgements1.setAcknowledgeErrorCode(Errors.INVALID_RECORD_STATE);
+        acknowledgements1.complete(Errors.INVALID_RECORD_STATE.exception());
         acknowledgementsMap.put(tip1, acknowledgements1);
 
         Map<TopicIdPartition, Acknowledgements> acknowledgementsMap2 = new HashMap<>();

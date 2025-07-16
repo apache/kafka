@@ -111,33 +111,15 @@ class OffsetFetcherUtils {
                 Errors error = Errors.forCode(partition.errorCode());
                 switch (error) {
                     case NONE:
-                        if (!partition.oldStyleOffsets().isEmpty()) {
-                            // Handle v0 response with offsets
-                            long offset;
-                            if (partition.oldStyleOffsets().size() > 1) {
-                                throw new IllegalStateException("Unexpected partitionData response of length " +
-                                        partition.oldStyleOffsets().size());
-                            } else {
-                                offset = partition.oldStyleOffsets().get(0);
-                            }
-                            log.debug("Handling v0 ListOffsetResponse response for {}. Fetched offset {}",
-                                    topicPartition, offset);
-                            if (offset != ListOffsetsResponse.UNKNOWN_OFFSET) {
-                                OffsetFetcherUtils.ListOffsetData offsetData = new OffsetFetcherUtils.ListOffsetData(offset, null, Optional.empty());
-                                fetchedOffsets.put(topicPartition, offsetData);
-                            }
-                        } else {
-                            // Handle v1 and later response or v0 without offsets
-                            log.debug("Handling ListOffsetResponse response for {}. Fetched offset {}, timestamp {}",
-                                    topicPartition, partition.offset(), partition.timestamp());
-                            if (partition.offset() != ListOffsetsResponse.UNKNOWN_OFFSET) {
-                                Optional<Integer> leaderEpoch = (partition.leaderEpoch() == ListOffsetsResponse.UNKNOWN_EPOCH)
-                                        ? Optional.empty()
-                                        : Optional.of(partition.leaderEpoch());
-                                OffsetFetcherUtils.ListOffsetData offsetData = new OffsetFetcherUtils.ListOffsetData(partition.offset(), partition.timestamp(),
-                                        leaderEpoch);
-                                fetchedOffsets.put(topicPartition, offsetData);
-                            }
+                        log.debug("Handling ListOffsetResponse response for {}. Fetched offset {}, timestamp {}",
+                                topicPartition, partition.offset(), partition.timestamp());
+                        if (partition.offset() != ListOffsetsResponse.UNKNOWN_OFFSET) {
+                            Optional<Integer> leaderEpoch = (partition.leaderEpoch() == ListOffsetsResponse.UNKNOWN_EPOCH)
+                                    ? Optional.empty()
+                                    : Optional.of(partition.leaderEpoch());
+                            OffsetFetcherUtils.ListOffsetData offsetData = new OffsetFetcherUtils.ListOffsetData(partition.offset(), partition.timestamp(),
+                                    leaderEpoch);
+                            fetchedOffsets.put(topicPartition, offsetData);
                         }
                         break;
                     case UNSUPPORTED_FOR_MESSAGE_FORMAT:

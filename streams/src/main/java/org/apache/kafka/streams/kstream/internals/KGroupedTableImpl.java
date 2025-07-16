@@ -27,8 +27,8 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.GroupedTableOperationRepartitionNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
@@ -69,11 +69,12 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
 
-    private <VAgg> KTable<K, VAgg> doAggregate(final ProcessorSupplier<K, Change<V>, K, Change<VAgg>> aggregateSupplier,
-                                         final NamedInternal named,
-                                         final String functionName,
-                                         final MaterializedInternal<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized) {
-
+    private <VAgg> KTable<K, VAgg> doAggregate(
+        final ProcessorSupplier<K, Change<V>, K, Change<VAgg>> aggregateSupplier,
+        final NamedInternal named,
+        final String functionName,
+        final MaterializedInternal<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized
+    ) {
         final String sinkName = named.suffixWithOrElseGet("-sink", builder, KStreamImpl.SINK_NAME);
         final String sourceName = named.suffixWithOrElseGet("-source", builder, KStreamImpl.SOURCE_NAME);
         final String funcName = named.orElseGenerateWithPrefix(builder, functionName);
@@ -88,10 +89,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         // the passed in StreamsGraphNode must be the parent of the repartition node
         builder.addGraphNode(this.graphNode, repartitionGraphNode);
 
-        final StatefulProcessorNode statefulProcessorNode = new StatefulProcessorNode<>(
+        final ProcessorGraphNode<K, Change<V>> statefulProcessorNode = new ProcessorGraphNode<>(
             funcName,
-            new ProcessorParameters<>(aggregateSupplier, funcName),
-            new String[]{materialized.storeName()}
+            new ProcessorParameters<>(aggregateSupplier, funcName)
         );
         statefulProcessorNode.setOutputVersioned(materialized.storeSupplier() instanceof VersionedBytesStoreSupplier);
 

@@ -51,6 +51,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -61,11 +62,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
-import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -95,13 +95,6 @@ public class RaftUtilTest {
 
     private static Stream<Arguments> singletonFetchRequestTestCases() {
         return Stream.of(
-                Arguments.of(new FetchRequestTestCase(Uuid.ZERO_UUID, (short) 0, (short) -1,
-                        "{\"replicaId\":-1,\"maxWaitMs\":0,\"minBytes\":0,\"topics\":[{\"topic\":\"topic\"," +
-                            "\"partitions\":[{\"partition\":2,\"fetchOffset\":333,\"partitionMaxBytes\":10}]}]}")),
-                Arguments.of(new FetchRequestTestCase(Uuid.ZERO_UUID, (short) 3, (short) -1,
-                        "{\"replicaId\":-1,\"maxWaitMs\":0,\"minBytes\":0,\"maxBytes\":2147483647," +
-                            "\"topics\":[{\"topic\":\"topic\",\"partitions\":[{\"partition\":2,\"fetchOffset\":333," +
-                            "\"partitionMaxBytes\":10}]}]}")),
                 Arguments.of(new FetchRequestTestCase(Uuid.ZERO_UUID, (short) 4, (short) -1,
                         "{\"replicaId\":-1,\"maxWaitMs\":0,\"minBytes\":0,\"maxBytes\":2147483647,\"isolationLevel\":0," +
                             "\"topics\":[{\"topic\":\"topic\",\"partitions\":[{\"partition\":2,\"fetchOffset\":333," +
@@ -141,12 +134,6 @@ public class RaftUtilTest {
 
     private static Stream<Arguments> singletonFetchResponseTestCases() {
         return Stream.of(
-                Arguments.of(new FetchResponseTestCase((short) 0, -1,
-                        "{\"responses\":[{\"topic\":\"topic\",\"partitions\":[{\"partitionIndex\":1," +
-                            "\"errorCode\":0,\"highWatermark\":1000,\"records\":\"\"}]}]}")),
-                Arguments.of(new FetchResponseTestCase((short) 1, -1,
-                        "{\"throttleTimeMs\":0,\"responses\":[{\"topic\":\"topic\",\"partitions\":" +
-                            "[{\"partitionIndex\":1,\"errorCode\":0,\"highWatermark\":1000,\"records\":\"\"}]}]}")),
                 Arguments.of(new FetchResponseTestCase((short) 4, -1,
                         "{\"throttleTimeMs\":0,\"responses\":[{\"topic\":\"topic\",\"partitions\":" +
                             "[{\"partitionIndex\":1,\"errorCode\":0,\"highWatermark\":1000,\"lastStableOffset\":900," +
@@ -354,6 +341,29 @@ public class RaftUtilTest {
         assertEquals(testCase.expectedJson, json.toString());
     }
 
+    // Test that the replicaDirectoryId field introduced in version 17 is ignorable for older versions.
+    // This is done by setting a FetchPartition's replicaDirectoryId explicitly to a non-zero uuid and
+    // checking that the FetchRequestData can still be written to an older version specified by
+    // testCase.version.
+    @ParameterizedTest
+    @MethodSource("singletonFetchRequestTestCases")
+    public void testFetchRequestV17Compatibility(final FetchRequestTestCase testCase) {
+        FetchRequestData fetchRequestData = RaftUtil.singletonFetchRequest(
+            topicPartition,
+            Uuid.ONE_UUID,
+            partition -> partition
+                .setPartitionMaxBytes(10)
+                .setCurrentLeaderEpoch(5)
+                .setFetchOffset(333)
+                .setLastFetchedEpoch(testCase.lastFetchedEpoch)
+                .setPartition(2)
+                .setReplicaDirectoryId(Uuid.ONE_UUID)
+                .setLogStartOffset(0)
+        );
+        JsonNode json = FetchRequestDataJsonConverter.write(fetchRequestData, testCase.version);
+        assertEquals(testCase.expectedJson, json.toString());
+    }
+
     @ParameterizedTest
     @MethodSource("singletonFetchResponseTestCases")
     public void testSingletonFetchResponseForAllVersion(final FetchResponseTestCase testCase) {
@@ -382,7 +392,7 @@ public class RaftUtilTest {
                         .setSnapshotId(new FetchResponseData.SnapshotId())
                         .setErrorCode(Errors.NONE.code())
                         .setCurrentLeader(new FetchResponseData.LeaderIdAndEpoch())
-                        .setAbortedTransactions(singletonList(
+                        .setAbortedTransactions(List.of(
                                 new FetchResponseData.AbortedTransaction()
                                         .setProducerId(producerId)
                                         .setFirstOffset(firstOffset)
@@ -429,7 +439,7 @@ public class RaftUtilTest {
                 leaderEpoch,
                 leaderId,
                 true,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address))
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address))
         );
         JsonNode json = VoteResponseDataJsonConverter.write(voteResponseData, version);
         assertEquals(expectedJson, json.toString());
@@ -457,6 +467,35 @@ public class RaftUtilTest {
         assertEquals(expectedJson, json.toString());
     }
 
+    // Test that the replicaDirectoryId field introduced in version 1 is ignorable for version 0
+    // This is done by setting a FetchPartition's replicaDirectoryId explicitly to a non-zero uuid and
+    // checking that the FetchSnapshotRequestData can still be written to an older version specified by
+    // testCase.version.
+    @ParameterizedTest
+    @MethodSource("fetchSnapshotRequestTestCases")
+    public void testSingletonFetchSnapshotRequestV1Compatibility(
+        short version,
+        Uuid directoryId,
+        String expectedJson
+    ) {
+        int epoch = 1;
+        int maxBytes = 1000;
+        int position = 10;
+
+        FetchSnapshotRequestData fetchSnapshotRequestData = RaftUtil.singletonFetchSnapshotRequest(
+            clusterId,
+            ReplicaKey.of(1, directoryId),
+            topicPartition,
+            epoch,
+            new OffsetAndEpoch(10, epoch),
+            maxBytes,
+            position
+        );
+        fetchSnapshotRequestData.topics().get(0).partitions().get(0).setReplicaDirectoryId(Uuid.ONE_UUID);
+        JsonNode json = FetchSnapshotRequestDataJsonConverter.write(fetchSnapshotRequestData, version);
+        assertEquals(expectedJson, json.toString());
+    }
+
     @ParameterizedTest
     @MethodSource("fetchSnapshotResponseTestCases")
     public void testSingletonFetchSnapshotResponseForAllVersion(final short version, final String expectedJson) {
@@ -467,7 +506,7 @@ public class RaftUtilTest {
                 version,
                 topicPartition,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address)),
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address)),
                 responsePartitionSnapshot -> responsePartitionSnapshot
         );
 
@@ -486,7 +525,7 @@ public class RaftUtilTest {
                 clusterId,
                 leaderEpoch,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address)),
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address)),
                 ReplicaKey.of(1, Uuid.ONE_UUID)
         );
         JsonNode json = BeginQuorumEpochRequestDataJsonConverter.write(beginQuorumEpochRequestData, version);
@@ -507,7 +546,7 @@ public class RaftUtilTest {
                 Errors.NONE,
                 leaderEpoch,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address))
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address))
         );
         JsonNode json = BeginQuorumEpochResponseDataJsonConverter.write(beginQuorumEpochResponseData, version);
         assertEquals(expectedJson, json.toString());
@@ -524,7 +563,7 @@ public class RaftUtilTest {
                 clusterId,
                 leaderEpoch,
                 leaderId,
-                singletonList(ReplicaKey.of(1, Uuid.ONE_UUID))
+                List.of(ReplicaKey.of(1, Uuid.ONE_UUID))
         );
         JsonNode json = EndQuorumEpochRequestDataJsonConverter.write(endQuorumEpochRequestData, version);
         assertEquals(expectedJson, json.toString());
@@ -544,7 +583,7 @@ public class RaftUtilTest {
                 Errors.NONE,
                 leaderEpoch,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address))
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address))
         );
         JsonNode json = EndQuorumEpochResponseDataJsonConverter.write(endQuorumEpochResponseData, version);
         assertEquals(expectedJson, json.toString());
@@ -574,8 +613,8 @@ public class RaftUtilTest {
                 leaderId,
                 leaderEpoch,
                 highWatermark,
-                Collections.singletonList(replicaState),
-                Collections.singletonList(replicaState),
+                List.of(replicaState),
+                List.of(replicaState),
                 0
         );
         JsonNode json = DescribeQuorumResponseDataJsonConverter.write(describeQuorumResponseData, version);

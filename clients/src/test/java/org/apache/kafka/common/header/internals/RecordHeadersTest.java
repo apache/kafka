@@ -30,7 +30,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class RecordHeadersTest {
 
@@ -73,7 +72,7 @@ public class RecordHeadersTest {
         assertEquals(1, getCount(headers));
 
         headers.add(new RecordHeader("key3", "value3".getBytes()));
-        
+
         assertNull(headers.lastHeader("key"));
 
         assertHeader("key2", "value2", headers.lastHeader("key2"));
@@ -134,36 +133,27 @@ public class RecordHeadersTest {
         headers.add(new RecordHeader("key", "value".getBytes()));
         Iterator<Header> headerIteratorBeforeClose = headers.iterator();
         headers.setReadOnly();
-        try {
-            headers.add(new RecordHeader("key", "value".getBytes()));
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
 
-        try {
-            headers.remove("key");
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
+        assertThrows(IllegalStateException.class,
+            () -> headers.add(new RecordHeader("key", "value".getBytes())),
+            "IllegalStateException expected as headers are closed.");
 
-        try {
-            Iterator<Header> headerIterator = headers.iterator();
-            headerIterator.next();
-            headerIterator.remove();
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
-        
-        try {
-            headerIteratorBeforeClose.next();
-            headerIteratorBeforeClose.remove();
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
+        assertThrows(IllegalStateException.class,
+            () -> headers.remove("key"),
+            "IllegalStateException expected as headers are closed.");
+
+        Iterator<Header> headerIterator = headers.iterator();
+        headerIterator.next();
+
+        assertThrows(IllegalStateException.class,
+            headerIterator::remove,
+            "IllegalStateException expected as headers are closed.");
+
+        headerIteratorBeforeClose.next();
+
+        assertThrows(IllegalStateException.class,
+            headerIterator::remove,
+            "IllegalStateException expected as headers are closed.");
     }
 
     @Test
@@ -222,7 +212,7 @@ public class RecordHeadersTest {
     private int getCount(Headers headers) {
         return headers.toArray().length;
     }
-    
+
     static void assertHeader(String key, String value, Header actual) {
         assertEquals(key, actual.key());
         assertArrayEquals(value.getBytes(), actual.value());

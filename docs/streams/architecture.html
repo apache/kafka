@@ -102,7 +102,7 @@
     <p>
         Starting more stream threads or more instances of the application merely amounts to replicating the topology and having it process a different subset of Kafka partitions, effectively parallelizing processing.
         It is worth noting that there is no shared state amongst the threads, so no inter-thread coordination is necessary. This makes it very simple to run topologies in parallel across the application instances and threads.
-        The assignment of Kafka topic partitions amongst the various stream threads is transparently handled by Kafka Streams leveraging <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Client-side+Assignment+Proposal">Kafka's coordination</a> functionality.
+        The assignment of Kafka topic partitions amongst the various stream threads is transparently handled by Kafka Streams leveraging <a href="https://cwiki.apache.org/confluence/x/foynAw">Kafka's coordination</a> functionality.
     </p>
 
     <p>

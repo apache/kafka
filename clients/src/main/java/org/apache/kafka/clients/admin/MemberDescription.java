@@ -57,7 +57,7 @@ public class MemberDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)}.
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
     @Deprecated
     public MemberDescription(
@@ -81,7 +81,7 @@ public class MemberDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)}.
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
     @Deprecated
     public MemberDescription(
@@ -102,7 +102,7 @@ public class MemberDescription {
     }
 
     /**
-     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)}.
+     * @deprecated Since 4.0. Use {@link #MemberDescription(String, Optional, String, String, MemberAssignment, Optional, Optional, Optional)} instead.
      */
     @Deprecated
     public MemberDescription(String memberId,

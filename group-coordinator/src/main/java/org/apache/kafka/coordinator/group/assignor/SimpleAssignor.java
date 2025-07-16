@@ -16,107 +16,65 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
-import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
-import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 
 /**
- * A simple partition assignor that assigns each member all partitions of the subscribed topics.
+ * A simple partition assignor for share groups that assigns partitions of the subscribed topics
+ * to different members based on the rules defined in KIP-932. It is not rack-aware.
+ * <p>
+ * Assignments are done according to the following principles:
+ * <ol>
+ *   <li>Balance:          Ensure partitions are distributed equally among all members.
+ *                         The difference in assignments sizes between any two members
+ *                         should not exceed one partition.</li>
+ *   <li>Stickiness:       Minimize partition movements among members by retaining
+ *                         as much of the existing assignment as possible.</li>
+ * </ol>
+ * <p>
+ * Balance is prioritized above stickiness.
  */
 public class SimpleAssignor implements ShareGroupPartitionAssignor {
-
+    private static final Logger log = LoggerFactory.getLogger(SimpleAssignor.class);
     private static final String SIMPLE_ASSIGNOR_NAME = "simple";
 
+    /**
+     * Unique name for this assignor.
+     */
     @Override
     public String name() {
         return SIMPLE_ASSIGNOR_NAME;
     }
 
+    /**
+     * Assigns partitions to group members based on the given assignment specification and topic metadata.
+     *
+     * @param groupSpec                The assignment spec which includes member metadata.
+     * @param subscribedTopicDescriber The topic and partition metadata describer.
+     * @return The new assignment for the group.
+     */
     @Override
-    public GroupAssignment assign(
-        GroupSpec groupSpec,
-        SubscribedTopicDescriber subscribedTopicDescriber
-    ) throws PartitionAssignorException {
-        if (groupSpec.memberIds().isEmpty())
-            return new GroupAssignment(Collections.emptyMap());
+    public GroupAssignment assign(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException {
+        if (groupSpec.memberIds().isEmpty()) {
+            return new GroupAssignment(Map.of());
+        }
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
-            return assignHomogenous(groupSpec, subscribedTopicDescriber);
+            log.debug("Detected that all members are subscribed to the same set of topics, invoking the homogeneous assignment algorithm");
+            return new SimpleHomogeneousAssignmentBuilder(groupSpec, subscribedTopicDescriber).build();
         } else {
-            return assignHeterogeneous(groupSpec, subscribedTopicDescriber);
+            log.debug("Detected that the members are subscribed to different sets of topics, invoking the heterogeneous assignment algorithm");
+            return new SimpleHeterogeneousAssignmentBuilder(groupSpec, subscribedTopicDescriber).build();
         }
-    }
-
-    private GroupAssignment assignHomogenous(
-        GroupSpec groupSpec,
-        SubscribedTopicDescriber subscribedTopicDescriber
-    ) {
-        Set<Uuid> subscribeTopicIds = groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
-            .subscribedTopicIds();
-        if (subscribeTopicIds.isEmpty())
-            return new GroupAssignment(Collections.emptyMap());
-
-        Map<Uuid, Set<Integer>> targetPartitions = computeTargetPartitions(
-            subscribeTopicIds, subscribedTopicDescriber);
-
-        return new GroupAssignment(groupSpec.memberIds().stream().collect(Collectors.toMap(
-            Function.identity(), memberId -> new MemberAssignmentImpl(targetPartitions))));
-    }
-
-    private GroupAssignment assignHeterogeneous(
-        GroupSpec groupSpec,
-        SubscribedTopicDescriber subscribedTopicDescriber
-    ) {
-        Map<String, MemberAssignment> members = new HashMap<>();
-        for (String memberId : groupSpec.memberIds()) {
-            MemberSubscription spec = groupSpec.memberSubscription(memberId);
-            if (spec.subscribedTopicIds().isEmpty())
-                continue;
-
-            Map<Uuid, Set<Integer>> targetPartitions = computeTargetPartitions(
-                spec.subscribedTopicIds(), subscribedTopicDescriber);
-
-            members.put(memberId, new MemberAssignmentImpl(targetPartitions));
-        }
-        return new GroupAssignment(members);
-    }
-
-    private Map<Uuid, Set<Integer>> computeTargetPartitions(
-        Set<Uuid> subscribeTopicIds,
-        SubscribedTopicDescriber subscribedTopicDescriber
-    ) {
-        Map<Uuid, Set<Integer>> targetPartitions = new HashMap<>();
-        subscribeTopicIds.forEach(topicId -> {
-            int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
-            if (numPartitions == -1) {
-                throw new PartitionAssignorException(
-                    "Members are subscribed to topic " + topicId
-                        + " which doesn't exist in the topic metadata."
-                );
-            }
-
-            Set<Integer> partitions = new HashSet<>();
-            for (int i = 0; i < numPartitions; i++) {
-                partitions.add(i);
-            }
-            targetPartitions.put(topicId, partitions);
-        });
-        return targetPartitions;
     }
 }

@@ -48,6 +48,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -369,6 +370,40 @@ public class KGroupedStreamImplTest {
         table.toStream().process(supplier);
 
         doAggregateSessionWindows(supplier);
+    }
+
+    @Test
+    public void sessionGapOfZeroShouldOnlyPutRecordsWithSameTsIntoSameSession() {
+        final MockApiProcessorSupplier<Windowed<String>, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final KTable<Windowed<String>, Integer> table = groupedStream
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ZERO))
+            .aggregate(
+                () -> 0,
+                (aggKey, value, aggregate) -> aggregate + 1,
+                (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
+                Materialized.with(null, Serdes.Integer()));
+        table.toStream().process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("1", "1", 10);
+            inputTopic.pipeInput("1", "1", 11);
+            inputTopic.pipeInput("1", "1", 11);
+            inputTopic.pipeInput("1", "1", 12);
+        }
+
+        final Map<Windowed<String>, ValueAndTimestamp<Integer>> result
+            = supplier.theCapturedProcessor().lastValueAndTimestampPerKey();
+        assertEquals(
+            ValueAndTimestamp.make(1, 10),
+            result.get(new Windowed<>("1", new SessionWindow(10L, 10L))));
+        assertEquals(
+            ValueAndTimestamp.make(2, 11L),
+            result.get(new Windowed<>("1", new SessionWindow(11L, 11L))));
+        assertEquals(
+            ValueAndTimestamp.make(1, 12L),
+            result.get(new Windowed<>("1", new SessionWindow(12L, 12L))));
     }
 
     private void doCountSessionWindows(final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier) {

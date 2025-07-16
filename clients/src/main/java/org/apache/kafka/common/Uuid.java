@@ -20,8 +20,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -51,11 +49,7 @@ public class Uuid implements Comparable<Uuid> {
     /**
      * The set of reserved UUIDs that will never be returned by the randomUuid method.
      */
-    public static final Set<Uuid> RESERVED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-            METADATA_TOPIC_ID,
-            ZERO_UUID,
-            ONE_UUID
-    )));
+    public static final Set<Uuid> RESERVED = Set.of(ZERO_UUID, ONE_UUID);
 
     private final long mostSignificantBits;
     private final long leastSignificantBits;

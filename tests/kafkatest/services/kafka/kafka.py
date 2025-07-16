@@ -33,6 +33,7 @@ from kafkatest.services.security.listener_security_config import ListenerSecurit
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH
 from kafkatest.version import KafkaVersion
+from kafkatest.version import get_version
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config
 
 
@@ -202,9 +203,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  controller_num_nodes_override=0,
                  allow_zk_with_kraft=False,
                  quorum_info_provider=None,
-                 use_new_coordinator=None,
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
+                 use_transactions_v2=False,
+                 use_share_groups=None,
+                 use_streams_groups=False
                  ):
         """
         :param context: test context
@@ -253,7 +256,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param jmx_attributes:
         :param int zk_connect_timeout:
         :param int zk_session_timeout:
-        :param list[list] server_prop_overrides: overrides for kafka.properties file
+        :param list[list] server_prop_overrides: overrides for kafka.properties file, if the second value is None or "", it will be filtered
             e.g: [["config1", "true"], ["config2", "1000"]]
         :param str zk_chroot:
         :param bool zk_client_secure: connect to Zookeeper over secure client port (TLS) when True
@@ -265,9 +268,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param int controller_num_nodes_override: the number of controller nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and isolated_kafka is not None; ignored otherwise
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
-        :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
         :param consumer_group_migration_policy: The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa.
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
+        :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
+        :param use_share_groups: When true, enables the use of share groups introduced in KIP-932
+        :param use_streams_groups: When true, enables the use of streams groups introduced in KIP-1071
         """
 
         self.zk = zk
@@ -281,17 +286,19 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.isolated_controller_quorum = None # will define below if necessary
         self.dynamicRaftQuorum = False
 
-        # Set use_new_coordinator based on context and arguments.
+        # Set use_share_groups based on context and arguments.
         # If not specified, the default config is used.
-        if use_new_coordinator is None:
-            arg_name = 'use_new_coordinator'
+        if use_share_groups is None:
+            arg_name = 'use_share_groups'
             if context.injected_args is not None:
-                use_new_coordinator = context.injected_args.get(arg_name)
-            if use_new_coordinator is None:
-                use_new_coordinator = context.globals.get(arg_name)
+                use_share_groups = context.injected_args.get(arg_name)
+            if use_share_groups is None:
+                use_share_groups = context.globals.get(arg_name)
         
         # Assign the determined value.
-        self.use_new_coordinator = use_new_coordinator
+        self.use_transactions_v2 = use_transactions_v2
+        self.use_share_groups = use_share_groups
+        self.use_streams_groups = use_streams_groups
 
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
@@ -350,7 +357,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     listener_security_config=listener_security_config,
                     extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
                     isolated_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
-                    server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum
+                    server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum,
+                    use_streams_groups=self.use_streams_groups
                 )
                 self.controller_quorum = self.isolated_controller_quorum
 
@@ -598,12 +606,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                         nodes_for_kdc += other_service.nodes
                     self.minikdc = MiniKdc(self.context, nodes_for_kdc, extra_principals = add_principals)
                     self.minikdc.start()
-        else:
-            self.minikdc = None
-            if self.quorum_info.using_kraft:
-                self.controller_quorum.minikdc = None
-                if self.isolated_kafka:
-                    self.isolated_kafka.minikdc = None
 
     def alive(self, node):
         return len(self.pids(node)) > 0
@@ -751,7 +753,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         #load template configs as dictionary
         config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                       security_config=self.security_config, num_nodes=self.num_nodes,
-                                      listener_security_config=self.listener_security_config)
+                                      listener_security_config=self.listener_security_config,
+                                      use_share_groups=self.use_share_groups)
 
         configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
                         if not l.startswith("#") and "=" in l )
@@ -768,9 +771,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             else:
                 override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'false'
 
-        if self.use_new_coordinator is not None:
-            override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = str(self.use_new_coordinator)
-
         if self.consumer_group_migration_policy is not None:
             override_configs[config_property.CONSUMER_GROUP_MIGRATION_POLICY] = str(self.consumer_group_migration_policy)
 
@@ -780,10 +780,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):
             override_configs[prop[0]] = prop[1]
 
+        if self.use_share_groups is not None and self.use_share_groups is True:
+            override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
+
+        if self.use_streams_groups is True:
+            override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
+            override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)
+
         #update template configs with test override configs
         configs.update(override_configs)
 
-        prop_file = self.render_configs(configs)
+        filtered_configs = {k: v for k, v in configs.items() if v not in [None, ""]}
+        prop_file = self.render_configs(filtered_configs)
         return prop_file
 
     def render_configs(self, configs):
@@ -887,6 +895,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     else:
                         cmd += " --standalone"
                         self.standalone_controller_bootstrapped = True
+            if self.use_transactions_v2:
+                cmd += " --feature transaction.version=2"
+            else:
+                if get_version(node).supports_feature_command():
+                    cmd += " --feature transaction.version=0"
             self.logger.info("Running log directory format command...\n%s" % cmd)
             node.account.ssh(cmd)
 
@@ -920,24 +933,29 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             raise Exception("No process ids recorded on node %s" % node.account.hostname)
 
     def upgrade_metadata_version(self, new_version):
-        self.run_features_command("upgrade", new_version)
+        self.run_metadata_features_command("upgrade", new_version)
 
     def downgrade_metadata_version(self, new_version):
-        self.run_features_command("downgrade", new_version)
+        self.run_metadata_features_command("downgrade", new_version)
 
-    def run_features_command(self, op, new_version):
+    def run_metadata_features_command(self, op, new_version):
         cmd = self.path.script("kafka-features.sh ")
         cmd += "--bootstrap-server %s " % self.bootstrap_servers()
         cmd += "%s --metadata %s" % (op, new_version)
         self.logger.info("Running %s command...\n%s" % (op, cmd))
         self.nodes[0].account.ssh(cmd)
 
+    def run_features_command(self, op, feature, new_version):
+        cmd = self.path.script("kafka-features.sh ")
+        cmd += "--bootstrap-server %s " % self.bootstrap_servers()
+        cmd += "%s --feature %s=%s" % (op, feature, new_version)
+        self.logger.info("Running %s command...\n%s" % (op, cmd))
+        self.nodes[0].account.ssh(cmd)
+
     def pids(self, node):
         """Return process ids associated with running processes on the given node."""
         try:
-            cmd = "ps ax | grep -i %s | grep -v grep | awk '{print $1}'" % self.java_class_name()
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
+            return node.account.java_pids(self.java_class_name())
         except (RemoteCommandError, ValueError) as e:
             return []
 
@@ -1170,12 +1188,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
-    def all_nodes_acl_command_supports_bootstrap_server(self):
-        for node in self.nodes:
-            if not node.version.acl_command_supports_bootstrap_server():
-                return False
-        return True
-
     def all_nodes_reassign_partitions_command_supports_bootstrap_server(self):
         for node in self.nodes:
             if not node.version.reassign_partitions_command_supports_bootstrap_server():
@@ -1332,46 +1344,25 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-    def set_unclean_leader_election(self, topic, value=True, node=None):
-        if node is None:
-            node = self.nodes[0]
-        if value is True:
-            self.logger.info("Enabling unclean leader election for topic %s", topic)
-        else:
-            self.logger.info("Disabling unclean leader election for topic %s", topic)
-
-        force_use_zk_connection = not self.all_nodes_configs_command_uses_bootstrap_server()
-
-        cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
-              (self.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection), topic, str(value).lower())
-        self.logger.info("Running alter unclean leader command...\n%s" % cmd)
-        node.account.ssh(cmd)
-
-    def kafka_acls_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None, override_command_config = None):
+    def kafka_acls_cmd_with_optional_security_settings(self, node, kafka_security_protocol = None, override_command_config = None):
         if self.quorum_info.using_kraft and not self.quorum_info.has_brokers:
             raise Exception("Must invoke kafka-acls against a broker, not a KRaft controller")
-        force_use_zk_connection = force_use_zk_connection or not self.all_nodes_acl_command_supports_bootstrap_server
-        if force_use_zk_connection:
-            bootstrap_server_or_authorizer_zk_props = "--authorizer-properties zookeeper.connect=%s" % (self.zk_connect_setting())
-            skip_optional_security_settings = True
-        else:
-            if kafka_security_protocol is None:
-                # it wasn't specified, so use the inter-broker security protocol if it is PLAINTEXT,
-                # otherwise use the client security protocol
-                if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
-                    security_protocol_to_use = SecurityConfig.PLAINTEXT
-                else:
-                    security_protocol_to_use = self.security_protocol
+        if kafka_security_protocol is None:
+            # it wasn't specified, so use the inter-broker security protocol if it is PLAINTEXT,
+            # otherwise use the client security protocol
+            if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
+                security_protocol_to_use = SecurityConfig.PLAINTEXT
             else:
-                security_protocol_to_use = kafka_security_protocol
-            bootstrap_server_or_authorizer_zk_props = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
-            skip_optional_security_settings = security_protocol_to_use == SecurityConfig.PLAINTEXT
+                security_protocol_to_use = self.security_protocol
+        else:
+            security_protocol_to_use = kafka_security_protocol
+        bootstrap_server = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
+        skip_optional_security_settings = security_protocol_to_use == SecurityConfig.PLAINTEXT
         if skip_optional_security_settings:
             optional_jass_krb_system_props_prefix = ""
             optional_command_config_suffix = ""
         else:
-            # we need security configs because aren't going to ZooKeeper and we aren't using PLAINTEXT
+            # we need security configs because we aren't using PLAINTEXT
             if (security_protocol_to_use == self.interbroker_security_protocol):
                 # configure JAAS to provide the broker's credentials
                 # since this is an authenticating cluster and we are going to use the inter-broker security protocol
@@ -1391,7 +1382,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         kafka_acls_script = self.path.script("kafka-acls.sh", node)
         return "%s%s %s%s" % \
                (optional_jass_krb_system_props_prefix, kafka_acls_script,
-                bootstrap_server_or_authorizer_zk_props, optional_command_config_suffix)
+                bootstrap_server, optional_command_config_suffix)
 
     def run_cli_tool(self, node, cmd):
         output = ""
@@ -1593,11 +1584,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             describe_output = self.describe_topic(topic, node, offline_nodes=offline_nodes)
             self.logger.debug(describe_output)
             requested_partition_line = self._describe_topic_line_for_partition(partition, describe_output)
-            # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2
+            # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2    Elr: 4  LastKnownElr: 5
             if not requested_partition_line:
                 raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
             isr_csv = requested_partition_line.split()[9] # 10th column from above
-            isr_idx_list = [int(i) for i in isr_csv.split(",")]
+            if isr_csv == "Elr:":
+                isr_idx_list = []
+            else:
+                isr_idx_list = [int(i) for i in isr_csv.split(",")]
 
         self.logger.info("Isr for topic %s and partition %d is now: %s" % (topic, partition, isr_idx_list))
         return isr_idx_list
@@ -1723,6 +1717,29 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
+    def set_share_group_offset_reset_strategy(self, group, strategy=None, node=None, command_config=None):
+        """ Set the offset reset strategy config for the given group.
+        """
+        if strategy is None:
+            return
+        if node is None:
+            node = self.nodes[0]
+        config_script = self.path.script("kafka-configs.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"share.auto.offset.reset=%s\" %s" % \
+               (config_script,
+                self.bootstrap_servers(self.security_protocol),
+                group,
+                strategy,
+                command_config)
+        return "Completed" in self.run_cli_tool(node, cmd)
+
     def list_consumer_groups(self, node=None, command_config=None, state=None, type=None):
         """ Get list of consumer groups.
         """
@@ -1746,6 +1763,27 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             cmd += " --type %s" % type
         return self.run_cli_tool(node, cmd)
 
+    def list_share_groups(self, node=None, command_config=None, state=None):
+        """ Get list of share groups.
+        """
+        if node is None:
+            node = self.nodes[0]
+        share_group_script = self.path.script("kafka-share-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --list" % \
+               (share_group_script,
+                self.bootstrap_servers(self.security_protocol),
+                command_config)
+        if state is not None:
+            cmd += " --state %s" % state
+        return self.run_cli_tool(node, cmd)
+
     def describe_consumer_group(self, group, node=None, command_config=None):
         """ Describe a consumer group.
         """
@@ -1767,10 +1805,64 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
-            if not (line.startswith("SLF4J") or line.startswith("TOPIC") or line.startswith("Could not fetch offset")):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
                 output += line
         self.logger.debug(output)
         return output
+    
+    def describe_share_group(self, group, node=None, command_config=None):
+        """ Describe a share group.
+        """
+        if node is None:
+            node = self.nodes[0]
+        share_group_script = self.path.script("kafka-share-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --group %s --describe" % \
+              (share_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config, group)
+
+        output = ""
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
+                output += line
+        self.logger.debug(output)
+        return output
+    
+    def describe_share_group_members(self, group, node=None, command_config=None):
+        """ Describe members of a share group.
+        """
+        if node is None:
+            node = self.nodes[0]
+        share_group_script = self.path.script("kafka-share-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --group %s --describe" % \
+              (share_group_script,
+               self.bootstrap_servers(self.security_protocol),
+               command_config, group)
+        
+        cmd += " --members"
+
+        output_lines = []
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.strip() == ""):
+                output_lines.append(line.strip())
+        self.logger.debug(output_lines)
+        return output_lines
 
     def describe_quorum(self, node=None):
         """Run the describe quorum command.
@@ -1919,4 +2011,4 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return output
 
     def java_class_name(self):
-        return "kafka.Kafka"
+        return "kafka\.Kafka"

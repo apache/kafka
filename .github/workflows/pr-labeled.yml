@@ -44,10 +44,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
+        # Find the CI workflow run that is pending approval and approve it
         run: |
           set +e
           echo "Found 'ci-approved' label on PR #$PR_NUMBER."
-          RUN_ID=$(gh run list -L 1 -c $SHA -s action_required --json databaseId --jq '.[].databaseId')
+          RUN_ID=$(gh run list -L 1 -c $SHA -s action_required -w CI --json databaseId --jq '.[].databaseId')
           if [ -z "$RUN_ID" ]; then
             echo "No workflow run found for SHA $SHA";
             exit 0;
@@ -64,4 +65,4 @@ jobs:
           repository: ${{ github.repository }}
           run_id: ${{ env.RUN_ID }}
           pr_number: ${{ env.PR_NUMBER }}
-          commit_sha: ${{ github.event.workflow_run.head_sha }}
+          commit_sha: ${{ github.event.pull_request.head.sha }}

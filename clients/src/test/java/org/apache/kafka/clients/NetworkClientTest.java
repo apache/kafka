@@ -215,7 +215,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
 
-        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
                 .setTimeoutMs(1000));
@@ -385,7 +385,7 @@ public class NetworkClientTest {
     private void awaitReady(NetworkClient client, Node node) {
         if (client.discoverBrokerVersions()) {
             setExpectedApiVersionsResponse(TestUtils.defaultApiVersionsResponse(
-                ApiMessageType.ListenerType.ZK_BROKER));
+                ApiMessageType.ListenerType.BROKER));
         }
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
@@ -632,7 +632,7 @@ public class NetworkClientTest {
 
     private ClientResponse produce(NetworkClient client, int requestTimeoutMs, boolean shouldEmulateTimeout) {
         awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
-        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
                 .setTimeoutMs(1000));
@@ -748,51 +748,12 @@ public class NetworkClientTest {
         assertEquals(0, client.throttleDelayMs(node, time.milliseconds()));
     }
 
-    // Creates expected ApiVersionsResponse from the specified node, where the max protocol version for the specified
-    // key is set to the specified version.
-    private ApiVersionsResponse createExpectedApiVersionsResponse(ApiKeys key, short maxVersion) {
-        ApiVersionCollection versionList = new ApiVersionCollection();
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            if (apiKey == key) {
-                versionList.add(new ApiVersion()
-                    .setApiKey(apiKey.id)
-                    .setMinVersion((short) 0)
-                    .setMaxVersion(maxVersion));
-            } else versionList.add(ApiVersionsResponse.toApiVersion(apiKey));
-        }
-        return new ApiVersionsResponse(new ApiVersionsResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setThrottleTimeMs(0)
-            .setApiKeys(versionList));
-    }
-
-    @Test
-    public void testThrottlingNotEnabledForConnectionToOlderBroker() {
-        // Instrument the test so that the max protocol version for PRODUCE returned from the node is 5 and thus
-        // client-side throttling is not enabled. Also, return a response with a 100ms throttle delay.
-        setExpectedApiVersionsResponse(createExpectedApiVersionsResponse(PRODUCE, (short) 5));
-        while (!client.ready(node, time.milliseconds()))
-            client.poll(1, time.milliseconds());
-        selector.clear();
-
-        int correlationId = sendEmptyProduceRequest();
-        client.poll(1, time.milliseconds());
-
-        sendThrottledProduceResponse(correlationId, 100, (short) 5);
-        client.poll(1, time.milliseconds());
-
-        // Since client-side throttling is disabled, the connection is ready even though the response indicated a
-        // throttle delay.
-        assertTrue(client.ready(node, time.milliseconds()));
-        assertEquals(0, client.throttleDelayMs(node, time.milliseconds()));
-    }
-
     private int sendEmptyProduceRequest() {
         return sendEmptyProduceRequest(client, node.idString());
     }
 
     private int sendEmptyProduceRequest(NetworkClient client, String nodeId) {
-        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
                 .setTimeoutMs(1000));
@@ -1476,7 +1437,7 @@ public class NetworkClientTest {
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
-        return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+        return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER);
     }
 
     private static class TestCallbackHandler implements RequestCompletionHandler {

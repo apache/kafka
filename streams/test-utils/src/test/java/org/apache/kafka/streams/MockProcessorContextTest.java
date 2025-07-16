@@ -21,6 +21,8 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -53,24 +55,36 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("deprecation") // this is a test of a deprecated API
+@Deprecated
 public class MockProcessorContextTest {
+
     @Test
     public void shouldCaptureOutputRecords() {
-        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
+        final Transformer<String, Long, KeyValue<String, Long>> transformer = new Transformer<>() {
+            private ProcessorContext context;
+
             @Override
-            public void process(final String key, final Long value) {
-                context().forward(key + value, key.length() + value);
+            public void init(final ProcessorContext context) {
+                this.context = context;
             }
+
+            @Override
+            public KeyValue<String, Long> transform(final String key, final Long value) {
+                context.forward(key + value, key.length() + value);
+                return null;
+            }
+
+            @Override
+            public void close() { }
         };
 
-        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
-        processor.init(context);
+        final MockProcessorContext context = new MockProcessorContext();
+        transformer.init(context);
 
-        processor.process("foo", 5L);
-        processor.process("barbaz", 50L);
+        transformer.transform("foo", 5L);
+        transformer.transform("barbaz", 50L);
 
-        final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
+        final Iterator<MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
         assertEquals(new KeyValue<>("foo5", 8L), forwarded.next().keyValue());
         assertEquals(new KeyValue<>("barbaz50", 56L), forwarded.next().keyValue());
         assertFalse(forwarded.hasNext());
@@ -82,21 +96,32 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCaptureOutputRecordsUsingTo() {
-        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
+        final Transformer<String, Long, KeyValue<String, Long>> transformer = new Transformer<>() {
+            private ProcessorContext context;
+
             @Override
-            public void process(final String key, final Long value) {
-                context().forward(key + value, key.length() + value, To.all());
+            public void init(final ProcessorContext context) {
+                this.context = context;
             }
+
+            @Override
+            public KeyValue<String, Long> transform(final String key, final Long value) {
+                context.forward(key + value, key.length() + value);
+                return null;
+            }
+
+            @Override
+            public void close() { }
         };
 
-        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
+        final MockProcessorContext context = new MockProcessorContext();
 
-        processor.init(context);
+        transformer.init(context);
 
-        processor.process("foo", 5L);
-        processor.process("barbaz", 50L);
+        transformer.transform("foo", 5L);
+        transformer.transform("barbaz", 50L);
 
-        final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
+        final Iterator<MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
         assertEquals(new KeyValue<>("foo5", 8L), forwarded.next().keyValue());
         assertEquals(new KeyValue<>("barbaz50", 56L), forwarded.next().keyValue());
         assertFalse(forwarded.hasNext());
@@ -108,39 +133,50 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCaptureRecordsOutputToChildByName() {
-        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
+        final Transformer<String, Long, KeyValue<String, Long>> transformer = new Transformer<>() {
+            private ProcessorContext context;
             private int count = 0;
 
             @Override
-            public void process(final String key, final Long value) {
+            public void init(final ProcessorContext context) {
+                this.context = context;
+            }
+
+            @Override
+            public KeyValue<String, Long> transform(final String key, final Long value) {
                 if (count == 0) {
-                    context().forward("start", -1L, To.all()); // broadcast
+                    context.forward("start", -1L, To.all()); // broadcast
                 }
                 final To toChild = count % 2 == 0 ? To.child("george") : To.child("pete");
-                context().forward(key + value, key.length() + value, toChild);
+                context.forward(key + value, key.length() + value, toChild);
                 count++;
+
+                return null;
             }
+
+            @Override
+            public void close() { }
         };
 
-        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
+        final MockProcessorContext context = new MockProcessorContext();
 
-        processor.init(context);
+        transformer.init(context);
 
-        processor.process("foo", 5L);
-        processor.process("barbaz", 50L);
+        transformer.transform("foo", 5L);
+        transformer.transform("barbaz", 50L);
 
         {
-            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
+            final Iterator<MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
 
-            final org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward forward1 = forwarded.next();
+            final MockProcessorContext.CapturedForward forward1 = forwarded.next();
             assertEquals(new KeyValue<>("start", -1L), forward1.keyValue());
             assertNull(forward1.childName());
 
-            final org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward forward2 = forwarded.next();
+            final MockProcessorContext.CapturedForward forward2 = forwarded.next();
             assertEquals(new KeyValue<>("foo5", 8L), forward2.keyValue());
             assertEquals("george", forward2.childName());
 
-            final org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward forward3 = forwarded.next();
+            final MockProcessorContext.CapturedForward forward3 = forwarded.next();
             assertEquals(new KeyValue<>("barbaz50", 56L), forward3.keyValue());
             assertEquals("pete", forward3.childName());
 
@@ -148,21 +184,21 @@ public class MockProcessorContextTest {
         }
 
         {
-            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded("george").iterator();
+            final Iterator<MockProcessorContext.CapturedForward> forwarded = context.forwarded("george").iterator();
             assertEquals(new KeyValue<>("start", -1L), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("foo5", 8L), forwarded.next().keyValue());
             assertFalse(forwarded.hasNext());
         }
 
         {
-            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded("pete").iterator();
+            final Iterator<MockProcessorContext.CapturedForward> forwarded = context.forwarded("pete").iterator();
             assertEquals(new KeyValue<>("start", -1L), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("barbaz50", 56L), forwarded.next().keyValue());
             assertFalse(forwarded.hasNext());
         }
 
         {
-            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded("steve").iterator();
+            final Iterator<MockProcessorContext.CapturedForward> forwarded = context.forwarded("steve").iterator();
             assertEquals(new KeyValue<>("start", -1L), forwarded.next().keyValue());
             assertFalse(forwarded.hasNext());
         }
@@ -170,27 +206,37 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCaptureCommitsAndAllowReset() {
-        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
+        final Transformer<String, Long, ?> transformer = new Transformer<>() {
+            private ProcessorContext context;
             private int count = 0;
 
             @Override
-            public void process(final String key, final Long value) {
-                if (++count > 2) {
-                    context().commit();
-                }
+            public void init(final ProcessorContext context) {
+                this.context = context;
             }
+
+            @Override
+            public Object transform(final String key, final Long value) {
+                if (++count > 2) {
+                    context.commit();
+                }
+                return null;
+            }
+
+            @Override
+            public void close() { }
         };
 
-        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
+        final MockProcessorContext context = new MockProcessorContext();
 
-        processor.init(context);
+        transformer.init(context);
 
-        processor.process("foo", 5L);
-        processor.process("barbaz", 50L);
+        transformer.transform("foo", 5L);
+        transformer.transform("barbaz", 50L);
 
         assertFalse(context.committed());
 
-        processor.process("foobar", 500L);
+        transformer.transform("foobar", 500L);
 
         assertTrue(context.committed());
 
@@ -201,19 +247,31 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldStoreAndReturnStateStores() {
-        final org.apache.kafka.streams.processor.AbstractProcessor<String, Long> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Long>() {
+        final Transformer<String, Long, ?> transformer = new Transformer<>() {
+            private ProcessorContext context;
+
             @Override
-            public void process(final String key, final Long value) {
-                final KeyValueStore<String, Long> stateStore = context().getStateStore("my-state");
+            public void init(final ProcessorContext context) {
+                this.context = context;
+            }
+
+            @Override
+            public Object transform(final String key, final Long value) {
+                final KeyValueStore<String, Long> stateStore = context.getStateStore("my-state");
                 stateStore.put(key, (stateStore.get(key) == null ? 0 : stateStore.get(key)) + value);
                 stateStore.put("all", (stateStore.get("all") == null ? 0 : stateStore.get("all")) + value);
+
+                return null;
             }
+
+            @Override
+            public void close() { }
         };
 
         final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
-                Stores.inMemoryKeyValueStore("my-state"),
-                Serdes.String(),
-                Serdes.Long()).withLoggingDisabled();
+            Stores.inMemoryKeyValueStore("my-state"),
+            Serdes.String(),
+            Serdes.Long()).withLoggingDisabled();
 
         final KeyValueStore<String, Long> store = storeBuilder.build();
 
@@ -239,10 +297,10 @@ public class MockProcessorContextTest {
 
         store.init(mockInternalProcessorContext, store);
 
-        processor.init(mockInternalProcessorContext);
+        transformer.init(mockInternalProcessorContext);
 
-        processor.process("foo", 5L);
-        processor.process("bar", 50L);
+        transformer.transform("foo", 5L);
+        transformer.transform("bar", 50L);
 
         assertEquals(5L, (long) store.get("foo"));
         assertEquals(50L, (long) store.get("bar"));
@@ -254,27 +312,39 @@ public class MockProcessorContextTest {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testMetadata");
 
-        final org.apache.kafka.streams.processor.AbstractProcessor<String, Object> processor = new org.apache.kafka.streams.processor.AbstractProcessor<String, Object>() {
+        final Transformer<String, Long, KeyValue<String, Object>> transformer = new Transformer<>() {
+            private ProcessorContext context;
+
             @Override
-            public void process(final String key, final Object value) {
-                context().forward("appId", context().applicationId());
-                context().forward("taskId", context().taskId());
-
-                context().forward("topic", context().topic());
-                context().forward("partition", context().partition());
-                context().forward("offset", context().offset());
-                context().forward("timestamp", context().timestamp());
-
-                context().forward("key", key);
-                context().forward("value", value);
+            public void init(final ProcessorContext context) {
+                this.context = context;
             }
+
+            @Override
+            public KeyValue<String, Object> transform(final String key, final Long value) {
+                context.forward("appId", context.applicationId());
+                context.forward("taskId", context.taskId());
+
+                context.forward("topic", context.topic());
+                context.forward("partition", context.partition());
+                context.forward("offset", context.offset());
+                context.forward("timestamp", context.timestamp());
+
+                context.forward("key", key);
+                context.forward("value", value);
+
+                return null;
+            }
+
+            @Override
+            public void close() { }
         };
 
-        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext(config);
-        processor.init(context);
+        final MockProcessorContext context = new MockProcessorContext(config);
+        transformer.init(context);
 
         try {
-            processor.process("foo", 5L);
+            transformer.transform("foo", 5L);
             fail("Should have thrown an exception.");
         } catch (final IllegalStateException expected) {
             // expected, since the record metadata isn't initialized
@@ -284,8 +354,8 @@ public class MockProcessorContextTest {
         context.setRecordMetadata("t1", 0, 0L, new RecordHeaders(), 0L);
 
         {
-            processor.process("foo", 5L);
-            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
+            transformer.transform("foo", 5L);
+            final Iterator<MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
             assertEquals(new KeyValue<>("appId", "testMetadata"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("taskId", new TaskId(0, 0)), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("topic", "t1"), forwarded.next().keyValue());
@@ -305,8 +375,8 @@ public class MockProcessorContextTest {
         context.setCurrentStreamTimeMs(30L);
 
         {
-            processor.process("bar", 50L);
-            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
+            transformer.transform("bar", 50L);
+            final Iterator<MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
             assertEquals(new KeyValue<>("appId", "testMetadata"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("taskId", new TaskId(0, 0)), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("topic", "t1"), forwarded.next().keyValue());
@@ -325,8 +395,8 @@ public class MockProcessorContextTest {
         context.setPartition(30);
 
         {
-            processor.process("baz", 500L);
-            final Iterator<org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
+            transformer.transform("baz", 500L);
+            final Iterator<MockProcessorContext.CapturedForward> forwarded = context.forwarded().iterator();
             assertEquals(new KeyValue<>("appId", "testMetadata"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("taskId", new TaskId(0, 0)), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("topic", "t2"), forwarded.next().keyValue());
@@ -340,7 +410,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCapturePunctuator() {
-        final org.apache.kafka.streams.processor.Processor<String, Long> processor = new org.apache.kafka.streams.processor.Processor<String, Long>() {
+        final Transformer<String, Long, KeyValue<String, Long>> transformer = new Transformer<>() {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(
@@ -351,19 +421,19 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void process(final String key, final Long value) {
+            public KeyValue<String, Long> transform(final String key, final Long value) {
+                return null;
             }
 
             @Override
-            public void close() {
-            }
+            public void close() { }
         };
 
-        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext();
+        final MockProcessorContext context = new MockProcessorContext();
 
-        processor.init(context);
+        transformer.init(context);
 
-        final org.apache.kafka.streams.processor.MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
+        final MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
         assertEquals(1000L, capturedPunctuator.getIntervalMs());
         assertEquals(PunctuationType.WALL_CLOCK_TIME, capturedPunctuator.getType());
         assertFalse(capturedPunctuator.cancelled());
@@ -374,6 +444,7 @@ public class MockProcessorContextTest {
         assertTrue(context.committed());
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void fullConstructorShouldSetAllExpectedAttributes() {
         final Properties config = new Properties();
@@ -382,7 +453,7 @@ public class MockProcessorContextTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
 
         final File dummyFile = new File("");
-        final org.apache.kafka.streams.processor.MockProcessorContext context = new org.apache.kafka.streams.processor.MockProcessorContext(config, new TaskId(1, 1), dummyFile);
+        final MockProcessorContext context = new MockProcessorContext(config, new TaskId(1, 1), dummyFile);
 
         assertEquals("testFullConstructor", context.applicationId());
         assertEquals(new TaskId(1, 1), context.taskId());

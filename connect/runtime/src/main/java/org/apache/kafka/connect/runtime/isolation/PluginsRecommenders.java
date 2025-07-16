@@ -19,10 +19,13 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -74,9 +77,16 @@ public class PluginsRecommenders {
         return headerConverterPluginVersionRecommender;
     }
 
+    public TransformationPluginRecommender transformationPluginRecommender(String classOrAliasConfig) {
+        return new TransformationPluginRecommender(classOrAliasConfig);
+    }
+
+    public PredicatePluginRecommender predicatePluginRecommender(String classOrAliasConfig) {
+        return new PredicatePluginRecommender(classOrAliasConfig);
+    }
+
     public class ConnectorPluginVersionRecommender implements ConfigDef.Recommender {
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
             if (plugins == null) {
@@ -193,6 +203,62 @@ public class PluginsRecommenders {
         protected Function<String, List<Object>> recommendations() {
             return converterClass -> plugins.headerConverters(converterClass).stream()
                     .map(PluginDesc::version).distinct().collect(Collectors.toList());
+        }
+    }
+
+    // Recommender for transformation and predicate plugins
+    public abstract class SMTPluginRecommender<T> implements ConfigDef.Recommender {
+
+        protected abstract Function<String, Set<PluginDesc<T>>> plugins();
+
+        protected final String classOrAliasConfig;
+
+        public SMTPluginRecommender(String classOrAliasConfig) {
+            this.classOrAliasConfig = classOrAliasConfig;
+        }
+
+        @Override
+        @SuppressWarnings({"rawtypes"})
+        public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+            if (plugins == null) {
+                return Collections.emptyList();
+            }
+            if (parsedConfig.get(classOrAliasConfig) == null) {
+                return Collections.emptyList();
+            }
+
+            Class classOrAlias = (Class) parsedConfig.get(classOrAliasConfig);
+            return plugins().apply(classOrAlias.getName())
+                    .stream().map(PluginDesc::version).distinct().collect(Collectors.toList());
+        }
+
+        @Override
+        public boolean visible(String name, Map<String, Object> parsedConfig) {
+            return true;
+        }
+    }
+
+    public class TransformationPluginRecommender extends SMTPluginRecommender<Transformation<?>> {
+
+        public TransformationPluginRecommender(String classOrAliasConfig) {
+            super(classOrAliasConfig);
+        }
+
+        @Override
+        protected Function<String, Set<PluginDesc<Transformation<?>>>> plugins() {
+            return plugins::transformations;
+        }
+    }
+
+    public class PredicatePluginRecommender extends SMTPluginRecommender<Predicate<?>> {
+
+        public PredicatePluginRecommender(String classOrAliasConfig) {
+            super(classOrAliasConfig);
+        }
+
+        @Override
+        protected Function<String, Set<PluginDesc<Predicate<?>>>> plugins() {
+            return plugins::predicates;
         }
     }
 }

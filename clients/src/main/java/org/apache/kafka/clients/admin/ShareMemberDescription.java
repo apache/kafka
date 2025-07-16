@@ -30,18 +30,21 @@ public class ShareMemberDescription {
     private final String clientId;
     private final String host;
     private final ShareMemberAssignment assignment;
+    private final int memberEpoch;
 
     public ShareMemberDescription(
         String memberId,
         String clientId,
         String host,
-        ShareMemberAssignment assignment
+        ShareMemberAssignment assignment,
+        int memberEpoch
     ) {
         this.memberId = memberId == null ? "" : memberId;
         this.clientId = clientId == null ? "" : clientId;
         this.host = host == null ? "" : host;
         this.assignment = assignment == null ?
             new ShareMemberAssignment(Collections.emptySet()) : assignment;
+        this.memberEpoch = memberEpoch;
     }
 
     @Override
@@ -52,12 +55,13 @@ public class ShareMemberDescription {
         return memberId.equals(that.memberId) &&
             clientId.equals(that.clientId) &&
             host.equals(that.host) &&
-            assignment.equals(that.assignment);
+            assignment.equals(that.assignment) &&
+            memberEpoch == that.memberEpoch;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(memberId, clientId, host, assignment);
+        return Objects.hash(memberId, clientId, host, assignment, memberEpoch);
     }
 
     /**
@@ -88,11 +92,20 @@ public class ShareMemberDescription {
         return assignment;
     }
 
+    /**
+     * The epoch of the group member.
+     */
+    public int memberEpoch() {
+        return memberEpoch;
+    }
+
     @Override
     public String toString() {
         return "(memberId=" + memberId +
             ", clientId=" + clientId +
             ", host=" + host +
-            ", assignment=" + assignment + ")";
+            ", assignment=" + assignment +
+            ", memberEpoch=" + memberEpoch +
+            ")";
     }
 }

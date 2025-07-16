@@ -137,7 +137,7 @@ public class SourceNodeTest {
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any(), any()))
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
@@ -159,7 +159,7 @@ public class SourceNodeTest {
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareValueDeserializer(any(), any(), any()))
+        utilsMock.when(() -> WrappingNullableUtils.prepareValueDeserializer(any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
@@ -181,7 +181,7 @@ public class SourceNodeTest {
         final SourceNode<String, String> node =
             new SourceNode<>(context.currentNode().name(), new TheDeserializer(), new TheDeserializer());
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any(), any())).thenThrow(new StreamsException(""));
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any())).thenThrow(new StreamsException(""));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
 

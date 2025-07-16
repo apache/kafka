@@ -17,7 +17,9 @@
   "apiKey": 27,
   "type": "response",
   "name": "WriteTxnMarkersResponse",
-  "validVersions": "0-1",
+  "validVersions": "1",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Version 1 enables flexible versions.
   "flexibleVersions": "1+",
   "fields": [

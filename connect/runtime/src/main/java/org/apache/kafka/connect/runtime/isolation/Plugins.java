@@ -165,7 +165,6 @@ public class Plugins {
         );
     }
 
-    @SuppressWarnings("unchecked")
     protected static <U> Class<? extends U> pluginClass(
             DelegatingClassLoader loader,
             String classOrAlias,
@@ -265,15 +264,17 @@ public class Plugins {
         };
     }
 
-    public String latestVersion(String classOrAlias) {
-        return delegatingLoader.latestVersion(classOrAlias);
+    public String latestVersion(String classOrAlias, PluginType... allowedTypes) {
+        return pluginVersion(classOrAlias, null, allowedTypes);
     }
 
-    public String pluginVersion(String classOrAlias, ClassLoader sourceLoader) {
-        if (!(sourceLoader instanceof PluginClassLoader)) {
-            return latestVersion(classOrAlias);
+    public String pluginVersion(String classOrAlias, ClassLoader sourceLoader, PluginType... allowedTypes) {
+        String location = (sourceLoader instanceof PluginClassLoader) ? ((PluginClassLoader) sourceLoader).location() : null;
+        PluginDesc<?> desc = delegatingLoader.pluginDesc(classOrAlias, location, Set.of(allowedTypes));
+        if (desc != null) {
+            return desc.version();
         }
-        return delegatingLoader.versionInLocation(classOrAlias, ((PluginClassLoader) sourceLoader).location());
+        return null;
     }
 
     public DelegatingClassLoader delegatingLoader() {
@@ -376,7 +377,7 @@ public class Plugins {
 
     public Object newPlugin(String classOrAlias, VersionRange range, ClassLoader sourceLoader) throws ClassNotFoundException {
         if (range == null && sourceLoader instanceof PluginClassLoader) {
-            sourceLoader.loadClass(classOrAlias);
+            return newPlugin(sourceLoader.loadClass(classOrAlias));
         }
         return newPlugin(classOrAlias, range);
     }
@@ -546,7 +547,7 @@ public class Plugins {
     }
 
     private HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName, String versionPropertyName, ClassLoaderUsage classLoaderUsage) {
-        if (!config.originals().containsKey(classPropertyName) && classLoaderUsage == ClassLoaderUsage.CURRENT_CLASSLOADER) {
+        if (config.getClass(classPropertyName) == null && classLoaderUsage == ClassLoaderUsage.CURRENT_CLASSLOADER) {
             // This configuration does not define the Header Converter via the specified property name
             return null;
         }
@@ -599,7 +600,7 @@ public class Plugins {
                 // if the config specifies the class name, use it, otherwise use the default which we can get from config.getClass
                 String classOrAlias = config.originalsStrings().get(classPropertyName);
                 if (classOrAlias == null) {
-                    classOrAlias = config.getClass(classPropertyName).getName();
+                    classOrAlias = config.getClass(classPropertyName) == null ? null : config.getClass(classPropertyName).getName();
                 }
                 try {
                     klass = pluginClass(delegatingLoader, classOrAlias, basePluginClass, range);
@@ -675,8 +676,7 @@ public class Plugins {
         }
         try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
-            if (plugin instanceof Versioned) {
-                Versioned versionedPlugin = (Versioned) plugin;
+            if (plugin instanceof Versioned versionedPlugin) {
                 if (Utils.isBlank(versionedPlugin.version())) {
                     throw new ConnectException("Version not defined for '" + klassName + "'");
                 }

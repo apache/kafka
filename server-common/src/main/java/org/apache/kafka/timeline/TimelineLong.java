@@ -110,8 +110,7 @@ public final class TimelineLong implements Revertable {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TimelineLong)) return false;
-        TimelineLong other = (TimelineLong) o;
+        if (!(o instanceof TimelineLong other)) return false;
         return value == other.value;
     }
 

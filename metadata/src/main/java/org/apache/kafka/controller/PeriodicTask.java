@@ -20,6 +20,8 @@ package org.apache.kafka.controller;
 import java.util.EnumSet;
 import java.util.function.Supplier;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+
 class PeriodicTask {
     /**
      * The name of this periodic task.
@@ -34,7 +36,12 @@ class PeriodicTask {
     private final Supplier<ControllerResult<Boolean>> op;
 
     /**
-     * The period of the task, in nanoseconds.
+     * The period of the task when ControllerResult.response is true, in nanoseconds.
+     */
+    private final long immediatePeriodNs;
+
+    /**
+     * The default period of the task when ControllerResult.response is false, in nanoseconds.
      */
     private final long periodNs;
 
@@ -42,6 +49,8 @@ class PeriodicTask {
      * The flags used by this periodic task.
      */
     private final EnumSet<PeriodicTaskFlag> flags;
+
+    private static final long DEFAULT_IMMEDIATE_PERIOD_NS = MILLISECONDS.toNanos(10);
 
     PeriodicTask(
         String name,
@@ -51,6 +60,21 @@ class PeriodicTask {
     ) {
         this.name = name;
         this.op = op;
+        this.immediatePeriodNs = DEFAULT_IMMEDIATE_PERIOD_NS;
+        this.periodNs = periodNs;
+        this.flags = flags;
+    }
+
+    PeriodicTask(
+        String name,
+        Supplier<ControllerResult<Boolean>> op,
+        long periodNs,
+        EnumSet<PeriodicTaskFlag> flags,
+        long immediatePeriodNs
+    ) {
+        this.name = name;
+        this.op = op;
+        this.immediatePeriodNs = immediatePeriodNs;
         this.periodNs = periodNs;
         this.flags = flags;
     }
@@ -61,6 +85,10 @@ class PeriodicTask {
 
     Supplier<ControllerResult<Boolean>> op() {
         return op;
+    }
+
+    long immediatePeriodNs() {
+        return immediatePeriodNs;
     }
 
     long periodNs() {

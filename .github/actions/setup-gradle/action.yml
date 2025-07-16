@@ -42,7 +42,7 @@ runs:
         distribution: temurin
         java-version: ${{ inputs.java-version }}
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@d156388eb19639ec20ade50009f3d199ce1e2808 # v4.1.0
+      uses: gradle/actions/setup-gradle@94baf225fe0a508e581a564467443d0e2379123b # v4.3.0
       env:
         GRADLE_BUILD_ACTION_CACHE_DEBUG_ENABLED: true
       with:

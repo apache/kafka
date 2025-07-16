@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.VersionedPluginLoadingException;
 
@@ -31,8 +32,8 @@ public class CachedConnectors {
     private static final String LATEST_VERSION = "latest";
 
     private final Map<String, Map<String, Connector>> connectors;
-    private final Map<String, Exception> invalidConnectors;
-    private final Map<String, Map<String, Exception>> invalidVersions;
+    private final Map<String, Throwable> invalidConnectors;
+    private final Map<String, Map<String, VersionedPluginLoadingException>> invalidVersions;
     private final Plugins plugins;
 
     public CachedConnectors(Plugins plugins) {
@@ -42,18 +43,18 @@ public class CachedConnectors {
         this.invalidVersions = new ConcurrentHashMap<>();
     }
 
-    private void validate(String connectorName, VersionRange range) throws Exception {
+    private void validate(String connectorName, VersionRange range) throws ConnectException, VersionedPluginLoadingException {
         if (invalidConnectors.containsKey(connectorName)) {
-            throw new Exception(invalidConnectors.get(connectorName));
+            throw new ConnectException(invalidConnectors.get(connectorName));
         }
 
         String version = range == null ? LATEST_VERSION : range.toString();
         if (invalidVersions.containsKey(connectorName) && invalidVersions.get(connectorName).containsKey(version)) {
-            throw new Exception(invalidVersions.get(connectorName).get(version));
+            throw new VersionedPluginLoadingException(invalidVersions.get(connectorName).get(version).getMessage());
         }
     }
 
-    private Connector lookup(String connectorName, VersionRange range) throws Exception {
+    private Connector lookup(String connectorName, VersionRange range) {
         String version = range == null ? LATEST_VERSION : range.toString();
         if (connectors.containsKey(connectorName) && connectors.get(connectorName).containsKey(version)) {
             return connectors.get(connectorName).get(version);
@@ -72,7 +73,7 @@ public class CachedConnectors {
         }
     }
 
-    public Connector getConnector(String connectorName, VersionRange range) throws Exception {
+    public Connector getConnector(String connectorName, VersionRange range) {
         validate(connectorName, range);
         return lookup(connectorName, range);
     }

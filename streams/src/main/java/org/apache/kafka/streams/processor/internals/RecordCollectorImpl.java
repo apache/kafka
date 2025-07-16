@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -160,7 +161,7 @@ public class RecordCollectorImpl implements RecordCollector {
             }
             if (!partitions.isEmpty()) {
                 final Optional<Set<Integer>> maybeMulticastPartitions = partitioner.partitions(topic, key, value, partitions.size());
-                if (!maybeMulticastPartitions.isPresent()) {
+                if (maybeMulticastPartitions.isEmpty()) {
                     // A null//empty partition indicates we should use the default partitioner
                     send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
                 } else {
@@ -258,6 +259,10 @@ public class RecordCollectorImpl implements RecordCollector {
 
         final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 
+        // As many records could be in-flight,
+        // freeing raw records in the context to reduce memory pressure
+        freeRawInputRecordFromContext(context);
+
         streamsProducer.send(serializedRecord, (metadata, exception) -> {
             try {
                 // if there's already an exception record, skip logging offsets or new exceptions
@@ -308,6 +313,12 @@ public class RecordCollectorImpl implements RecordCollector {
                 sendException.set(new StreamsException("Producer.send `Callback` failed", fatal));
             }
         });
+    }
+
+    private static void freeRawInputRecordFromContext(final InternalProcessorContext<Void, Void> context) {
+        if (context != null && context.recordContext() != null) {
+            context.recordContext().freeRawRecord();
+        }
     }
 
     private <K, V> void handleException(final ProductionExceptionHandler.SerializationExceptionOrigin origin,
@@ -387,7 +398,9 @@ public class RecordCollectorImpl implements RecordCollector {
                 recordContext.headers(),
                 processorNodeId,
                 taskId,
-                recordContext.timestamp()
+                recordContext.timestamp(),
+                context.recordContext().sourceRawKey(),
+                context.recordContext().sourceRawValue()
             ) :
             new DefaultErrorHandlerContext(
                 context,
@@ -397,7 +410,9 @@ public class RecordCollectorImpl implements RecordCollector {
                 new RecordHeaders(),
                 processorNodeId,
                 taskId,
-                -1L
+                -1L,
+                null,
+                null
             );
     }
 
@@ -441,6 +456,11 @@ public class RecordCollectorImpl implements RecordCollector {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, productionException));
+        } else if (productionException instanceof TransactionAbortedException) {
+            // swallow silently
+            //
+            // TransactionAbortedException is only thrown after `abortTransaction()` was called,
+            // so it's only a followup error, and Kafka Streams is already handling the original error
         } else {
             final ProductionExceptionHandlerResponse response;
             try {
@@ -570,7 +590,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
     @Override
     public Map<TopicPartition, Long> offsets() {
-        return Collections.unmodifiableMap(new HashMap<>(offsets));
+        return Map.copyOf(offsets);
     }
 
     private void checkForException() {

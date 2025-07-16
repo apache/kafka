@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.common.UnitTestFeatureVersion.FV0.UT_FV0_0;
 
@@ -47,6 +46,8 @@ public enum Feature {
     TRANSACTION_VERSION(TransactionVersion.FEATURE_NAME, TransactionVersion.values(), TransactionVersion.LATEST_PRODUCTION),
     GROUP_VERSION(GroupVersion.FEATURE_NAME, GroupVersion.values(), GroupVersion.LATEST_PRODUCTION),
     ELIGIBLE_LEADER_REPLICAS_VERSION(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.values(), EligibleLeaderReplicasVersion.LATEST_PRODUCTION),
+    SHARE_VERSION(ShareVersion.FEATURE_NAME, ShareVersion.values(), ShareVersion.LATEST_PRODUCTION),
+    STREAMS_VERSION(StreamsVersion.FEATURE_NAME, StreamsVersion.values(), StreamsVersion.LATEST_PRODUCTION),
 
     /**
      * Features defined only for unit tests and are not used in production.
@@ -91,14 +92,14 @@ public enum Feature {
 
         TEST_AND_PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
             !feature.name.startsWith("unit." + TestFeatureVersion.FEATURE_NAME)
-        ).collect(Collectors.toList());
+        ).toList();
 
         PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
             !feature.name.equals(TEST_VERSION.featureName()) &&
             !feature.name.startsWith("unit." + TestFeatureVersion.FEATURE_NAME)
-        ).collect(Collectors.toList());
+        ).toList();
         PRODUCTION_FEATURE_NAMES = PRODUCTION_FEATURES.stream().map(feature ->
-                feature.name).collect(Collectors.toList());
+                feature.name).toList();
 
         validateDefaultValueAndLatestProductionValue(TEST_VERSION);
         for (Feature feature : PRODUCTION_FEATURES) {
@@ -155,8 +156,6 @@ public enum Feature {
      * For example, say feature X level x relies on feature Y level y:
      * if feature X >= x then throw an error if feature Y < y.
      *
-     * All feature levels above 0 in kraft require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
-     *
      * @param feature                   the feature we are validating
      * @param features                  the feature versions we have (or want to set)
      * @throws IllegalArgumentException if the feature is not valid
@@ -164,9 +163,9 @@ public enum Feature {
     public static void validateVersion(FeatureVersion feature, Map<String, Short> features) {
         Short metadataVersion = features.get(MetadataVersion.FEATURE_NAME);
 
-        if (feature.featureLevel() >= 1 && (metadataVersion == null || metadataVersion < MetadataVersion.IBP_3_3_IV0.featureLevel()))
+        if (feature.featureLevel() >= 1 && (metadataVersion == null || metadataVersion < MetadataVersion.MINIMUM_VERSION.featureLevel()))
             throw new IllegalArgumentException(feature.featureName() + " could not be set to " + feature.featureLevel() +
-                    " because it depends on metadata.version=4 (" + MetadataVersion.IBP_3_3_IV0 + ")");
+                    " because it depends on metadata.version=" + MetadataVersion.MINIMUM_VERSION.featureLevel() + " (" + MetadataVersion.MINIMUM_VERSION + ")");
 
         for (Map.Entry<String, Short> dependency: feature.dependencies().entrySet()) {
             Short featureLevel = features.get(dependency.getKey());
@@ -252,7 +251,7 @@ public enum Feature {
      *     - The feature X has default version = XV_10 (dependency = {}), latest production = XV_10 (dependency = {})
      *     - The feature X has default version = XV_10 (dependency = {Y: YV_3}), latest production = XV_11 (dependency = {Y: YV_4})
      *       The feature Y has default version = YV_3 (dependency = {}), latest production = YV_4 (dependency = {})
-     *     - The feature X has default version = XV_10 (dependency = {MetadataVersion: IBP_4_0_IV0}), boostrap MV = IBP_4_0_IV0,
+     *     - The feature X has default version = XV_10 (dependency = {MetadataVersion: IBP_4_0_IV0}), bootstrap MV = IBP_4_0_IV0,
      *                       latest production = XV_11 (dependency = {MetadataVersion: IBP_4_0_IV1}), MV latest production = IBP_4_0_IV1
      *
      * @param feature the feature to validate.
@@ -297,11 +296,6 @@ public enum Feature {
         }
 
         for (MetadataVersion metadataVersion: MetadataVersion.values()) {
-            // Only checking the kraft metadata versions.
-            if (metadataVersion.compareTo(MetadataVersion.MINIMUM_KRAFT_VERSION) < 0) {
-                continue;
-            }
-
             defaultVersion = feature.defaultVersion(metadataVersion);
             for (Map.Entry<String, Short> dependency: defaultVersion.dependencies().entrySet()) {
                 String dependencyFeatureName = dependency.getKey();

@@ -30,6 +30,11 @@ import java.util.List;
  * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
  * {@code META-INF/services/org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy}.
+ * <p>
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the policy to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>config</code> set to
+ * <code>connector.client.config.override.policy</code>, and <code>class</code> set to the
+ * ConnectorClientConfigOverridePolicy class name.
  */
 public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoCloseable {
 

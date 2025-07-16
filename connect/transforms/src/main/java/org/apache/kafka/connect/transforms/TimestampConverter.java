@@ -164,9 +164,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         TRANSLATORS.put(TYPE_UNIX, new TimestampTranslator() {
             @Override
             public Date toRaw(Config config, Object orig) {
-                if (!(orig instanceof Long))
+                if (!(orig instanceof Long unixTime))
                     throw new DataException("Expected Unix timestamp to be a Long, but found " + orig.getClass());
-                Long unixTime = (Long) orig;
                 switch (config.unixPrecision) {
                     case UNIX_PRECISION_SECONDS:
                         return Timestamp.toLogical(Timestamp.SCHEMA, TimeUnit.SECONDS.toMillis(unixTime));

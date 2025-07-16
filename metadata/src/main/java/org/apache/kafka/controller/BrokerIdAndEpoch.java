@@ -41,8 +41,7 @@ public class BrokerIdAndEpoch {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || (!(o instanceof BrokerIdAndEpoch))) return false;
-        BrokerIdAndEpoch other = (BrokerIdAndEpoch) o;
+        if (o == null || (!(o instanceof BrokerIdAndEpoch other))) return false;
         return id == other.id && epoch == other.epoch;
     }
 

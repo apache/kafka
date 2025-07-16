@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +34,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 
@@ -44,7 +44,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
  * The default raft timeouts are relatively low compared to some other timeouts such as
  * request.timeout.ms. This is part of a general design philosophy where we see changing
  * the leader of a Raft cluster as a relatively quick operation. For example, the KIP-631
- * controller should be able to transition from standby to active without reloading all of
+ * controller should be able to transition from standby to active without reloading all
  * the metadata. The standby is a "hot" standby, not a "cold" one.
  */
 public class QuorumConfig {
@@ -58,14 +58,14 @@ public class QuorumConfig {
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of <code>{id}@{host}:{port}</code> entries. " +
         "For example: <code>1@localhost:9092,2@localhost:9093,3@localhost:9094</code>";
-    public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
+    public static final List<String> DEFAULT_QUORUM_VOTERS = List.of();
 
     public static final String QUORUM_BOOTSTRAP_SERVERS_CONFIG = QUORUM_PREFIX + "bootstrap.servers";
     public static final String QUORUM_BOOTSTRAP_SERVERS_DOC = "List of endpoints to use for " +
         "bootstrapping the cluster metadata. The endpoints are specified in comma-separated list " +
         "of <code>{host}:{port}</code> entries. For example: " +
         "<code>localhost:9092,localhost:9093,localhost:9094</code>.";
-    public static final List<String> DEFAULT_QUORUM_BOOTSTRAP_SERVERS = Collections.emptyList();
+    public static final List<String> DEFAULT_QUORUM_BOOTSTRAP_SERVERS = List.of();
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
     public static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
@@ -102,12 +102,12 @@ public class QuorumConfig {
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(QUORUM_VOTERS_CONFIG, LIST, DEFAULT_QUORUM_VOTERS, new ControllerQuorumVotersValidator(), HIGH, QUORUM_VOTERS_DOC)
             .define(QUORUM_BOOTSTRAP_SERVERS_CONFIG, LIST, DEFAULT_QUORUM_BOOTSTRAP_SERVERS, new ControllerQuorumBootstrapServersValidator(), HIGH, QUORUM_BOOTSTRAP_SERVERS_DOC)
-            .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_TIMEOUT_MS, null, HIGH, QUORUM_ELECTION_TIMEOUT_MS_DOC)
-            .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_FETCH_TIMEOUT_MS, null, HIGH, QUORUM_FETCH_TIMEOUT_MS_DOC)
-            .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS, null, HIGH, QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
-            .define(QUORUM_LINGER_MS_CONFIG, INT, DEFAULT_QUORUM_LINGER_MS, null, MEDIUM, QUORUM_LINGER_MS_DOC)
-            .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, null, MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
-            .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, null, LOW, QUORUM_RETRY_BACKOFF_MS_DOC);
+            .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_TIMEOUT_MS, atLeast(0), HIGH, QUORUM_ELECTION_TIMEOUT_MS_DOC)
+            .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_FETCH_TIMEOUT_MS, atLeast(0), HIGH, QUORUM_FETCH_TIMEOUT_MS_DOC)
+            .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS, atLeast(0), HIGH, QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
+            .define(QUORUM_LINGER_MS_CONFIG, INT, DEFAULT_QUORUM_LINGER_MS, atLeast(0), MEDIUM, QUORUM_LINGER_MS_DOC)
+            .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, atLeast(0), MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
+            .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, atLeast(0), LOW, QUORUM_RETRY_BACKOFF_MS_DOC);
 
     private final List<String> voters;
     private final List<String> bootstrapServers;

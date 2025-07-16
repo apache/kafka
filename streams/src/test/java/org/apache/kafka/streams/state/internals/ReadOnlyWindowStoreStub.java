@@ -110,7 +110,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -149,7 +149,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -191,7 +191,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -235,7 +235,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -286,7 +286,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -342,7 +342,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -378,7 +378,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {}
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
 
     @Override
     public void flush() {

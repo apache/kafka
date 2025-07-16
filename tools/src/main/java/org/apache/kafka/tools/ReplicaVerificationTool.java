@@ -472,7 +472,7 @@ public class ReplicaVerificationTool {
                                 if (batch.lastOffset() >= fetchResponsePerReplica.get(replicaId).highWatermark()) {
                                     isMessageInAllReplicas = false;
                                 } else {
-                                    if (!messageInfoFromFirstReplicaOpt.isPresent()) {
+                                    if (messageInfoFromFirstReplicaOpt.isEmpty()) {
                                         messageInfoFromFirstReplicaOpt = Optional.of(
                                             new MessageInfo(replicaId, batch.lastOffset(), batch.nextOffset(), batch.checksum())
                                         );

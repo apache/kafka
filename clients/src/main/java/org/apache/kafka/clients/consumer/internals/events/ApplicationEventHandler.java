@@ -81,8 +81,10 @@ public class ApplicationEventHandler implements Closeable {
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
         event.setEnqueuedMs(time.milliseconds());
+        // Record the updated queue size before actually adding the event to the queue
+        // to avoid race conditions (the background thread is continuously removing from this queue)
+        asyncConsumerMetrics.recordApplicationEventQueueSize(applicationEventQueue.size() + 1);
         applicationEventQueue.add(event);
-        asyncConsumerMetrics.recordApplicationEventQueueSize(applicationEventQueue.size());
         wakeupNetworkThread();
     }
 

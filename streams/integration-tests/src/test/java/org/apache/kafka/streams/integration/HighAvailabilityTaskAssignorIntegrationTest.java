@@ -287,11 +287,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     private static String getKiloByteValue() {
-        final StringBuilder kiloBuilder = new StringBuilder(1000);
-        for (int i = 0; i < 1000; i++) {
-            kiloBuilder.append('0');
-        }
-        return kiloBuilder.toString();
+        return "0".repeat(1000);
     }
 
     private static void assertFalseNoRetry(final boolean assertion, final String message) {

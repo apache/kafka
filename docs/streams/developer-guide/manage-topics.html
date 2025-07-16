@@ -48,8 +48,6 @@
         <dt>Output topics</dt>
         <dd>Topics that are specified via sink processors in the application&#8217;s topology; e.g. via
           <code class="docutils literal"><span class="pre">KStream#to()</span></code>, <code class="docutils literal"><span class="pre">KTable.to()</span></code> and <code class="docutils literal"><span class="pre">Topology#addSink()</span></code>.</dd>
-        <dt>Intermediate topics</dt>
-        <dd>Topics that are both input and output topics of the application&#8217;s topology.</dd>
       </dl>
       <p>User topics must be created and manually managed ahead of time (e.g., via the
         <a class="reference internal" href="../../kafka/post-deployment.html#kafka-operations-admin"><span class="std std-ref">topic tools</span></a>).  If user topics are shared among multiple applications for reading and

@@ -50,6 +50,14 @@ class ShareConsumeBenchSpecTest {
         }
     }
 
+    @Test
+    public void testDefaultShareGroupName() {
+        ShareConsumeBenchSpec shareConsumeBenchSpec = new ShareConsumeBenchSpec(0, 0, "node", "localhost",
+                123, 1234, null, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), 1,
+                Optional.empty(), List.of("abc"));
+        assertEquals("share", shareConsumeBenchSpec.shareGroup());
+    }
+
     private ShareConsumeBenchSpec shareConsumeBenchSpec(List<String> activeTopics) {
         return new ShareConsumeBenchSpec(0, 0, "node", "localhost",
                 123, 1234, "sg-1",

@@ -51,6 +51,7 @@ import org.apache.kafka.common.network.SaslChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -763,7 +764,7 @@ public class SaslAuthenticatorTest {
         selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion((short) 0));
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
 
         ApiVersion apiVersion = response.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
@@ -822,7 +823,7 @@ public class SaslAuthenticatorTest {
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
         ApiVersionsResponse response =
-            ApiVersionsResponse.parse(responseBuffer, version);
+            ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), version);
         assertEquals(Errors.INVALID_REQUEST.code(), response.data().errorCode());
 
         // Send ApiVersionsRequest with a supported version. This should succeed.
@@ -861,7 +862,7 @@ public class SaslAuthenticatorTest {
         selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
-        ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(new ByteBufferAccessor(responseBuffer), version);
         assertEquals(Errors.NONE.code(), response.data().errorCode());
 
         // Test that client can authenticate successfully
@@ -1107,7 +1108,7 @@ public class SaslAuthenticatorTest {
 
     /**
      * Test that callback handlers are only applied to connections for the mechanisms
-     * configured for the handler. Test enables two mechanisms 'PLAIN` and `DIGEST-MD5`
+     * configured for the handler. Test enables two mechanisms `PLAIN` and `DIGEST-MD5`
      * on the servers with different callback handlers for the two mechanisms. Verifies
      * that clients using both mechanisms authenticate successfully.
      */
@@ -1617,7 +1618,6 @@ public class SaslAuthenticatorTest {
               null,
               null,
               "plain",
-              false,
               null,
               null,
             new LogContext()
@@ -1673,7 +1673,7 @@ public class SaslAuthenticatorTest {
         Map<String, ?> configs = new TestSecurityConfig(saslClientConfigs).values();
         this.channelBuilder = new AlternateSaslChannelBuilder(ConnectionMode.CLIENT,
                 Collections.singletonMap(saslMechanism, JaasContext.loadClientContext(configs)), securityProtocol, null,
-                false, saslMechanism, true, credentialCache, null, time);
+                false, saslMechanism, credentialCache, null, time);
         this.channelBuilder.configure(configs);
         // initial authentication must succeed
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
@@ -1958,7 +1958,7 @@ public class SaslAuthenticatorTest {
         };
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
-                securityProtocol, listenerName, false, saslMechanism, true,
+                securityProtocol, listenerName, false, saslMechanism,
                 credentialCache, null, null, time, new LogContext(), apiVersionSupplier);
 
         serverChannelBuilder.configure(saslServerConfigs);
@@ -1981,7 +1981,7 @@ public class SaslAuthenticatorTest {
 
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionsResponse defaultApiVersionResponse = TestUtils.defaultApiVersionsResponse(
-                ApiMessageType.ListenerType.ZK_BROKER);
+                ApiMessageType.ListenerType.BROKER);
             ApiVersionCollection apiVersions = new ApiVersionCollection();
             for (ApiVersion apiVersion : defaultApiVersionResponse.data().apiKeys()) {
                 if (apiVersion.apiKey() != ApiKeys.SASL_AUTHENTICATE.id) {
@@ -1999,7 +1999,7 @@ public class SaslAuthenticatorTest {
         };
 
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(ConnectionMode.SERVER, jaasContexts,
-                securityProtocol, listenerName, false, saslMechanism, true,
+                securityProtocol, listenerName, false, saslMechanism,
                 credentialCache, null, null, time, new LogContext(), apiVersionSupplier) {
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
@@ -2034,7 +2034,7 @@ public class SaslAuthenticatorTest {
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
         SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
-                securityProtocol, listenerName, false, saslMechanism, true,
+                securityProtocol, listenerName, false, saslMechanism,
                 null, null, null, time, new LogContext(), null) {
 
             @Override
@@ -2047,7 +2047,7 @@ public class SaslAuthenticatorTest {
                                                                        Subject subject) {
 
                 return new SaslClientAuthenticator(configs, callbackHandler, id, subject,
-                        servicePrincipal, serverHost, saslMechanism, true,
+                        servicePrincipal, serverHost, saslMechanism,
                         transportLayer, time, new LogContext()) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
@@ -2167,8 +2167,7 @@ public class SaslAuthenticatorTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, time,
-                true, new LogContext());
+                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, new LogContext());
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 
@@ -2572,11 +2571,11 @@ public class SaslAuthenticatorTest {
 
         public AlternateSaslChannelBuilder(ConnectionMode connectionMode, Map<String, JaasContext> jaasContexts,
                 SecurityProtocol securityProtocol, ListenerName listenerName, boolean isInterBrokerListener,
-                String clientSaslMechanism, boolean handshakeRequestEnable, CredentialCache credentialCache,
+                String clientSaslMechanism, CredentialCache credentialCache,
                 DelegationTokenCache tokenCache, Time time) {
             super(connectionMode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
-                handshakeRequestEnable, credentialCache, tokenCache, null, time, new LogContext(),
-                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+                credentialCache, tokenCache, null, time, new LogContext(),
+                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER));
         }
 
         @Override
@@ -2585,10 +2584,10 @@ public class SaslAuthenticatorTest {
                 TransportLayer transportLayer, Subject subject) {
             if (++numInvocations == 1)
                 return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal, serverHost,
-                        "DIGEST-MD5", true, transportLayer, time, new LogContext());
+                        "DIGEST-MD5", transportLayer, time, new LogContext());
             else
                 return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal, serverHost,
-                        "PLAIN", true, transportLayer, time, new LogContext()) {
+                        "PLAIN", transportLayer, time, new LogContext()) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
                         return new SaslHandshakeRequest.Builder(
@@ -2616,6 +2615,16 @@ public class SaslAuthenticatorTest {
 
         static KafkaPrincipal saslSslPrincipal(String saslPrincipal, String sslPrincipal) {
             return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslPrincipal + ":" + sslPrincipal);
+        }
+
+        @Override
+        public byte[] serialize(KafkaPrincipal principal) {
+            return new byte[0];
+        }
+
+        @Override
+        public KafkaPrincipal deserialize(byte[] bytes) {
+            return null;
         }
     }
 }

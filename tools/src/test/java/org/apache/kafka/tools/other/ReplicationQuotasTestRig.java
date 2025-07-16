@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.other;
 
-import kafka.log.UnifiedLog;
 import kafka.server.BrokerServer;
 import kafka.server.KafkaBroker;
 import kafka.utils.TestUtils;
@@ -39,6 +38,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.quota.QuotaType;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
 
 import org.apache.logging.log4j.core.config.Configurator;
@@ -249,7 +249,7 @@ public class ReplicationQuotasTestRig {
 
             ReassignPartitionsCommand.executeAssignment(adminClient, false,
                 ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Collections.emptyMap()),
-                config.throttle, -1L, 10000L, Time.SYSTEM);
+                config.throttle, -1L, 10000L, Time.SYSTEM, false);
 
             //Await completion
             waitForReassignmentToComplete();

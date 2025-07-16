@@ -17,6 +17,8 @@
   "apiKey": 23,
   "type": "response",
   "name": "OffsetForLeaderEpochResponse",
+  // Versions 0-1 were removed in Apache Kafka 4.0, Version 2 is the new baseline.
+  //
   // Version 1 added the leader epoch to the response.
   //
   // Version 2 added the throttle time.
@@ -24,7 +26,7 @@
   // Version 3 is the same as version 2.
   //
   // Version 4 enables flexible versions.
-  "validVersions": "0-4",
+  "validVersions": "2-4",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,

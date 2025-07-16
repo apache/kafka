@@ -61,8 +61,7 @@ public final class ProducerIdsImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ProducerIdsImage)) return false;
-        ProducerIdsImage other = (ProducerIdsImage) o;
+        if (!(o instanceof ProducerIdsImage other)) return false;
         return nextProducerId == other.nextProducerId;
     }
 

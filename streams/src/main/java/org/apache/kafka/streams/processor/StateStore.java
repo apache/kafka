@@ -56,7 +56,7 @@ public interface StateStore {
     /**
      * Initializes this state store.
      * <p>
-     * The implementation of this function must register the root store in the context via the
+     * The implementation of this function must register the root store in the stateStoreContext via the
      * {@link StateStoreContext#register(StateStore, StateRestoreCallback, CommitCallback)} function, where the
      * first {@link StateStore} parameter should always be the passed-in {@code root} object, and
      * the second parameter should be an object of user's implementation
@@ -69,7 +69,7 @@ public interface StateStore {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void init(final StateStoreContext context, final StateStore root);
+    void init(final StateStoreContext stateStoreContext, final StateStore root);
 
     /**
      * Flush any cached data

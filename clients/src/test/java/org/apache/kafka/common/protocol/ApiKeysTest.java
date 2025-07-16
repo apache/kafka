@@ -80,12 +80,24 @@ public class ApiKeysTest {
     public void testApiScope() {
         Set<ApiKeys> apisMissingScope = new HashSet<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
-            if (apiKey.messageType.listeners().isEmpty()) {
+            if (apiKey.messageType.listeners().isEmpty() && apiKey.hasValidVersion()) {
                 apisMissingScope.add(apiKey);
             }
         }
         assertEquals(Collections.emptySet(), apisMissingScope,
             "Found some APIs missing scope definition");
+    }
+
+    @Test
+    public void testHasValidVersions() {
+        var apiKeysWithNoValidVersions = Set.of(ApiKeys.LEADER_AND_ISR, ApiKeys.STOP_REPLICA, ApiKeys.UPDATE_METADATA,
+            ApiKeys.CONTROLLED_SHUTDOWN);
+        for (ApiKeys apiKey : ApiKeys.values()) {
+            if (apiKeysWithNoValidVersions.contains(apiKey))
+                assertFalse(apiKey.hasValidVersion());
+            else
+                assertTrue(apiKey.hasValidVersion());
+        }
     }
 
     @Test

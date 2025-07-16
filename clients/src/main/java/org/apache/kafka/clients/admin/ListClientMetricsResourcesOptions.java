@@ -17,13 +17,10 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * Options for {@link Admin#listClientMetricsResources()}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
+ * @deprecated Since 4.1. Use {@link ListConfigResourcesOptions} instead.
  */
-@InterfaceStability.Evolving
+@Deprecated(since = "4.1")
 public class ListClientMetricsResourcesOptions extends AbstractOptions<ListClientMetricsResourcesOptions> {
 }

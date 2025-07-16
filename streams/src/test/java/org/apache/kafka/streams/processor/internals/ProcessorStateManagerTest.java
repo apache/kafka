@@ -31,7 +31,6 @@ import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.query.Position;
@@ -133,7 +132,7 @@ public class ProcessorStateManagerTest {
     @Mock
     private StateStoreMetadata storeMetadata;
     @Mock
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
 
     @BeforeEach
     public void setup() {
@@ -315,7 +314,7 @@ public class ProcessorStateManagerTest {
         stateMgr.registerStateStores(singletonList(store), context);
 
         verify(context).uninitialize();
-        verify(store).init((StateStoreContext) context, store);
+        verify(store).init(context, store);
 
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
         assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
@@ -334,7 +333,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.registerStateStores(singletonList(store), context);
         verify(context).uninitialize();
-        verify(store).init((StateStoreContext) context, store);
+        verify(store).init(context, store);
 
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
         assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
@@ -357,7 +356,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.registerStateStores(singletonList(store), context);
         verify(context).uninitialize();
-        verify(store).init((StateStoreContext) context, store);
+        verify(store).init(context, store);
 
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
         assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
@@ -1214,7 +1213,7 @@ public class ProcessorStateManagerTest {
         }
 
         @Override
-        public void onCommit() throws IOException {
+        public void onCommit() {
             StoreQueryUtils.checkpointPosition(checkpointFile, position);
         }
     }
@@ -1255,5 +1254,5 @@ public class ProcessorStateManagerTest {
         }
     }
 
-    interface CachingStore extends CachedStateStore, StateStore { }
+    interface CachingStore extends CachedStateStore<Object, Object>, StateStore { }
 }

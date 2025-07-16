@@ -25,36 +25,47 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterInstance;
-import org.apache.kafka.common.test.api.ClusterTemplate;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Properties;
 
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-@ExtendWith(ClusterTestExtensions.class)
+@ClusterTestDefaults(
+    types = {Type.CO_KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+    }
+)
 public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     public static final String TOPIC_PREFIX = "foo.";
     public static final String GROUP_PREFIX = "test.group.";
@@ -64,11 +75,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         this.clusterInstance = clusterInstance;
     }
 
-    private static List<ClusterConfig> generator() {
-        return ConsumerGroupCommandTestUtils.generator();
-    }
-
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testDeleteOffsetsNonExistingGroup() {
         String group = "missing.group";
         String topic = "foo:1";
@@ -78,7 +85,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testDeleteOffsetsOfStableConsumerGroupWithTopicPartition() {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -90,7 +97,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testDeleteOffsetsOfStableConsumerGroupWithTopicOnly() {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -102,7 +109,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition() {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -112,7 +119,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly() {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -122,7 +129,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition() {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -134,7 +141,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly() {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -146,7 +153,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition() {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -156,7 +163,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly() {
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -226,19 +233,13 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     }
 
     private void produceRecord(String topic) {
-        try (KafkaProducer<byte[], byte[]> producer = createProducer()) {
+        try (Producer<byte[], byte[]> producer = createProducer()) {
             assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(topic, 0, null, null)).get());
         }
     }
 
-    private KafkaProducer<byte[], byte[]> createProducer() {
-        Properties config = new Properties();
-        config.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        config.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1");
-        config.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        config.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-
-        return new KafkaProducer<>(config);
+    private Producer<byte[], byte[]> createProducer() {
+        return clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"));
     }
 
     private Consumer<byte[], byte[]> createConsumer(String group, GroupProtocol groupProtocol) {

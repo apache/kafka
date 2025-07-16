@@ -357,11 +357,11 @@ public class IQv2IntegrationTest {
                         }
 
                         @Override
-                        public void init(final StateStoreContext context, final StateStore root) {
-                            context.register(root, (key, value) -> put(Bytes.wrap(key), value));
+                        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+                            stateStoreContext.register(root, (key, value) -> put(Bytes.wrap(key), value));
                             this.open = true;
                             this.position = Position.emptyPosition();
-                            this.context = context;
+                            this.context = stateStoreContext;
                         }
 
                         @Override

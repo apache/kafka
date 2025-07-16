@@ -110,8 +110,7 @@ public final class ManCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof ManCommandHandler)) return false;
-        ManCommandHandler o = (ManCommandHandler) other;
+        if (!(other instanceof ManCommandHandler o)) return false;
         return o.cmd.equals(cmd);
     }
 }
