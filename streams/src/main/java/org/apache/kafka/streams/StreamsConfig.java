@@ -620,7 +620,8 @@ public class StreamsConfig extends AbstractConfig {
         "used. Otherwise, the classic group protocol will be used.";
 
     public static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG = "errors.dead.letter.queue.topic.name";
-    private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record in the provided topic name if an error occurs.\n" +
+
+    private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record to the topic with the provided name if an error occurs.\n" +
             "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.";
 
     /** {@code log.summary.interval.ms} */

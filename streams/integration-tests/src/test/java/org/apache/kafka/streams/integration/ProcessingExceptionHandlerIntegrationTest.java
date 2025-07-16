@@ -357,7 +357,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
             final StreamsException e = assertThrows(StreamsException.class, () -> inputTopic.pipeInput(eventError.key, eventError.value, Instant.EPOCH));
             assertEquals("Fatal user code error in processing error callback", e.getMessage());
             assertInstanceOf(NullPointerException.class, e.getCause());
-            assertEquals("Invalid ProcessingExceptionResponse response.", e.getCause().getMessage());
+            assertEquals("Invalid ProcessingExceptionHandler response.", e.getCause().getMessage());
             assertFalse(isExecuted.get());
         }
     }

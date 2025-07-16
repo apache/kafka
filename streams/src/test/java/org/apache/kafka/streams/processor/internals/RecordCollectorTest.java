@@ -1715,7 +1715,7 @@ public class RecordCollectorTest {
 
             assertEquals("Fatal user code error in production error callback", exception.getMessage());
             assertInstanceOf(NullPointerException.class, exception.getCause());
-            assertEquals("Invalid ProductionExceptionResponse response.", exception.getCause().getMessage());
+            assertEquals("Invalid ProductionExceptionHandler response.", exception.getCause().getMessage());
         }
     }
 
@@ -1764,7 +1764,7 @@ public class RecordCollectorTest {
         final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals("Fatal user code error in production error callback", thrown.getMessage());
         assertInstanceOf(NullPointerException.class, thrown.getCause());
-        assertEquals("Invalid ProductionExceptionResponse response.", thrown.getCause().getMessage());
+        assertEquals("Invalid ProductionExceptionHandler response.", thrown.getCause().getMessage());
     }
 
     @Test

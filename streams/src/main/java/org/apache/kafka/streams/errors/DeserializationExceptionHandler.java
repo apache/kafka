@@ -171,16 +171,16 @@ public interface DeserializationExceptionHandler extends Configurable {
      */
     class Response {
 
-        private Result result;
+        private final Result result;
 
-        private List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
+        private final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords;
 
         /**
          * Constructs a new {@code DeserializationExceptionResponse} object.
          *
          * @param result the result indicating whether processing should continue or fail;
          *                                  must not be {@code null}.
-         * @param deadLetterQueueRecords    the list of records to be sent to the dead letter queue; may be {@code null}.
+         * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
          */
         private Response(final Result result,
                          final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {

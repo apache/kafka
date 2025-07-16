@@ -38,7 +38,7 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
                                 final Exception exception) {
         return exception instanceof RetriableException ?
             Response.retry() :
-            Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, context.sourceRawKey(), context.sourceRawKey(), context, exception));
+            Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, context.sourceRawKey(), context.sourceRawValue(), context, exception));
     }
 
     @SuppressWarnings("rawtypes")

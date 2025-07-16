@@ -83,14 +83,14 @@ public class ExceptionHandlerUtils {
             throw new InvalidConfigurationException(String.format("%s cannot be null while building dead letter queue record", StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
         }
         final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(deadLetterQueueTopicName, null, context.timestamp(), key, value);
-        final StringWriter stackStraceStringWriter = new StringWriter();
-        final PrintWriter stackTracePrintWriter = new PrintWriter(stackStraceStringWriter);
+        final StringWriter stackTraceStringWriter = new StringWriter();
+        final PrintWriter stackTracePrintWriter = new PrintWriter(stackTraceStringWriter);
         e.printStackTrace(stackTracePrintWriter);
 
         try (final StringSerializer stringSerializer = new StringSerializer()) {
             producerRecord.headers().add(HEADER_ERRORS_EXCEPTION_NAME, stringSerializer.serialize(null, e.toString()));
             producerRecord.headers().add(HEADER_ERRORS_EXCEPTION_MESSAGE_NAME, stringSerializer.serialize(null, e.getMessage()));
-            producerRecord.headers().add(HEADER_ERRORS_STACKTRACE_NAME, stringSerializer.serialize(null, stackStraceStringWriter.toString()));
+            producerRecord.headers().add(HEADER_ERRORS_STACKTRACE_NAME, stringSerializer.serialize(null, stackTraceStringWriter.toString()));
             producerRecord.headers().add(HEADER_ERRORS_TOPIC_NAME, stringSerializer.serialize(null, context.topic()));
             producerRecord.headers().add(HEADER_ERRORS_PARTITION_NAME, stringSerializer.serialize(null, String.valueOf(context.partition())));
             producerRecord.headers().add(HEADER_ERRORS_OFFSET_NAME, stringSerializer.serialize(null, String.valueOf(context.offset())));

@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(MockitoExtension.class)
 public class ExceptionHandlerUtilsTest {
     @Test
-    public void checkDealLetterQueueRecords() {
+    public void checkDeadLetterQueueRecords() {
         final StringSerializer stringSerializer = new StringSerializer();
         final StringDeserializer stringDeserializer = new StringDeserializer();
         final MockRecordCollector collector = new MockRecordCollector();

@@ -221,11 +221,11 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 internalProcessorContext.recordContext().sourceRawValue()
             );
 
-            final ProcessingExceptionHandler.Response processingExceptionResponse;
+            final ProcessingExceptionHandler.Response response;
             try {
-                processingExceptionResponse = Objects.requireNonNull(
+                response = Objects.requireNonNull(
                     processingExceptionHandler.handleError(errorHandlerContext, record, processingException),
-                    "Invalid ProcessingExceptionResponse response."
+                    "Invalid ProcessingExceptionHandler response."
                 );
             } catch (final Exception fatalUserException) {
                 // while Java distinguishes checked vs unchecked exceptions, other languages
@@ -243,7 +243,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 );
             }
 
-            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = processingExceptionResponse.deadLetterQueueRecords();
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.deadLetterQueueRecords();
             if (!deadLetterQueueRecords.isEmpty()) {
                 final RecordCollector collector = ((RecordCollector.Supplier) internalProcessorContext).recordCollector();
                 for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
@@ -257,7 +257,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 }
             }
 
-            if (processingExceptionResponse.result() == ProcessingExceptionHandler.Result.FAIL) {
+            if (response.result() == ProcessingExceptionHandler.Result.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
                      " a processing error. If you would rather have the streaming pipeline" +
                      " continue after a processing error, please set the " +
