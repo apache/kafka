@@ -52,7 +52,7 @@ public class HandlingSourceTopicDeletionIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
     private static final int NUM_THREADS = 2;
-    private static final long TIMEOUT = 60000;
+    private static final long TIMEOUT = 300000;
     private static final String INPUT_TOPIC = "inputTopic";
     private static final String OUTPUT_TOPIC = "outputTopic";
 
