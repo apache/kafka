@@ -15,7 +15,7 @@
 
 # The base image of openjdk:17 is typically oraclelinux:8-slim, which doesn't include apt-get. 
 # Therefore, use openjdk:17-bullseye instead.
-ARG jdk_version=openjdk:17-bullseye
+ARG jdk_version
 FROM $jdk_version AS build-native-image
 
 WORKDIR /build
