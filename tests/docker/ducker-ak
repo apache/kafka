@@ -87,7 +87,7 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     By default no port is exposed. See README.md for more detail on this option.
 
     If -j|--jdk is specified, you can customize the OpenJDK base image used for building
-    the ducker container. Defaults to ${default_jdk}. Example: -j openjdk:11-bullseye
+    the ducker container. Defaults to ${default_jdk}. Example: -j openjdk:17-bullseye
 
     If --ipv6 is specified, we will create a Docker network with IPv6 enabled.
     
