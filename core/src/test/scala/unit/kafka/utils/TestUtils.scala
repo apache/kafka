@@ -334,13 +334,19 @@ object TestUtils extends Logging {
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
     topicConfig: Properties = new Properties,
+    createTopicRequestTimeoutMs: Option[Int] = None
   ): Uuid = {
     val configsMap = new util.HashMap[String, String]()
     topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
 
+    var createTopicsOptions: CreateTopicsOptions = new CreateTopicsOptions()
+    if (createTopicRequestTimeoutMs.isDefined) {
+      createTopicsOptions = createTopicsOptions.timeoutMs(createTopicRequestTimeoutMs.get)
+    }
+
     val result = if (replicaAssignment.isEmpty) {
       admin.createTopics(util.List.of(new NewTopic(
-        topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
+        topic, numPartitions, replicationFactor.toShort).configs(configsMap)), createTopicsOptions)
     } else {
       val assignment = new util.HashMap[Integer, util.List[Integer]]()
       replicaAssignment.foreachEntry { case (k, v) =>
@@ -349,7 +355,7 @@ object TestUtils extends Logging {
         assignment.put(k.asInstanceOf[Integer], replicas)
       }
       admin.createTopics(util.List.of(new NewTopic(
-        topic, assignment).configs(configsMap)))
+        topic, assignment).configs(configsMap)), createTopicsOptions)
     }
 
     result.topicId(topic).get()
@@ -364,6 +370,7 @@ object TestUtils extends Logging {
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
     topicConfig: Properties = new Properties,
+    createTopicRequestTimeoutMs: Option[Int] = None
   ): scala.collection.immutable.Map[Int, Int] = {
     val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
       numPartitions
@@ -386,7 +393,8 @@ object TestUtils extends Logging {
         numPartitions,
         replicationFactor,
         replicaAssignment,
-        topicConfig
+        topicConfig,
+        createTopicRequestTimeoutMs
       )
     } catch {
       case e: ExecutionException =>

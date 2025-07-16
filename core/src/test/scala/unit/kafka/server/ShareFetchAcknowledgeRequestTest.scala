@@ -25,17 +25,19 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse, ShareAcknowledgeRequest, ShareAcknowledgeResponse, ShareFetchRequest, ShareFetchResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, ShareRequestMetadata}
 import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
+import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.IntegrationTestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, Timeout}
+import org.junit.jupiter.api.AfterEach
 
 import java.net.Socket
 import java.util
 
-@Timeout(1200)
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
-  new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
+  new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "")
 ))
 class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
@@ -92,18 +94,18 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         ),
         brokers = 2
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         ),
         brokers = 2
       ),
@@ -113,7 +115,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val metadata: ShareRequestMetadata = new ShareRequestMetadata(MEMBER_ID, ShareRequestMetadata.INITIAL_EPOCH)
 
     // Create a single-partition topic and find a broker which is not the leader
-    val partitionToLeader = createTopicAndReturnLeaders(TOPIC)
+    val partitionToLeader = createTopicAndReturnLeaders(TOPIC, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -147,23 +149,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       )
     )
   )
   def testShareFetchRequestSuccess(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -209,23 +211,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       )
     )
   )
   def testShareFetchRequestSuccessMultiplePartitions(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition1 = new TopicIdPartition(topicId, new TopicPartition(TOPIC, 0))
@@ -305,25 +307,25 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         ),
         brokers = 3
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         ),
         brokers = 3
       ),
     )
   )
   def testShareFetchRequestSuccessMultiplePartitionsMultipleBrokers(): Unit = {
-    val partitionToLeaders = createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    val partitionToLeaders = createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition1 = new TopicIdPartition(topicId, new TopicPartition(TOPIC, 0))
@@ -424,23 +426,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareAcknowledgeRequestSuccessAccept(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -536,25 +538,25 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
           new ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1"),
           new ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000")
         )
       ),
     )
   )
   def testShareFetchRequestPiggybackedAccept(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -655,23 +657,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareAcknowledgeRequestSuccessRelease(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -764,23 +766,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareFetchRequestPiggybackedRelease(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -877,23 +879,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareAcknowledgeRequestSuccessReject(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -989,23 +991,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareFetchRequestPiggybackedReject(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1106,25 +1108,25 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
           new ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "2") // Setting max delivery count config to 2
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1"),
           new ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "2") // Setting max delivery count config to 2
         )
       ),
     )
   )
   def testShareAcknowledgeRequestMaxDeliveryAttemptExhausted(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1265,17 +1267,17 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
@@ -1285,7 +1287,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val memberId2 = Uuid.randomUuid()
     val memberId3 = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1356,17 +1358,17 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
@@ -1380,7 +1382,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val memberId2 = Uuid.randomUuid()
     val memberId3 = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1458,23 +1460,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareSessionCloseWithShareFetch(): Unit = {
-    createTopicAndReturnLeaders(TOPIC)
+    createTopicAndReturnLeaders(TOPIC, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1565,23 +1567,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareSessionCloseWithShareAcknowledge(): Unit = {
-    createTopicAndReturnLeaders(TOPIC)
+    createTopicAndReturnLeaders(TOPIC, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1681,23 +1683,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareFetchInitialEpochWithAcknowledgements(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1729,23 +1731,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareAcknowledgeInitialRequestError(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1771,23 +1773,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareFetchRequestInvalidShareSessionEpoch(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1842,23 +1844,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
   )
   def testShareAcknowledgeRequestInvalidShareSessionEpoch(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1918,17 +1920,17 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
@@ -1936,7 +1938,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
   def testShareFetchRequestShareSessionNotFound(): Unit = {
     val wrongMemberId = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1990,19 +1992,19 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
           new ClusterConfigProperty(key = "group.share.max.share.sessions", value = "2"),
           new ClusterConfigProperty(key = "group.share.max.size", value = "2")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1"),
           new ClusterConfigProperty(key = "group.share.max.share.sessions", value = "2"),
           new ClusterConfigProperty(key = "group.share.max.size", value = "2")
         )
@@ -2014,7 +2016,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val memberId2 = Uuid.randomUuid()
     val memberId3 = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -2074,17 +2076,17 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
@@ -2092,7 +2094,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
   def testShareAcknowledgeRequestShareSessionNotFound(): Unit = {
     val wrongMemberId = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -2152,17 +2154,17 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       ),
     )
@@ -2171,7 +2173,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val partition1 = 0
     val partition2 = 1
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition1 = new TopicIdPartition(topicId, new TopicPartition(TOPIC, partition1))
@@ -2251,23 +2253,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       )
     )
   )
   def testShareFetchRequestWithMaxRecordsAndBatchSize(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -2313,23 +2315,23 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         )
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1")
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+          new ClusterConfigProperty(key = ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, value = "1")
         )
       )
     )
   )
   def testShareFetchRequestMultipleBatchesWithMaxRecordsAndBatchSize(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))

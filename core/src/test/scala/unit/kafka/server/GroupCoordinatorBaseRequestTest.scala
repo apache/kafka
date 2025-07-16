@@ -120,7 +120,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     topic: String,
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
-    topicConfig: Properties = new Properties
+    topicConfig: Properties = new Properties,
+    createTopicRequestTimeoutMs: Option[Int] = None
   ): Map[TopicIdPartition, Int] = {
     val admin = cluster.admin()
     try {
@@ -131,7 +132,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         controllers = controllerServers(),
         numPartitions = numPartitions,
         replicationFactor = replicationFactor,
-        topicConfig = topicConfig
+        topicConfig = topicConfig,
+        createTopicRequestTimeoutMs = createTopicRequestTimeoutMs
       )
       partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds.get(topic), new TopicPartition(topic, partition)) -> leader }
     } finally {
