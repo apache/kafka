@@ -18949,6 +18949,69 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGrouBumpGroupEpochWhenConfigIsUpdated() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        StreamsGroupHeartbeatRequestData.Topology topology = new StreamsGroupHeartbeatRequestData.Topology().setSubtopologies(List.of(
+                new StreamsGroupHeartbeatRequestData.Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .build();
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withStreamsGroupTaskAssignors(List.of(assignor))
+                .withMetadataImage(metadataImage)
+                .withStreamsGroup(new StreamsGroupBuilder(groupId, 0)
+                        .withTopology(StreamsTopology.fromHeartbeatRequest(topology)))
+                .build();
+
+        StreamsGroup streamsGroup = context.groupMetadataManager
+                .streamsGroup(groupId);
+        assignor.prepareGroupAssignment(
+                Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskAssignmentTestUtil.TaskRole.ACTIVE,
+                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+                ))
+        );
+
+        // First heartbeat
+        context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                        .setGroupId(groupId));
+
+        // Task were assigned. It bumped groupEpoch
+        assertEquals(1, streamsGroup.metadataRefreshDeadline().epoch);
+
+        // Second heartbeat
+        context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberEpoch(1));
+
+        // Assert groupEpoch is the same
+        assertEquals(1, streamsGroup.metadataRefreshDeadline().epoch);
+
+        // Update config to trigger rebalance
+        Properties newGroupConfig = new Properties();
+        newGroupConfig.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, 2);
+        context.updateGroupConfig(groupId, newGroupConfig);
+
+        // Third heartbeat.
+        context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberEpoch(1));
+
+        // Assert groupEpoch was bumped
+        assertEquals(2, streamsGroup.metadataRefreshDeadline().epoch);
+    }
+
+    @Test
     public void testReplayConsumerGroupMemberMetadata() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
