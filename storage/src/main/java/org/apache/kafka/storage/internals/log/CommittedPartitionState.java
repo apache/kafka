@@ -23,6 +23,11 @@ import java.util.Set;
 
 public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState leaderRecoveryState) implements PartitionState {
 
+    public CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState leaderRecoveryState) {
+        this.isr = Set.copyOf(isr);
+        this.leaderRecoveryState = leaderRecoveryState;
+    }
+
     @Override
     public Set<Integer> maximalIsr() {
         return Collections.unmodifiableSet(isr);
