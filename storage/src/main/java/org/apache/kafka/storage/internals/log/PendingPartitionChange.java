@@ -21,5 +21,4 @@ import org.apache.kafka.metadata.LeaderAndIsr;
 public interface PendingPartitionChange extends PartitionState {
     CommittedPartitionState lastCommittedState();
     LeaderAndIsr sentLeaderAndIsr();
-    void notifyListener(AlterPartitionListener alterPartitionListener);
 }

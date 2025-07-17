@@ -1803,9 +1803,11 @@ class Partition(val topicPartition: TopicPartition,
       partitionEpoch = leaderAndIsr.partitionEpoch
       info(s"ISR updated to ${partitionState.isr.asScala.mkString(",")} ${if (isUnderMinIsr) "(under-min-isr)" else ""} " +
         s"and version updated to $partitionEpoch")
-
-      proposedIsrState.notifyListener(alterPartitionListener)
-
+      proposedIsrState match {
+        case _: PendingExpandIsr => alterPartitionListener.markIsrExpand()
+        case _: PendingShrinkIsr => alterPartitionListener.markIsrShrink()
+        case _ =>
+      }
       // we may need to increment high watermark since ISR could be down to 1
       leaderLogIfLocal.exists(log => maybeIncrementLeaderHW(log))
     }

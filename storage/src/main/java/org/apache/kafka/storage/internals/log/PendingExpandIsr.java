@@ -28,11 +28,6 @@ public record PendingExpandIsr(int newInSyncReplicaId,
                                CommittedPartitionState lastCommittedState) implements PendingPartitionChange {
 
     @Override
-    public void notifyListener(AlterPartitionListener alterPartitionListener) {
-        alterPartitionListener.markIsrExpand();
-    }
-
-    @Override
     public Set<Integer> isr() {
         return lastCommittedState.isr();
     }

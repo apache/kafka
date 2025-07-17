@@ -26,11 +26,6 @@ public record PendingShrinkIsr(Set<Integer> outOfSyncReplicaIds,
                                CommittedPartitionState lastCommittedState) implements PendingPartitionChange {
 
     @Override
-    public void notifyListener(AlterPartitionListener alterPartitionListener) {
-        alterPartitionListener.markIsrShrink();
-    }
-
-    @Override
     public Set<Integer> isr() {
         return lastCommittedState.isr();
     }
