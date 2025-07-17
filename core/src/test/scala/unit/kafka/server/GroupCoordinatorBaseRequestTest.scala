@@ -135,6 +135,12 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         topicConfig = topicConfig,
         createTopicRequestTimeoutMs = createTopicRequestTimeoutMs
       )
+      admin
+        .describeTopics(TopicCollection.ofTopicNames(List(topic).asJava))
+        .allTopicNames()
+        .get()
+        .get(topic)
+        .topicId()
       partitionToLeader.map { case (partition, leader) => new TopicIdPartition(getTopicIds.get(topic), new TopicPartition(topic, partition)) -> leader }
     } finally {
       admin.close()
