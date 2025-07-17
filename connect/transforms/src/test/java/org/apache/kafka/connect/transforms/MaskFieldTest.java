@@ -61,25 +61,25 @@ public class MaskFieldTest {
             .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA))
             .field("withDefault", SchemaBuilder.string().optional().defaultValue("default").build())
             .build();
-    private static final Map<String, Object> VALUES = new HashMap<>();
+    private static final Map<String, Object> VALUES = Map.ofEntries(
+        Map.entry("magic", 42),
+        Map.entry("bool", true),
+        Map.entry("byte", (byte) 42),
+        Map.entry("short", (short) 42),
+        Map.entry("int", 42),
+        Map.entry("long", 42L),
+        Map.entry("float", 42f),
+        Map.entry("double", 42d),
+        Map.entry("string", "55.121.20.20"),
+        Map.entry("date", new Date()),
+        Map.entry("bigint", new BigInteger("42")),
+        Map.entry("bigdec", new BigDecimal("42.0")),
+        Map.entry("list", List.of(42)),
+        Map.entry("map", Map.of("key", "value"))
+    );
     private static final Struct VALUES_WITH_SCHEMA = new Struct(SCHEMA);
 
     static {
-        VALUES.put("magic", 42);
-        VALUES.put("bool", true);
-        VALUES.put("byte", (byte) 42);
-        VALUES.put("short", (short) 42);
-        VALUES.put("int", 42);
-        VALUES.put("long", 42L);
-        VALUES.put("float", 42f);
-        VALUES.put("double", 42d);
-        VALUES.put("string", "55.121.20.20");
-        VALUES.put("date", new Date());
-        VALUES.put("bigint", new BigInteger("42"));
-        VALUES.put("bigdec", new BigDecimal("42.0"));
-        VALUES.put("list", List.of(42));
-        VALUES.put("map", Map.of("key", "value"));
-
         VALUES_WITH_SCHEMA.put("magic", 42);
         VALUES_WITH_SCHEMA.put("bool", true);
         VALUES_WITH_SCHEMA.put("byte", (byte) 42);
