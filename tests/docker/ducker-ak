@@ -45,7 +45,9 @@ docker_run_memory_limit="2000m"
 default_num_nodes=14
 
 # The default OpenJDK base image.
-default_jdk="openjdk:17-buster"
+# The base image of openjdk:17 is typically oraclelinux:8-slim, which doesn't include apt-get. 
+# Therefore, use openjdk:17-bullseye instead.
+default_jdk="openjdk:17-bullseye"
 
 # The default ducker-ak image name.
 default_image_name="ducker-ak"
@@ -70,7 +72,7 @@ help|-h|--help
     Display this help message
 
 up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
-        [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [--ipv6]
+        [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [-j|--jdk JDK_VERSION] [--ipv6]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
@@ -83,6 +85,9 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     on the host. The argument can be a single port (like 5005), a port range like (5005-5009)
     or a combination of port/port-range separated by comma (like 2181,9092 or 2181,5005-5008).
     By default no port is exposed. See README.md for more detail on this option.
+
+    If -j|--jdk is specified, you can customize the OpenJDK base image used for building
+    the ducker container. Defaults to ${default_jdk}. Example: -j openjdk:17-bullseye
 
     If --ipv6 is specified, we will create a Docker network with IPv6 enabled.
     
