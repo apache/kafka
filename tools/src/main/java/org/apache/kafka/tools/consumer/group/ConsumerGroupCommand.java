@@ -42,6 +42,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -1001,8 +1002,8 @@ public class ConsumerGroupCommand {
         }
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
-            // ensure all partitions have leader, otherwise throw a runtime exception
-            checkAllTopicPartitionsHaveLeader(partitionsToReset);
+            // ensure all partitions are valid, otherwise throw a runtime exception
+            checkAllTopicPartitionsValid(partitionsToReset);
 
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return offsetsUtils.resetToOffset(partitionsToReset);
@@ -1028,12 +1029,35 @@ public class ConsumerGroupCommand {
             return null;
         }
 
-        private void checkAllTopicPartitionsHaveLeader(Collection<TopicPartition> partitionsToReset) {
+        private void checkAllTopicPartitionsValid(Collection<TopicPartition> partitionsToReset) {
+            // check the partitions exist
+            List<TopicPartition> partitionsNotExistList = filterNotExistPartitions(partitionsToReset);
+            if (!partitionsNotExistList.isEmpty()) {
+                String partitionStr = partitionsNotExistList.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+                throw new UnknownTopicOrPartitionException("The partitions \"" + partitionStr + "\" does not exist");
+            }
+
+            // check the partitions have leader
             List<TopicPartition> partitionsWithoutLeader = filterNoneLeaderPartitions(partitionsToReset);
             if (!partitionsWithoutLeader.isEmpty()) {
                 String partitionStr = partitionsWithoutLeader.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
-                // throw exception
                 throw new LeaderNotAvailableException("The partitions \"" + partitionStr + "\" have no leader");
+            }
+        }
+
+        private List<TopicPartition> filterNotExistPartitions(Collection<TopicPartition> topicPartitions) {
+            // collect all topics
+            Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+            try {
+                List<TopicPartition> existPartitions = adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                        .stream()
+                        .flatMap(entry -> entry.getValue().partitions().stream()
+                                .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                        .toList();
+
+                return topicPartitions.stream().filter(element -> !existPartitions.contains(element)).toList();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         }
 

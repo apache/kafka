@@ -236,7 +236,7 @@ public class ConsumerGroupServiceTest {
         when(admin.describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified), any()))
                 .thenReturn(describeTopicsResult(topicsWithoutPartitionsSpecified));
         when(admin.describeTopics(anySet()))
-                .thenReturn(describeTopicsResult(topicsWithoutPartitionsSpecified));
+                .thenReturn(describeTopicsResult(TOPICS));
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
 
@@ -324,6 +324,7 @@ public class ConsumerGroupServiceTest {
                     .collect(Collectors.toList());
             topicDescriptions.put(topic, new TopicDescription(topic, false, partitions));
         });
+        System.out.println("cccc: " + topicDescriptions);
         return AdminClientTestUtils.describeTopicsResult(topicDescriptions);
     }
 

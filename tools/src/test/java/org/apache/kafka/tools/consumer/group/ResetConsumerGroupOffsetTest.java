@@ -28,6 +28,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -677,6 +678,22 @@ public class ResetConsumerGroupOffsetTest {
             // shutdown a broker to make some partitions missing leader
             cluster.shutdownBroker(0);
             assertThrows(LeaderNotAvailableException.class, () -> resetOffsets(service));
+        }
+    }
+
+    @ClusterTest
+    public void testResetOffsetsWithPartitionNotExist(ClusterInstance cluster) throws Exception {
+        String group = generateRandomGroupId();
+        String topic = generateRandomTopic();
+        String[] args = buildArgsForGroup(cluster, group, "--topic", topic + ":2,3",
+                "--to-earliest", "--execute");
+
+        try (Admin admin = cluster.admin();
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+
+            admin.createTopics(singleton(new NewTopic(topic, 1, (short) 1))).all().get();
+            produceConsumeAndShutdown(cluster, topic, group, 2, GroupProtocol.CLASSIC);
+            assertThrows(UnknownTopicOrPartitionException.class, () -> resetOffsets(service));
         }
     }
 
