@@ -138,9 +138,8 @@ object StorageTool extends Logging {
         formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
       } catch {
         case _: Throwable =>
-          throw new TerseFailure("Unknown metadata.version " + releaseVersion +
-          ". Supported metadata.version are " + metadataVersionsToString(
-            MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()))
+          throw new TerseFailure(s"Unknown metadata.version $releaseVersion. Supported metadata.version are " +
+            s"${metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction())}")
       }
     })
 
