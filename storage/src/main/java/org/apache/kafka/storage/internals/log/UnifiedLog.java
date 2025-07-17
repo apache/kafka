@@ -2238,6 +2238,12 @@ public class UnifiedLog implements AutoCloseable {
                     if (targetOffset < 0) {
                         throw new IllegalArgumentException("Cannot truncate partition " + topicPartition() + " to a negative offset (" + targetOffset + ").");
                     }
+
+                    long hwm = highWatermark();
+                    if (targetOffset < hwm) {
+                        logger.warn("Truncating {}{} to offset {} below high watermark {}", isFuture() ? "future " : "", topicPartition(), targetOffset, hwm);
+                    }
+
                     if (targetOffset >= localLog.logEndOffset()) {
                         logger.info("Truncating to {} has no effect as the largest offset in the log is {}", targetOffset, localLog.logEndOffset() - 1);
                         // Always truncate epoch cache since we may have a conflicting epoch entry at the

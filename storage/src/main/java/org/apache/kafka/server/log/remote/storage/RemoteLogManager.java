@@ -1659,7 +1659,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {
         int fetchMaxBytes = remoteStorageFetchInfo.fetchMaxBytes;
-        TopicPartition tp = remoteStorageFetchInfo.topicPartition;
+        TopicPartition tp = remoteStorageFetchInfo.topicIdPartition.topicPartition();
         FetchRequest.PartitionData fetchInfo = remoteStorageFetchInfo.fetchInfo;
 
         boolean includeAbortedTxns = remoteStorageFetchInfo.fetchIsolation == FetchIsolation.TXN_COMMITTED;
@@ -1715,6 +1715,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             //  - there is no minimum-one-message constraint and
             //  - the first batch size is more than maximum bytes that can be sent and
             if (!remoteStorageFetchInfo.minOneMessage && firstBatchSize > maxBytes) {
+                LOGGER.debug("Returning empty record for offset {} in partition {} because the first batch size {} " +
+                        "is greater than max fetch bytes {}", offset, tp, firstBatchSize, maxBytes);
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY);
             }
 

@@ -22457,11 +22457,12 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         MockTime time = new MockTime();
-        int offsetWriteTimeout = 10;
+        int initRetryTimeoutMs = 10;
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
             .withTime(time)
-            .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, offsetWriteTimeout)
+            .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, initRetryTimeoutMs - 1)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, initRetryTimeoutMs)
             .build();
 
         Uuid t1Uuid = Uuid.randomUuid();
@@ -22533,7 +22534,7 @@ public class GroupMetadataManagerTest {
                 .setDeletingTopics(List.of())
         );
 
-        long timeNow = time.milliseconds() + offsetWriteTimeout * 2 + 1;
+        long timeNow = time.milliseconds() + initRetryTimeoutMs + 1;
         time.setCurrentTimeMs(timeNow);
         memberId = Uuid.randomUuid();
         result = context.shareGroupHeartbeat(
@@ -22723,14 +22724,15 @@ public class GroupMetadataManagerTest {
         int partitions = 1;
         String groupId = "foogrp";
         MockTime time = new MockTime();
-        int offsetWriteTimeout = 10;
+        int initRetryTimeoutMs = 10;
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
             .withTime(time)
-            .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, offsetWriteTimeout)
+            .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, initRetryTimeoutMs - 1)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, initRetryTimeoutMs)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(topicId, topicName, partitions)
                 .build())
@@ -22796,7 +22798,7 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.onNewMetadataImage(metadataImage, new MetadataDelta(metadataImage));
 
         // Since t1 is initializing and t2 is initialized due to replay above.
-        timeNow = timeNow + 2 * offsetWriteTimeout + 1;
+        timeNow = timeNow + initRetryTimeoutMs + 1;
         time.setCurrentTimeMs(timeNow);
         assertEquals(
             Map.of(
