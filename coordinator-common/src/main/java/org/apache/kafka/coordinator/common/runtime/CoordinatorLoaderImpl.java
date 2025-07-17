@@ -127,6 +127,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
                 stats.readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes() > 0;
 
+                // Reuses a potentially larger buffer by updating it when reading from FileRecords.
                 MemoryRecords memoryRecords = toReadableMemoryRecords(tp, fetchDataInfo.records, buffer);
                 if (fetchDataInfo.records instanceof FileRecords) {
                     buffer = memoryRecords.buffer();
@@ -249,8 +250,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                         LOG.warn("Unknown record type {} while loading offsets and group metadata from {}." +
                                 " Ignoring it. It could be a left over from an aborted upgrade.", ex.unknownType(), tp);
                     } catch (RuntimeException ex) {
-                        String msg = String.format("Deserializing record %s from %s failed due to: %s", record, tp, ex.getMessage());
-                        LOG.error(msg);
+                        String msg = String.format("Deserializing record %s from %s failed.", record, tp);
+                        LOG.error(msg, ex);
                         throw new RuntimeException(msg, ex);
                     }
 
@@ -268,9 +269,9 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                             );
                         } catch (RuntimeException ex) {
                             String msg = String.format("Replaying record %s from %s at offset %d with producer id %d and" +
-                                            " producer epoch %d failed due to: %s.", coordinatorRecord, tp, record.offset(),
-                                    batch.producerId(), batch.producerEpoch(), ex.getMessage());
-                            LOG.error(msg);
+                                            " producer epoch %d failed.", coordinatorRecord, tp, record.offset(),
+                                    batch.producerId(), batch.producerEpoch());
+                            LOG.error(msg, ex);
                             throw new RuntimeException(msg, ex);
                         }
                     });

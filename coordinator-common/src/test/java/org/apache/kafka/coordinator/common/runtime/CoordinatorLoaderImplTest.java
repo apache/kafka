@@ -37,7 +37,6 @@ import org.apache.kafka.storage.internals.log.UnifiedLog;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.invocation.InvocationOnMock;
 
@@ -338,7 +337,7 @@ class CoordinatorLoaderImplTest {
             RuntimeException ex = assertFutureThrows(RuntimeException.class, loader.load(tp, coordinator));
 
             assertNotNull(ex);
-            assertEquals(String.format("Deserializing record DefaultRecord(offset=0, timestamp=-1, key=2 bytes, value=2 bytes) from %s failed due to: Error!", tp), ex.getMessage());
+            assertEquals(String.format("Deserializing record DefaultRecord(offset=0, timestamp=-1, key=2 bytes, value=2 bytes) from %s failed.", tp), ex.getMessage());
         }
     }
 
@@ -663,13 +662,12 @@ class CoordinatorLoaderImplTest {
 
         when(fileRecords.sizeInBytes()).thenReturn(memoryRecords.sizeInBytes());
 
-        ArgumentCaptor<ByteBuffer> bufferCapture = ArgumentCaptor.forClass(ByteBuffer.class);
         doAnswer(invocation -> {
-            ByteBuffer buffer = bufferCapture.getValue();
+            ByteBuffer buffer = invocation.getArgument(0, ByteBuffer.class);
             buffer.put(memoryRecords.buffer().duplicate());
             buffer.flip();
             return null;
-        }).when(fileRecords).readInto(bufferCapture.capture(), ArgumentMatchers.anyInt());
+        }).when(fileRecords).readInto(any(ByteBuffer.class), ArgumentMatchers.anyInt());
 
         return new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecords);
     }
@@ -692,13 +690,12 @@ class CoordinatorLoaderImplTest {
 
         when(fileRecords.sizeInBytes()).thenReturn(memoryRecords.sizeInBytes());
 
-        ArgumentCaptor<ByteBuffer> bufferCapture = ArgumentCaptor.forClass(ByteBuffer.class);
         doAnswer(invocation -> {
-            ByteBuffer buffer = bufferCapture.getValue();
+            ByteBuffer buffer = invocation.getArgument(0, ByteBuffer.class);
             buffer.put(memoryRecords.buffer().duplicate());
             buffer.flip();
             return null;
-        }).when(fileRecords).readInto(bufferCapture.capture(), ArgumentMatchers.anyInt());
+        }).when(fileRecords).readInto(any(ByteBuffer.class), ArgumentMatchers.anyInt());
 
         return new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecords);
     }
