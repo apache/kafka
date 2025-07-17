@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
@@ -242,24 +243,28 @@ public class StreamsGroupCommand {
         }
 
         public void describeGroups() throws ExecutionException, InterruptedException {
-            List<String> groups = listStreamsGroups();
-            if (!groups.isEmpty()) {
-                StreamsGroupDescription description = getDescribeGroup(groups.get(0));
-                if (description == null)
-                    return;
-                boolean verbose = opts.options.has(opts.verboseOpt);
-                if (opts.options.has(opts.membersOpt)) {
-                    printMembers(description, verbose);
-                } else if (opts.options.has(opts.stateOpt)) {
-                    printStates(description, verbose);
-                } else {
-                    printOffsets(description, verbose);
+            List<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? new ArrayList<>(listStreamsGroups())
+                : new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
+            if (!groupIds.isEmpty()) {
+                for (String groupId : groupIds) {
+                    StreamsGroupDescription description = getDescribeGroup(groupId);
+                    boolean verbose = opts.options.has(opts.verboseOpt);
+                    if (opts.options.has(opts.membersOpt)) {
+                        printMembers(description, verbose);
+                    } else if (opts.options.has(opts.stateOpt)) {
+                        printStates(description, verbose);
+                    } else {
+                        printOffsets(description, verbose);
+                    }
                 }
             }
         }
 
         StreamsGroupDescription getDescribeGroup(String group) throws ExecutionException, InterruptedException {
-            DescribeStreamsGroupsResult result = adminClient.describeStreamsGroups(List.of(group));
+            DescribeStreamsGroupsResult result = adminClient.describeStreamsGroups(
+                List.of(group),
+                new DescribeStreamsGroupsOptions().timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
             Map<String, StreamsGroupDescription> descriptionMap = result.all().get();
             return descriptionMap.get(group);
         }
@@ -491,7 +496,8 @@ public class StreamsGroupCommand {
                                             if (e.getCause() instanceof UnknownTopicOrPartitionException) {
                                                 printError("Deleting internal topics for group '" + groupId + "' failed because the topics do not exist.", Optional.empty());
                                             } else if (e.getCause() instanceof UnsupportedVersionException) {
-                                                printError("Deleting internal topics is not supported by the broker version. " +
+                                                printError("Deleting internal topics is not supported by the broker version.\n" +
+                                                    "Internal topics: (" + String.join(",", internalTopics) + ").\n" +
                                                     "Use 'kafka-topics.sh' to delete the group's internal topics.", Optional.of(e.getCause()));
                                             } else {
                                                 printError("Deleting internal topics for group '" + groupId + "' failed due to " + e.getMessage(), Optional.of(e));
@@ -825,8 +831,19 @@ public class StreamsGroupCommand {
                 }
             } catch (InterruptedException | ExecutionException e) {
                 if (e.getCause() instanceof UnsupportedVersionException) {
-                    printError("Retrieving internal topics is not supported by the broker version. " +
-                        "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
+                    try {
+                        // Retrieve internal topic list if possible, and add the list of topic names to error message
+                        Set<String> allTopics = adminClient.listTopics().names().get();
+                        List<String> internalTopics = allTopics.stream()
+                            .filter(topic -> groupIds.stream().anyMatch(groupId -> isInferredInternalTopic(topic, groupId)))
+                            .collect(Collectors.toList());
+                        printError("Retrieving internal topics is not supported by the broker version.\n" +
+                            "Internal topics: (" + String.join(",", internalTopics) + ").\n" +
+                            "Use 'kafka-topics.sh' to delete the group's internal topics.", Optional.of(e.getCause()));
+                    } catch (InterruptedException | ExecutionException ex) {
+                        printError("Retrieving internal topics is not supported by the broker version. " +
+                            "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
+                    }
                 } else {
                     printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
                 }
