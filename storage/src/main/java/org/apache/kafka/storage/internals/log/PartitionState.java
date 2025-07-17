@@ -22,15 +22,13 @@ import java.util.Set;
 
 public interface PartitionState {
     /**
-     * Includes only the in-sync replicas which have been committed to ZK.
+     * Includes only the in-sync replicas which have been committed to ZK/Controller.
      */
     Set<Integer> isr();
 
     /**
      * This set may include un-committed ISR members following an expansion. This "effective" ISR is used for advancing
-     * the high watermark as well as determining which replicas are required for acks=all produce requests.
-     *
-     * Only applicable as of IBP 2.7-IV2, for older versions this will return the committed ISR
+     * the high watermark as well as determining which replicas are required for acks=all produce requests.*
      */
     Set<Integer> maximalIsr();
 
