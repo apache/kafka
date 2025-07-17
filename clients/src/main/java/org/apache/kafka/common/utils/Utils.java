@@ -1497,6 +1497,9 @@ public final class Utils {
      * @throws ConfigException if any key is not a String
      */
     public static Map<String, Object> castToStringObjectMap(Map<?, ?> inputMap) {
+        if (inputMap instanceof Properties) {
+            return propsToMap((Properties) inputMap);
+        }
         Map<String, Object> map = new HashMap<>(inputMap.size());
         for (Map.Entry<?, ?> entry : inputMap.entrySet()) {
             if (entry.getKey() instanceof String) {
