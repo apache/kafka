@@ -78,7 +78,9 @@ class LogManager(logDirs: Seq[File],
                  time: Time,
                  remoteStorageSystemEnable: Boolean,
                  val initialTaskDelayMs: Long,
-                 cleanerFactory: (CleanerConfig, util.List[File], ConcurrentMap[TopicPartition, UnifiedLog], LogDirFailureChannel, Time) => LogCleaner = (cleanerConfig, files, map, logDirFailureChannel, time) => new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time)) extends Logging {
+                 cleanerFactory: (CleanerConfig, util.List[File], ConcurrentMap[TopicPartition, UnifiedLog], LogDirFailureChannel, Time) => LogCleaner =
+                  (cleanerConfig, files, map, logDirFailureChannel, time) => new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time)
+                ) extends Logging {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 

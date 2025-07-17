@@ -1154,8 +1154,15 @@ class ReplicaManager(val config: KafkaConfig,
               // Stop current replica movement if the destinationDir is different from the existing destination log directory
               if (partition.futureReplicaDirChanged(destinationDir)) {
                 replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
+                // There's a chance that the future replica can be promoted between the check for futureReplicaDirChanged
+                // and call to removeFetcherForPartitions. We want to avoid resuming cleaning again in that case to avoid
+                // an IllegalStateException. The presence of a future log after the call to removeFetcherForPartitions
+                // implies that it has not been promoted as both synchronize on partitionMapLock.
+                val futureReplicaPromoted = partition.futureLog.isEmpty
                 partition.removeFutureLocalReplica()
-                logManager.resumeCleaning(topicPartition)
+                if (!futureReplicaPromoted) {
+                  logManager.resumeCleaning(topicPartition)
+                }
               }
             case HostedPartition.Offline(_) =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
