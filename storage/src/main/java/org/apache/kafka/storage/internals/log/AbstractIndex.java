@@ -35,7 +35,6 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Supplier;
 
 /**
  * The abstract index class which holds entry format agnostic methods.
@@ -48,7 +47,15 @@ public abstract class AbstractIndex implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractIndex.class);
 
-    // Serializes all index operations that mutate internal state
+    // Serializes all index operations that mutate internal state.
+    // Readers do not need to acquire this lock because:
+    //  1) MappedByteBuffer provides direct access to the OS-level buffer cache,
+    //     which allows concurrent reads in practice.
+    //  2) Clients only read committed data and are not affected by concurrent appends/truncates.
+    //     In the rare case when the data is truncated, the follower could read inconsistent data.
+    //     The follower has the logic to ignore the inconsistent data through crc and leader epoch.
+    //  3) Read and remap operations are coordinated via remapLock to ensure visibility of the
+    //     underlying mmap.
     private final ReentrantLock lock = new ReentrantLock();
     // Allows concurrent read operations while ensuring exclusive access if the underlying mmap is changed
     private final ReentrantReadWriteLock remapLock = new ReentrantReadWriteLock();
@@ -191,8 +198,8 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
-        return inLockThrows(() ->
-                inRemapWriteLockThrows(() -> {
+        return inLock(() ->
+                inRemapWriteLock(() -> {
                     int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
                     if (length == roundedNewSize) {
@@ -258,7 +265,7 @@ public abstract class AbstractIndex implements Closeable {
      * the file.
      */
     public void trimToValidSize() throws IOException {
-        inLockThrows(() -> {
+        inLock(() -> {
             if (mmap != null) {
                 resize(entrySize() * entries);
             }
@@ -282,10 +289,7 @@ public abstract class AbstractIndex implements Closeable {
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-        inLockThrows(() ->
-                inRemapWriteLockThrows(() -> {
-                    safeForceUnmap();
-                }));
+        inLock(() -> inRemapWriteLock(this::safeForceUnmap));
     }
 
     /**
@@ -412,36 +416,28 @@ public abstract class AbstractIndex implements Closeable {
         mmap.position(entries * entrySize());
     }
 
-    protected final <T> T inLock(Supplier<T> action) {
+    protected final <T, E extends Exception> T inLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
         return LockUtils.inLock(lock, action);
     }
 
-    protected final void inLock(Runnable action) {
+    protected final <E extends Exception> void inLock(LockUtils.ThrowingRunnable<E> action) throws E {
         LockUtils.inLock(lock, action);
     }
 
-    protected final <T, E extends Exception> T inLockThrows(LockUtils.ThrowingSupplier<T, E> action) throws E {
-        return LockUtils.inLockThrows(lock, action);
-    }
-
-    protected final <E extends Exception> void inLockThrows(LockUtils.ThrowingRunnable<E> action) throws E {
-        LockUtils.inLockThrows(lock, action);
-    }
-
-    protected final <T> T inRemapReadLock(Supplier<T> action) {
+    protected final <T, E extends Exception> T inRemapReadLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
         return LockUtils.inLock(remapLock.readLock(), action);
     }
 
-    protected final void inRemapReadLock(Runnable action) {
+    protected final <E extends Exception> void inRemapReadLock(LockUtils.ThrowingRunnable<E> action) throws E {
         LockUtils.inLock(remapLock.readLock(), action);
     }
 
-    protected final <T, E extends Exception> T inRemapWriteLockThrows(LockUtils.ThrowingSupplier<T, E> action) throws E {
-        return LockUtils.inLockThrows(remapLock.writeLock(), action);
+    protected final <T, E extends Exception> T inRemapWriteLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
+        return LockUtils.inLock(remapLock.writeLock(), action);
     }
 
-    protected final <E extends Exception> void inRemapWriteLockThrows(LockUtils.ThrowingRunnable<E> action) throws E {
-        LockUtils.inLockThrows(remapLock.writeLock(), action);
+    protected final <E extends Exception> void inRemapWriteLock(LockUtils.ThrowingRunnable<E> action) throws E {
+        LockUtils.inLock(remapLock.writeLock(), action);
     }
 
     /**
