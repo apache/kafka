@@ -144,11 +144,15 @@ public class ClientTelemetryUtilsTest {
         assertEquals(CompressionType.SNAPPY, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.ZSTD, CompressionType.SNAPPY), Set.of(CompressionType.ZSTD)));
         assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.LZ4, CompressionType.GZIP, CompressionType.SNAPPY), Set.of(CompressionType.LZ4)));
 
-        // Test for null parameter
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Collections.emptyList(), null));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null, null));
-        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), null));
-        assertEquals(CompressionType.LZ4, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.LZ4, CompressionType.SNAPPY), null));
+        // Test null acceptedCompressionTypes parameter
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null, Collections.emptySet()));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null, Set.of(CompressionType.GZIP)));
+
+        // Test NullPointerException for null unsupportedCompressionTypes parameter
+        assertThrows(NullPointerException.class, () ->
+            ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), null));
+        assertThrows(NullPointerException.class, () -> 
+            ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.LZ4, CompressionType.SNAPPY), null));
     }
 
     @ParameterizedTest

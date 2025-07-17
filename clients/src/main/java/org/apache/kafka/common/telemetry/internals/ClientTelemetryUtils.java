@@ -182,14 +182,20 @@ public class ClientTelemetryUtils {
         return validateResourceLabel(metadata, MetricsContext.NAMESPACE);
     }
 
+    /**
+     * Determines the preferred compression type from broker-accepted types, avoiding unsupported ones.
+     * 
+     * @param acceptedCompressionTypes the list of compression types accepted by the broker in order 
+     *                                of preference, or null/empty if no compression is accepted
+     * @param unsupportedCompressionTypes the set of compression types that should be avoided due to 
+     *                                   missing libraries or previous failures (must not be null)
+     * @return the preferred compression type to use, or {@link CompressionType#NONE} if no acceptable
+     *         compression type is available
+     * @throws NullPointerException if unsupportedCompressionTypes is null
+     */
     public static CompressionType preferredCompressionType(List<CompressionType> acceptedCompressionTypes, Set<CompressionType> unsupportedCompressionTypes) {
-        if (acceptedCompressionTypes == null || acceptedCompressionTypes.isEmpty()) {
+        if (acceptedCompressionTypes == null) {
             return CompressionType.NONE;
-        }
-
-        // If no unsupported types, return the first accepted type (broker's preference)
-        if (unsupportedCompressionTypes == null || unsupportedCompressionTypes.isEmpty()) {
-            return acceptedCompressionTypes.get(0);
         }
 
         // Broker is providing the compression types in order of preference. Grab the
