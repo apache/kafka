@@ -19,6 +19,7 @@ package org.apache.kafka.common.telemetry.internals;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
@@ -65,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 public class ClientTelemetryReporterTest {
 
@@ -414,7 +416,7 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
-    public void testCreateRequestPushCompressionNoClassDefFoundError() {
+    public void testCreateRequestPushCompressionFallbackToNextType() {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
 
@@ -422,12 +424,14 @@ public class ClientTelemetryReporterTest {
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
+        // Set up subscription with multiple compression types: GZIP -> LZ4 -> SNAPPY
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, Collections.singletonList(CompressionType.ZSTD), true, null);
+            uuid, 1234, 20000, List.of(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), any())).thenThrow(new NoClassDefFoundError("Compression library not found"));
+            // First request: GZIP fails with NoClassDefFoundError, should use NONE for this request
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.GZIP))).thenThrow(new NoClassDefFoundError("GZIP not available"));
 
             Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
             assertNotNull(requestOptional);
@@ -435,9 +439,54 @@ public class ClientTelemetryReporterTest {
             assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
             PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
 
-            assertEquals(subscription.clientInstanceId(), request.data().clientInstanceId());
-            assertEquals(subscription.subscriptionId(), request.data().subscriptionId());
-            // CompressionType.NONE is used when compression fails due to NoClassDefFoundError
+            // Should fallback to NONE for this request (GZIP gets cached as unsupported)
+            assertEquals(CompressionType.NONE.id, request.data().compressionType());
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+
+            // Reset state for next request
+            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+            // Second request: LZ4 is selected (since GZIP is now cached as unsupported), LZ4 fails, should use NONE
+            // Note that some libraries eg. LZ4 return KafkaException with cause as NoClassDefFoundError
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.LZ4))).thenThrow(new KafkaException(new NoClassDefFoundError("LZ4 not available")));
+
+            requestOptional = telemetrySender.createRequest();
+            assertNotNull(requestOptional);
+            assertTrue(requestOptional.isPresent());
+            assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+            request = (PushTelemetryRequest) requestOptional.get().build();
+
+            // Should fallback to NONE for this request (LZ4 gets cached as unsupported)
+            assertEquals(CompressionType.NONE.id, request.data().compressionType());
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+
+            // Reset state for next request
+            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+            // Third request: SNAPPY is selected (since GZIP and LZ4 are now cached as unsupported), SNAPPY fails, should use NONE
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.SNAPPY))).thenThrow(new NoClassDefFoundError("SNAPPY not available"));
+
+            requestOptional = telemetrySender.createRequest();
+            assertNotNull(requestOptional);
+            assertTrue(requestOptional.isPresent());
+            assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+            request = (PushTelemetryRequest) requestOptional.get().build();
+
+            // Should fallback to NONE for this request (SNAPPY gets cached as unsupported)
+            assertEquals(CompressionType.NONE.id, request.data().compressionType());
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+
+            // Reset state for next request
+            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+            // Fourth request: All compression types are now cached as unsupported, should use NONE directly
+            requestOptional = telemetrySender.createRequest();
+            assertNotNull(requestOptional);
+            assertTrue(requestOptional.isPresent());
+            assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+            request = (PushTelemetryRequest) requestOptional.get().build();
+
+            // Should use NONE directly (no compression types are supported)
             assertEquals(CompressionType.NONE.id, request.data().compressionType());
             assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
         }

@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import io.opentelemetry.proto.metrics.v1.Metric;
@@ -123,10 +124,31 @@ public class ClientTelemetryUtilsTest {
 
     @Test
     public void testPreferredCompressionType() {
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Collections.emptyList()));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.NONE, CompressionType.GZIP)));
-        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE)));
+        // Test with no unsupported types
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Collections.emptyList(), Collections.emptySet()));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null, Collections.emptySet()));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.NONE, CompressionType.GZIP), Collections.emptySet()));
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), Collections.emptySet()));
+
+        // Test with unsupported types filtering
+        assertEquals(CompressionType.LZ4, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.GZIP)));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), Set.of(CompressionType.GZIP)));
+        assertEquals(CompressionType.SNAPPY, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), Set.of(CompressionType.GZIP, CompressionType.LZ4)));
+
+        // Test when all types are unsupported
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP), Set.of(CompressionType.GZIP)));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.GZIP, CompressionType.LZ4)));
+
+        // Test priority order with unsupported types (first available wins)
+        assertEquals(CompressionType.ZSTD, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.ZSTD, CompressionType.SNAPPY), Set.of()));
+        assertEquals(CompressionType.SNAPPY, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.ZSTD, CompressionType.SNAPPY), Set.of(CompressionType.ZSTD)));
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.LZ4, CompressionType.GZIP, CompressionType.SNAPPY), Set.of(CompressionType.LZ4)));
+
+        // Test for null parameter
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Collections.emptyList(), null));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null, null));
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), null));
+        assertEquals(CompressionType.LZ4, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.LZ4, CompressionType.SNAPPY), null));
     }
 
     @ParameterizedTest

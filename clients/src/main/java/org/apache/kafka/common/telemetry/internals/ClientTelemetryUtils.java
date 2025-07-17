@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import io.opentelemetry.proto.metrics.v1.MetricsData;
@@ -181,13 +182,22 @@ public class ClientTelemetryUtils {
         return validateResourceLabel(metadata, MetricsContext.NAMESPACE);
     }
 
-    public static CompressionType preferredCompressionType(List<CompressionType> acceptedCompressionTypes) {
-        if (acceptedCompressionTypes != null && !acceptedCompressionTypes.isEmpty()) {
-            // Broker is providing the compression types in order of preference. Grab the
-            // first one.
+    public static CompressionType preferredCompressionType(List<CompressionType> acceptedCompressionTypes, Set<CompressionType> unsupportedCompressionTypes) {
+        if (acceptedCompressionTypes == null || acceptedCompressionTypes.isEmpty()) {
+            return CompressionType.NONE;
+        }
+
+        // If no unsupported types, return the first accepted type (broker's preference)
+        if (unsupportedCompressionTypes == null || unsupportedCompressionTypes.isEmpty()) {
             return acceptedCompressionTypes.get(0);
         }
-        return CompressionType.NONE;
+
+        // Broker is providing the compression types in order of preference. Grab the
+        // first one that's not unsupported.
+        return acceptedCompressionTypes.stream()
+                .filter(t -> !unsupportedCompressionTypes.contains(t))
+                .findFirst()
+                .orElse(CompressionType.NONE);
     }
 
     public static ByteBuffer compress(MetricsData metrics, CompressionType compressionType) throws IOException {
