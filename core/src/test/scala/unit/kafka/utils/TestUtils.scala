@@ -952,7 +952,7 @@ object TestUtils extends Logging {
                        time: MockTime = new MockTime(),
                        recoveryThreadsPerDataDir: Int = 4,
                        transactionVerificationEnabled: Boolean = false,
-                       log: Option[UnifiedLog] = None,
+                       logFn: Option[(TopicPartition, Option[Uuid]) => UnifiedLog] = None,
                        remoteStorageSystemEnable: Boolean = false,
                        initialTaskDelayMs: Long = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT): LogManager = {
     val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
@@ -975,9 +975,13 @@ object TestUtils extends Logging {
                    remoteStorageSystemEnable = remoteStorageSystemEnable,
                    initialTaskDelayMs = initialTaskDelayMs)
 
-    if (log.isDefined) {
+    if (logFn.isDefined) {
       val spyLogManager = Mockito.spy(logManager)
-      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Optional[Uuid]]), any(classOf[Option[Uuid]]))
+      Mockito.doAnswer(answer => {
+        val topicPartition = answer.getArgument(0, classOf[TopicPartition])
+        val topicId = answer.getArgument(3, classOf[Optional[Uuid]])
+        logFn.get(topicPartition, OptionConverters.toScala(topicId))
+      }).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Optional[Uuid]]), any(classOf[Option[Uuid]]))
       spyLogManager
     } else
       logManager
