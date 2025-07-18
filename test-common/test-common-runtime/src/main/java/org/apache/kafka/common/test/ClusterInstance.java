@@ -71,7 +71,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
+import scala.collection.JavaConverters;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
@@ -444,6 +446,21 @@ public interface ClusterInstance {
                 .map(KafkaBroker::socketServer)
                 .map(s -> s.boundPort(clientListener()))
                 .toList();
+    }
 
+    default void restartDeadBrokers() {
+        for (Map.Entry<Integer, KafkaBroker> entry : brokers().entrySet()) {
+            int brokerId = entry.getKey();
+            KafkaBroker broker = entry.getValue();
+
+            if (broker.isShutdown()) {
+                startBroker(brokerId);
+            }
+        }
+    }
+
+    default String bootstrapServers(ListenerName listenerName){
+        Seq<KafkaBroker> brokerSeq = new ArrayList<>(brokers().values()).asScala().toSeq();
+        kafka.utils.TestUtils.bootstrapServers(brokerSeq, listenerName);
     }
 }
