@@ -1663,6 +1663,7 @@ project(':coordinator-common') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':core')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs

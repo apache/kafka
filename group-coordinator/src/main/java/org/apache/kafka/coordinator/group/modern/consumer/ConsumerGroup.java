@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
@@ -43,8 +44,6 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
@@ -1108,7 +1107,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
         long committedOffset,
         String defaultAssignor,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
@@ -1120,7 +1119,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             entry -> describedGroup.members().add(
                 entry.getValue().asConsumerGroupDescribeMember(
                     targetAssignment.get(entry.getValue().memberId(), committedOffset),
-                    topicsImage
+                    image
                 )
             )
         );
@@ -1145,7 +1144,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
         Map<String, Long> topicHashCache,
-        MetadataImage metadataImage
+        CoordinatorMetadataImage metadataImage
     ) {
         String groupId = classicGroup.groupId();
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
@@ -1165,7 +1164,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 if (assignment.userData() != null && assignment.userData().hasRemaining()) {
                     throw new UnsupportedVersionException("userData from a custom assignor would be lost");
                 }
-                assignedPartitions = toTopicPartitionMap(assignment, metadataImage.topics());
+                assignedPartitions = toTopicPartitionMap(assignment, metadataImage);
             }
 
             // Every member is guaranteed to have metadata set when it joins,

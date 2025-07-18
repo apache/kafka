@@ -17,7 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 
 import com.dynatrace.hash4j.hashing.Hashing;
 
@@ -38,10 +39,10 @@ public class UtilsTest {
     private static final String FOO_TOPIC_NAME = "foo";
     private static final String BAR_TOPIC_NAME = "bar";
     private static final int FOO_NUM_PARTITIONS = 2;
-    private static final MetadataImage FOO_METADATA_IMAGE = new MetadataImageBuilder()
-        .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
-        .addRacks()
-        .build();
+    private static final CoordinatorMetadataImage FOO_METADATA_IMAGE = new MetadataImageBuilder()
+            .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
 
     @Test
     void testNonExistingTopicName() {
@@ -170,7 +171,7 @@ public class UtilsTest {
 
     @ParameterizedTest
     @MethodSource("differentFieldGenerator")
-    void testComputeTopicHashWithDifferentField(MetadataImage differentImage) {
+    void testComputeTopicHashWithDifferentField(CoordinatorMetadataImage differentImage) {
         long result = Utils.computeTopicHash(FOO_TOPIC_NAME, FOO_METADATA_IMAGE);
 
         assertNotEquals(
@@ -185,21 +186,21 @@ public class UtilsTest {
                 new MetadataImageBuilder() // different topic id
                     .addTopic(Uuid.randomUuid(), FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
                     .addRacks()
-                    .build()
+                    .buildCoordinatorMetadataImage()
             ),
             Arguments.of(new MetadataImageBuilder() // different topic name
                     .addTopic(FOO_TOPIC_ID, "bar", FOO_NUM_PARTITIONS)
                     .addRacks()
-                    .build()
+                    .buildCoordinatorMetadataImage()
             ),
             Arguments.of(new MetadataImageBuilder() // different partitions
                     .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, 1)
                     .addRacks()
-                    .build()
+                    .buildCoordinatorMetadataImage()
             ),
             Arguments.of(new MetadataImageBuilder() // different racks
                     .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
-                    .build()
+                    .buildCoordinatorMetadataImage()
             )
         );
     }
