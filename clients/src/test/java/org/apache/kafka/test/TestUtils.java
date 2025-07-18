@@ -600,8 +600,8 @@ public class TestUtils {
             // Enable strict type checking.
             // This ensures we're testing for the exact exception type, not its subclasses.
             assertEquals(
-                exceptionCauseClass,
-                cause.getClass(),
+                exceptionCauseClass, 
+                cause.getClass(), 
                 "Expected " + exceptionCauseClass.getSimpleName() + ", but got " + cause.getClass().getSimpleName()
             );
             return exceptionCauseClass.cast(cause);

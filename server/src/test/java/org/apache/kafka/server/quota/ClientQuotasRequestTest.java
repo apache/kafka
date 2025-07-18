@@ -378,21 +378,19 @@ public class ClientQuotasRequestTest {
     }
 
     // Entities to be matched against.
-    private final Map<ClientQuotaEntity, Double> matchUserClientEntities = new HashMap<>() {
-        {
-            put(toClientEntity(toUserMap("user-1"), toClientIdMap("client-id-1")), 50.50);
-            put(toClientEntity(toUserMap("user-2"), toClientIdMap("client-id-1")), 51.51);
-            put(toClientEntity(toUserMap("user-3"), toClientIdMap("client-id-2")), 52.52);
-            put(toClientEntity(toUserMap(null), toClientIdMap("client-id-1")), 53.53);
-            put(toClientEntity(toUserMap("user-1"), toClientIdMap(null)), 54.54);
-            put(toClientEntity(toUserMap("user-3"), toClientIdMap(null)), 55.55);
-            put(toClientEntity(toUserMap("user-1")), 56.56);
-            put(toClientEntity(toUserMap("user-2")), 57.57);
-            put(toClientEntity(toUserMap("user-3")), 58.58);
-            put(toClientEntity(toUserMap(null)), 59.59);
-            put(toClientEntity(toClientIdMap("client-id-2")), 60.60);
-        }
-    };
+    private final Map<ClientQuotaEntity, Double> matchUserClientEntities = new HashMap<>(Map.ofEntries(
+        Map.entry(toClientEntity(toUserMap("user-1"), toClientIdMap("client-id-1")), 50.50),
+        Map.entry(toClientEntity(toUserMap("user-2"), toClientIdMap("client-id-1")), 51.51),
+        Map.entry(toClientEntity(toUserMap("user-3"), toClientIdMap("client-id-2")), 52.52),
+        Map.entry(toClientEntity(toUserMap(null), toClientIdMap("client-id-1")), 53.53),
+        Map.entry(toClientEntity(toUserMap("user-1"), toClientIdMap(null)), 54.54),
+        Map.entry(toClientEntity(toUserMap("user-3"), toClientIdMap(null)), 55.55),
+        Map.entry(toClientEntity(toUserMap("user-1")), 56.56),
+        Map.entry(toClientEntity(toUserMap("user-2")), 57.57),
+        Map.entry(toClientEntity(toUserMap("user-3")), 58.58),
+        Map.entry(toClientEntity(toUserMap(null)), 59.59),
+        Map.entry(toClientEntity(toClientIdMap("client-id-2")), 60.60)
+    ));
 
     private final Map<ClientQuotaEntity, Double> matchIpEntities = Map.of(
         toIpEntity(Optional.of("1.2.3.4")), 10.0,
