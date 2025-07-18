@@ -324,7 +324,6 @@ public class ConsumerGroupServiceTest {
                     .collect(Collectors.toList());
             topicDescriptions.put(topic, new TopicDescription(topic, false, partitions));
         });
-        System.out.println("cccc: " + topicDescriptions);
         return AdminClientTestUtils.describeTopicsResult(topicDescriptions);
     }
 

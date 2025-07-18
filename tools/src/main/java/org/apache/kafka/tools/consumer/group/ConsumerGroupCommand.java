@@ -1031,10 +1031,10 @@ public class ConsumerGroupCommand {
 
         private void checkAllTopicPartitionsValid(Collection<TopicPartition> partitionsToReset) {
             // check the partitions exist
-            List<TopicPartition> partitionsNotExistList = filterNotExistPartitions(partitionsToReset);
+            List<TopicPartition> partitionsNotExistList = filterNonExistentPartitions(partitionsToReset);
             if (!partitionsNotExistList.isEmpty()) {
                 String partitionStr = partitionsNotExistList.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
-                throw new UnknownTopicOrPartitionException("The partitions \"" + partitionStr + "\" does not exist");
+                throw new UnknownTopicOrPartitionException("The partitions \"" + partitionStr + "\" do not exist");
             }
 
             // check the partitions have leader
@@ -1045,7 +1045,7 @@ public class ConsumerGroupCommand {
             }
         }
 
-        private List<TopicPartition> filterNotExistPartitions(Collection<TopicPartition> topicPartitions) {
+        private List<TopicPartition> filterNonExistentPartitions(Collection<TopicPartition> topicPartitions) {
             // collect all topics
             Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
             try {
@@ -1056,7 +1056,7 @@ public class ConsumerGroupCommand {
                         .toList();
 
                 return topicPartitions.stream().filter(element -> !existPartitions.contains(element)).toList();
-            } catch (Exception e) {
+            } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
         }
