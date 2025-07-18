@@ -23,6 +23,7 @@ package org.apache.kafka.streams.errors;
  * @see org.apache.kafka.streams.StreamsConfig
  */
 @SuppressWarnings("unused")
+@Deprecated(since = "4.2", forRemoval = true)
 public class BrokerNotFoundException extends StreamsException {
 
     private static final long serialVersionUID = 1L;
