@@ -32,7 +32,7 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.server.IntegrationTestUtils
-import org.junit.jupiter.api.Assertions.{assertEquals, fail}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, fail}
 
 import java.net.Socket
 import java.util
@@ -121,19 +121,30 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     topicConfig: Properties = new Properties,
-    createTopicRequestTimeoutMs: Option[Int] = None
   ): Map[TopicIdPartition, Int] = {
     val admin = cluster.admin()
+    var partitionToLeader: scala.collection.immutable.Map[Int, Int] = null
     try {
-      val partitionToLeader = TestUtils.createTopicWithAdmin(
-        admin = admin,
-        topic = topic,
-        brokers = brokers(),
-        controllers = controllerServers(),
-        numPartitions = numPartitions,
-        replicationFactor = replicationFactor,
-        topicConfig = topicConfig,
-        createTopicRequestTimeoutMs = createTopicRequestTimeoutMs
+      TestUtils.waitUntilTrue(
+        condition = () => {
+          try {
+            partitionToLeader = TestUtils.createTopicWithAdmin(
+              admin = admin,
+              topic = topic,
+              brokers = brokers(),
+              controllers = controllerServers(),
+              numPartitions = numPartitions,
+              replicationFactor = replicationFactor,
+              topicConfig = topicConfig
+            )
+            true // Success
+          } catch {
+            case _: Throwable => false // Will retry
+          }
+        },
+        msg = "Failed to create topic with admin within 2 minutes",
+        waitTimeMs = 2 * 60 * 1000, // 2 minutes in milliseconds
+        pause = 40 * 1000 // 40 seconds in milliseconds
       )
       admin
         .describeTopics(TopicCollection.ofTopicNames(List(topic).asJava))

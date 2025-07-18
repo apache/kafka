@@ -30,7 +30,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.IntegrationTestUtils
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.AfterEach
 
 import java.net.Socket
@@ -115,7 +115,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val metadata: ShareRequestMetadata = new ShareRequestMetadata(MEMBER_ID, ShareRequestMetadata.INITIAL_EPOCH)
 
     // Create a single-partition topic and find a broker which is not the leader
-    val partitionToLeader = createTopicAndReturnLeaders(TOPIC, createTopicRequestTimeoutMs = Some(120000))
+    val partitionToLeader = createTopicAndReturnLeaders(TOPIC)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -165,7 +165,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchRequestSuccess(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -227,7 +227,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchRequestSuccessMultiplePartitions(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition1 = new TopicIdPartition(topicId, new TopicPartition(TOPIC, 0))
@@ -325,7 +325,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchRequestSuccessMultiplePartitionsMultipleBrokers(): Unit = {
-    val partitionToLeaders = createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    val partitionToLeaders = createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition1 = new TopicIdPartition(topicId, new TopicPartition(TOPIC, 0))
@@ -442,7 +442,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareAcknowledgeRequestSuccessAccept(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -556,7 +556,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchRequestPiggybackedAccept(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -673,7 +673,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareAcknowledgeRequestSuccessRelease(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -782,7 +782,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchRequestPiggybackedRelease(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -895,7 +895,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareAcknowledgeRequestSuccessReject(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1007,7 +1007,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchRequestPiggybackedReject(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1126,7 +1126,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareAcknowledgeRequestMaxDeliveryAttemptExhausted(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1287,7 +1287,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val memberId2 = Uuid.randomUuid()
     val memberId3 = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1382,7 +1382,12 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val memberId2 = Uuid.randomUuid()
     val memberId3 = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    try {
+      createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
+    } catch {
+      case e: Throwable =>
+        fail(s"Test failed due to exception: ${e.getMessage}", e)
+    }
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1476,7 +1481,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareSessionCloseWithShareFetch(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1583,7 +1588,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareSessionCloseWithShareAcknowledge(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1699,7 +1704,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchInitialEpochWithAcknowledgements(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1747,7 +1752,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareAcknowledgeInitialRequestError(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1789,7 +1794,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchRequestInvalidShareSessionEpoch(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1860,7 +1865,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareAcknowledgeRequestInvalidShareSessionEpoch(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -1938,7 +1943,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
   def testShareFetchRequestShareSessionNotFound(): Unit = {
     val wrongMemberId = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -2016,7 +2021,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val memberId2 = Uuid.randomUuid()
     val memberId3 = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -2094,7 +2099,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
   def testShareAcknowledgeRequestShareSessionNotFound(): Unit = {
     val wrongMemberId = Uuid.randomUuid()
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -2173,7 +2178,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val partition1 = 0
     val partition2 = 1
 
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition1 = new TopicIdPartition(topicId, new TopicPartition(TOPIC, partition1))
@@ -2269,7 +2274,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchRequestWithMaxRecordsAndBatchSize(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
@@ -2331,7 +2336,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     )
   )
   def testShareFetchRequestMultipleBatchesWithMaxRecordsAndBatchSize(): Unit = {
-    createTopicAndReturnLeaders(TOPIC, numPartitions = 3, createTopicRequestTimeoutMs = Some(120000))
+    createTopicAndReturnLeaders(TOPIC, numPartitions = 3)
     val topicIds = getTopicIds
     val topicId = topicIds.get(TOPIC)
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(TOPIC, PARTITION))
