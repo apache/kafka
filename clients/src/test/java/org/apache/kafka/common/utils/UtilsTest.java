@@ -897,6 +897,24 @@ public class UtilsTest {
     }
 
     @Test
+    public void testPropsToMapNonStringKey() {
+        ConfigException ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, "value");
+            Utils.propsToMap(props);
+        });
+        assertTrue(ce.getMessage().contains("One or more keys is not a string."));
+
+        ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(true, "value");
+            props.put('a', "value");
+            Utils.propsToMap(props);
+        });
+        assertTrue(ce.getMessage().contains("One or more keys is not a string."));
+    }
+
+    @Test
     public void testPropsToMapWithDefaults() {
         Properties defaultProperties = new Properties();
         defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
@@ -941,6 +959,69 @@ public class UtilsTest {
         Properties props = new Properties();
         props.put("key", value);
         assertEquals(Utils.propsToMap(props).get("key"), value);
+    }
+
+    @Test
+    public void testCastToStringObjectMap() {
+        Map<Object, Object> map = new HashMap<>();
+        map.put("key1", "value1");
+        map.put("key2", 1);
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("key1", "value1");
+        expectedMap.put("key2", 1);
+
+        assertEquals(map, expectedMap);
+    }
+
+    @Test
+    public void testCastToStringObjectMapNonStringKey() {
+        ConfigException ce = assertThrows(ConfigException.class, () -> {
+            Map<Object, Object> map = new HashMap<>();
+            map.put(1, "value");
+            Utils.castToStringObjectMap(map);
+        });
+        assertTrue(ce.getMessage().contains("Key must be a string"));
+
+        ce = assertThrows(ConfigException.class, () -> {
+            Map<Object, Object> map = new HashMap<>();
+            map.put(true, "value");
+            map.put('a', "value");
+            Utils.castToStringObjectMap(map);
+        });
+        assertTrue(ce.getMessage().contains("Key must be a string"));
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesAsInput() {
+        Properties props = new Properties();
+        props.put("key1", "value1");
+        props.put("key2", "value2");
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("key1", "value1");
+        expectedMap.put("key2", "value2");
+
+        assertEquals(expectedMap, Utils.castToStringObjectMap(props));
+        assertEquals(Utils.propsToMap(props), Utils.castToStringObjectMap(props));
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesNonStringKey() {
+        ConfigException ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, "value");
+            Utils.castToStringObjectMap(props);
+        });
+        assertTrue(ce.getMessage().contains("One or more keys is not a string."));
+
+        ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(true, "value");
+            props.put('a', "value");
+            Utils.castToStringObjectMap(props);
+        });
+        assertTrue(ce.getMessage().contains("One or more keys is not a string."));
     }
 
     @Test
