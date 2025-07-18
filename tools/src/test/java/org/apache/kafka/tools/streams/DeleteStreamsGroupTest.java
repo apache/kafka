@@ -405,11 +405,20 @@ public class DeleteStreamsGroupTest {
             updateStreamsGroupProtocol((short) 0);
             final Map<String, Throwable> result = new HashMap<>();
             String output = ToolsTestUtils.grabConsoleOutput(() -> result.putAll(service.deleteGroups()));
+            System.out.println(output);
 
             assertTrue(output.contains("Deletion of requested streams groups ('" + appId + "') was successful."),
                 "The streams group could not be deleted as expected");
-            assertTrue(output.contains("Retrieving internal topics is not supported by the broker version. " +
-                "Use 'kafka-topics.sh' to list and delete the group's internal topics."));
+            assertTrue(output.contains("Retrieving internal topics is not supported by the broker version."));
+            assertTrue(output.contains("Use 'kafka-topics.sh' to delete the group's internal topics."));
+            // Validate the list of internal topics in error message
+            assertTrue(output.contains("Internal topics:"));
+            System.out.println(output);
+            assertTrue(
+                output.matches("(?s).*" + APP_ID_PREFIX + "[a-zA-Z0-9\\-]+-(aggregated_value-changelog|repartition|changelog).*"),
+                "The internal topic name does not match the expected format. Output: " + output
+            );
+
             assertEquals(1, result.size());
             assertTrue(result.containsKey(appId));
             assertNull(result.get(appId), "The streams group could not be deleted as expected");

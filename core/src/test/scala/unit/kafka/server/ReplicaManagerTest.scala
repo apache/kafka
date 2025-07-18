@@ -77,7 +77,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -94,8 +94,8 @@ import java.net.InetAddress
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
-import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, TimeUnit}
-import java.util.function.BiConsumer
+import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, Future, TimeUnit}
+import java.util.function.{BiConsumer, Consumer}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
@@ -112,7 +112,9 @@ object ReplicaManagerTest {
 class ReplicaManagerTest {
 
   private val topic = "test-topic"
+  private val topic2 = "test-topic2"
   private val topicId = Uuid.fromString("YK2ed2GaTH2JpgzUaJ8tgg")
+  private val topicId2 = Uuid.randomUuid()
   private val topicIds = scala.Predef.Map("test-topic" -> topicId)
   private val topicNames = topicIds.map(_.swap)
   private val topicPartition = new TopicPartition(topic, 0)
@@ -2975,7 +2977,8 @@ class ReplicaManagerTest {
     if (enableRemoteStorage && defaultTopicRemoteLogStorageEnable) {
       logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     }
-    val mockLog = setupMockLog(path1)
+    val logConfig = new LogConfig(logProps)
+    val mockLogFn = (topicPartition: TopicPartition, topicId: Option[Uuid]) => setupMockLog(path1, logConfig, enableRemoteStorage, topicPartition, topicId)
     if (setupLogDirMetaProperties) {
       // add meta.properties file in each dir
       config.logDirs.stream().forEach(dir => {
@@ -2989,10 +2992,7 @@ class ReplicaManagerTest {
           new File(new File(dir), MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
       })
     }
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)), new LogConfig(logProps), log = if (shouldMockLog) Some(mockLog) else None, remoteStorageSystemEnable = enableRemoteStorage)
-    val logConfig = new LogConfig(logProps)
-    when(mockLog.config).thenReturn(logConfig)
-    when(mockLog.remoteLogEnabled()).thenReturn(enableRemoteStorage)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)), logConfig, logFn = if (shouldMockLog) Some(mockLogFn) else None, remoteStorageSystemEnable = enableRemoteStorage)
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
     brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.isRemoteStorageSystemEnabled)
 
@@ -3294,38 +3294,53 @@ class ReplicaManagerTest {
   @ValueSource(booleans = Array(true, false))
   def testOffsetOutOfRangeExceptionWhenReadFromLog(isFromFollower: Boolean): Unit = {
     val replicaId = if (isFromFollower) 1 else -1
+    val fetchMaxBytes = 150
+    val partitionMaxBytes = 100
     val tp0 = new TopicPartition(topic, 0)
+    val tp02 = new TopicPartition(topic2, 0)
     val tidp0 = new TopicIdPartition(topicId, tp0)
+    val tidp02 = new TopicIdPartition(topicId2, tp02)
     // create a replicaManager with remoteLog enabled
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false))
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
+      replicaManager.createPartition(tp02).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId2))
       val partition0Replicas = Seq[Integer](0, 1).asJava
-      val topicIds = Map(tp0.topic -> topicId).asJava
+      val topicIds = Map(tp0.topic -> topicId, tp02.topic -> topicId2).asJava
       val leaderEpoch = 0
       val delta = createLeaderDelta(topicIds.get(topic), tp0, partition0Replicas.get(0), partition0Replicas, partition0Replicas)
+      val delta2 = createLeaderDelta(topicIds.get(topic2), tp02, partition0Replicas.get(0), partition0Replicas, partition0Replicas)
       val leaderMetadataImage = imageFromTopics(delta.apply())
+      val leaderMetadataImage2 = imageFromTopics(delta2.apply())
       replicaManager.applyDelta(delta, leaderMetadataImage)
+      replicaManager.applyDelta(delta2, leaderMetadataImage2)
 
-      val params = new FetchParams(replicaId, 1, 1000, 0, 100, FetchIsolation.LOG_END, Optional.empty)
-      // when reading log, it'll throw OffsetOutOfRangeException, which will be handled separately
-      val result = replicaManager.readFromLog(params, Seq(tidp0 -> new PartitionData(topicId, 1, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UNBOUNDED_QUOTA, false)
+      val params = new FetchParams(replicaId, 1, 100, 0, fetchMaxBytes, FetchIsolation.LOG_END, Optional.empty)
+      // when reading logs from 2 partitions, they'll throw OffsetOutOfRangeException, which will be handled separately
+      val results = replicaManager.readFromLog(params, Seq(
+        tidp0 -> new PartitionData(topicId, 1, 0, partitionMaxBytes, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch)),
+        tidp02 -> new PartitionData(topicId2, 1, 0, partitionMaxBytes, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UNBOUNDED_QUOTA, false)
 
-      if (isFromFollower) {
-        // expect OFFSET_MOVED_TO_TIERED_STORAGE error returned if it's from follower, since the data is already available in remote log
-        assertEquals(Errors.OFFSET_MOVED_TO_TIERED_STORAGE, result.head._2.error)
-      } else {
-        assertEquals(Errors.NONE, result.head._2.error)
-      }
-      assertEquals(startOffset, result.head._2.leaderLogStartOffset)
-      assertEquals(endOffset, result.head._2.leaderLogEndOffset)
-      assertEquals(highHW, result.head._2.highWatermark)
-      if (isFromFollower) {
-        assertFalse(result.head._2.info.delayedRemoteStorageFetch.isPresent)
-      } else {
-        // for consumer fetch, we should return a delayedRemoteStorageFetch to wait for remote fetch
-        assertTrue(result.head._2.info.delayedRemoteStorageFetch.isPresent)
+      results.foreach { case (tidp, partitionData) =>
+        assertEquals(startOffset, partitionData.leaderLogStartOffset)
+        assertEquals(endOffset, partitionData.leaderLogEndOffset)
+        assertEquals(highHW, partitionData.highWatermark)
+        if (isFromFollower) {
+          // expect OFFSET_MOVED_TO_TIERED_STORAGE error returned if it's from follower, since the data is already available in remote log
+          assertEquals(Errors.OFFSET_MOVED_TO_TIERED_STORAGE, partitionData.error)
+          assertFalse(partitionData.info.delayedRemoteStorageFetch.isPresent)
+        } else {
+          assertEquals(Errors.NONE, partitionData.error)
+          // for consumer fetch, we should return a delayedRemoteStorageFetch to wait for remote fetch
+          assertTrue(partitionData.info.delayedRemoteStorageFetch.isPresent)
+          // verify the 1st partition will set the fetchMaxBytes to partitionMaxBytes,
+          // and the 2nd one will set to the remaining (fetchMaxBytes - partitionMaxBytes) to meet the "fetch.max.bytes" config.
+          if (tidp.topic == topic)
+            assertEquals(partitionMaxBytes, partitionData.info.delayedRemoteStorageFetch.get().fetchMaxBytes)
+          else
+            assertEquals(fetchMaxBytes - partitionMaxBytes, partitionData.info.delayedRemoteStorageFetch.get().fetchMaxBytes)
+        }
       }
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -3343,7 +3358,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog= true, remoteFetchQuotaExceeded = Some(false))
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
       val topicIds = Map(tp0.topic -> topicId).asJava
       val leaderEpoch = 0
       val delta = createLeaderDelta(topicIds.get(topic), tp0, brokerList.get(0), brokerList, brokerList)
@@ -3373,7 +3388,7 @@ class ReplicaManagerTest {
       } else {
         verify(mockRemoteLogManager).asyncRead(remoteStorageFetchInfoArg.capture(), any())
         val remoteStorageFetchInfo = remoteStorageFetchInfoArg.getValue
-        assertEquals(tp0, remoteStorageFetchInfo.topicPartition)
+        assertEquals(tp0, remoteStorageFetchInfo.topicIdPartition.topicPartition)
         assertEquals(fetchOffset, remoteStorageFetchInfo.fetchInfo.fetchOffset)
         assertEquals(topicId, remoteStorageFetchInfo.fetchInfo.topicId)
         assertEquals(startOffset, remoteStorageFetchInfo.fetchInfo.logStartOffset)
@@ -3421,7 +3436,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
 
       val leaderEpoch = 0
       val leaderDelta = createLeaderDelta(topicId, tp0, leaderId = 0, leaderEpoch = leaderEpoch)
@@ -3520,7 +3535,7 @@ class ReplicaManagerTest {
 
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
 
       val leaderEpoch = 0
       val leaderDelta = createLeaderDelta(topicId, tp0, leaderId = 0, leaderEpoch = leaderEpoch)
@@ -3577,6 +3592,109 @@ class ReplicaManagerTest {
     }
   }
 
+  @Test
+  def testMultipleRemoteFetchesInOneFetchRequest(): Unit = {
+    val replicaId = -1
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
+    val tidp0 = new TopicIdPartition(topicId, tp0)
+    val tidp1 = new TopicIdPartition(topicId, tp1)
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteFetchQuotaExceeded = Some(false))
+
+    try {
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
+      replicaManager.createPartition(tp1).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
+
+      val leaderEpoch = 0
+      val leaderDelta0 = createLeaderDelta(topicId, tp0, leaderId = 0, leaderEpoch = leaderEpoch)
+      val leaderDelta1 = createLeaderDelta(topicId, tp1, leaderId = 0, leaderEpoch = leaderEpoch)
+      val leaderMetadataImage0 = imageFromTopics(leaderDelta0.apply())
+      val leaderMetadataImage1 = imageFromTopics(leaderDelta1.apply())
+      replicaManager.applyDelta(leaderDelta0, leaderMetadataImage0)
+      replicaManager.applyDelta(leaderDelta1, leaderMetadataImage1)
+
+      val params = new FetchParams(replicaId, 1, 1000, 10, 100, FetchIsolation.LOG_END, Optional.empty)
+      val fetchOffsetTp0 = 1
+      val fetchOffsetTp1 = 2
+
+      val responseSeq = new AtomicReference[Seq[(TopicIdPartition, FetchPartitionData)]]()
+      val responseLatch = new CountDownLatch(1)
+
+      def fetchCallback(responseStatus: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        responseSeq.set(responseStatus)
+        responseLatch.countDown()
+      }
+
+      val callbacks: util.Set[Consumer[RemoteLogReadResult]] = new util.HashSet[Consumer[RemoteLogReadResult]]()
+      when(mockRemoteLogManager.asyncRead(any(), any())).thenAnswer(ans => {
+        callbacks.add(ans.getArgument(1, classOf[Consumer[RemoteLogReadResult]]))
+        mock(classOf[Future[Void]])
+      })
+
+      // Start the fetch request for both partitions - this should trigger remote fetches since
+      // the default mocked log behavior throws OffsetOutOfRangeException
+      replicaManager.fetchMessages(params, Seq(
+        tidp0 -> new PartitionData(topicId, fetchOffsetTp0, startOffset, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch)),
+        tidp1 -> new PartitionData(topicId, fetchOffsetTp1, startOffset, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))
+      ), UNBOUNDED_QUOTA, fetchCallback)
+
+      // Verify that exactly two asyncRead calls were made (one for each partition)
+      val remoteStorageFetchInfoArg: ArgumentCaptor[RemoteStorageFetchInfo] = ArgumentCaptor.forClass(classOf[RemoteStorageFetchInfo])
+      verify(mockRemoteLogManager, times(2)).asyncRead(remoteStorageFetchInfoArg.capture(), any())
+
+      // Verify that remote fetch operations were properly set up for both partitions
+      assertTrue(replicaManager.delayedRemoteFetchPurgatory.watched == 2, "DelayedRemoteFetch purgatory should have operations")
+
+      // Verify both partitions were captured in the remote fetch requests
+      val capturedFetchInfos = remoteStorageFetchInfoArg.getAllValues.asScala
+      assertEquals(2, capturedFetchInfos.size, "Should have 2 remote storage fetch info calls")
+
+      val capturedTopicPartitions = capturedFetchInfos.map(_.topicIdPartition.topicPartition).toSet
+      assertTrue(capturedTopicPartitions.contains(tp0), "Should contain " + tp0)
+      assertTrue(capturedTopicPartitions.contains(tp1), "Should contain " + tp1)
+
+      // Verify the fetch info details are correct for both partitions
+      capturedFetchInfos.foreach { fetchInfo =>
+        assertEquals(topicId, fetchInfo.fetchInfo.topicId)
+        assertEquals(startOffset, fetchInfo.fetchInfo.logStartOffset)
+        assertEquals(leaderEpoch, fetchInfo.fetchInfo.currentLeaderEpoch.get())
+        if (fetchInfo.topicIdPartition.topicPartition == tp0) {
+          assertEquals(fetchOffsetTp0, fetchInfo.fetchInfo.fetchOffset)
+        } else {
+          assertEquals(fetchOffsetTp1, fetchInfo.fetchInfo.fetchOffset)
+        }
+      }
+
+      // Complete the 2 asyncRead tasks
+      callbacks.forEach(callback => callback.accept(buildRemoteReadResult(Errors.NONE)))
+
+      // Wait for the fetch callback to complete and verify responseSeq content
+      assertTrue(responseLatch.await(5, TimeUnit.SECONDS), "Fetch callback should complete")
+
+      val responseData = responseSeq.get()
+      assertNotNull(responseData, "Response sequence should not be null")
+      assertEquals(2, responseData.size, "Response should contain data for both partitions")
+
+      // Verify that response contains both tidp0 and tidp1 and have no errors
+      val responseTopicIdPartitions = responseData.map(_._1).toSet
+      assertTrue(responseTopicIdPartitions.contains(tidp0), "Response should contain " + tidp0)
+      assertTrue(responseTopicIdPartitions.contains(tidp1), "Response should contain " + tidp1)
+      responseData.foreach { case (_, fetchPartitionData) =>
+        assertEquals(Errors.NONE, fetchPartitionData.error)
+      }
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  private def buildRemoteReadResult(error: Errors): RemoteLogReadResult = {
+    new RemoteLogReadResult(
+      Optional.of(new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY)),
+      if (error != Errors.NONE) Optional.of[Throwable](error.exception) else Optional.empty[Throwable]())
+  }
+
   private def yammerMetricValue(name: String): Any = {
     val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
     val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
@@ -3603,7 +3721,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(remoteLogManager), buildRemoteLogAuxState = true)
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(topicPartition).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(topicPartition).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
       val partition0Replicas = Seq[Integer](0, 1).asJava
 
       // Verify the metrics for build remote log state and for failures is zero before replicas start to fetch
@@ -3642,7 +3760,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(remoteLogManager), buildRemoteLogAuxState = true)
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
 
       // Verify the metrics for build remote log state and for failures is zero before replicas start to fetch
       assertEquals(0, brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count)
@@ -3687,7 +3805,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(remoteLogManager), buildRemoteLogAuxState = true)
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
       val partition0Replicas = Seq[Integer](0, 1).asJava
 
       // Verify the metrics for build remote log state and for failures is zero before replicas start to fetch
@@ -3717,14 +3835,14 @@ class ReplicaManagerTest {
     }
   }
 
-  private def setupMockLog(path: String): UnifiedLog = {
+  private def setupMockLog(path: String, logConfig: LogConfig, enableRemoteStorage: Boolean, topicPartition: TopicPartition, topicId: Option[Uuid]): UnifiedLog = {
     val mockLog = mock(classOf[UnifiedLog])
-    val partitionDir = new File(path, s"$topic-0")
+    val partitionDir = new File(path, s"$topicPartition")
     partitionDir.mkdir()
     when(mockLog.dir).thenReturn(partitionDir)
     when(mockLog.parentDir).thenReturn(path)
-    when(mockLog.topicId).thenReturn(Optional.of(topicId))
-    when(mockLog.topicPartition).thenReturn(new TopicPartition(topic, 0))
+    when(mockLog.topicId).thenReturn(topicId.toJava)
+    when(mockLog.topicPartition).thenReturn(topicPartition)
     when(mockLog.highWatermark).thenReturn(highHW)
     when(mockLog.updateHighWatermark(anyLong())).thenReturn(0L)
     when(mockLog.logEndOffsetMetadata).thenReturn(new LogOffsetMetadata(10))
@@ -3738,6 +3856,8 @@ class ReplicaManagerTest {
     when(mockLog.latestEpoch).thenReturn(Optional.of(0))
     val producerStateManager = mock(classOf[ProducerStateManager])
     when(mockLog.producerStateManager).thenReturn(producerStateManager)
+    when(mockLog.config).thenReturn(logConfig)
+    when(mockLog.remoteLogEnabled()).thenReturn(enableRemoteStorage)
 
     mockLog
   }
@@ -5728,7 +5848,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true)
     try {
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
-      replicaManager.createPartition(tp).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints = offsetCheckpoints, None)
+      replicaManager.createPartition(tp).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints = offsetCheckpoints, Some(topicId))
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val leaderEpoch = 0
       val leaderDelta = createLeaderDelta(topicId, tp, leaderId = 0, leaderEpoch = leaderEpoch, replicas = partition0Replicas, isr = partition0Replicas)

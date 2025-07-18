@@ -224,7 +224,7 @@ public class ProducerFailureHandlingTest {
                     .groupMetadataTopicConfigs()
                     .forEach((k, v) -> topicConfig.put(k.toString(), v.toString()));
             admin.createTopics(List.of(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1).configs(topicConfig)));
-            clusterInstance.waitForTopic(Topic.GROUP_METADATA_TOPIC_NAME, 0);
+            clusterInstance.waitTopicDeletion(Topic.GROUP_METADATA_TOPIC_NAME);
         }
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
