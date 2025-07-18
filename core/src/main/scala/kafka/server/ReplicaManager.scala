@@ -2382,11 +2382,9 @@ class ReplicaManager(val config: KafkaConfig,
                                         partitions: Set[Partition],
                                         correlationId: Int,
                                         topicIds: String => Option[Uuid]): Unit = {
-    val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
-
     try {
       if (isShuttingDown.get()) {
-        if (traceLoggingEnabled) {
+        if (stateChangeLogger.isTraceEnabled) {
           partitions.foreach { partition =>
             stateChangeLogger.trace(s"Skipped the update topic ID step of the become-follower state " +
               s"change with correlation id $correlationId from controller $controllerId epoch $controllerEpoch for " +

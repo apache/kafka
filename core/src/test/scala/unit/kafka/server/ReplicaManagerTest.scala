@@ -187,6 +187,32 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testHighWaterMarkDirectoryMapping2(): Unit = {
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.kRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+    try {
+      val partition = rm.createPartition(new TopicPartition(topic, 1))
+      partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), None)
+      rm.checkpointHighWatermarks()
+      config.logDirs.map(s => Paths.get(s, ReplicaManager.HighWatermarkFilename))
+        .foreach(checkpointFile => assertTrue(Files.exists(checkpointFile),
+          s"checkpoint file does not exist at $checkpointFile"))
+    } finally {
+      rm.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
   def testHighwaterMarkRelativeDirectoryMapping(): Unit = {
     val props = TestUtils.createBrokerConfig(1)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
