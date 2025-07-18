@@ -44,23 +44,24 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class MaskFieldTest {
 
     private static final Schema SCHEMA = SchemaBuilder.struct()
-            .field("magic", Schema.INT32_SCHEMA)
-            .field("bool", Schema.BOOLEAN_SCHEMA)
-            .field("byte", Schema.INT8_SCHEMA)
-            .field("short", Schema.INT16_SCHEMA)
-            .field("int", Schema.INT32_SCHEMA)
-            .field("long", Schema.INT64_SCHEMA)
-            .field("float", Schema.FLOAT32_SCHEMA)
-            .field("double", Schema.FLOAT64_SCHEMA)
-            .field("string", Schema.STRING_SCHEMA)
-            .field("date", org.apache.kafka.connect.data.Date.SCHEMA)
-            .field("time", Time.SCHEMA)
-            .field("timestamp", Timestamp.SCHEMA)
-            .field("decimal", Decimal.schema(0))
-            .field("array", SchemaBuilder.array(Schema.INT32_SCHEMA))
-            .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA))
-            .field("withDefault", SchemaBuilder.string().optional().defaultValue("default").build())
-            .build();
+        .field("magic", Schema.INT32_SCHEMA)
+        .field("bool", Schema.BOOLEAN_SCHEMA)
+        .field("byte", Schema.INT8_SCHEMA)
+        .field("short", Schema.INT16_SCHEMA)
+        .field("int", Schema.INT32_SCHEMA)
+        .field("long", Schema.INT64_SCHEMA)
+        .field("float", Schema.FLOAT32_SCHEMA)
+        .field("double", Schema.FLOAT64_SCHEMA)
+        .field("string", Schema.STRING_SCHEMA)
+        .field("date", org.apache.kafka.connect.data.Date.SCHEMA)
+        .field("time", Time.SCHEMA)
+        .field("timestamp", Timestamp.SCHEMA)
+        .field("decimal", Decimal.schema(0))
+        .field("array", SchemaBuilder.array(Schema.INT32_SCHEMA))
+        .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA))
+        .field("withDefault", SchemaBuilder.string().optional().defaultValue("default").build())
+        .build();
+
     private static final Map<String, Object> VALUES = Map.ofEntries(
         Map.entry("magic", 42),
         Map.entry("bool", true),
@@ -77,26 +78,24 @@ public class MaskFieldTest {
         Map.entry("list", List.of(42)),
         Map.entry("map", Map.of("key", "value"))
     );
-    private static final Struct VALUES_WITH_SCHEMA = new Struct(SCHEMA);
 
-    static {
-        VALUES_WITH_SCHEMA.put("magic", 42);
-        VALUES_WITH_SCHEMA.put("bool", true);
-        VALUES_WITH_SCHEMA.put("byte", (byte) 42);
-        VALUES_WITH_SCHEMA.put("short", (short) 42);
-        VALUES_WITH_SCHEMA.put("int", 42);
-        VALUES_WITH_SCHEMA.put("long", 42L);
-        VALUES_WITH_SCHEMA.put("float", 42f);
-        VALUES_WITH_SCHEMA.put("double", 42d);
-        VALUES_WITH_SCHEMA.put("string", "hmm");
-        VALUES_WITH_SCHEMA.put("date", new Date());
-        VALUES_WITH_SCHEMA.put("time", new Date());
-        VALUES_WITH_SCHEMA.put("timestamp", new Date());
-        VALUES_WITH_SCHEMA.put("decimal", new BigDecimal(42));
-        VALUES_WITH_SCHEMA.put("array", List.of(1, 2, 3));
-        VALUES_WITH_SCHEMA.put("map", Map.of("what", "what"));
-        VALUES_WITH_SCHEMA.put("withDefault", null);
-    }
+    private static final Struct VALUES_WITH_SCHEMA = new Struct(SCHEMA)
+        .put("magic", 42)
+        .put("bool", true)
+        .put("byte", (byte) 42)
+        .put("short", (short) 42)
+        .put("int", 42)
+        .put("long", 42L)
+        .put("float", 42f)
+        .put("double", 42d)
+        .put("string", "hmm")
+        .put("date", new Date())
+        .put("time", new Date())
+        .put("timestamp", new Date())
+        .put("decimal", new BigDecimal(42))
+        .put("array", List.of(1, 2, 3))
+        .put("map", Map.of("what", "what"))
+        .put("withDefault", null);
 
     private static MaskField<SinkRecord> transform(List<String> fields, String replacement) {
         final MaskField<SinkRecord> xform = new MaskField.Value<>();
@@ -126,8 +125,8 @@ public class MaskFieldTest {
     private static void checkReplacementSchemaless(List<String> maskFields, Object replacement) {
         SinkRecord record = record(null, VALUES);
         final Map<String, Object> updatedValue = (Map) transform(maskFields, String.valueOf(replacement))
-                .apply(record)
-                .value();
+            .apply(record)
+            .value();
         for (String maskField : maskFields) {
             assertEquals(replacement, updatedValue.get(maskField), "Invalid replacement for " + maskField + " value");
         }

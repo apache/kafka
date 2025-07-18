@@ -65,16 +65,16 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     private static final String PURPOSE = "mask fields";
 
-    private static final Map<Class<?>, Function<String, ?>> REPLACEMENT_MAPPING_FUNC = Map.ofEntries(
-        Map.entry(Byte.class, v -> Values.convertToByte(null, v)),
-        Map.entry(Short.class, v -> Values.convertToShort(null, v)),
-        Map.entry(Integer.class, v -> Values.convertToInteger(null, v)),
-        Map.entry(Long.class, v -> Values.convertToLong(null, v)),
-        Map.entry(Float.class, v -> Values.convertToFloat(null, v)),
-        Map.entry(Double.class, v -> Values.convertToDouble(null, v)),
-        Map.entry(String.class, Function.identity()),
-        Map.entry(BigDecimal.class, BigDecimal::new),
-        Map.entry(BigInteger.class, BigInteger::new)
+    private static final Map<Class<?>, Function<String, ?>> REPLACEMENT_MAPPING_FUNC = Map.of(
+        Byte.class, v -> Values.convertToByte(null, v),
+        Short.class, v -> Values.convertToShort(null, v),
+        Integer.class, v -> Values.convertToInteger(null, v),
+        Long.class, v -> Values.convertToLong(null, v),
+        Float.class, v -> Values.convertToFloat(null, v),
+        Double.class, v -> Values.convertToDouble(null, v),
+        String.class, Function.identity(),
+        BigDecimal.class, BigDecimal::new,
+        BigInteger.class, BigInteger::new
     );
     private static final Map<Class<?>, Object> PRIMITIVE_VALUE_MAPPING = Map.ofEntries(
         Map.entry(Boolean.class, Boolean.FALSE),
