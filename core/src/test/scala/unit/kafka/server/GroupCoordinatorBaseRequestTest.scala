@@ -120,7 +120,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     topic: String,
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
-    topicConfig: Properties = new Properties,
+    topicConfig: Properties = new Properties
   ): Map[TopicIdPartition, Int] = {
     val admin = cluster.admin()
     var partitionToLeader: scala.collection.immutable.Map[Int, Int] = null

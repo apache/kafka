@@ -333,7 +333,7 @@ object TestUtils extends Logging {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-    topicConfig: Properties = new Properties
+    topicConfig: Properties = new Properties,
   ): Uuid = {
     val configsMap = new util.HashMap[String, String]()
     topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
@@ -363,7 +363,7 @@ object TestUtils extends Logging {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-    topicConfig: Properties = new Properties
+    topicConfig: Properties = new Properties,
   ): scala.collection.immutable.Map[Int, Int] = {
     val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
       numPartitions
