@@ -17,8 +17,8 @@
 package org.apache.kafka.clients.producer.internals;
 
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.PotentialCauseException;
 import org.apache.kafka.common.errors.TimeoutException;
 
 import java.util.concurrent.CountDownLatch;
@@ -50,19 +50,19 @@ public final class TransactionalRequestResult {
     }
 
     public void await() {
-        this.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new PotentialCauseException("Unknown reason."));
+        this.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unknown reason."));
     }
 
     public void await(long timeout, TimeUnit unit) {
-        this.await(timeout, unit, () -> new PotentialCauseException("Unknown reason."));
+        this.await(timeout, unit, () -> new KafkaException("Unknown reason."));
     }
 
-    public void await(long timeout, TimeUnit unit, Supplier<PotentialCauseException> potentialCauseException) {
+    public void await(long timeout, TimeUnit unit, Supplier<KafkaException> potentialCauseException) {
         try {
             boolean success = latch.await(timeout, unit);
             if (!success) {
                 throw new TimeoutException("Timeout expired after " + unit.toMillis(timeout) +
-                                           "ms while awaiting " + operation, potentialCauseException.get());
+                    "ms while awaiting " + operation, potentialCauseException.get());
             }
 
             isAcked = true;
