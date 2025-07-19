@@ -383,7 +383,7 @@ public class ShareGroupCommand {
             try {
                 ShareGroupDescription shareGroupDescription = describeShareGroups(List.of(groupId)).get(groupId);
                 if (!GroupState.EMPTY.equals(shareGroupDescription.groupState())) {
-                    throw new IllegalArgumentException(String.format("Share group '%s' is not empty.", groupId));
+                    CommandLineUtils.printErrorAndExit(String.format("Share group '%s' is not empty.", groupId));
                 }
                 Map<TopicPartition, OffsetAndMetadata> offsetsToReset = prepareOffsetsToReset(groupId);
                 if (offsetsToReset == null) {
@@ -404,7 +404,7 @@ public class ShareGroupCommand {
             } catch (ExecutionException ee) {
                 Throwable cause = ee.getCause();
                 if (cause instanceof KafkaException) {
-                    CommandLineUtils.printUsageAndExit(opts.parser, cause.getMessage());
+                    CommandLineUtils.printErrorAndExit(cause.getMessage());
                 } else {
                     throw new RuntimeException(cause);
                 }
@@ -423,12 +423,12 @@ public class ShareGroupCommand {
                     .collect(Collectors.toSet());
                 if (!existsTopics.containsAll(topics)) {
                     CommandLineUtils
-                        .printUsageAndExit(opts.parser, String.format("Topic %s not present in metadata.",
+                        .printErrorAndExit(String.format("Topic %s not present in metadata.",
                             topics.stream().filter(topic -> !existsTopics.contains(topic)).collect(Collectors.joining(", "))));
                     return null;
                 } else if (!subscribedTopic.containsAll(topics)) {
                     CommandLineUtils
-                        .printUsageAndExit(opts.parser, String.format("Share group '%s' is not subscribed to topic '%s'.",
+                        .printErrorAndExit(String.format("Share group '%s' is not subscribed to topic '%s'.",
                             groupId, topics.stream().filter(topic -> !subscribedTopic.contains(topic)).collect(Collectors.joining(", "))));
                     return null;
                 }

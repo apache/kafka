@@ -69,7 +69,14 @@ public class OffsetsUtils {
     }
 
     public static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
-        String format = "%n%-30s %-30s %-10s %-15s";
+        int maxGroupLen = Math.max(15, groupAssignmentsToReset.keySet().stream().mapToInt(String::length).max().orElse(0));
+        int maxTopicLen = Math.max(15, groupAssignmentsToReset.values().stream()
+            .flatMap(assignments -> assignments.keySet().stream())
+            .mapToInt(tp -> tp.topic().length())
+            .max()
+            .orElse(0));
+
+        String format = "%n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %s";
         if (!groupAssignmentsToReset.isEmpty())
             System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
 
