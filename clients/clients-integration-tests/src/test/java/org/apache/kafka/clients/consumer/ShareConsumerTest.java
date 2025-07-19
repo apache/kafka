@@ -954,9 +954,12 @@ public class ShareConsumerTest {
             assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(rde.topicPartition().topic(), 1, rde.offset(), AcknowledgeType.REJECT));
             assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(rde.topicPartition().topic(), tp2.partition(), 0, AcknowledgeType.REJECT));
 
-            // Reject this record
+            // Reject this record.
             shareConsumer.acknowledge(rde.topicPartition().topic(), rde.topicPartition().partition(), rde.offset(), AcknowledgeType.REJECT);
             shareConsumer.commitSync();
+
+            // The next acknowledge() should throw an IllegalStateException as the record has been acked.
+            assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(rde.topicPartition().topic(), rde.topicPartition().partition(), rde.offset(), AcknowledgeType.REJECT));
 
             records = shareConsumer.poll(Duration.ZERO);
             assertEquals(0, records.count());

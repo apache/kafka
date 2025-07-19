@@ -114,7 +114,7 @@ public class ShareFetch<K, V> {
      * @param record The record to acknowledge
      * @param type The acknowledgment type which indicates whether it was processed successfully
      */
-    public void acknowledge(final ConsumerRecord<K, V> record, AcknowledgeType type) {
+    public void acknowledge(final ConsumerRecord<K, V> record, final AcknowledgeType type) {
         for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> tipBatch : batches.entrySet()) {
             TopicIdPartition tip = tipBatch.getKey();
             if (tip.topic().equals(record.topic()) && (tip.partition() == record.partition())) {

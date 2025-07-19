@@ -21,20 +21,20 @@ import org.apache.kafka.common.errors.SerializationException;
 
 public class ShareFetchException extends SerializationException {
 
-    private final KafkaException origin;
-
     private final ShareFetch<?, ?> shareFetch;
 
-    public ShareFetchException(KafkaException exception, ShareFetch<?, ?> shareFetch) {
-        this.origin = exception;
-        this.shareFetch = shareFetch;
-    }
+    private final KafkaException cause;
 
-    public KafkaException origin() {
-        return origin;
+    public ShareFetchException(ShareFetch<?, ?> shareFetch, KafkaException cause) {
+        this.shareFetch = shareFetch;
+        this.cause = cause;
     }
 
     public ShareFetch<?, ?> shareFetch() {
         return shareFetch;
+    }
+
+    public KafkaException cause() {
+        return cause;
     }
 }

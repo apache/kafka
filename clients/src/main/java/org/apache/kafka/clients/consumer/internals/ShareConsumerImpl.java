@@ -604,7 +604,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             return ConsumerRecords.empty();
         } catch (ShareFetchException e) {
             currentFetch = (ShareFetch<K, V>) e.shareFetch();
-            throw e.origin();
+            throw e.cause();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();

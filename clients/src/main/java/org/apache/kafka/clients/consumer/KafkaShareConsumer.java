@@ -508,22 +508,20 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
-     * Acknowledge delivery of a specific record by its topic, partition, and offset, indicating whether
+     * Acknowledge delivery of a record returned on the last {@link #poll(Duration)} call indicating whether
      * it was processed successfully. The acknowledgement is committed on the next {@link #commitSync()},
      * {@link #commitAsync()} or {@link #poll(Duration)} call.
-     * <p>
-     * This method provides an alternative to {@link #acknowledge(ConsumerRecord, AcknowledgeType)} when
-     * the full record is unavailable. It is typically used for manual offset management scenarios.
-     * <p>
-     * This method can only be used if the consumer is using <b>explicit acknowledgement</b>.
+     * <p>This method can only be used if the consumer is using <b>explicit acknowledgement</b>.
+     * <p>It provides an alternative to {@link #acknowledge(ConsumerRecord, AcknowledgeType)} for
+     * situations where the {@link ConsumerRecord} is not available, such as when the record could not be deserialized.
      *
-     * @param topic     The topic of the record to acknowledge
+     * @param topic The topic of the record to acknowledge
      * @param partition The partition of the record to acknowledge
-     * @param offset    The offset of the record to acknowledge
-     * @param type      The acknowledgement type which indicates whether it was processed successfully
+     * @param offset The offset of the record to acknowledge
+     * @param type The acknowledge type which indicates whether it was processed successfully
      *
-     * @throws IllegalStateException if the specified record is not pending acknowledgement,
-     *                               or the consumer is not configured for explicit acknowledgement
+     * @throws IllegalStateException if the record is not waiting to be acknowledged, or the consumer is not using
+     *                               explicit acknowledgement
      */
 
     @Override

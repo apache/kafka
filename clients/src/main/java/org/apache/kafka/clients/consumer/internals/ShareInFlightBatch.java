@@ -102,6 +102,7 @@ public class ShareInFlightBatch<K, V> {
             acknowledgedRecords.forEach(inFlightRecords::remove);
         }
         acknowledgedRecords.clear();
+        exception = null;
 
         Acknowledgements currentAcknowledgements = acknowledgements;
         acknowledgements = Acknowledgements.empty();
