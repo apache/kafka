@@ -1234,8 +1234,8 @@ public class PartitionChangeBuilderTest {
         assertEquals(Optional.empty(), builder.build());
     }
 
-        @Test
-    public void testEligibleLeaderReplicas_NotEligiblableLastKnownLeader() {
+    @Test
+    public void testEligibleLeaderReplicas_NotEligibleLastKnownLeader() {
         short version = 2;
         PartitionRegistration partition = new PartitionRegistration.Builder()
                 .setReplicas(new int[] {1, 2, 3, 4})
@@ -1258,6 +1258,40 @@ public class PartitionChangeBuilderTest {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> false,
                 metadataVersionForPartitionChangeRecordVersion(version), 3)
             .setElection(Election.PREFERRED)
+            .setEligibleLeaderReplicasEnabled(true)
+            .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
+            .setUseLastKnownLeaderInBalancedRecovery(true);
+
+        builder.setTargetIsr(List.of());
+
+        // No change to the partition.
+        assertEquals(Optional.empty(), builder.build());
+    }
+
+    @Test
+    public void testUncleanLeaderElectionFailureIfNoAvailableReplica() {
+        short version = 2;
+        PartitionRegistration partition = new PartitionRegistration.Builder()
+                .setReplicas(new int[] {1, 2, 3, 4})
+                .setDirectories(new Uuid[]{
+                        Uuid.fromString("zANDdMukTEqefOvHpmniMg"),
+                        Uuid.fromString("Ui2Eq8rbRiuW7m7uiPTRyg"),
+                        Uuid.fromString("MhgJOZrrTsKNcGM0XKK4aA"),
+                        Uuid.fromString("Y25PaCAmRfyGIKxAThhBAw")
+                })
+                .setIsr(new int[] {})
+                .setElr(new int[] {})
+                .setLastKnownElr(new int[] {1})
+                .setLeader(-1)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+                .setLeaderEpoch(100)
+                .setPartitionEpoch(200)
+                .build();
+        Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
+
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> false,
+                metadataVersionForPartitionChangeRecordVersion(version), 3)
+            .setElection(Election.UNCLEAN)
             .setEligibleLeaderReplicasEnabled(true)
             .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
             .setUseLastKnownLeaderInBalancedRecovery(true);
