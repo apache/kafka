@@ -128,9 +128,21 @@ object StorageTool extends Logging {
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
       setControllerListenerName(config.controllerListenerNames.get(0)).
       setMetadataLogDirectory(config.metadataLogDir)
-    Option(namespace.getString("release_version")).foreach(
-      releaseVersion => formatter.
-        setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion)))
+
+    def metadataVersionsToString(first: MetadataVersion, last: MetadataVersion): String = {
+      val versions = MetadataVersion.VERSIONS.slice(first.ordinal, last.ordinal + 1)
+      versions.map(_.toString).mkString(", ")
+    }
+    Option(namespace.getString("release_version")).foreach(releaseVersion => {
+      try {
+        formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
+      } catch {
+        case _: Throwable =>
+          throw new TerseFailure(s"Unknown metadata.version $releaseVersion. Supported metadata.version are " +
+            s"${metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction())}")
+      }
+    })
+
     Option(namespace.getList[String]("feature")).foreach(
       featureNamesAndLevels(_).foreachEntry {
         (k, v) => formatter.setFeatureLevel(k, v)

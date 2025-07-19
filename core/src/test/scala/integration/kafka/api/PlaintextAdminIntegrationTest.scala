@@ -52,6 +52,7 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.authorizer.AclEntry
+import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVersion}
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
@@ -60,7 +61,7 @@ import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 import org.slf4j.LoggerFactory
 
 import java.util.AbstractMap.SimpleImmutableEntry
@@ -3002,6 +3003,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testElectUncleanLeadersForOnePartition(): Unit = {
     // Case: unclean leader election with one topic partition
     client = createAdminClient
+    disableEligibleLeaderReplicas(client)
 
     val broker1 = 1
     val broker2 = 2
@@ -3029,6 +3031,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testElectUncleanLeadersForManyPartitions(): Unit = {
     // Case: unclean leader election with many topic partitions
     client = createAdminClient
+    disableEligibleLeaderReplicas(client)
 
     val broker1 = 1
     val broker2 = 2
@@ -3068,6 +3071,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testElectUncleanLeadersForAllPartitions(): Unit = {
     // Case: noop unclean leader election and valid unclean leader election for all partitions
     client = createAdminClient
+    disableEligibleLeaderReplicas(client)
 
     val broker1 = 1
     val broker2 = 2
@@ -3107,6 +3111,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testElectUncleanLeadersForUnknownPartitions(): Unit = {
     // Case: unclean leader election for unknown topic
     client = createAdminClient
+    disableEligibleLeaderReplicas(client)
 
     val broker1 = 1
     val broker2 = 2
@@ -3132,6 +3137,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testElectUncleanLeadersWhenNoLiveBrokers(): Unit = {
     // Case: unclean leader election with no live brokers
     client = createAdminClient
+    disableEligibleLeaderReplicas(client)
 
     val broker1 = 1
     val broker2 = 2
@@ -3160,6 +3166,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testElectUncleanLeadersNoop(): Unit = {
     // Case: noop unclean leader election with explicit topic partitions
     client = createAdminClient
+    disableEligibleLeaderReplicas(client)
 
     val broker1 = 1
     val broker2 = 2
@@ -3187,6 +3194,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testElectUncleanLeadersAndNoop(): Unit = {
     // Case: one noop unclean leader election and one valid unclean leader election
     client = createAdminClient
+    disableEligibleLeaderReplicas(client)
 
     val broker1 = 1
     val broker2 = 2
@@ -3876,6 +3884,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val props = new Properties()
     props.setProperty(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "1:1")
     testAppendConfig(props, "0:0", "1:1,0:0")
+  }
+
+  private def disableEligibleLeaderReplicas(admin: Admin): Unit = {
+    if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_1_IV0)) {
+      admin.updateFeatures(
+        util.Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
+        new UpdateFeaturesOptions()).all().get()
+    }
   }
 
   private def testAppendConfig(props: Properties, append: String, expected: String): Unit = {
