@@ -788,6 +788,15 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return null;
     }
 
+    public boolean isPartitionReady(TopicPartition partition) {
+        Uuid uuid = topicIdByPartitionMap.get(partition);
+        if (uuid == null) {
+            return false;
+        }
+        TopicIdPartition topicIdPartition = new TopicIdPartition(uuid, partition);
+        return remoteLogMetadataManagerPlugin.get().isReady(topicIdPartition);
+    }
+
     abstract class RLMTask extends CancellableRunnable {
 
         protected final TopicIdPartition topicIdPartition;
