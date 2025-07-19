@@ -810,7 +810,7 @@ public abstract class TopicCommand {
             ifExistsOpt = parser.accepts("if-exists",
                 "If set when altering or deleting or describing topics, the action will only execute if the topic exists.");
             ifNotExistsOpt = parser.accepts("if-not-exists",
-                "If set when creating topics, the action will only execute if the topic does not already exist.");
+                "If set when creating topics, the create request will not fail if the topic already exists, but the request will still be sent.");
             excludeInternalTopicOpt = parser.accepts("exclude-internal",
                 "Exclude internal topics when listing or describing topics. By default, the internal topics are included.");
             partitionSizeLimitPerResponseOpt = parser.accepts("partition-size-limit-per-response",
