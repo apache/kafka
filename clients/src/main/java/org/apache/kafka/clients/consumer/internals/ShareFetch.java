@@ -19,10 +19,8 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.RecordDeserializationException;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -136,10 +134,10 @@ public class ShareFetch<K, V> {
     public void acknowledge(final String topic, final int partition, final long offset, final AcknowledgeType type) {
         for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> tipBatch : batches.entrySet()) {
             TopicIdPartition tip = tipBatch.getKey();
-            KafkaException shareException = tipBatch.getValue().getException();
+            ShareInFlightBatchException exception = tipBatch.getValue().getException();
             if (tip.topic().equals(topic) && (tip.partition() == partition) &&
-                shareException instanceof RecordDeserializationException &&
-                ((RecordDeserializationException) shareException).offset() == offset) {
+                exception != null &&
+                exception.offsets().contains(offset)) {
 
                 tipBatch.getValue().addAcknowledgement(offset, type);
                 return;
