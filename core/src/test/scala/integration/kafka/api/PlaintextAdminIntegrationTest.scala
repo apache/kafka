@@ -2700,7 +2700,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   /**
    * Verify that initially there are no share groups to list.
    */
-  private def assertShareGroupsIsClean(): Unit = {
+  private def assertNoShareGroupsExist(): Unit = {
     val list = client.listGroups()
     assertEquals(0, list.all().get().size())
     assertEquals(0, list.errors().get().size())
@@ -2747,7 +2747,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val config = createConfig
     client = Admin.create(config)
     try {
-      assertShareGroupsIsClean()
+      assertNoShareGroupsExist()
       prepareTopics(List(testTopicName), testNumPartitions)
       prepareRecords(testTopicName)
 
@@ -2901,6 +2901,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetDeleteResult.all())
       assertNull(offsetDeleteResult.topicResult(testTopicName).get())
       assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetDeleteResult.topicResult(fakeTopicName))
+
+      val tp1 = new TopicPartition(testTopicName, 0)
+      val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1))))
+        .partitionsToOffsetAndMetadata(testGroupId)
+        .get()
+      assertTrue(parts.containsKey(tp1))
+      assertNull(parts.get(tp1))
     } finally {
       Utils.closeQuietly(client, "adminClient")
     }
@@ -2961,6 +2968,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetAlterResult.all())
       assertNull(offsetAlterResult.partitionResult(tp1).get())
       assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetAlterResult.partitionResult(tp2))
+
+      val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1))))
+        .partitionsToOffsetAndMetadata(testGroupId)
+        .get()
+      assertTrue(parts.containsKey(tp1))
+      assertEquals(0, parts.get(tp1).offset())
     } finally {
       Utils.closeQuietly(client, "adminClient")
     }
@@ -2982,7 +2995,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val latch = new CountDownLatch(consumerSet.size)
 
     try {
-      assertShareGroupsIsClean()
+      assertNoShareGroupsExist()
       prepareTopics(List(testTopicName), 2)
       prepareRecords(testTopicName)
 
