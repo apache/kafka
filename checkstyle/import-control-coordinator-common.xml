@@ -27,6 +27,8 @@
     <allow pkg="org.slf4j" />
     <allow pkg="org.junit" />
     <allow pkg="org.mockito" />
+    <!-- no one depends on the server -->
+    <disallow pkg="kafka" />
 
     <!-- anyone can use public classes -->
     <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
@@ -41,7 +43,6 @@
         <subpackage name="common">
             <subpackage name="runtime">
                 <allow pkg="com.yammer.metrics.core" />
-                <allow pkg="kafka.server" />
                 <allow pkg="org.apache.kafka.clients.consumer" />
                 <allow pkg="org.apache.kafka.common.annotation" />
                 <allow pkg="org.apache.kafka.common.compress" />
@@ -67,7 +68,6 @@
                 <allow pkg="org.apache.kafka.test" />
                 <allow pkg="org.apache.kafka.timeline" />
                 <allow pkg="org.HdrHistogram" />
-                <allow pkg="scala" />
             </subpackage>
         </subpackage>
     </subpackage>
