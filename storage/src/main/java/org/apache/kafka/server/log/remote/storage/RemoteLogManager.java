@@ -1639,20 +1639,20 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      */
     // Visible for testing
     static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
-        List<Integer> epochsWithNoMessages = new ArrayList<>();
+        if (leaderEpochs.size() <= 1) return leaderEpochs;
+
+        TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>();
         Map.Entry<Integer, Long> previousEpochAndOffset = null;
+
         for (Map.Entry<Integer, Long> currentEpochAndOffset : leaderEpochs.entrySet()) {
-            if (previousEpochAndOffset != null && previousEpochAndOffset.getValue().equals(currentEpochAndOffset.getValue())) {
-                epochsWithNoMessages.add(previousEpochAndOffset.getKey());
+            if (previousEpochAndOffset != null && !previousEpochAndOffset.getValue().equals(currentEpochAndOffset.getValue())) {
+                filteredLeaderEpochs.put(previousEpochAndOffset.getKey(), previousEpochAndOffset.getValue());
             }
             previousEpochAndOffset = currentEpochAndOffset;
         }
-        if (epochsWithNoMessages.isEmpty()) {
-            return leaderEpochs;
-        }
-        TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>(leaderEpochs);
-        for (Integer epochWithNoMessage : epochsWithNoMessages) {
-            filteredLeaderEpochs.remove(epochWithNoMessage);
+
+        if (previousEpochAndOffset != null) {
+            filteredLeaderEpochs.put(previousEpochAndOffset.getKey(), previousEpochAndOffset.getValue());
         }
         return filteredLeaderEpochs;
     }
