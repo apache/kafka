@@ -98,7 +98,6 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
 
         try (TopicBasedRemoteLogMetadataManager remoteLogMetadataManager = RemoteLogMetadataManagerTestUtils.builder()
                 .bootstrapServers(clusterInstance.bootstrapServers())
-                .startConsumerThread(true)
                 .remoteLogMetadataTopicPartitioner(numMetadataTopicPartitions -> new RemoteLogMetadataTopicPartitioner(numMetadataTopicPartitions) {
                     @Override
                     public int metadataPartition(TopicIdPartition topicIdPartition) {
