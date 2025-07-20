@@ -141,13 +141,13 @@ Creating a Release Candidate
 ```
 # kafka/test is an example repo. Please replace with the docker hub repo you have push access to.
 
-python docker_release.py kafka/test:3.6.0 --kafka-url --image-type=jvm https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
+python docker_release.py kafka/test:3.6.0 --image-type=jvm --kafka-url=https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 ```
 - Example(native):- To push an image named test under kafka-native dockerhub namespace with 3.8.0 tag and native image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz (it is recommended to use scala 2.13 binary tarball), following command can be used. (Make sure you have push access to the docker repo)
 ```
 # kafka-native/test is an example repo. Please replace with the docker hub repo you have push access to.
 
-python docker_release.py kafka-native/test:3.8.0 --kafka-url --image-type=native https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
+python docker_release.py kafka-native/test:3.8.0 --image-type=native --kafka-url=https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
 ```
 
 - Please note that we use docker buildx for preparing the multi-architecture image and pushing it to docker registry. It's possible to encounter build failures because of buildx. Please retry the command in case some buildx related error occurs.

@@ -186,7 +186,7 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String FETCH_MIN_BYTES_CONFIG = "fetch.min.bytes";
     public static final int DEFAULT_FETCH_MIN_BYTES = 1;
-    private static final String FETCH_MIN_BYTES_DOC = "The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request. The default setting of " + DEFAULT_FETCH_MIN_BYTES + " byte means that fetch requests are answered as soon as that many byte(s) of data is available or the fetch request times out waiting for data to arrive. Setting this to a larger value will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency.";
+    private static final String FETCH_MIN_BYTES_DOC = "The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request. The default setting of " + DEFAULT_FETCH_MIN_BYTES + " byte means that fetch requests are answered as soon as that many byte(s) of data is available or the fetch request times out waiting for data to arrive. Setting this to a larger value will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency. Even if the total data available in the broker exceeds fetch.min.bytes, the actual returned size may still be less than this value due to per-partition limits max.partition.fetch.bytes and max returned limits fetch.max.bytes.";
 
     /**
      * <code>fetch.max.bytes</code>
@@ -197,9 +197,7 @@ public class ConsumerConfig extends AbstractConfig {
             "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
             "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
             "<code>max.message.bytes</code> (topic config). A fetch request consists of many partitions, and there is another setting that controls how much " +
-            "data is returned for each partition in a fetch request - see <code>max.partition.fetch.bytes</code>. Note that there is a current limitation when " +
-            "performing remote reads from tiered storage (KIP-405) - only one partition out of the fetch request is fetched from the remote store (KAFKA-14915). " +
-            "Note also that the consumer performs multiple fetches in parallel.";
+            "data is returned for each partition in a fetch request - see <code>max.partition.fetch.bytes</code>. Note that the consumer performs multiple fetches in parallel.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
     /**
@@ -224,9 +222,7 @@ public class ConsumerConfig extends AbstractConfig {
             "partition of the fetch is larger than this limit, the " +
             "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
             "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size. " +
-            "Consider increasing <code>max.partition.fetch.bytes</code> especially in the cases of remote storage reads (KIP-405), because currently only " +
-            "one partition per fetch request is served from the remote store (KAFKA-14915).";
+            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
     /** <code>send.buffer.bytes</code> */

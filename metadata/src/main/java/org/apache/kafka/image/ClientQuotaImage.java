@@ -30,7 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 
 
 /**
@@ -38,21 +37,11 @@ import java.util.Objects;
  *
  * This class is thread-safe.
  */
-public final class ClientQuotaImage {
+public record ClientQuotaImage(Map<String, Double> quotas) {
     public static final ClientQuotaImage EMPTY = new ClientQuotaImage(Map.of());
 
-    private final Map<String, Double> quotas;
-
-    public ClientQuotaImage(Map<String, Double> quotas) {
-        this.quotas = quotas;
-    }
-
-    Map<String, Double> quotas() {
-        return quotas;
-    }
-
-    public Map<String, Double> quotaMap() {
-        return Collections.unmodifiableMap(quotas);
+    public ClientQuotaImage {
+        quotas = Collections.unmodifiableMap(quotas);
     }
 
     public void write(
@@ -96,17 +85,6 @@ public final class ClientQuotaImage {
 
     public boolean isEmpty() {
         return quotas.isEmpty();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotaImage other)) return false;
-        return quotas.equals(other.quotas);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(quotas);
     }
 
     @Override
