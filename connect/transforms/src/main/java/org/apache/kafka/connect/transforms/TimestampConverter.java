@@ -184,7 +184,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Long toType(Config config, Date orig) {
-                Long unixTimeMillis = Timestamp.fromLogical(Timestamp.SCHEMA, orig);
+                long unixTimeMillis = Timestamp.fromLogical(Timestamp.SCHEMA, orig);
                 return switch (config.unixPrecision) {
                     case UNIX_PRECISION_SECONDS -> TimeUnit.MILLISECONDS.toSeconds(unixTimeMillis);
                     case UNIX_PRECISION_MICROS -> TimeUnit.MILLISECONDS.toMicros(unixTimeMillis);
