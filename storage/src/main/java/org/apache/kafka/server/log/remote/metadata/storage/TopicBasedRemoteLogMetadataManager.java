@@ -373,9 +373,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     lock.writeLock().unlock();
                 }
             }
-        } catch (Exception e) {
-            log.error("Encountered error while initializing topic-based RLMM resources", e);
-            initializationFailed = true;
         }
     }
 
