@@ -317,7 +317,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     }
 
     private void handleRetry(long retryIntervalMs) {
-        log.info("Sleep for {} ms before it is retried again.", retryIntervalMs);
+        log.info("Sleep for {} ms before retrying.", retryIntervalMs);
         Utils.sleep(retryIntervalMs);
     }
 
@@ -335,7 +335,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             while (!(initialized.get() || closing.get() || initializationFailed)) {
                 // If it is timed out then raise an error to exit.
                 if (time.milliseconds() - startTimeMs > retryMaxTimeoutMs) {
-                    log.error("Timed out in initializing the resources {} ms.", retryMaxTimeoutMs);
+                    log.error("Timed out to initialize the resources within {} ms.", retryMaxTimeoutMs);
                     initializationFailed = true;
                     break;
                 }
