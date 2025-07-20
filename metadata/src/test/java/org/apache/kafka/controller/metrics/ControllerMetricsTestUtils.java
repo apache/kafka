@@ -62,7 +62,7 @@ public class ControllerMetricsTestUtils {
     }
 
     public static PartitionRegistration fakePartitionRegistration(
-        FakePartitionRegistrationType  type
+        FakePartitionRegistrationType type
     ) {
         int leader = switch (type) {
             case NORMAL -> 0;

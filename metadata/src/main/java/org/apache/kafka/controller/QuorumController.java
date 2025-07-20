@@ -1692,7 +1692,7 @@ public final class QuorumController implements Controller {
      *
      * This task periodically expires delegation tokens.
      *
-     * @param checkIntervalNs The check interval in nanoseconds.
+     * @param checkIntervalNs
      */
     private void registerExpireDelegationTokens(long checkIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("expireDelegationTokens",
