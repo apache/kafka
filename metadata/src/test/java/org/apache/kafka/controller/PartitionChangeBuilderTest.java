@@ -1237,10 +1237,7 @@ public class PartitionChangeBuilderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Election.class, names = {
-            "PREFERRED",
-            "UNCLEAN",
-            "ONLINE"})
+    @EnumSource(value = Election.class)
     public void testEligibleLeaderReplicas_NotEligibleLastKnownLeader(Election type) {
         short version = 2;
         PartitionRegistration partition = new PartitionRegistration.Builder()
