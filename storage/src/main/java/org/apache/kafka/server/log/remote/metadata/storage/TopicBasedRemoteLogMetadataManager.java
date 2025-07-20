@@ -370,6 +370,9 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     lock.writeLock().unlock();
                 }
             }
+        } catch (KafkaException e) {
+            log.error("Encountered error while initializing topic-based RLMM resources", e);
+            initializationFailed = true;
         }
     }
 
