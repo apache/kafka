@@ -327,26 +327,23 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         long retryIntervalMs = rlmmConfig.initializationRetryIntervalMs();
         long retryMaxTimeoutMs = rlmmConfig.initializationRetryMaxTimeoutMs();
         RemoteLogMetadataTopicPartitioner partitioner = partitionerFunction.apply(metadataTopicPartitionCount);
-        NewTopic remoteLogMetadataTopicRequest = createRemoteLogMetadataTopicRequest(rlmmConfig);
-        String topicName = remoteLogMetadataTopicRequest.name();
+        NewTopic newTopic = newRemoteLogMetadataTopic(rlmmConfig);
         boolean isTopicCreated = false;
         long startTimeMs = time.milliseconds();
         try (Admin admin = Admin.create(rlmmConfig.commonProperties())) {
             while (!(initialized.get() || closing.get() || initializationFailed)) {
-                // If it is timed out then raise an error to exit.
                 if (time.milliseconds() - startTimeMs > retryMaxTimeoutMs) {
                     log.error("Timed out to initialize the resources within {} ms.", retryMaxTimeoutMs);
                     initializationFailed = true;
                     break;
                 }
-                isTopicCreated = isTopicCreated || createTopic(admin, remoteLogMetadataTopicRequest);
+                isTopicCreated = isTopicCreated || createTopic(admin, newTopic);
                 if (!isTopicCreated) {
                     handleRetry(retryIntervalMs);
                     continue;
                 }
-                // If the existing topic partition size is not same as configured, mark initialization as failed and exit.
                 try {
-                    if (!isPartitionsCountSameAsConfigured(admin, topicName, metadataTopicPartitionCount)) {
+                    if (!isPartitionsCountSameAsConfigured(admin, newTopic.name(), metadataTopicPartitionCount)) {
                         initializationFailed = true;
                         break;
                     }
@@ -412,7 +409,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return true;
     }
 
-    private NewTopic createRemoteLogMetadataTopicRequest(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig) {
+    private NewTopic newRemoteLogMetadataTopic(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig) {
         Map<String, String> topicConfigs = new HashMap<>();
         topicConfigs.put(TopicConfig.RETENTION_MS_CONFIG, Long.toString(rlmmConfig.metadataTopicRetentionMs()));
         topicConfigs.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
