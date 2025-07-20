@@ -126,7 +126,6 @@ public class ClientTelemetryUtilsTest {
     public void testPreferredCompressionType() {
         // Test with no unsupported types
         assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Collections.emptyList(), Collections.emptySet()));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null, Collections.emptySet()));
         assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.NONE, CompressionType.GZIP), Collections.emptySet()));
         assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), Collections.emptySet()));
 
@@ -144,9 +143,11 @@ public class ClientTelemetryUtilsTest {
         assertEquals(CompressionType.SNAPPY, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.ZSTD, CompressionType.SNAPPY), Set.of(CompressionType.ZSTD)));
         assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.LZ4, CompressionType.GZIP, CompressionType.SNAPPY), Set.of(CompressionType.LZ4)));
 
-        // Test null acceptedCompressionTypes parameter
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null, Collections.emptySet()));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null, Set.of(CompressionType.GZIP)));
+        // Test NullPointerException for null acceptedCompressionTypes parameter
+        assertThrows(NullPointerException.class, () ->
+            ClientTelemetryUtils.preferredCompressionType(null, Collections.emptySet()));
+        assertThrows(NullPointerException.class, () -> 
+            ClientTelemetryUtils.preferredCompressionType(null, Set.of(CompressionType.GZIP)));
 
         // Test NullPointerException for null unsupportedCompressionTypes parameter
         assertThrows(NullPointerException.class, () ->
