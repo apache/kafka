@@ -77,7 +77,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -5358,6 +5358,71 @@ class ReplicaManagerTest {
     val fetchState = manager.getFetcher(tp).flatMap(_.fetchState(tp))
     assertTrue(fetchState.isDefined)
     assertEquals(expectedTopicId, fetchState.get.topicId)
+  }
+
+  @Test
+  def testReplicaAlterLogDirsMultipleReassignmentDoesNotBlockLogCleaner(): Unit = {
+    val localId = 0
+    val tp = new TopicPartition(topic, 0)
+    val tpId = new TopicIdPartition(topicId, tp)
+
+    val props = TestUtils.createBrokerConfig(localId)
+    val path1 = TestUtils.tempRelativeDir("data").getAbsolutePath
+    val path2 = TestUtils.tempRelativeDir("data2").getAbsolutePath
+    val path3 = TestUtils.tempRelativeDir("data3").getAbsolutePath
+    props.put("log.dirs", Seq(path1, path2, path3).mkString(","))
+    val config = KafkaConfig.fromProps(props)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)), cleanerConfig = new CleanerConfig(true))
+    mockLogMgr.startup(Set())
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = mockLogMgr,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager,
+      addPartitionsToTxnManager = Some(addPartitionsToTxnManager))
+
+    try {
+      val spiedPartition = spy(Partition(tpId, time, replicaManager))
+      replicaManager.addOnlinePartition(tp, spiedPartition)
+
+      val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
+      val leaderImage = imageFromTopics(leaderDelta.apply())
+      replicaManager.applyDelta(leaderDelta, leaderImage)
+
+      // Move the replica to the second log directory.
+      val partition = replicaManager.getPartitionOrException(tp)
+      val firstLogDir = partition.log.get.dir.getParentFile
+      val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == firstLogDir).head
+      replicaManager.alterReplicaLogDirs(Map(tp -> newReplicaFolder.getAbsolutePath))
+
+      // Prevent promotion of future replica
+      doReturn(false).when(spiedPartition).maybeReplaceCurrentWithFutureReplica()
+
+      // Make sure the future log is created with the correct topic ID.
+      val futureLog = replicaManager.futureLocalLogOrException(tp)
+      assertEquals(Optional.of(topicId), futureLog.topicId)
+
+      // Move the replica to the third log directory
+      val finalReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(it => it == firstLogDir || it == newReplicaFolder).head
+      replicaManager.alterReplicaLogDirs(Map(tp -> finalReplicaFolder.getAbsolutePath))
+
+      reset(spiedPartition)
+
+      TestUtils.waitUntilTrue(() => {
+        replicaManager.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+        replicaManager.replicaAlterLogDirsManager.fetcherThreadMap.isEmpty
+      }, s"ReplicaAlterLogDirsThread should be gone", waitTimeMs = 60_000)
+
+      verify(replicaManager.logManager.cleaner, times(2)).resumeCleaning(Set(tp).asJava)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+      mockLogMgr.shutdown()
+    }
   }
 
   @Test

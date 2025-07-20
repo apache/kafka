@@ -307,6 +307,20 @@ Found problem:
   }
 
   @Test
+  def testFormatWithUnsupportedReleaseVersion(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val failure = assertThrows(classOf[TerseFailure], () =>
+      runFormatCommand(stream, properties, Seq("--release-version", "3.3-IV1"))).getMessage
+    assertTrue(failure.contains("Unknown metadata.version 3.3-IV1"))
+    assertTrue(failure.contains(MetadataVersion.MINIMUM_VERSION.version))
+    assertTrue(failure.contains(MetadataVersion.latestProduction().version))
+  }
+
+  @Test
   def testFormatWithReleaseVersionAsFeature(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()

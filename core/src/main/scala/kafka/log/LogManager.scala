@@ -77,7 +77,10 @@ class LogManager(logDirs: Seq[File],
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time,
                  remoteStorageSystemEnable: Boolean,
-                 val initialTaskDelayMs: Long) extends Logging {
+                 val initialTaskDelayMs: Long,
+                 cleanerFactory: (CleanerConfig, util.List[File], ConcurrentMap[TopicPartition, UnifiedLog], LogDirFailureChannel, Time) => LogCleaner =
+                  (cleanerConfig, files, map, logDirFailureChannel, time) => new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time)
+                ) extends Logging {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -627,7 +630,7 @@ class LogManager(logDirs: Seq[File],
                          initialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
-      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs.asJava, currentLogs, logDirFailureChannel, time)
+      _cleaner = cleanerFactory(cleanerConfig, liveLogDirs.asJava, currentLogs, logDirFailureChannel, time)
       _cleaner.startup()
     } else {
       warn("The config `log.cleaner.enable` is deprecated and will be removed in Kafka 5.0. Starting from Kafka 5.0, the log cleaner will always be enabled, and this config will be ignored.")
@@ -893,7 +896,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Resume cleaning of the provided partition and log a message about it.
    */
-  private def resumeCleaning(topicPartition: TopicPartition): Unit = {
+  def resumeCleaning(topicPartition: TopicPartition): Unit = {
     if (cleaner != null) {
       cleaner.resumeCleaning(util.Set.of(topicPartition))
       info(s"Cleaning for partition $topicPartition is resumed")

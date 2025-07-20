@@ -33,10 +33,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -48,7 +50,6 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -1062,7 +1063,7 @@ public class ConsumerGroupTest {
                     .setMemberType((byte) 1)
             ));
         ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "",
-            new MetadataImageBuilder().build().topics());
+            new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build()));
 
         assertEquals(expected, actual);
     }
@@ -1261,11 +1262,11 @@ public class ConsumerGroupTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 1)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         ClassicGroup classicGroup = new ClassicGroup(
             logContext,
@@ -2040,11 +2041,11 @@ public class ConsumerGroupTest {
 
     @Test
     public void testComputeMetadataHash() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .addTopic(Uuid.randomUuid(), "bar", 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         Map<String, Long> cache = new HashMap<>();
         assertEquals(
             computeGroupHash(Map.of(
@@ -2084,11 +2085,11 @@ public class ConsumerGroupTest {
                     "bar", new SubscriptionCount(1, 0)
                 ),
                 cache,
-                new MetadataImageBuilder()
+                new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                     .addTopic(Uuid.randomUuid(), "foo", 1)
                     .addTopic(Uuid.randomUuid(), "bar", 1)
                     .addRacks()
-                    .build()
+                    .build())
             )
         );
         assertEquals(
@@ -2120,11 +2121,11 @@ public class ConsumerGroupTest {
                     "bar", new SubscriptionCount(1, 0)
                 ),
                 cache,
-                new MetadataImageBuilder()
+                new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                     .addTopic(Uuid.randomUuid(), "foo", 1)
                     .addTopic(Uuid.randomUuid(), "bar", 1)
                     .addRacks()
-                    .build()
+                    .build())
             )
         );
 
