@@ -593,6 +593,15 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
+    /**
+     * Get the authentication exception for a given node, if any.
+     * @param node the node to check
+     * @return an AuthenticationException iff authentication has failed, null otherwise
+     */
+    public AuthenticationException authenticationException(Node node) {
+        return client.authenticationException(node);
+    }
+
     private class RequestFutureCompletionHandler implements RequestCompletionHandler {
         private final RequestFuture<ClientResponse> future;
         private ClientResponse response;

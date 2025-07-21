@@ -22,6 +22,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -45,8 +46,12 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.CertificateExpiredAuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.PersistentAuthenticationException;
+import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -627,6 +632,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     /**
      * @throws KafkaException if the rebalance callback throws exception
+     * @throws AuthenticationException if authentication fails
      */
     private ConsumerRecords<K, V> poll(final Timer timer) {
         acquireAndEnsureOpen();
@@ -639,6 +645,9 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             do {
                 client.maybeTriggerWakeup();
+
+                // Check for authentication failures that should be surfaced to the application
+                checkForAuthenticationFailures();
 
                 // try to update assignment metadata BUT do not need to block on the timer for join group
                 updateAssignmentMetadataIfNeeded(timer, false);
@@ -1281,6 +1290,48 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
         if (offsetAndMetadata != null)
             offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
+    }
+
+    /**
+     * Check for authentication failures that should be surfaced to the application.
+     * This method checks for authentication exceptions on connected nodes and throws
+     * appropriate exceptions for permanent failures like certificate expiration.
+     * 
+     * @throws AuthenticationException if authentication has failed
+     */
+    private void checkForAuthenticationFailures() {
+        // Check authentication failures for all known nodes
+        for (Node node : metadata.fetch().nodes()) {
+            AuthenticationException authException = client.authenticationException(node);
+            if (authException != null) {
+                log.error("Authentication failed for node {}: {}", node, authException.getMessage());
+                
+                // Check for specific SSL certificate-related errors
+                if (authException instanceof SslAuthenticationException) {
+                    SslAuthenticationException sslException = (SslAuthenticationException) authException;
+                    String message = sslException.getMessage();
+                    
+                    // Check for certificate expiration patterns in the error message
+                    if (message != null && (
+                            message.contains("certificate expired") || 
+                            message.contains("Certificate expired") ||
+                            message.contains("CERTIFICATE_EXPIRED") ||
+                            message.contains("certificate has expired") ||
+                            message.contains("expired certificate"))) {
+                        throw new CertificateExpiredAuthenticationException(
+                            "SSL certificate has expired for node " + node + ": " + message, sslException);
+                    }
+                    
+                    // For other SSL authentication failures, throw PersistentAuthenticationException
+                    throw new PersistentAuthenticationException(
+                        "SSL authentication failed for node " + node + ": " + message, sslException);
+                }
+                
+                // For non-SSL authentication failures, also treat as persistent
+                throw new PersistentAuthenticationException(
+                    "Authentication failed for node " + node + ": " + authException.getMessage(), authException);
+            }
+        }
     }
 
     // Functions below are for testing only

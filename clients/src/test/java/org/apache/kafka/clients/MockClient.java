@@ -174,6 +174,16 @@ public class MockClient implements KafkaClient {
         pendingAuthenticationErrors.put(node, backoffMs);
     }
 
+    /**
+     * Set a specific authentication exception for a node. This is useful for testing
+     * specific authentication failure scenarios.
+     */
+    public void setNodeAuthenticationFailure(Node node, AuthenticationException exception) {
+        pendingAuthenticationErrors.remove(node);
+        authenticationErrors.put(node, exception);
+        disconnect(node.idString());
+    }
+
     @Override
     public boolean connectionFailed(Node node) {
         return connectionState(node.idString()).isBackingOff(time.milliseconds());
