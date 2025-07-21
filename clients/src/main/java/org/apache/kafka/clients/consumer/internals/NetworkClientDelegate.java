@@ -138,7 +138,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Returns the responses of the sent requests. This method will try to send the unsent requests, poll for responses,
+     * This method will try to send the unsent requests, poll for responses,
      * and check the disconnected nodes.
      *
      * @param timeoutMs     timeout time
@@ -149,7 +149,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Returns the responses of the sent requests. This method will try to send the unsent requests, poll for responses,
+     * This method will try to send the unsent requests, poll for responses,
      * and check the disconnected nodes.
      *
      * @param timeoutMs     timeout time
