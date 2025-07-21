@@ -183,7 +183,10 @@ class CoordinatorLoaderImplTest {
             when(log.read(8L, 1000, FetchIsolation.LOG_END, true))
                     .thenReturn(readResult5);
 
-            assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS));
+            CoordinatorLoader.LoadSummary summary = loader.load(tp, coordinator).get(10, TimeUnit.SECONDS);
+            assertNotNull(summary);
+            // Includes 7 normal + 2 control (COMMIT, ABORT)
+            assertEquals(9, summary.numRecords());
 
             verify(coordinator).replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k1", "v1"));
             verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k2", "v2"));
