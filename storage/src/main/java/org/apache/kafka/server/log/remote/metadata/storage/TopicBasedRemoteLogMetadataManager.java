@@ -111,14 +111,13 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     public CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
             throws RemoteStorageException {
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
-        TopicIdPartition topicIdPartition = remoteLogSegmentMetadata.topicIdPartition();
         return withReadLockAndEnsureInitialized(() -> {
             if (remoteLogSegmentMetadata.state() != RemoteLogSegmentState.COPY_SEGMENT_STARTED) {
                 throw new IllegalArgumentException(
                         "Given remoteLogSegmentMetadata should have state as " + RemoteLogSegmentState.COPY_SEGMENT_STARTED
                                 + " but it contains state as: " + remoteLogSegmentMetadata.state());
             }
-            return storeRemoteLogMetadata(topicIdPartition, remoteLogSegmentMetadata);
+            return storeRemoteLogMetadata(remoteLogSegmentMetadata);
         });
     }
 
@@ -126,13 +125,12 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     public CompletableFuture<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate metadataUpdate)
             throws RemoteStorageException {
         Objects.requireNonNull(metadataUpdate, "metadataUpdate can not be null");
-        TopicIdPartition topicIdPartition = metadataUpdate.topicIdPartition();
         return withReadLockAndEnsureInitialized(() -> {
             if (metadataUpdate.state() == RemoteLogSegmentState.COPY_SEGMENT_STARTED) {
                 throw new IllegalArgumentException("Given remoteLogSegmentMetadataUpdate should not have the state as: "
                         + RemoteLogSegmentState.COPY_SEGMENT_STARTED);
             }
-            return storeRemoteLogMetadata(topicIdPartition, metadataUpdate);
+            return storeRemoteLogMetadata(metadataUpdate);
         });
     }
 
@@ -140,24 +138,21 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata deleteMetadata)
             throws RemoteStorageException {
         Objects.requireNonNull(deleteMetadata, "deleteMetadata can not be null");
-        TopicIdPartition topicIdPartition = deleteMetadata.topicIdPartition();
         return withReadLockAndEnsureInitialized(
-                () -> storeRemoteLogMetadata(topicIdPartition, deleteMetadata));
+                () -> storeRemoteLogMetadata(deleteMetadata));
     }
 
     /**
      * Returns {@link CompletableFuture} which will complete only after publishing of the given {@code remoteLogMetadata} into
      * the remote log metadata topic and the internal consumer is caught up until the produced record's offset.
      *
-     * @param topicIdPartition partition of the given remoteLogMetadata.
-     * @param remoteLogMetadata RemoteLogMetadata to be stored.
+     *  @param remoteLogMetadata RemoteLogMetadata to be stored.
      * @return a future with acknowledge and potentially waiting also for consumer to catch up.
      * This ensures cache is synchronized with backing topic.
      * @throws RemoteStorageException if there are any storage errors occur.
      */
-    private CompletableFuture<Void> storeRemoteLogMetadata(TopicIdPartition topicIdPartition,
-                                                           RemoteLogMetadata remoteLogMetadata) throws RemoteStorageException {
-        log.debug("Storing the partition: {} metadata: {}", topicIdPartition, remoteLogMetadata);
+    private CompletableFuture<Void> storeRemoteLogMetadata(RemoteLogMetadata remoteLogMetadata) throws RemoteStorageException {
+        log.debug("Storing the partition: {} metadata: {}", remoteLogMetadata.topicIdPartition(), remoteLogMetadata);
         try {
             // Publish the message to the metadata topic.
             CompletableFuture<RecordMetadata> produceFuture = producerManager.publishMessage(remoteLogMetadata);
