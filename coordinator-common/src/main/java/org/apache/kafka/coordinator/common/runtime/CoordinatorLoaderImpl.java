@@ -214,6 +214,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
         for (MutableRecordBatch batch : memoryRecords.batches()) {
             if (batch.isControlBatch()) {
                 for (Record record : batch) {
+                    loadStats.numRecords++;
+
                     ControlRecordType controlRecord = ControlRecordType.parse(record.key());
                     if (controlRecord == ControlRecordType.COMMIT) {
                         if (LOG.isTraceEnabled()) {
