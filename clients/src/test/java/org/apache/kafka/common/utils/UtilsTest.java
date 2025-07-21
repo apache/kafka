@@ -981,7 +981,7 @@ public class UtilsTest {
             map.put(1, "value");
             Utils.castToStringObjectMap(map);
         });
-        assertTrue(ce.getMessage().contains("Key must be a string"));
+        assertTrue(ce.getMessage().contains("Key must be a string."));
 
         ce = assertThrows(ConfigException.class, () -> {
             Map<Object, Object> map = new HashMap<>();
@@ -989,7 +989,7 @@ public class UtilsTest {
             map.put('a', "value");
             Utils.castToStringObjectMap(map);
         });
-        assertEquals("Key must be a string", ce.getMessage());
+        assertTrue(ce.getMessage().contains("Key must be a string."));
     }
 
     @Test
