@@ -382,7 +382,7 @@ public class ShareGroupCommand {
             String groupId = opts.options.valueOf(opts.groupOpt);
             try {
                 ShareGroupDescription shareGroupDescription = describeShareGroups(List.of(groupId)).get(groupId);
-                if (!GroupState.EMPTY.equals(shareGroupDescription.groupState())) {
+                if (!(GroupState.EMPTY.equals(shareGroupDescription.groupState()) || GroupState.DEAD.equals(shareGroupDescription.groupState()))) {
                     CommandLineUtils.printErrorAndExit(String.format("Share group '%s' is not empty.", groupId));
                 }
                 Map<TopicPartition, OffsetAndMetadata> offsetsToReset = prepareOffsetsToReset(groupId);
@@ -414,27 +414,26 @@ public class ShareGroupCommand {
         protected Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId) throws ExecutionException, InterruptedException {
             Map<String, ListShareGroupOffsetsSpec> groupSpecs = Map.of(groupId, new ListShareGroupOffsetsSpec());
             Map<TopicPartition, OffsetAndMetadata> offsetsByTopicPartitions = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
-            Set<String> existsTopics = adminClient.listTopics().names().get();
+            Collection<TopicPartition> partitionsToReset;
 
             if (opts.options.has(opts.topicOpt)) {
-                Set<String> topics = Set.copyOf(opts.options.valuesOf(opts.topicOpt));
-                Set<String> subscribedTopic = offsetsByTopicPartitions.keySet().stream()
+                partitionsToReset = offsetsUtils.parseTopicPartitionsToReset(opts.options.valuesOf(opts.topicOpt));
+                Set<String> subscribedTopics = offsetsByTopicPartitions.keySet().stream()
                     .map(TopicPartition::topic)
                     .collect(Collectors.toSet());
-                if (!existsTopics.containsAll(topics)) {
-                    CommandLineUtils
-                        .printErrorAndExit(String.format("Topic %s not present in metadata.",
-                            topics.stream().filter(topic -> !existsTopics.contains(topic)).collect(Collectors.joining(", "))));
-                    return null;
-                } else if (!subscribedTopic.containsAll(topics)) {
+                Set<String> resetTopics = partitionsToReset.stream()
+                    .map(TopicPartition::topic)
+                    .collect(Collectors.toSet());
+                if (!subscribedTopics.containsAll(resetTopics)) {
                     CommandLineUtils
                         .printErrorAndExit(String.format("Share group '%s' is not subscribed to topic '%s'.",
-                            groupId, topics.stream().filter(topic -> !subscribedTopic.contains(topic)).collect(Collectors.joining(", "))));
+                            groupId, resetTopics.stream().filter(topic -> !subscribedTopics.contains(topic)).collect(Collectors.joining(", "))));
                     return null;
                 }
+            } else {
+                partitionsToReset = offsetsByTopicPartitions.keySet();
             }
-
-            Collection<TopicPartition> partitionsToReset = offsetsByTopicPartitions.keySet();
+            
             if (opts.options.has(opts.resetToEarliestOpt)) {
                 return offsetsUtils.resetToEarliest(partitionsToReset);
             } else if (opts.options.has(opts.resetToLatestOpt)) {

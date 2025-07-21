@@ -720,23 +720,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
     
     private AlterShareGroupOffsetsResponseData buildErrorResponse(AlterShareGroupOffsetsResponseData response, InitializeShareGroupStateResult result) {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+        Map<Uuid, Map<Integer, PartitionErrorData>> topicPartitionErrorsMap = result.getErrors();
         data.setResponses(
             new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
                 .map(topic -> {
                     AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
                         .setTopicName(topic.topicName());
-                    Map<Uuid, Map<Integer, PartitionErrorData>> topicPartitionErrorsMap = result.getErrors();
                     topic.partitions().forEach(partition -> {
                         if (partition.errorCode() != Errors.NONE.code()) {
                             topicData.partitions().add(partition);
                             return;
                         }
                         AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData;
-                        PartitionErrorData error = topicPartitionErrorsMap.get(topic.topicId()).get(partition.partitionIndex());
+                        Map<Integer, PartitionErrorData> partitionErrors =
+                            Optional.ofNullable(topicPartitionErrorsMap)
+                                .map(map -> map.get(topic.topicId()))
+                                .orElse(Collections.emptyMap());
+                        PartitionErrorData error = partitionErrors.get(partition.partitionIndex());
                         if (error == null) {
-                            partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                                .setPartitionIndex(partition.partitionIndex())
-                                .setErrorCode(Errors.NONE.code());
+                            partitionData = partition.duplicate();
                         } else {
                             partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                                 .setPartitionIndex(partition.partitionIndex())
@@ -764,7 +766,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
                 .map(topic -> {
                     AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                        .setTopicName(topic.topicName());
+                        .setTopicName(topic.topicName())
+                        .setTopicId(topic.topicId());
                     topic.partitions().forEach(partition -> {
                         AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                             .setPartitionIndex(partition.partitionIndex())
