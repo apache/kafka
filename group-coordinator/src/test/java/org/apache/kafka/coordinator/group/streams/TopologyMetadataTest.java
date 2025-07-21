@@ -17,10 +17,11 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredInternalTopic;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
-import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,16 +42,16 @@ import static org.mockito.Mockito.when;
 
 class TopologyMetadataTest {
 
-    private MetadataImage metadataImage;
+    private CoordinatorMetadataImage metadataImage;
     private SortedMap<String, ConfiguredSubtopology> subtopologyMap;
     private TopologyMetadata topologyMetadata;
 
     @BeforeEach
     void setUp() {
-        metadataImage = new MetadataImageBuilder()
+        metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "source_topic", 3)
             .addTopic(Uuid.randomUuid(), "repartition_source_topic", 4)
-            .build();
+            .build());
         subtopologyMap = new TreeMap<>();
         topologyMetadata = new TopologyMetadata(metadataImage, subtopologyMap);
     }

@@ -60,6 +60,7 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -89,6 +90,8 @@ public class ConsumerGroupServiceTest {
                 .thenReturn(listGroupOffsetsResult(GROUP));
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
+        when(admin.describeTopics(ArgumentMatchers.anySet()))
+                .thenReturn(describeTopicsResult());
 
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
         assertEquals(Optional.of(GroupState.STABLE), statesAndAssignments.getKey());
@@ -172,6 +175,7 @@ public class ConsumerGroupServiceTest {
                 any()
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
                 .collect(Collectors.toMap(Entry::getKey, Entry::getValue))));
+        when(admin.describeTopics(ArgumentMatchers.anySet())).thenReturn(describeTopicsResult());
 
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
         Optional<GroupState> state = statesAndAssignments.getKey();
@@ -229,6 +233,8 @@ public class ConsumerGroupServiceTest {
                 .thenReturn(describeGroupsResult(GroupState.DEAD));
         when(admin.describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified), any()))
                 .thenReturn(describeTopicsResult(topicsWithoutPartitionsSpecified));
+        when(admin.describeTopics(anySet()))
+                .thenReturn(describeTopicsResult(TOPICS));
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
 
@@ -287,6 +293,18 @@ public class ConsumerGroupServiceTest {
         );
     }
 
+    private DescribeTopicsResult describeTopicsResult() {
+        Map<String, TopicDescription> topicDescriptionMap = TOPICS.stream().collect(Collectors.toMap(
+                Function.identity(),
+                topic -> new TopicDescription(
+                        topic,
+                        false,
+                        IntStream.range(0, NUM_PARTITIONS)
+                                .mapToObj(i -> new TopicPartitionInfo(i, Node.noNode(), List.of(), List.of()))
+                                .toList())));
+        return AdminClientTestUtils.describeTopicsResult(topicDescriptionMap);
+    }
+
     private ListOffsetsResult listOffsetsResult() {
         ListOffsetsResultInfo resultInfo = new ListOffsetsResultInfo(100, System.currentTimeMillis(), Optional.of(1));
         Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures = TOPIC_PARTITIONS.stream().collect(Collectors.toMap(
@@ -300,7 +318,7 @@ public class ConsumerGroupServiceTest {
 
         topics.forEach(topic -> {
             List<TopicPartitionInfo> partitions = IntStream.range(0, NUM_PARTITIONS)
-                    .mapToObj(i -> new TopicPartitionInfo(i, null, List.of(), List.of()))
+                    .mapToObj(i -> new TopicPartitionInfo(i, Node.noNode(), List.of(), List.of()))
                     .collect(Collectors.toList());
             topicDescriptions.put(topic, new TopicDescription(topic, false, partitions));
         });

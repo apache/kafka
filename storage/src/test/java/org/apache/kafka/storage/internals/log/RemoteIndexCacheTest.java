@@ -331,6 +331,18 @@ public class RemoteIndexCacheTest {
         verify(cacheEntry.offsetIndex()).renameTo(any(File.class));
         verify(cacheEntry.txnIndex()).renameTo(any(File.class));
 
+        // wait until the delete method is invoked
+        TestUtils.waitForCondition(() -> {
+            try {
+                verify(cacheEntry.timeIndex()).deleteIfExists();
+                verify(cacheEntry.offsetIndex()).deleteIfExists();
+                verify(cacheEntry.txnIndex()).deleteIfExists();
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }, "Failed to delete index file");
+
         // verify no index files on disk
         assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isPresent(),
                 "Offset index file should not be present on disk at " + tpDir.toPath());

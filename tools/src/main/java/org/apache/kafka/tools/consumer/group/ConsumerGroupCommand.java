@@ -41,6 +41,8 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -50,9 +52,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -82,7 +81,6 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 public class ConsumerGroupCommand {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommand.class);
 
     static final String MISSING_COLUMN_VALUE = "-";
 
@@ -592,8 +590,7 @@ public class ConsumerGroupCommand {
                         getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty(), Optional.empty())
                 );
             } else {
-                List<TopicPartition> topicPartitionsSorted = topicPartitions.stream().sorted(Comparator.comparingInt(TopicPartition::partition)).collect(Collectors.toList());
-                return describePartitions(group, coordinator, topicPartitionsSorted, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
+                return describePartitions(group, coordinator, topicPartitions, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
             }
         }
 
@@ -604,7 +601,7 @@ public class ConsumerGroupCommand {
         private Collection<PartitionAssignmentState> describePartitions(
             String group,
             Optional<Node> coordinator,
-            List<TopicPartition> topicPartitions,
+            Collection<TopicPartition> topicPartitions,
             Map<TopicPartition, OffsetAndMetadata> committedOffsets,
             Optional<String> consumerIdOpt,
             Optional<String> hostOpt,
@@ -619,7 +616,11 @@ public class ConsumerGroupCommand {
                     consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
-            return offsetsUtils.getLogEndOffsets(topicPartitions).entrySet().stream().map(logEndOffsetResult -> {
+            List<TopicPartition> topicPartitionsWithoutLeader = filterNoneLeaderPartitions(topicPartitions);
+            List<TopicPartition> topicPartitionsWithLeader = topicPartitions.stream().filter(tp -> !topicPartitionsWithoutLeader.contains(tp)).toList();
+
+            // prepare data for partitions with leaders
+            List<PartitionAssignmentState> existLeaderAssignments = offsetsUtils.getLogEndOffsets(topicPartitionsWithLeader).entrySet().stream().map(logEndOffsetResult -> {
                 if (logEndOffsetResult.getValue() instanceof OffsetsUtils.LogOffset)
                     return getDescribePartitionResult.apply(
                         logEndOffsetResult.getKey(),
@@ -631,7 +632,34 @@ public class ConsumerGroupCommand {
                     return null;
 
                 throw new IllegalStateException("Unknown LogOffset subclass: " + logEndOffsetResult.getValue());
-            }).collect(Collectors.toList());
+            }).toList();
+
+            // prepare data for partitions without leaders
+            List<PartitionAssignmentState> noneLeaderAssignments = topicPartitionsWithoutLeader.stream()
+                    .map(tp -> getDescribePartitionResult.apply(tp, Optional.empty())).toList();
+
+            // concat the data and then sort them
+            return Stream.concat(existLeaderAssignments.stream(), noneLeaderAssignments.stream())
+                    .sorted(Comparator.<PartitionAssignmentState, String>comparing(
+                            state -> state.topic.orElse(""), String::compareTo)
+                            .thenComparingInt(state -> state.partition.orElse(-1)))
+                    .collect(Collectors.toList());
+        }
+
+        private List<TopicPartition> filterNoneLeaderPartitions(Collection<TopicPartition> topicPartitions) {
+            // collect all topics
+            Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+
+            try {
+                return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                        .stream()
+                        .flatMap(entry -> entry.getValue().partitions().stream()
+                                .filter(partitionInfo -> partitionInfo.leader() == null)
+                                .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                        .toList();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
@@ -974,6 +1002,9 @@ public class ConsumerGroupCommand {
         }
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+            // ensure all partitions are valid, otherwise throw a runtime exception
+            checkAllTopicPartitionsValid(partitionsToReset);
+
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return offsetsUtils.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
@@ -996,6 +1027,38 @@ public class ConsumerGroupCommand {
 
             CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
+        }
+
+        private void checkAllTopicPartitionsValid(Collection<TopicPartition> partitionsToReset) {
+            // check the partitions exist
+            List<TopicPartition> partitionsNotExistList = filterNonExistentPartitions(partitionsToReset);
+            if (!partitionsNotExistList.isEmpty()) {
+                String partitionStr = partitionsNotExistList.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+                throw new UnknownTopicOrPartitionException("The partitions \"" + partitionStr + "\" do not exist");
+            }
+
+            // check the partitions have leader
+            List<TopicPartition> partitionsWithoutLeader = filterNoneLeaderPartitions(partitionsToReset);
+            if (!partitionsWithoutLeader.isEmpty()) {
+                String partitionStr = partitionsWithoutLeader.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+                throw new LeaderNotAvailableException("The partitions \"" + partitionStr + "\" have no leader");
+            }
+        }
+
+        private List<TopicPartition> filterNonExistentPartitions(Collection<TopicPartition> topicPartitions) {
+            // collect all topics
+            Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+            try {
+                List<TopicPartition> existPartitions = adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                        .stream()
+                        .flatMap(entry -> entry.getValue().partitions().stream()
+                                .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                        .toList();
+
+                return topicPartitions.stream().filter(element -> !existPartitions.contains(element)).toList();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> assignments) {
