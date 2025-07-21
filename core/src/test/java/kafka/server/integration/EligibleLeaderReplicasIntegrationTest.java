@@ -43,15 +43,14 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
 import java.io.File;
@@ -74,6 +73,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@ClusterTestDefaults(
+    brokers = 5,
+    serverProperties = {
+        @ClusterConfigProperty(key = ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, value = "true"),
+        @ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
+        @ClusterConfigProperty(key = ServerConfigs.BROKER_RACK_DOC, value = "new HashMap<>()"),
+        @ClusterConfigProperty(key = ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, value = "4"),
+    }
+)
 public class EligibleLeaderReplicasIntegrationTest {
     private String bootstrapServer;
     private String testTopicName;
@@ -81,28 +89,21 @@ public class EligibleLeaderReplicasIntegrationTest {
 
     private final ClusterInstance clusterInstance;
 
-    @ClusterTest(
-        types = {Type.KRAFT},
-        metadataVersion = MetadataVersion.IBP_4_0_IV1,
-        brokers = 5,
-            serverProperties = {
-                @ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
-                @ClusterConfigProperty(key = ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, value = "4"),
-            }
-    )
+    EligibleLeaderReplicasIntegrationTest(ClusterInstance clusterInstance) {
+        this.clusterInstance = clusterInstance;
+    }
 
     @BeforeEach
     public void setUp(TestInfo info) {
         // create adminClient
         Properties props = new Properties();
-        //bootstrapServer = bootstrapServers(listenerName());
-        bootstrapServer = clusterInstance.bootstrapServers(listenerName());
+        bootstrapServer = clusterInstance.bootstrapServers();
         props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
         adminClient = Admin.create(props);
         adminClient.updateFeatures(
-                Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
-                        new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions()
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
+            new UpdateFeaturesOptions()
         );
         testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(), "ELR-test");
     }
@@ -113,7 +114,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     }
 
     @ClusterTest
-    public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+    public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         Seq<KafkaBroker> brokerSeq = scala.collection.JavaConverters.asScalaBuffer(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
@@ -200,7 +201,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     }
 
     @ClusterTest
-    public void testElrMemberCanBeElected(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+    public void testElrMemberCanBeElected() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         Seq<KafkaBroker> brokerSeq = scala.collection.JavaConverters.asScalaBuffer(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
@@ -276,7 +277,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     }
 
     @ClusterTest
-    public void testElrMemberShouldBeKickOutWhenUncleanShutdown(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+    public void testElrMemberShouldBeKickOutWhenUncleanShutdown() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         Seq<KafkaBroker> brokerSeq = scala.collection.JavaConverters.asScalaBuffer(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
@@ -336,7 +337,7 @@ public class EligibleLeaderReplicasIntegrationTest {
         This test is only valid for KIP-966 part 1. When the unclean recovery is implemented, it should be removed.
      */
     @ClusterTest
-    public void testLastKnownLeaderShouldBeElectedIfEmptyElr(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+    public void testLastKnownLeaderShouldBeElectedIfEmptyElr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         Seq<KafkaBroker> brokerSeq = scala.collection.JavaConverters.asScalaBuffer(new ArrayList<>(clusterInstance.brokers().values())).toSeq();

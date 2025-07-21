@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -71,9 +72,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
-import scala.collection.JavaConverters;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
@@ -449,18 +448,12 @@ public interface ClusterInstance {
     }
 
     default void restartDeadBrokers() {
+        if (brokers().isEmpty())
+            throw new KafkaException("Must supply at least one server config.");
         for (Map.Entry<Integer, KafkaBroker> entry : brokers().entrySet()) {
-            int brokerId = entry.getKey();
-            KafkaBroker broker = entry.getValue();
-
-            if (broker.isShutdown()) {
-                startBroker(brokerId);
+            if (entry.getValue().isShutdown()) {
+                startBroker(entry.getKey());
             }
         }
-    }
-
-    default String bootstrapServers(ListenerName listenerName){
-        Seq<KafkaBroker> brokerSeq = new ArrayList<>(brokers().values()).asScala().toSeq();
-        kafka.utils.TestUtils.bootstrapServers(brokerSeq, listenerName);
     }
 }
