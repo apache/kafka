@@ -526,7 +526,7 @@ public class TopicCommandTest {
     }
 
     private List<Integer> getPartitionReplicas(List<TopicPartitionInfo> partitions, int partitionNumber) {
-        return partitions.get(partitionNumber).replicas().stream().map(Node::id).collect(Collectors.toList());
+        return partitions.get(partitionNumber).replicas().stream().map(Node::id).toList();
     }
 
     @ClusterTemplate("generate")
@@ -813,7 +813,7 @@ public class TopicCommandTest {
                     .stream()
                     .collect(Collectors.toMap(
                         TopicPartitionInfo::partition,
-                        info -> info.replicas().stream().map(Node::id).collect(Collectors.toList())));
+                        info -> info.replicas().stream().map(Node::id).toList()));
             checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), numPartitions,
                     replicationFactor, true, true, true);
 
@@ -834,7 +834,7 @@ public class TopicCommandTest {
 
             assignment = adminClient.describeTopics(List.of(testTopicName))
                     .allTopicNames().get().get(testTopicName).partitions().stream()
-                    .collect(Collectors.toMap(TopicPartitionInfo::partition, info -> info.replicas().stream().map(Node::id).collect(Collectors.toList())));
+                    .collect(Collectors.toMap(TopicPartitionInfo::partition, info -> info.replicas().stream().map(Node::id).toList()));
             checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), alteredNumPartitions, replicationFactor,
                     true, true, true);
 
@@ -1444,7 +1444,7 @@ public class TopicCommandTest {
 
             List<Integer> partitionRackMapValueSize = partitionRackMap.values().stream()
                     .map(value -> (int) value.stream().distinct().count())
-                    .collect(Collectors.toList());
+                    .toList();
 
             List<Integer> expected = Collections.nCopies(numPartitions, replicationFactor);
             assertEquals(expected, partitionRackMapValueSize, "More than one replica of the same partition is assigned to the same rack");
@@ -1504,7 +1504,7 @@ public class TopicCommandTest {
                     rack = brokerRackMapping.get(brokerId);
                     List<String> partitionRackValues = Stream.of(List.of(rack), partitionRackMap.getOrDefault(partitionId, List.of()))
                             .flatMap(List::stream)
-                            .collect(Collectors.toList());
+                            .toList();
                     partitionRackMap.put(partitionId, partitionRackValues);
                 } else {
                     System.err.printf("No mapping found for %s in `brokerRackMapping`%n", brokerId);

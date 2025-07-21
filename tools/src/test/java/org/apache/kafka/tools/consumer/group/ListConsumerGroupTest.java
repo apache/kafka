@@ -52,7 +52,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import joptsimple.OptionException;
 
@@ -610,7 +609,7 @@ public class ListConsumerGroupTest {
             // Parse the groups.
             Set<List<String>> groups = new HashSet<>();
             for (; index < lines.length; index++) {
-                groups.add(Arrays.stream(lines[index].split("\\s+")).collect(Collectors.toList()));
+                groups.add(Arrays.stream(lines[index].split("\\s+")).toList());
             }
             return expectedRows.equals(groups);
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));

@@ -56,7 +56,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import joptsimple.OptionException;
@@ -669,7 +668,7 @@ public class ResetConsumerGroupOffsetTest {
         try (Admin admin = cluster.admin();
              ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
 
-            admin.createTopics(singleton(new NewTopic(topic, 3, (short) 1))).all().get();
+            admin.createTopics(Set.of(new NewTopic(topic, 3, (short) 1))).all().get();
             produceConsumeAndShutdown(cluster, topic, group, 2, GroupProtocol.CLASSIC);
             assertDoesNotThrow(() -> resetOffsets(service));
             // shutdown a broker to make some partitions missing leader
@@ -688,7 +687,7 @@ public class ResetConsumerGroupOffsetTest {
         try (Admin admin = cluster.admin();
              ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
 
-            admin.createTopics(singleton(new NewTopic(topic, 1, (short) 1))).all().get();
+            admin.createTopics(Set.of(new NewTopic(topic, 1, (short) 1))).all().get();
             produceConsumeAndShutdown(cluster, topic, group, 2, GroupProtocol.CLASSIC);
             assertThrows(UnknownTopicOrPartitionException.class, () -> resetOffsets(service));
         }
@@ -726,7 +725,7 @@ public class ResetConsumerGroupOffsetTest {
     private void produceMessages(ClusterInstance cluster, String topic, int numMessages) {
         List<ProducerRecord<byte[], byte[]>> records = IntStream.range(0, numMessages)
                 .mapToObj(i -> new ProducerRecord<byte[], byte[]>(topic, new byte[100 * 1000]))
-                .collect(Collectors.toList());
+                .toList();
         produceMessages(cluster, records);
     }
 
@@ -796,7 +795,7 @@ public class ResetConsumerGroupOffsetTest {
     private static List<String> generateIds(String name) {
         return IntStream.rangeClosed(1, 2)
                 .mapToObj(id -> name + id)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private void produceConsumeAndShutdown(ClusterInstance cluster,

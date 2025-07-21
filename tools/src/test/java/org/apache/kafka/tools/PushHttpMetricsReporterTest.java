@@ -43,6 +43,7 @@ import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -234,7 +235,7 @@ public class PushHttpMetricsReporterTest {
         JsonNode metrics = payload.get("metrics");
         assertTrue(metrics.isArray());
         assertEquals(3, metrics.size());
-        List<JsonNode> metricsList = List.of(metrics.get(0), metrics.get(1), metrics.get(2));
+        List<JsonNode> metricsList = new ArrayList<>(List.of(metrics.get(0), metrics.get(1), metrics.get(2)));
         // Sort metrics based on name so that we can verify the value for each metric below
         metricsList.sort(Comparator.comparing(m -> m.get("name").textValue()));
 

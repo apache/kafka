@@ -486,7 +486,7 @@ public class StreamsGroupCommandTest {
         topics.forEach(topic -> {
             List<TopicPartitionInfo> partitions = IntStream.range(0, numOfPartitions)
                 .mapToObj(i -> new TopicPartitionInfo(i, null, List.of(), List.of()))
-                .collect(Collectors.toList());
+                .toList();
             topicDescriptions.put(topic, new TopicDescription(topic, false, partitions));
         });
         return AdminClientTestUtils.describeTopicsResult(topicDescriptions);
