@@ -19,14 +19,13 @@ package org.apache.kafka.coordinator.group.modern.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -385,22 +384,22 @@ public class ConsumerGroupMember extends ModernGroupMember {
 
     /**
      * @param targetAssignment The target assignment of this member in the corresponding group.
-     *
+     * @param image
      * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
      */
     public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(
         Assignment targetAssignment,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, image)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromMap(
                     targetAssignment != null ? targetAssignment.partitions() : Map.of(),
-                    topicsImage
+                    image
                 )))
             .setClientHost(clientHost)
             .setClientId(clientId)
@@ -413,17 +412,14 @@ public class ConsumerGroupMember extends ModernGroupMember {
 
     private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
         Map<Uuid, Set<Integer>> partitions,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            if (topicImage != null) {
-                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                    .setTopicId(topicId)
-                    .setTopicName(topicImage.name())
-                    .setPartitions(new ArrayList<>(partitionSet)));
-            }
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                .setTopicId(topicId)
+                .setTopicName(topicMetadata.name())
+                .setPartitions(new ArrayList<>(partitionSet))));
         });
         return topicPartitions;
     }

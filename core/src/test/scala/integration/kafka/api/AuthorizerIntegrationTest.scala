@@ -3254,6 +3254,18 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     removeAllClientAcls()
   }
 
+  private def createEmptyShareGroup(): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), shareGroupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), topicResource)
+    shareConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, shareGroup)
+    val consumer = createShareConsumer()
+    consumer.subscribe(util.Set.of(topic))
+    consumer.poll(Duration.ofMillis(500L))
+    consumer.close()
+    removeAllClientAcls()
+  }
+
   @Test
   def testShareGroupDescribeWithGroupDescribeAndTopicDescribeAcl(): Unit = {
     createShareGroupToDescribe()
@@ -3614,6 +3626,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @Test
   def testDeleteShareGroupOffsetsWithoutTopicReadAcl(): Unit = {
+    createEmptyShareGroup()
     addAndVerifyAcls(shareGroupDeleteAcl(shareGroupResource), shareGroupResource)
 
     val request = deleteShareGroupOffsetsRequest
@@ -3663,6 +3676,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @Test
   def testAlterShareGroupOffsetsWithoutTopicReadAcl(): Unit = {
+    createEmptyShareGroup()
     addAndVerifyAcls(shareGroupReadAcl(shareGroupResource), shareGroupResource)
 
     val request = alterShareGroupOffsetsRequest
