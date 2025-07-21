@@ -19,7 +19,8 @@ package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
@@ -97,7 +98,7 @@ class EndpointToPartitionsManagerTest {
         when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyMap));
 
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
-                EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, metadataImage);
+                EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
 
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(1, result.activePartitions().size());
@@ -137,7 +138,7 @@ class EndpointToPartitionsManagerTest {
         configuredSubtopologyOneMap.put("0", configuredSubtopologyOne);
         when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyOneMap));
 
-        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, metadataImage);
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
 
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(2, result.activePartitions().size());
