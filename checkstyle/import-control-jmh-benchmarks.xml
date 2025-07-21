@@ -52,6 +52,8 @@
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.storage"/>
     <allow pkg="org.apache.kafka.clients"/>
+    <allow class="org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage"/>
+    <allow class="org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage"/>
     <allow class="org.apache.kafka.coordinator.common.runtime.HdrHistogram"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.image"/>

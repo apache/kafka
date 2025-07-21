@@ -30,7 +30,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -921,7 +922,7 @@ public class StreamsGroupTest {
         StreamsTopology topology = mock(StreamsTopology.class);
         when(topology.requiredTopics()).thenReturn(Set.of("topic1"));
 
-        long metadataHash = streamsGroup.computeMetadataHash(metadataImage, new HashMap<>(), topology);
+        long metadataHash = streamsGroup.computeMetadataHash(new KRaftCoordinatorMetadataImage(metadataImage), new HashMap<>(), topology);
         // The metadata hash means no topic.
         assertNotEquals(0, metadataHash);
     }
@@ -988,7 +989,7 @@ public class StreamsGroupTest {
             .addTopic(Uuid.randomUuid(), "test-topic2", 1)
             .build();
 
-        streamsGroup.setConfiguredTopology(InternalTopicManager.configureTopics(logContext, 0, topology, metadataImage.topics()));
+        streamsGroup.setConfiguredTopology(InternalTopicManager.configureTopics(logContext, 0, topology, new KRaftCoordinatorMetadataImage(metadataImage)));
 
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic1"));
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic2"));
