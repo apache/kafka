@@ -26,6 +26,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -409,6 +410,24 @@ public class ConsumerNetworkClientTest {
         assertEquals(2, checkCount.getAndSet(0));
         assertEquals(2, consumerClient.pendingRequestCount(node));
         assertEquals(2, client.inFlightRequestCount(node.idString()));
+    }
+
+    @Test
+    public void testAuthenticationExceptionExposure() {
+        // Test that ConsumerNetworkClient exposes authentication exceptions from underlying client
+        SslAuthenticationException sslException = new SslAuthenticationException("certificate expired");
+        client.setNodeAuthenticationFailure(node, sslException);
+        
+        AuthenticationException result = consumerClient.authenticationException(node);
+        assertEquals(sslException, result);
+        assertTrue(result.getMessage().contains("certificate expired"));
+    }
+
+    @Test
+    public void testAuthenticationExceptionNull() {
+        // Test that no authentication exception returns null
+        AuthenticationException result = consumerClient.authenticationException(node);
+        assertEquals(null, result);
     }
 
     private HeartbeatRequest.Builder heartbeat() {
