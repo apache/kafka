@@ -819,11 +819,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 }
 
               if (nextState == TransactionState.PREPARE_ABORT && isEpochFence) {
-                // We should clear the pending state to make way for the transition to PrepareAbort and also bump
-                // the epoch in the transaction metadata we are about to append.
+                // We should clear the pending state to make way for the transition to PrepareAbort
                 txnMetadata.pendingState = None
-                txnMetadata.producerEpoch = producerEpoch
-                txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
+                // For TV2+, don't manually set the epoch - let prepareAbortOrCommit handle it naturally.
               }
 
               nextProducerIdOrErrors.flatMap {
@@ -979,10 +977,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
                   case Some(epochAndMetadata) =>
                     if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
-                      // This was attempted epoch fence that failed, so mark this state on the metadata
-                      epochAndMetadata.transactionMetadata.hasFailedEpochFence = true
+                      // For TV2, we allow re-bumping the epoch on retry, since we don't complete the epoch bump.
+                      // Therefore, we don't set hasFailedEpochFence = true.
                       warn(s"The coordinator failed to write an epoch fence transition for producer $transactionalId to the transaction log " +
-                        s"with error $error. The epoch was increased to ${newMetadata.producerEpoch} but not returned to the client")
+                        s"with error $error")
                     }
                 }
               }

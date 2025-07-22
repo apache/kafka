@@ -40,7 +40,7 @@ public final class RemoteLogManagerConfig {
      */
     public static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP = "remote.log.storage.manager.impl.prefix";
     public static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_DOC = "Prefix used for properties to be passed to RemoteStorageManager " +
-            "implementation. For example this value can be `rsm.config.`.";
+            "implementation. For example this value can be <code>rsm.config.</code>.";
     public static final String DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "rsm.config.";
 
     /**
@@ -49,7 +49,7 @@ public final class RemoteLogManagerConfig {
      */
     public static final String REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP = "remote.log.metadata.manager.impl.prefix";
     public static final String REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_DOC = "Prefix used for properties to be passed to RemoteLogMetadataManager " +
-            "implementation. For example this value can be `rlmm.config.`.";
+            "implementation. For example this value can be <code>rlmm.config.</code>.";
     public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX = "rlmm.config.";
 
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP = "remote.log.storage.system.enable";
@@ -58,20 +58,20 @@ public final class RemoteLogManagerConfig {
     public static final boolean DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE = false;
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP = "remote.log.storage.manager.class.name";
-    public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteStorageManager` implementation.";
+    public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of <code>RemoteStorageManager</code> implementation.";
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP = "remote.log.storage.manager.class.path";
-    public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteStorageManager` implementation. " +
+    public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC = "Class path of the <code>RemoteStorageManager</code> implementation. " +
             "If specified, the RemoteStorageManager implementation and its dependent libraries will be loaded by a dedicated " +
             "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same " +
             "as the standard Java class path string.";
 
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP = "remote.log.metadata.manager.class.name";
-    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteLogMetadataManager` implementation.";
+    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of <code>RemoteLogMetadataManager</code> implementation.";
     public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME = "org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager";
 
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP = "remote.log.metadata.manager.class.path";
-    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteLogMetadataManager` implementation. " +
+    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC = "Class path of the <code>RemoteLogMetadataManager</code> implementation. " +
             "If specified, the RemoteLogMetadataManager implementation and its dependent libraries will be loaded by a dedicated " +
             "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same " +
             "as the standard Java class path string.";
@@ -92,10 +92,19 @@ public final class RemoteLogManagerConfig {
             "from remote storage in the local storage.";
     public static final long DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES = 1024 * 1024 * 1024L;
 
-    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP = "remote.log.manager.thread.pool.size";
-    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling follower tasks to read " +
+    public static final String REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP = "remote.log.manager.follower.thread.pool.size";
+    public static final String REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling follower tasks to read " +
             "the highest-uploaded remote-offset for follower partitions.";
-    public static final int DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE = 2;
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE = 2;
+
+    @Deprecated(since = "4.2", forRemoval = true)
+    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP = "remote.log.manager.thread.pool.size";
+    @Deprecated(since = "4.2", forRemoval = true)
+    public static final String REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling follower tasks to read " +
+            "the highest-uploaded remote-offset for follower partitions. This config is deprecated since 4.2, please use <code>" +
+            REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP + "</code> instead.";
+    @Deprecated(since = "4.2", forRemoval = true)
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE = DEFAULT_REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE;
 
     public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP = "remote.log.manager.copier.thread.pool.size";
     public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling tasks " +
@@ -106,7 +115,7 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling tasks " +
             "to clean up the expired remote log segments.";
     public static final int DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE = 10;
-    
+
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP = "remote.log.manager.task.interval.ms";
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_DOC = "Interval at which remote log manager runs the scheduled tasks like copy " +
             "segments, and clean up remote log segments.";
@@ -140,14 +149,14 @@ public final class RemoteLogManagerConfig {
 
     public static final String LOG_LOCAL_RETENTION_MS_PROP = "log.local.retention.ms";
     public static final String LOG_LOCAL_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segments before it gets eligible for deletion. " +
-            "Default value is -2, it represents `log.retention.ms` value is to be used. The effective value should always be less than or equal " +
-            "to `log.retention.ms` value.";
+            "Default value is -2, it represents <code>log.retention.ms</code> value is to be used. The effective value should always be less than or equal " +
+            "to <code>log.retention.ms</code> value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_MS = -2L;
 
     public static final String LOG_LOCAL_RETENTION_BYTES_PROP = "log.local.retention.bytes";
     public static final String LOG_LOCAL_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it gets eligible for deletion. " +
-            "Default value is -2, it represents `log.retention.bytes` value to be used. The effective value should always be " +
-            "less than or equal to `log.retention.bytes` value.";
+            "Default value is -2, it represents <code>log.retention.bytes</code> value to be used. The effective value should always be " +
+            "less than or equal to <code>log.retention.bytes</code> value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
@@ -183,8 +192,8 @@ public final class RemoteLogManagerConfig {
     public static final int DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS = 1;
 
     public static final String REMOTE_FETCH_MAX_WAIT_MS_PROP = "remote.fetch.max.wait.ms";
-    public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the remote fetch request. " +
-        "Note that the broker currently only fetches one partition per fetch request from the remote store. (KAFKA-14915)";
+    public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the fetch request containing remote fetch partitions. " +
+        "It's important to be aware that the request will only be responded after all remote partitions have been successfully fetched, have failed, or this timeout is exceeded.";
     public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 500;
 
     public static final String REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP = "remote.list.offsets.request.timeout.ms";
@@ -270,6 +279,12 @@ public final class RemoteLogManagerConfig {
                         atLeast(1),
                         MEDIUM,
                         REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC)
+                .define(REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
+                        INT,
+                        DEFAULT_REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE,
+                        atLeast(1),
+                        MEDIUM,
+                        REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_DOC)
                 .define(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
                         LONG,
                         DEFAULT_REMOTE_LOG_MANAGER_TASK_INTERVAL_MS,
@@ -391,8 +406,14 @@ public final class RemoteLogManagerConfig {
         return config.getString(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP);
     }
 
+
+    /**
+     * @deprecated since 4.2, please use {@link #remoteLogManagerFollowerThreadPoolSize()} instead.
+     * @return the value of the remote log manager follower thread pool size.
+     */
+    @Deprecated(since = "4.2", forRemoval = true)
     public int remoteLogManagerThreadPoolSize() {
-        return config.getInt(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP);
+        return remoteLogManagerFollowerThreadPoolSize();
     }
 
     public int remoteLogManagerCopierThreadPoolSize() {
@@ -401,6 +422,14 @@ public final class RemoteLogManagerConfig {
 
     public int remoteLogManagerExpirationThreadPoolSize() {
         return config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP);
+    }
+
+    public int remoteLogManagerFollowerThreadPoolSize() {
+        if (config.originals().containsKey(REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP)) {
+            return config.getInt(REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP);
+        } else {
+            return config.getInt(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP);
+        }
     }
 
     public long remoteLogManagerTaskIntervalMs() {

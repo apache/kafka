@@ -23,7 +23,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
-import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -80,7 +79,6 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -239,11 +237,6 @@ public class SharePartition {
     private final ReadWriteLock lock;
 
     /**
-     * The find next fetch offset is used to indicate if the next fetch offset should be recomputed.
-     */
-    private final AtomicBoolean findNextFetchOffset;
-
-    /**
      * The lock to ensure that the same share partition does not enter a fetch queue
      * while another one is being fetched within the queue. The caller's id that acquires the fetch
      * lock is utilized for ensuring the above.
@@ -275,6 +268,11 @@ public class SharePartition {
      * Once this time period is elapsed, the record will be made available or archived depending on the delivery count.
      */
     private final int defaultRecordLockDurationMs;
+
+    /**
+     * The find next fetch offset is used to indicate if the next fetch offset should be recomputed.
+     */
+    private boolean findNextFetchOffset;
 
     /**
      * Timer is used to implement acquisition lock on records that guarantees the movement of records from
@@ -411,7 +409,7 @@ public class SharePartition {
         this.maxDeliveryCount = maxDeliveryCount;
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
-        this.findNextFetchOffset = new AtomicBoolean(false);
+        this.findNextFetchOffset = false;
         this.fetchLock = new AtomicReference<>(null);
         this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
@@ -501,8 +499,8 @@ public class SharePartition {
 
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    log.error("Failed to initialize the share partition: {}-{}. Exception occurred: {}.",
-                        groupId, topicIdPartition, partitionData);
+                    maybeLogError(String.format("Failed to initialize the share partition: %s-%s. Exception occurred: %s.",
+                        groupId, topicIdPartition, partitionData), Errors.forCode(partitionData.errorCode()), ex);
                     throwable = ex;
                     return;
                 }
@@ -537,7 +535,7 @@ public class SharePartition {
                 if (!cachedState.isEmpty()) {
                     // If the cachedState is not empty, findNextFetchOffset flag is set to true so that any AVAILABLE records
                     // in the cached state are not missed
-                    findNextFetchOffset.set(true);
+                    updateFindNextFetchOffset(true);
                     endOffset = cachedState.lastEntry().getValue().lastOffset();
                     // initialReadGapOffset is not required, if there are no gaps in the read state response
                     if (gapStartOffset != -1) {
@@ -600,7 +598,7 @@ public class SharePartition {
         lock.writeLock().lock();
         try {
             // When none of the records in the cachedState are in the AVAILABLE state, findNextFetchOffset will be false
-            if (!findNextFetchOffset.get()) {
+            if (!findNextFetchOffset) {
                 if (cachedState.isEmpty() || startOffset > cachedState.lastEntry().getValue().lastOffset()) {
                     // 1. When cachedState is empty, endOffset is set to the next offset of the last
                     // offset removed from batch, which is the next offset to be fetched.
@@ -619,7 +617,7 @@ public class SharePartition {
                 // If cachedState is empty, there is no need of re-computing next fetch offset in future fetch requests.
                 // Same case when startOffset has moved beyond the in-flight records, startOffset and endOffset point to the LSO
                 // and the cached state is fresh.
-                findNextFetchOffset.set(false);
+                updateFindNextFetchOffset(false);
                 log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
                 return endOffset;
             }
@@ -642,14 +640,14 @@ public class SharePartition {
                 // Check if the state is maintained per offset or batch. If the offsetState
                 // is not maintained then the batch state is used to determine the offsets state.
                 if (entry.getValue().offsetState() == null) {
-                    if (entry.getValue().batchState() == RecordState.AVAILABLE) {
+                    if (entry.getValue().batchState() == RecordState.AVAILABLE && !entry.getValue().batchHasOngoingStateTransition()) {
                         nextFetchOffset = entry.getValue().firstOffset();
                         break;
                     }
                 } else {
                     // The offset state is maintained hence find the next available offset.
                     for (Map.Entry<Long, InFlightState> offsetState : entry.getValue().offsetState().entrySet()) {
-                        if (offsetState.getValue().state == RecordState.AVAILABLE) {
+                        if (offsetState.getValue().state == RecordState.AVAILABLE && !offsetState.getValue().hasOngoingStateTransition()) {
                             nextFetchOffset = offsetState.getKey();
                             break;
                         }
@@ -664,7 +662,7 @@ public class SharePartition {
             // If nextFetchOffset is -1, then no AVAILABLE records are found in the cachedState, so there is no need of
             // re-computing next fetch offset in future fetch requests
             if (nextFetchOffset == -1) {
-                findNextFetchOffset.set(false);
+                updateFindNextFetchOffset(false);
                 nextFetchOffset = endOffset + 1;
             }
             log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, nextFetchOffset);
@@ -959,14 +957,12 @@ public class SharePartition {
                     break;
                 }
             }
-
-            // If the acknowledgement is successful then persist state, complete the state transition
-            // and update the cached state for start offset. Else rollback the state transition.
-            rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
         } finally {
             lock.writeLock().unlock();
         }
-
+        // If the acknowledgement is successful then persist state, complete the state transition
+        // and update the cached state for start offset. Else rollback the state transition.
+        rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
         return future;
     }
 
@@ -1015,13 +1011,12 @@ public class SharePartition {
                     break;
                 }
             }
-
-            // If the release acquired records is successful then persist state, complete the state transition
-            // and update the cached state for start offset. Else rollback the state transition.
-            rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
         } finally {
             lock.writeLock().unlock();
         }
+        // If the release acquired records is successful then persist state, complete the state transition
+        // and update the cached state for start offset. Else rollback the state transition.
+        rollbackOrProcessStateUpdates(future, throwable, updatedStates, stateBatches);
         return future;
     }
 
@@ -1068,7 +1063,7 @@ public class SharePartition {
                 // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
                 // This should not change the next fetch offset because the record is not available for acquisition
                 if (updateResult.state != RecordState.ARCHIVED) {
-                    findNextFetchOffset.set(true);
+                    updateFindNextFetchOffset(true);
                 }
             }
         }
@@ -1113,7 +1108,7 @@ public class SharePartition {
             // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
             // This should not change the next fetch offset because the record is not available for acquisition
             if (updateResult.state != RecordState.ARCHIVED) {
-                findNextFetchOffset.set(true);
+                updateFindNextFetchOffset(true);
             }
         }
         return Optional.empty();
@@ -1148,7 +1143,7 @@ public class SharePartition {
             // If we have transitioned the state of any batch/offset from AVAILABLE to ARCHIVED,
             // then there is a chance that the next fetch offset can change.
             if (anyRecordArchived) {
-                findNextFetchOffset.set(true);
+                updateFindNextFetchOffset(true);
             }
 
             // The new startOffset will be the log start offset.
@@ -1210,7 +1205,7 @@ public class SharePartition {
             // If we have transitioned the state of any batch/offset from AVAILABLE to ARCHIVED,
             // then there is a chance that the next fetch offset can change.
             if (anyRecordArchived) {
-                findNextFetchOffset.set(true);
+                updateFindNextFetchOffset(true);
             }
         } finally {
             lock.writeLock().unlock();
@@ -1490,7 +1485,7 @@ public class SharePartition {
                 String.format("Share partition failed to load %s-%s", groupId, topicIdPartition));
             case INITIALIZING -> throw new LeaderNotAvailableException(
                 String.format("Share partition is already initializing %s-%s", groupId, topicIdPartition));
-            case FENCED -> throw new FencedStateEpochException(
+            case FENCED -> throw new LeaderNotAvailableException(
                 String.format("Share partition is fenced %s-%s", groupId, topicIdPartition));
             case EMPTY ->
                 // The share partition is not yet initialized.
@@ -1948,7 +1943,7 @@ public class SharePartition {
                 // This should not change the next fetch offset because the record is not available for acquisition
                 if (recordState == RecordState.AVAILABLE
                     && updateResult.state != RecordState.ARCHIVED) {
-                    findNextFetchOffset.set(true);
+                    updateFindNextFetchOffset(true);
                 }
             }
         } finally {
@@ -2004,7 +1999,7 @@ public class SharePartition {
             // This should not change the nextFetchOffset because the record is not available for acquisition
             if (recordState == RecordState.AVAILABLE
                 && updateResult.state != RecordState.ARCHIVED) {
-                findNextFetchOffset.set(true);
+                updateFindNextFetchOffset(true);
             }
         } finally {
             lock.writeLock().unlock();
@@ -2076,7 +2071,7 @@ public class SharePartition {
             lock.writeLock().lock();
             try {
                 if (exception != null) {
-                    log.error("Failed to write state to persister for the share partition: {}-{}",
+                    log.debug("Failed to write state to persister for the share partition: {}-{}",
                         groupId, topicIdPartition, exception);
                     updatedStates.forEach(state -> state.completeStateTransition(false));
                     future.completeExceptionally(exception);
@@ -2089,9 +2084,12 @@ public class SharePartition {
                     state.completeStateTransition(true);
                     // Cancel the acquisition lock timeout task for the state since it is acknowledged/released successfully.
                     state.cancelAndClearAcquisitionLockTimeoutTask();
+                    if (state.state == RecordState.AVAILABLE) {
+                        updateFindNextFetchOffset(true);
+                    }
                 });
                 // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
-                cacheStateUpdated  = maybeUpdateCachedStateAndOffsets();
+                cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
                 future.complete(null);
             } finally {
                 lock.writeLock().unlock();
@@ -2179,7 +2177,8 @@ public class SharePartition {
         }
     }
 
-    private boolean canMoveStartOffset() {
+    // Visible for testing.
+    boolean canMoveStartOffset() {
         // The Share Partition Start Offset may be moved after acknowledge request is complete.
         // The following conditions need to be met to move the startOffset:
         // 1. When the cachedState is not empty.
@@ -2204,7 +2203,15 @@ public class SharePartition {
                 "as there is an acquirable gap at the beginning. Cannot move the start offset.", startOffset, groupId, topicIdPartition);
             return false;
         }
-        RecordState startOffsetState = entry.getValue().offsetState == null ?
+        boolean isBatchState = entry.getValue().offsetState() == null;
+        boolean isOngoingTransition = isBatchState ?
+            entry.getValue().batchHasOngoingStateTransition() :
+            entry.getValue().offsetState().get(startOffset).hasOngoingStateTransition();
+        if (isOngoingTransition) {
+            return false;
+        }
+
+        RecordState startOffsetState = isBatchState ?
             entry.getValue().batchState() :
             entry.getValue().offsetState().get(startOffset).state();
         return isRecordStateAcknowledged(startOffsetState);
@@ -2239,13 +2246,13 @@ public class SharePartition {
                 }
 
                 if (inFlightBatch.offsetState() == null) {
-                    if (!isRecordStateAcknowledged(inFlightBatch.batchState())) {
+                    if (inFlightBatch.batchHasOngoingStateTransition() || !isRecordStateAcknowledged(inFlightBatch.batchState())) {
                         return lastOffsetAcknowledged;
                     }
                     lastOffsetAcknowledged = inFlightBatch.lastOffset();
                 } else {
                     for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
-                        if (!isRecordStateAcknowledged(offsetState.getValue().state())) {
+                        if (offsetState.getValue().hasOngoingStateTransition() || !isRecordStateAcknowledged(offsetState.getValue().state())) {
                             return lastOffsetAcknowledged;
                         }
                         lastOffsetAcknowledged = offsetState.getKey();
@@ -2324,8 +2331,8 @@ public class SharePartition {
                 PartitionErrorData partitionData = state.partitions().get(0);
                 if (partitionData.errorCode() != Errors.NONE.code()) {
                     KafkaException ex = fetchPersisterError(partitionData.errorCode(), partitionData.errorMessage());
-                    log.error("Failed to write the share group state for share partition: {}-{} due to exception",
-                        groupId, topicIdPartition, ex);
+                    maybeLogError(String.format("Failed to write the share group state for share partition: %s-%s due to exception",
+                        groupId, topicIdPartition), Errors.forCode(partitionData.errorCode()), ex);
                     future.completeExceptionally(ex);
                     return;
                 }
@@ -2343,9 +2350,7 @@ public class SharePartition {
                 new GroupIdNotFoundException(errorMessage);
             case UNKNOWN_TOPIC_OR_PARTITION ->
                 new UnknownTopicOrPartitionException(errorMessage);
-            case FENCED_STATE_EPOCH ->
-                new FencedStateEpochException(errorMessage);
-            case FENCED_LEADER_EPOCH ->
+            case FENCED_LEADER_EPOCH, FENCED_STATE_EPOCH ->
                 new NotLeaderOrFollowerException(errorMessage);
             default ->
                 new UnknownServerException(errorMessage);
@@ -2423,7 +2428,7 @@ public class SharePartition {
             if (!stateBatches.isEmpty()) {
                 writeShareGroupState(stateBatches).whenComplete((result, exception) -> {
                     if (exception != null) {
-                        log.error("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId: {}",
+                        log.debug("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId: {}",
                             groupId, topicIdPartition, memberId, exception);
                     }
                     // Even if write share group state RPC call fails, we will still go ahead with the state transition.
@@ -2461,7 +2466,7 @@ public class SharePartition {
             // Cancel the acquisition lock timeout task for the batch since it is completed now.
             updateResult.cancelAndClearAcquisitionLockTimeoutTask();
             if (updateResult.state != RecordState.ARCHIVED) {
-                findNextFetchOffset.set(true);
+                updateFindNextFetchOffset(true);
             }
             return;
         }
@@ -2508,7 +2513,7 @@ public class SharePartition {
             // Cancel the acquisition lock timeout task for the offset since it is completed now.
             updateResult.cancelAndClearAcquisitionLockTimeoutTask();
             if (updateResult.state != RecordState.ARCHIVED) {
-                findNextFetchOffset.set(true);
+                updateFindNextFetchOffset(true);
             }
         }
     }
@@ -2573,6 +2578,14 @@ public class SharePartition {
             archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
         }
         return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
+    }
+
+    private void maybeLogError(String message, Errors receivedError, Throwable wrappedException) {
+        if (receivedError == Errors.NETWORK_EXCEPTION) {
+            log.debug(message, wrappedException);
+        } else {
+            log.error(message, wrappedException);
+        }
     }
 
     /**
@@ -2734,12 +2747,22 @@ public class SharePartition {
 
     // Visible for testing.
     boolean findNextFetchOffset() {
-        return findNextFetchOffset.get();
+        lock.readLock().lock();
+        try {
+            return findNextFetchOffset;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
-    // Visible for testing. Should only be used for testing purposes.
-    void findNextFetchOffset(boolean findNextOffset) {
-        findNextFetchOffset.getAndSet(findNextOffset);
+    // Visible for testing.
+    void updateFindNextFetchOffset(boolean value) {
+        lock.writeLock().lock();
+        try {
+            findNextFetchOffset = value;
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     // Visible for testing
@@ -2916,7 +2939,8 @@ public class SharePartition {
             return batchState;
         }
 
-        private boolean batchHasOngoingStateTransition() {
+        // Visible for testing.
+        boolean batchHasOngoingStateTransition() {
             return inFlightState().hasOngoingStateTransition();
         }
 
@@ -3037,7 +3061,8 @@ public class SharePartition {
             acquisitionLockTimeoutTask = null;
         }
 
-        private boolean hasOngoingStateTransition() {
+        // Visible for testing.
+        boolean hasOngoingStateTransition() {
             if (rollbackState == null) {
                 // This case could occur when the batch/offset hasn't transitioned even once or the state transitions have
                 // been committed.
@@ -3070,6 +3095,7 @@ public class SharePartition {
                 return this;
             } catch (IllegalStateException e) {
                 log.error("Failed to update state of the records", e);
+                rollbackState = null;
                 return null;
             }
         }

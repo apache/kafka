@@ -28,7 +28,6 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -41,6 +40,8 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -554,7 +555,7 @@ class RemoteTopicCrudTest {
     }
 
     private void verifyRemoteLogTopicConfigs(Map<String, String> topicConfig) throws Exception {
-        TestUtils.waitForCondition(() -> {
+        TestCondition condition = () -> {
             var logBuffer = cluster.brokers().values()
                 .stream()
                 .map(broker -> broker.logManager().getLog(new TopicPartition(testTopicName, 0), false))
@@ -613,7 +614,8 @@ class RemoteTopicCrudTest {
                 }
             }
             return result;
-        }, "Failed to update topic config $topicConfig" + topicConfig);
+        };
+        TestUtils.waitForCondition(condition, "Failed to update topic config $topicConfig" + topicConfig);
     }
 
 

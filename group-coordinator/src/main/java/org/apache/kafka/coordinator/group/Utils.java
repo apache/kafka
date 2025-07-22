@@ -23,13 +23,9 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.image.ClusterImage;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
-import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import com.dynatrace.hash4j.hashing.HashStream64;
@@ -141,22 +137,20 @@ public class Utils {
      * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
      *
      * @param assignment    The map to convert.
-     * @param topicsImage   The TopicsImage.
+     * @param image   The CoordinatorMetadataImage.
      * @return The converted ConsumerProtocolAssignment.
      */
     public static ConsumerProtocolAssignment toConsumerProtocolAssignment(
         Map<Uuid, Set<Integer>> assignment,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         ConsumerProtocolAssignment.TopicPartitionCollection collection =
             new ConsumerProtocolAssignment.TopicPartitionCollection();
         assignment.forEach((topicId, partitions) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            if (topicImage != null) {
+            image.topicMetadata(topicId).ifPresent(topicMetadata ->
                 collection.add(new ConsumerProtocolAssignment.TopicPartition()
-                    .setTopic(topicImage.name())
-                    .setPartitions(new ArrayList<>(partitions)));
-            }
+                    .setTopic(topicMetadata.name())
+                    .setPartitions(new ArrayList<>(partitions))));
         });
         return new ConsumerProtocolAssignment()
             .setAssignedPartitions(collection);
@@ -165,20 +159,19 @@ public class Utils {
     /**
      * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
      *
-     * @param consumerProtocolAssignment    The ConsumerProtocolAssignment.
-     * @param topicsImage                   The TopicsImage.
+     * @param consumerProtocolAssignment The ConsumerProtocolAssignment.
+     * @param metadataImage              The Metadata image.
      * @return The converted map.
      */
     public static Map<Uuid, Set<Integer>> toTopicPartitionMap(
         ConsumerProtocolAssignment consumerProtocolAssignment,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage metadataImage
     ) {
         Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
         consumerProtocolAssignment.assignedPartitions().forEach(topicPartition -> {
-            TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
-            if (topicImage != null) {
-                topicPartitionMap.put(topicImage.id(), new HashSet<>(topicPartition.partitions()));
-            }
+            metadataImage.topicMetadata(topicPartition.topic()).ifPresent(topicMetadata -> {
+                topicPartitionMap.put(topicMetadata.id(), new HashSet<>(topicPartition.partitions()));
+            });
         });
         return topicPartitionMap;
     }
@@ -186,24 +179,23 @@ public class Utils {
     /**
      * Converts a ConsumerProtocolSubscription.TopicPartitionCollection to a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
      *
-     * @param topicPartitionCollection  The TopicPartitionCollection to convert.
-     * @param topicsImage               The TopicsImage.
+     * @param topicPartitionCollection The TopicPartitionCollection to convert.
+     * @param metadataImage            The Metadata image.
      * @return a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
      */
     public static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> toTopicPartitions(
         ConsumerProtocolSubscription.TopicPartitionCollection topicPartitionCollection,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage metadataImage
     ) {
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> res = new ArrayList<>();
         for (ConsumerProtocolSubscription.TopicPartition tp : topicPartitionCollection) {
-            TopicImage topicImage = topicsImage.getTopic(tp.topic());
-            if (topicImage != null) {
+            metadataImage.topicMetadata(tp.topic()).ifPresent(topicMetadata -> {
                 res.add(
                     new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                        .setTopicId(topicImage.id())
+                        .setTopicId(topicMetadata.id())
                         .setPartitions(tp.partitions())
                 );
-            }
+            });
         }
         return res;
     }
@@ -276,6 +268,22 @@ public class Utils {
         String error
     ) throws InvalidRequestException {
         if (value == null || !value.isEmpty()) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is not null and non-empty.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNotNullOrEmpty(
+        Collection<?> value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null && !value.isEmpty()) {
             throw new InvalidRequestException(error);
         }
     }
@@ -382,38 +390,32 @@ public class Utils {
      * 5. For each partition, write the partition ID and a sorted list of rack identifiers.
      * - Rack identifiers are formatted as "<length1><value1><length2><value2>" to prevent issues with simple separators.
      *
-     * @param topicName     The topic image.
-     * @param metadataImage The cluster image.
+     * @param topicName The topic name.
+     * @param metadataImage The topic metadata.
      * @return The hash of the topic.
      */
-    public static long computeTopicHash(String topicName, MetadataImage metadataImage) {
-        TopicImage topicImage = metadataImage.topics().getTopic(topicName);
-        if (topicImage == null) {
+    public static long computeTopicHash(String topicName, CoordinatorMetadataImage metadataImage) {
+        Optional<CoordinatorMetadataImage.TopicMetadata> topicImage = metadataImage.topicMetadata(topicName);
+        if (topicImage.isEmpty()) {
             return 0;
         }
+
+        CoordinatorMetadataImage.TopicMetadata topicMetadata = topicImage.get();
 
         HashStream64 hasher = Hashing.xxh3_64().hashStream();
         hasher = hasher
             .putByte(TOPIC_HASH_MAGIC_BYTE)
-            .putLong(topicImage.id().getMostSignificantBits())
-            .putLong(topicImage.id().getLeastSignificantBits())
-            .putString(topicImage.name())
-            .putInt(topicImage.partitions().size());
+            .putLong(topicMetadata.id().getMostSignificantBits())
+            .putLong(topicMetadata.id().getLeastSignificantBits())
+            .putString(topicMetadata.name())
+            .putInt(topicMetadata.partitionCount());
 
-        ClusterImage clusterImage = metadataImage.cluster();
-        List<String> racks = new ArrayList<>();
-        for (int i = 0; i < topicImage.partitions().size(); i++) {
+        for (int i = 0; i < topicMetadata.partitionCount(); i++) {
             hasher = hasher.putInt(i);
-            racks.clear(); // Clear the list for reuse
-            for (int replicaId : topicImage.partitions().get(i).replicas) {
-                BrokerRegistration broker = clusterImage.broker(replicaId);
-                if (broker != null) {
-                    broker.rack().ifPresent(racks::add);
-                }
-            }
+            List<String> partitionRacks = topicMetadata.partitionRacks(i);
+            Collections.sort(partitionRacks);
 
-            Collections.sort(racks);
-            for (String rack : racks) {
+            for (String rack : partitionRacks) {
                 // Format: "<length><value>"
                 // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
                 // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".

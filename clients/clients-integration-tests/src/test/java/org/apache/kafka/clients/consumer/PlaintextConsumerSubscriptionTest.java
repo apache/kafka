@@ -22,11 +22,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
@@ -371,6 +371,49 @@ public class PlaintextConsumerSubscriptionTest {
             expandedAssignment.add(new TopicPartition(topic2, 0));
             expandedAssignment.add(new TopicPartition(topic2, 1));
             awaitAssignment(consumer, expandedAssignment);
+        }
+    }
+
+    @ClusterTest
+    public void testTopicIdSubscriptionWithRe2JRegexAndOffsetsFetch() throws InterruptedException {
+        var topic1 = "topic1"; // matches subscribed pattern
+        cluster.createTopic(topic1, 2, (short) BROKER_COUNT);
+
+        Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+        try (
+                Producer<byte[], byte[]> producer = cluster.producer();
+                Consumer<byte[], byte[]> consumer = cluster.consumer(config)
+        ) {
+            assertEquals(0, consumer.assignment().size());
+
+            // Subscribe to broker-side regex and fetch. This will require metadata for topic IDs.
+            var pattern = new SubscriptionPattern("topic.*");
+            consumer.subscribe(pattern);
+            var assignment = Set.of(
+                    new TopicPartition(topic, 0),
+                    new TopicPartition(topic, 1),
+                    new TopicPartition(topic1, 0),
+                    new TopicPartition(topic1, 1));
+            awaitAssignment(consumer, assignment);
+            var totalRecords = 10;
+            var startingTimestamp = System.currentTimeMillis();
+            var tp = new TopicPartition(topic1, 0);
+            sendRecords(producer, tp, totalRecords, startingTimestamp);
+            consumeAndVerifyRecords(consumer, tp, totalRecords, 0, 0, startingTimestamp);
+
+            // Fetch offsets for known and unknown topics. This will require metadata for topic names temporarily (transient topics)
+            var topic2 = "newTopic2";
+            cluster.createTopic(topic2, 2, (short) BROKER_COUNT);
+            var unassignedPartition = new TopicPartition(topic2, 0);
+            var offsets = consumer.endOffsets(List.of(unassignedPartition, tp));
+            var expectedOffsets = Map.of(
+                    unassignedPartition, 0L,
+                    tp, (long) totalRecords);
+            assertEquals(expectedOffsets, offsets);
+
+            // Fetch records again with the regex subscription. This will require metadata for topic IDs again.
+            sendRecords(producer, tp, totalRecords, startingTimestamp);
+            consumeAndVerifyRecords(consumer, tp, totalRecords, totalRecords, 0, startingTimestamp);
         }
     }
 

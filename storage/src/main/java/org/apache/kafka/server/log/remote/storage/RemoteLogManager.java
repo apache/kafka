@@ -246,7 +246,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             "RLMCopyThreadPool", "kafka-rlm-copy-thread-pool-%d");
         rlmExpirationThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerExpirationThreadPoolSize(),
             "RLMExpirationThreadPool", "kafka-rlm-expiration-thread-pool-%d");
-        followerThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize(),
+        followerThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerFollowerThreadPoolSize(),
             "RLMFollowerScheduledThreadPool", "kafka-rlm-follower-thread-pool-%d");
 
         metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC, rlmCopyThreadPool::getIdlePercent);
@@ -290,6 +290,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         rlmExpirationThreadPool.setCorePoolSize(newSize);
     }
 
+    public void resizeFollowerThreadPool(int newSize) {
+        int currentSize = followerThreadPool.getCorePoolSize();
+        LOGGER.info("Updating remote follower thread pool size from {} to {}", currentSize, newSize);
+        followerThreadPool.setCorePoolSize(newSize);
+    }
+
     public void resizeReaderThreadPool(int newSize) {
         int currentSize = remoteStorageReaderThreadPool.getCorePoolSize();
         int currentMaximumSize = remoteStorageReaderThreadPool.getMaximumPoolSize();
@@ -312,6 +318,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     // Visible for testing
     int readerThreadPoolSize() {
         return remoteStorageReaderThreadPool.getCorePoolSize();
+    }
+
+    // Visible for testing
+    int followerThreadPoolSize() {
+        return followerThreadPool.getCorePoolSize();
     }
 
     /**
@@ -753,7 +764,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     /**
-     * Returns the leader epoch entries within the range of the given start[exclusive] and end[inclusive] offset.
+     * Returns the leader epoch entries within the range of the given start (inclusive) and end (exclusive) offset.
      * <p>
      * Visible for testing.
      *
@@ -1648,7 +1659,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {
         int fetchMaxBytes = remoteStorageFetchInfo.fetchMaxBytes;
-        TopicPartition tp = remoteStorageFetchInfo.topicPartition;
+        TopicPartition tp = remoteStorageFetchInfo.topicIdPartition.topicPartition();
         FetchRequest.PartitionData fetchInfo = remoteStorageFetchInfo.fetchInfo;
 
         boolean includeAbortedTxns = remoteStorageFetchInfo.fetchIsolation == FetchIsolation.TXN_COMMITTED;
@@ -1704,6 +1715,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             //  - there is no minimum-one-message constraint and
             //  - the first batch size is more than maximum bytes that can be sent and
             if (!remoteStorageFetchInfo.minOneMessage && firstBatchSize > maxBytes) {
+                LOGGER.debug("Returning empty record for offset {} in partition {} because the first batch size {} " +
+                        "is greater than max fetch bytes {}", offset, tp, firstBatchSize, maxBytes);
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY);
             }
 

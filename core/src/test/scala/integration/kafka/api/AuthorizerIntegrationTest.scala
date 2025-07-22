@@ -17,11 +17,12 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.{ExecutionException, Semaphore}
 import java.util.regex.Pattern
-import java.util.{Comparator, Optional, Properties}
+import java.util.{Comparator, Optional, Properties, UUID}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ListGroupsOptions, NewTopic}
 import org.apache.kafka.clients.consumer._
+import org.apache.kafka.clients.consumer.internals.{StreamsRebalanceData, StreamsRebalanceListener}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
@@ -37,7 +38,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, AlterShareGroupOffsetsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteShareGroupOffsetsRequestData, DeleteShareGroupStateRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeShareGroupOffsetsRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, InitializeShareGroupStateRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, OffsetFetchResponseData, ProduceRequestData, ReadShareGroupStateRequestData, ReadShareGroupStateSummaryRequestData, ShareAcknowledgeRequestData, ShareFetchRequestData, ShareGroupDescribeRequestData, ShareGroupHeartbeatRequestData, SyncGroupRequestData, WriteShareGroupStateRequestData, WriteTxnMarkersRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, AlterShareGroupOffsetsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteShareGroupOffsetsRequestData, DeleteShareGroupStateRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeShareGroupOffsetsRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, InitializeShareGroupStateRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, OffsetFetchResponseData, ProduceRequestData, ReadShareGroupStateRequestData, ReadShareGroupStateSummaryRequestData, ShareAcknowledgeRequestData, ShareFetchRequestData, ShareGroupDescribeRequestData, ShareGroupHeartbeatRequestData, StreamsGroupDescribeRequestData, StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData, SyncGroupRequestData, WriteShareGroupStateRequestData, WriteTxnMarkersRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
@@ -53,8 +54,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
-
+import org.junit.jupiter.params.provider.{CsvSource, MethodSource, ValueSource}
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.{WritableTxnMarker, WritableTxnMarkerTopic}
 import org.apache.kafka.coordinator.group.GroupConfig
@@ -76,6 +76,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   val shareGroupDeleteAcl = Map(shareGroupResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DELETE, ALLOW)))
   val shareGroupDescribeConfigsAcl = Map(shareGroupResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE_CONFIGS, ALLOW)))
   val shareGroupAlterConfigsAcl = Map(shareGroupResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALTER_CONFIGS, ALLOW)))
+  val streamsGroupReadAcl = Map(streamsGroupResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)))
+  val streamsGroupDescribeAcl = Map(streamsGroupResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)))
   val clusterAcl = Map(clusterResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, CLUSTER_ACTION, ALLOW)))
   val clusterCreateAcl = Map(clusterResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, CREATE, ALLOW)))
   val clusterAlterAcl = Map(clusterResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALTER, ALLOW)))
@@ -92,6 +94,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   val topicAlterConfigsAcl = Map(topicResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALTER_CONFIGS, ALLOW)))
   val transactionIdWriteAcl = Map(transactionalIdResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, WRITE, ALLOW)))
   val transactionalIdDescribeAcl = Map(transactionalIdResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)))
+  val sourceTopicDescribeAcl = Map(sourceTopicResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)))
 
   val numRecords = 1
 
@@ -223,7 +226,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     ApiKeys.DELETE_SHARE_GROUP_OFFSETS -> ((resp: DeleteShareGroupOffsetsResponse) => Errors.forCode(
       resp.data.errorCode)),
     ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> ((resp: AlterShareGroupOffsetsResponse) => Errors.forCode(
-      resp.data.errorCode))
+      resp.data.errorCode)),
+    ApiKeys.STREAMS_GROUP_HEARTBEAT -> ((resp: StreamsGroupHeartbeatResponse) => Errors.forCode(resp.data.errorCode)),
+    ApiKeys.STREAMS_GROUP_DESCRIBE -> ((resp: StreamsGroupDescribeResponse) =>
+      Errors.forCode(resp.data.groups.asScala.find(g => streamsGroup == g.groupId).head.errorCode))
   )
 
   def findErrorForTopicId(id: Uuid, response: AbstractResponse): Errors = {
@@ -291,7 +297,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY -> clusterAcl,
     ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS -> (shareGroupDescribeAcl ++ topicDescribeAcl),
     ApiKeys.DELETE_SHARE_GROUP_OFFSETS -> (shareGroupDeleteAcl ++ topicReadAcl),
-    ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> (shareGroupReadAcl ++ topicReadAcl)
+    ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> (shareGroupReadAcl ++ topicReadAcl),
+    ApiKeys.STREAMS_GROUP_HEARTBEAT -> (streamsGroupReadAcl ++ topicDescribeAcl),
+    ApiKeys.STREAMS_GROUP_DESCRIBE -> (streamsGroupDescribeAcl ++ topicDescribeAcl),
   )
 
   private def createMetadataRequest(allowAutoTopicCreation: Boolean) = {
@@ -825,6 +833,53 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     new AlterShareGroupOffsetsRequest.Builder(data).build(ApiKeys.ALTER_SHARE_GROUP_OFFSETS.latestVersion)
   }
 
+  private def streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequest.Builder(
+    new StreamsGroupHeartbeatRequestData()
+      .setGroupId(streamsGroup)
+      .setMemberId("member-id")
+      .setMemberEpoch(0)
+      .setRebalanceTimeoutMs(1000)
+      .setActiveTasks(List.empty.asJava)
+      .setStandbyTasks(List.empty.asJava)
+      .setWarmupTasks(List.empty.asJava)
+      .setTopology(new StreamsGroupHeartbeatRequestData.Topology().setSubtopologies(
+        List(new StreamsGroupHeartbeatRequestData.Subtopology()
+          .setSourceTopics(List(topic).asJava)
+        ).asJava
+      ))).build(ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion)
+
+  private def streamsGroupHeartbeatRequest(
+                                             topicAsSourceTopic: Boolean,
+                                             topicAsRepartitionSinkTopic: Boolean,
+                                             topicAsRepartitionSourceTopic: Boolean,
+                                             topicAsStateChangelogTopics: Boolean
+                                           ) = new StreamsGroupHeartbeatRequest.Builder(
+    new StreamsGroupHeartbeatRequestData()
+      .setGroupId(streamsGroup)
+      .setMemberId("member-id")
+      .setMemberEpoch(0)
+      .setRebalanceTimeoutMs(1000)
+      .setActiveTasks(List.empty.asJava)
+      .setStandbyTasks(List.empty.asJava)
+      .setWarmupTasks(List.empty.asJava)
+      .setTopology(new StreamsGroupHeartbeatRequestData.Topology().setSubtopologies(
+        List(new StreamsGroupHeartbeatRequestData.Subtopology()
+          .setSourceTopics(
+            (if (topicAsSourceTopic) List(sourceTopic, topic) else List(sourceTopic)).asJava)
+          .setRepartitionSinkTopics(
+            (if (topicAsRepartitionSinkTopic) List(topic) else List.empty).asJava)
+          .setRepartitionSourceTopics(
+            (if (topicAsRepartitionSourceTopic) List(new StreamsGroupHeartbeatRequestData.TopicInfo().setName(topic).setPartitions(3)) else List.empty).asJava)
+          .setStateChangelogTopics(
+            (if (topicAsStateChangelogTopics) List(new StreamsGroupHeartbeatRequestData.TopicInfo().setName(topic)) else List.empty).asJava)
+        ).asJava
+      ))).build(ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion)
+
+  private def streamsGroupDescribeRequest = new StreamsGroupDescribeRequest.Builder(
+    new StreamsGroupDescribeRequestData()
+      .setGroupIds(List(streamsGroup).asJava)
+      .setIncludeAuthorizedOperations(false)).build(ApiKeys.STREAMS_GROUP_DESCRIBE.latestVersion)
+  
   private def sendRequests(requestKeyToRequest: mutable.Map[ApiKeys, AbstractRequest], topicExists: Boolean = true,
                            topicNames: Map[Uuid, String] = getTopicNames()) = {
     for ((key, request) <- requestKeyToRequest) {
@@ -908,6 +963,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS -> describeShareGroupOffsetsRequest,
       ApiKeys.DELETE_SHARE_GROUP_OFFSETS -> deleteShareGroupOffsetsRequest,
       ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> alterShareGroupOffsetsRequest,
+      ApiKeys.STREAMS_GROUP_HEARTBEAT -> streamsGroupHeartbeatRequest,
+      ApiKeys.STREAMS_GROUP_DESCRIBE -> streamsGroupDescribeRequest,
 
       // Delete the topic last
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
@@ -940,7 +997,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       ApiKeys.ELECT_LEADERS -> electLeadersRequest,
       ApiKeys.SHARE_FETCH -> createShareFetchRequest,
       ApiKeys.SHARE_ACKNOWLEDGE -> shareAcknowledgeRequest,
-      ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS -> describeShareGroupOffsetsRequest
+      ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS -> describeShareGroupOffsetsRequest,
+      ApiKeys.STREAMS_GROUP_HEARTBEAT -> streamsGroupHeartbeatRequest,
+      ApiKeys.STREAMS_GROUP_DESCRIBE -> streamsGroupDescribeRequest
     )
 
     sendRequests(requestKeyToRequest, topicExists = false, topicNames)
@@ -3077,6 +3136,29 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   @Test
+  def testConsumerGroupHeartbeatWithRegexWithTopicDescribeAclAddedAndRemoved(): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
+    addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
+
+    val memberId = Uuid.randomUuid.toString;
+    var response = sendAndReceiveFirstRegexHeartbeat(memberId, listenerName)
+    TestUtils.tryUntilNoAssertionError() {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(0), true)
+    }
+
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+    TestUtils.tryUntilNoAssertionError(waitTime = 25000) {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
+    }
+
+    removeAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+    TestUtils.tryUntilNoAssertionError(waitTime = 25000) {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(0))
+    }
+  }
+
+  @Test
   def testConsumerGroupHeartbeatWithRegexWithDifferentMemberAcls(): Unit = {
     createTopicWithBrokerPrincipal(topic, numPartitions = 2)
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
@@ -3093,7 +3175,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // member permissions while computing assignments.
     var member2Response = sendAndReceiveFirstRegexHeartbeat("memberWithLimitedAccess", listenerName)
     member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(1))
-    member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, None, fullRequest = true)
+    member1Response = sendAndReceiveRegexHeartbeat(member1Response, interBrokerListenerName, Some(1), fullRequest = true)
     member2Response = sendAndReceiveRegexHeartbeat(member2Response, listenerName, Some(1))
 
     // Create another topic and send heartbeats on member1 to trigger regex refresh
@@ -3169,6 +3251,18 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val consumer = createShareConsumer()
     consumer.subscribe(util.Set.of(topic))
     consumer.poll(Duration.ofMillis(500L))
+    removeAllClientAcls()
+  }
+
+  private def createEmptyShareGroup(): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), shareGroupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), topicResource)
+    shareConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, shareGroup)
+    val consumer = createShareConsumer()
+    consumer.subscribe(util.Set.of(topic))
+    consumer.poll(Duration.ofMillis(500L))
+    consumer.close()
     removeAllClientAcls()
   }
 
@@ -3532,6 +3626,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @Test
   def testDeleteShareGroupOffsetsWithoutTopicReadAcl(): Unit = {
+    createEmptyShareGroup()
     addAndVerifyAcls(shareGroupDeleteAcl(shareGroupResource), shareGroupResource)
 
     val request = deleteShareGroupOffsetsRequest
@@ -3581,6 +3676,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @Test
   def testAlterShareGroupOffsetsWithoutTopicReadAcl(): Unit = {
+    createEmptyShareGroup()
     addAndVerifyAcls(shareGroupReadAcl(shareGroupResource), shareGroupResource)
 
     val request = alterShareGroupOffsetsRequest
@@ -3589,6 +3685,359 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.responses.stream().findFirst().get().partitions.get(0).errorCode, s"Unexpected response $response")
   }
 
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false, false, false",
+    "false, true,  false, false",
+    "false, false, true,  false",
+    "false, false, false, true"
+  ))
+  def testStreamsGroupHeartbeatWithGroupReadAndTopicDescribeAcl(
+                                                                 topicAsSourceTopic: Boolean,
+                                                                 topicAsRepartitionSinkTopic: Boolean,
+                                                                 topicAsRepartitionSourceTopic: Boolean,
+                                                                 topicAsStateChangelogTopics: Boolean
+                                                               ): Unit = {
+    addAndVerifyAcls(streamsGroupReadAcl(streamsGroupResource), streamsGroupResource)
+    addAndVerifyAcls(sourceTopicDescribeAcl(sourceTopicResource), sourceTopicResource) // Always added, since we need a source topic
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+
+    val request = streamsGroupHeartbeatRequest(
+      topicAsSourceTopic,
+      topicAsRepartitionSinkTopic,
+      topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics
+    )
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false, false, false",
+    "false, true,  false, false",
+    "false, false, true,  false",
+    "false, false, false, true"
+  ))
+  def testStreamsGroupHeartbeatWithOperationAll(
+                                                 topicAsSourceTopic: Boolean,
+                                                 topicAsRepartitionSinkTopic: Boolean,
+                                                 topicAsRepartitionSourceTopic: Boolean,
+                                                 topicAsStateChangelogTopics: Boolean
+                                               ): Unit = {
+    val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
+    addAndVerifyAcls(Set(allowAllOpsAcl), streamsGroupResource)
+    addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
+    addAndVerifyAcls(Set(allowAllOpsAcl), sourceTopicResource)
+
+    val request = streamsGroupHeartbeatRequest(
+      topicAsSourceTopic,
+      topicAsRepartitionSinkTopic,
+      topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics
+    )
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false, false, false",
+    "false, true,  false, false",
+    "false, false, true,  false",
+    "false, false, false, true"
+  ))
+  def testStreamsGroupHeartbeatWithoutGroupReadOrTopicDescribeAcl(
+                                                                   topicAsSourceTopic: Boolean,
+                                                                   topicAsRepartitionSinkTopic: Boolean,
+                                                                   topicAsRepartitionSourceTopic: Boolean,
+                                                                   topicAsStateChangelogTopics: Boolean
+                                                                 ): Unit = {
+    removeAllClientAcls()
+
+    val request = streamsGroupHeartbeatRequest(
+      topicAsSourceTopic,
+      topicAsRepartitionSinkTopic,
+      topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics
+    )
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false, false, false",
+    "false, true,  false, false",
+    "false, false, true,  false",
+    "false, false, false, true"
+  ))
+  def testStreamsGroupHeartbeatWithoutGroupReadAcl(
+                                                    topicAsSourceTopic: Boolean,
+                                                    topicAsRepartitionSinkTopic: Boolean,
+                                                    topicAsRepartitionSourceTopic: Boolean,
+                                                    topicAsStateChangelogTopics: Boolean
+                                                  ): Unit = {
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+    addAndVerifyAcls(sourceTopicDescribeAcl(sourceTopicResource), sourceTopicResource) // Always added, since we need a source topic
+
+    val request = streamsGroupHeartbeatRequest(
+      topicAsSourceTopic,
+      topicAsRepartitionSinkTopic,
+      topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics
+    )
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false, false, false",
+    "false, true,  false, false",
+    "false, false, true,  false",
+    "false, false, false, true"
+  ))
+  def testStreamsGroupHeartbeatWithoutTopicDescribeAcl(
+                                                        topicAsSourceTopic: Boolean,
+                                                        topicAsRepartitionSinkTopic: Boolean,
+                                                        topicAsRepartitionSourceTopic: Boolean,
+                                                        topicAsStateChangelogTopics: Boolean
+                                                      ): Unit = {
+    addAndVerifyAcls(streamsGroupReadAcl(streamsGroupResource), streamsGroupResource)
+    addAndVerifyAcls(sourceTopicDescribeAcl(sourceTopicResource), sourceTopicResource) // Always added, since we need a source topic
+
+    val request = streamsGroupHeartbeatRequest(
+      topicAsSourceTopic,
+      topicAsRepartitionSinkTopic,
+      topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics
+    )
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false",
+    "false, true"
+  ))
+  def testStreamsGroupHeartbeatWithoutInternalTopicCreateAcl(
+                                                              topicAsRepartitionSourceTopic: Boolean,
+                                                              topicAsStateChangelogTopics: Boolean
+                                                            ): Unit = {
+    createTopicWithBrokerPrincipal(sourceTopic)
+    addAndVerifyAcls(streamsGroupReadAcl(streamsGroupResource), streamsGroupResource)
+    addAndVerifyAcls(sourceTopicDescribeAcl(sourceTopicResource), sourceTopicResource) // Always added, since we need a source topic
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+
+    val request = streamsGroupHeartbeatRequest(
+      topicAsSourceTopic = false,
+      topicAsRepartitionSinkTopic = false,
+      topicAsRepartitionSourceTopic = topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics = topicAsStateChangelogTopics
+    )
+    val resource = Set[ResourceType](GROUP, TOPIC)
+
+    // Request successful, but internal topic not created.
+    val response = sendRequestAndVerifyResponseError(request, resource, isAuthorized = true).asInstanceOf[StreamsGroupHeartbeatResponse]
+    assertEquals(
+      util.List.of(new StreamsGroupHeartbeatResponseData.Status()
+        .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+        .setStatusDetail("Internal topics are missing: [topic]; Unauthorized to CREATE on topics topic.")),
+    response.data().status())
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false",
+    "false, true"
+  ))
+  def testStreamsGroupHeartbeatWithInternalTopicCreateAcl(
+                                                           topicAsRepartitionSourceTopic: Boolean,
+                                                           topicAsStateChangelogTopics: Boolean
+                                                         ): Unit = {
+    createTopicWithBrokerPrincipal(sourceTopic)
+    addAndVerifyAcls(streamsGroupReadAcl(streamsGroupResource), streamsGroupResource)
+    addAndVerifyAcls(sourceTopicDescribeAcl(sourceTopicResource), sourceTopicResource) // Always added, since we need a source topic
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+    addAndVerifyAcls(topicCreateAcl(topicResource), topicResource)
+
+    val request = streamsGroupHeartbeatRequest(
+      topicAsSourceTopic = false,
+      topicAsRepartitionSinkTopic = false,
+      topicAsRepartitionSourceTopic = topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics = topicAsStateChangelogTopics
+    )
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    val response = sendRequestAndVerifyResponseError(request, resource, isAuthorized = true).asInstanceOf[StreamsGroupHeartbeatResponse]
+    // Request successful, and no internal topic creation error.
+    assertEquals(
+      util.List.of(new StreamsGroupHeartbeatResponseData.Status()
+        .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+        .setStatusDetail("Internal topics are missing: [topic]")),
+      response.data().status())
+  }
+
+  private def createStreamsGroupToDescribe(
+                                            topicAsSourceTopic: Boolean,
+                                            topicAsRepartitionSinkTopic: Boolean,
+                                            topicAsRepartitionSourceTopic: Boolean,
+                                            topicAsStateChangelogTopics: Boolean
+                                          ): Unit = {
+    createTopicWithBrokerPrincipal(sourceTopic)
+    createTopicWithBrokerPrincipal(topic)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), streamsGroupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), topicResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), sourceTopicResource)
+    streamsConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, streamsGroup)
+    streamsConsumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    val consumer = createStreamsConsumer(streamsRebalanceData = new StreamsRebalanceData(
+      UUID.randomUUID(),
+      Optional.empty(),
+      util.Map.of(
+        "subtopology-0", new StreamsRebalanceData.Subtopology(
+          if (topicAsSourceTopic) util.Set.of(sourceTopic, topic) else util.Set.of(sourceTopic),
+          if (topicAsRepartitionSinkTopic) util.Set.of(topic) else util.Set.of(),
+          if (topicAsRepartitionSourceTopic)
+            util.Map.of(topic, new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.empty(), util.Map.of()))
+          else util.Map.of(),
+          if (topicAsStateChangelogTopics)
+            util.Map.of(topic, new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.empty(), util.Map.of()))
+          else util.Map.of(),
+          util.Set.of()
+        )),
+      Map.empty[String, String].asJava
+    ))
+    consumer.subscribe(
+      if (topicAsSourceTopic || topicAsRepartitionSourceTopic) util.Set.of(sourceTopic, topic) else util.Set.of(sourceTopic),
+      new StreamsRebalanceListener {
+        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Optional[Exception] =
+          Optional.empty()
+
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Optional[Exception] =
+          Optional.empty()
+
+        override def onAllTasksLost(): Optional[Exception] =
+          Optional.empty()
+      }
+    )
+    consumer.poll(Duration.ofMillis(500L))
+    removeAllClientAcls()
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false, false, false",
+    "false, true,  false, false",
+    "false, false, true,  false",
+    "false, false, false, true"
+  ))
+  def testStreamsGroupDescribeWithGroupDescribeAndTopicDescribeAcl(
+                                                                    topicAsSourceTopic: Boolean,
+                                                                    topicAsRepartitionSinkTopic: Boolean,
+                                                                    topicAsRepartitionSourceTopic: Boolean,
+                                                                    topicAsStateChangelogTopics: Boolean
+                                                                  ): Unit = {
+    createStreamsGroupToDescribe(
+      topicAsSourceTopic,
+      topicAsRepartitionSinkTopic,
+      topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics
+    )
+    addAndVerifyAcls(streamsGroupDescribeAcl(streamsGroupResource), streamsGroupResource)
+    addAndVerifyAcls(sourceTopicDescribeAcl(sourceTopicResource), sourceTopicResource) // Always added, since we need a source topic
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+
+    val request = streamsGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false, false, false",
+    "false, true,  false, false",
+    "false, false, true,  false",
+    "false, false, false, true"
+  ))
+  def testStreamsGroupDescribeWithOperationAll(
+                                                topicAsSourceTopic: Boolean,
+                                                topicAsRepartitionSinkTopic: Boolean,
+                                                topicAsRepartitionSourceTopic: Boolean,
+                                                topicAsStateChangelogTopics: Boolean
+                                              ): Unit = {
+    createStreamsGroupToDescribe(
+      topicAsSourceTopic,
+      topicAsRepartitionSinkTopic,
+      topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics
+    )
+
+    val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
+    addAndVerifyAcls(Set(allowAllOpsAcl), streamsGroupResource)
+    addAndVerifyAcls(sourceTopicDescribeAcl(sourceTopicResource), sourceTopicResource) // Always added, since we need a source topic
+    addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
+
+    val request = streamsGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false, false, false",
+    "false, true,  false, false",
+    "false, false, true,  false",
+    "false, false, false, true"
+  ))
+  def testStreamsGroupDescribeWithoutGroupDescribeAcl(
+                                                       topicAsSourceTopic: Boolean,
+                                                       topicAsRepartitionSinkTopic: Boolean,
+                                                       topicAsRepartitionSourceTopic: Boolean,
+                                                       topicAsStateChangelogTopics: Boolean
+                                                     ): Unit = {
+    createStreamsGroupToDescribe(
+      topicAsSourceTopic,
+      topicAsRepartitionSinkTopic,
+      topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics
+    )
+    addAndVerifyAcls(sourceTopicDescribeAcl(sourceTopicResource), sourceTopicResource) // Always added, since we need a source topic
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+
+    val request = streamsGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "true,  false, false, false",
+    "false, true,  false, false",
+    "false, false, true,  false",
+    "false, false, false, true"
+  ))
+  def testStreamsGroupDescribeWithoutGroupDescribeOrTopicDescribeAcl(
+                                                                      topicAsSourceTopic: Boolean,
+                                                                      topicAsRepartitionSinkTopic: Boolean,
+                                                                      topicAsRepartitionSourceTopic: Boolean,
+                                                                      topicAsStateChangelogTopics: Boolean
+                                                                    ): Unit = {
+    createStreamsGroupToDescribe(
+      topicAsSourceTopic,
+      topicAsRepartitionSinkTopic,
+      topicAsRepartitionSourceTopic,
+      topicAsStateChangelogTopics
+    )
+
+    val request = streamsGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    addAndVerifyAcls(sourceTopicDescribeAcl(sourceTopicResource), sourceTopicResource) // Always added, since we need a source topic
+
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+  
   private def sendAndReceiveFirstRegexHeartbeat(memberId: String,
                                                 listenerName: ListenerName): ConsumerGroupHeartbeatResponseData = {
     val request = new ConsumerGroupHeartbeatRequest.Builder(
@@ -3624,6 +4073,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       data = data
         .setTopicPartitions(partitions.asJava)
         .setSubscribedTopicRegex("^top.*")
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
     }
     val request = new ConsumerGroupHeartbeatRequest.Builder(data).build()
     val resource = Set[ResourceType](GROUP, TOPIC)

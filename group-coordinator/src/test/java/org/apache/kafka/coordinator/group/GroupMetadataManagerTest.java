@@ -79,8 +79,13 @@ import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer.ScheduledTimeout;
@@ -95,15 +100,24 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.Endpoint;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
@@ -203,6 +217,8 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPA
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.SHARE_GROUP_REBALANCES_SENSOR_NAME;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -214,6 +230,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -280,7 +297,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -467,11 +484,11 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -556,10 +573,10 @@ public class GroupMetadataManagerTest {
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -662,11 +679,11 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
         long barTopicHash = computeTopicHash(barTopicName, metadataImage);
 
@@ -769,7 +786,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setState(MemberState.STABLE)
@@ -786,7 +803,7 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
                 .withAssignmentEpoch(10)
                 .withMetadataHash(computeGroupHash(Map.of(
-                    fooTopicName, computeTopicHash(fooTopicName, metadataImage))
+                    fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage)))
                 )))
             .build();
 
@@ -797,14 +814,14 @@ public class GroupMetadataManagerTest {
         ));
 
         // Update metadata image with racks.
-        MetadataImage newMetadataImage = new MetadataImageBuilder(metadataImage)
+        CoordinatorMetadataImage newMetadataImage = new MetadataImageBuilder(metadataImage)
             .addTopic(fooTopicId, fooTopicName, 6)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         context.groupMetadataManager.onNewMetadataImage(
             newMetadataImage,
-            new MetadataDelta(newMetadataImage)
+            newMetadataImage.emptyDelta()
         );
         // If a topic is updated, related topic hash is cleanup.
         assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
@@ -862,7 +879,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setState(MemberState.STABLE)
@@ -880,7 +897,7 @@ public class GroupMetadataManagerTest {
                 .withAssignmentEpoch(10)
                 .withMetadataHash(computeGroupHash(Map.of(
                     fooTopicName,
-                    computeTopicHash(fooTopicName, metadataImage))
+                    computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage)))
                 )))
             .build();
 
@@ -894,8 +911,8 @@ public class GroupMetadataManagerTest {
         MetadataImage newMetadataImage = delta.apply(MetadataProvenance.EMPTY);
 
         context.groupMetadataManager.onNewMetadataImage(
-            newMetadataImage,
-            new MetadataDelta(newMetadataImage)
+            new KRaftCoordinatorMetadataImage(newMetadataImage),
+            new KRaftCoordinatorMetadataDelta(new MetadataDelta(newMetadataImage))
         );
         // If a topic is removed, related topic hash is cleanup.
         assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
@@ -954,7 +971,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setState(MemberState.STABLE)
@@ -1017,7 +1034,7 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
             ))),
             GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId),
             GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
@@ -1046,14 +1063,14 @@ public class GroupMetadataManagerTest {
             .addRacks()
             .build();
         long groupMetadataHash = computeGroupHash(Map.of(
-            fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-            barTopicName, computeTopicHash(barTopicName, metadataImage)
+            fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage)),
+            barTopicName, computeTopicHash(barTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
         ));
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setState(MemberState.STABLE)
@@ -1183,14 +1200,14 @@ public class GroupMetadataManagerTest {
             .addTopic(zarTopicId, zarTopicName, 1)
             .addRacks()
             .build();
-        long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
-        long barTopicHash = computeTopicHash(barTopicName, metadataImage);
-        long zarTopicHash = computeTopicHash(zarTopicName, metadataImage);
+        long fooTopicHash = computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage));
+        long barTopicHash = computeTopicHash(barTopicName, new KRaftCoordinatorMetadataImage(metadataImage));
+        long zarTopicHash = computeTopicHash(zarTopicName, new KRaftCoordinatorMetadataImage(metadataImage));
 
         // Consumer group with two members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setState(MemberState.STABLE)
@@ -1283,14 +1300,14 @@ public class GroupMetadataManagerTest {
             .addRacks()
             .build();
         long groupMetadataHash = computeGroupHash(Map.of(
-            fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-            barTopicName, computeTopicHash(barTopicName, metadataImage)
+            fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage)),
+            barTopicName, computeTopicHash(barTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
         ));
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setState(MemberState.STABLE)
@@ -1454,7 +1471,7 @@ public class GroupMetadataManagerTest {
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(member1)
                 .withMember(member2)
@@ -1466,8 +1483,8 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(barTopicId, 2)))
                 .withAssignmentEpoch(10)
                 .withMetadataHash(computeGroupHash(Map.of(
-                    fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-                    barTopicName, computeTopicHash(barTopicName, metadataImage)
+                    fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage)),
+                    barTopicName, computeTopicHash(barTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
                 ))))
             .build();
 
@@ -1625,13 +1642,13 @@ public class GroupMetadataManagerTest {
             .addTopic(barTopicId, barTopicName, 3)
             .addRacks()
             .build();
-        long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
-        long barTopicHash = computeTopicHash(barTopicName, metadataImage);
+        long fooTopicHash = computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage));
+        long barTopicHash = computeTopicHash(barTopicName, new KRaftCoordinatorMetadataImage(metadataImage));
 
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(member1)
                 .withMember(member2)
@@ -1820,7 +1837,7 @@ public class GroupMetadataManagerTest {
         // Consumer group with two static members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(member1)
                 .withMember(member2)
@@ -1832,8 +1849,8 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(barTopicId, 2)))
                 .withAssignmentEpoch(10)
                 .withMetadataHash(computeGroupHash(Map.of(
-                    fooTopicName, computeTopicHash(fooTopicName, metadataImage),
-                    barTopicName, computeTopicHash(barTopicName, metadataImage)
+                    fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage)),
+                    barTopicName, computeTopicHash(barTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
                 ))))
             .build();
 
@@ -1881,12 +1898,12 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .addTopic(zarTopicId, zarTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
         long barTopicHash = computeTopicHash(barTopicName, metadataImage);
         long zarTopicHash = computeTopicHash(zarTopicName, metadataImage);
@@ -1981,10 +1998,10 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -2037,9 +2054,9 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -2091,9 +2108,9 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -2230,9 +2247,9 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -2282,9 +2299,9 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with one static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -2338,7 +2355,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addRacks()
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         // Prepare new assignment for the group.
@@ -2451,11 +2468,11 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Create a context with one consumer group containing two members.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -2888,10 +2905,10 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Create a context with one consumer group containing two members.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -2958,9 +2975,9 @@ public class GroupMetadataManagerTest {
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -3026,7 +3043,7 @@ public class GroupMetadataManagerTest {
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .addRacks()
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         // Member 1 joins the consumer group. The request fails because the
@@ -3052,10 +3069,10 @@ public class GroupMetadataManagerTest {
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Create a context with one consumer group containing one member.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -3084,7 +3101,7 @@ public class GroupMetadataManagerTest {
                         // 6 partitions the metadata image.
                         .addTopic(fooTopicId, fooTopicName, 3)
                         .addRacks()
-                        .build())
+                        .buildCoordinatorMetadataImage())
                 ))))
             .build();
 
@@ -3162,10 +3179,10 @@ public class GroupMetadataManagerTest {
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Create a context with one consumer group containing one member.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -3194,7 +3211,7 @@ public class GroupMetadataManagerTest {
                         // 6 partitions the metadata image.
                         .addTopic(fooTopicId, fooTopicName, 3)
                         .addRacks()
-                        .build())
+                        .buildCoordinatorMetadataImage())
                 ))))
             .build();
 
@@ -3393,8 +3410,8 @@ public class GroupMetadataManagerTest {
         MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
 
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
-        assertEquals(image, context.groupMetadataManager.image());
+        context.groupMetadataManager.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(delta));
+        assertEquals(new KRaftCoordinatorMetadataImage(image), context.groupMetadataManager.image());
     }
 
     @Test
@@ -3467,12 +3484,12 @@ public class GroupMetadataManagerTest {
         image = delta.apply(MetadataProvenance.EMPTY);
 
         // Update metadata image with the delta.
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(delta));
 
         // Verify the groups.
         List.of("group1", "group2", "group3", "group4").forEach(groupId -> {
             ConsumerGroup group = context.groupMetadataManager.consumerGroup(groupId);
-            assertTrue(group.hasMetadataExpired(context.time.milliseconds()));
+            assertTrue(group.hasMetadataExpired(context.time.milliseconds()), groupId);
         });
 
         List.of("group5").forEach(groupId -> {
@@ -3481,7 +3498,7 @@ public class GroupMetadataManagerTest {
         });
 
         // Verify image.
-        assertEquals(image, context.groupMetadataManager.image());
+        assertEquals(new KRaftCoordinatorMetadataImage(image), context.groupMetadataManager.image());
     }
 
     @Test
@@ -3496,10 +3513,10 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(new MetadataImageBuilder()
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
-                .build())
+                .build()))
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -3571,10 +3588,10 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(new MetadataImageBuilder()
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
-                .build())
+                .build()))
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -3634,7 +3651,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder("foo-1")
                     .setState(MemberState.STABLE)
@@ -3651,7 +3668,7 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
                 .withAssignmentEpoch(10)
                 .withMetadataHash(computeGroupHash(Map.of(
-                    fooTopicName, computeTopicHash(fooTopicName, metadataImage))
+                    fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage)))
                 )))
             .build();
 
@@ -3699,10 +3716,10 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
-            .withMetadataImage(new MetadataImageBuilder()
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
-                .build())
+                .build()))
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -3759,7 +3776,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withShareGroup(new ShareGroupBuilder(groupId, 10)
                 .withMember(new ShareGroupMember.Builder(memberId)
                     .setState(MemberState.STABLE)
@@ -3775,7 +3792,7 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
                 .withAssignmentEpoch(10)
                 .withMetadataHash(computeGroupHash(Map.of(
-                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                    fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
                 ))))
             .build();
 
@@ -3823,10 +3840,10 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(new MetadataImageBuilder()
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
-                .build())
+                .build()))
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -3904,10 +3921,10 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(new MetadataImageBuilder()
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
                 .addRacks()
-                .build())
+                .build()))
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of(memberId1, new MemberAssignmentImpl(mkAssignment(
@@ -4054,7 +4071,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -4158,7 +4175,7 @@ public class GroupMetadataManagerTest {
                         GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
                         GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
                         GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 3, computeGroupHash(Map.of(
-                            fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                            fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
                         )))
                     )
                 )
@@ -4183,7 +4200,7 @@ public class GroupMetadataManagerTest {
             .addTopic(barTopicId, barTopicName, 3)
             .build();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(metadataImage)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
             .withConsumerGroup(new ConsumerGroupBuilder("foo", 10)
                 .withMember(new ConsumerGroupMember.Builder("foo-1")
                     .setState(MemberState.UNREVOKED_PARTITIONS)
@@ -4211,7 +4228,7 @@ public class GroupMetadataManagerTest {
                     mkTopicAssignment(fooTopicId, 3, 4, 5)))
                 .withAssignmentEpoch(10)
                 .withMetadataHash(computeGroupHash(Map.of(
-                    fooTopicName, computeTopicHash(fooTopicName, metadataImage)
+                    fooTopicName, computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(metadataImage))
                 ))))
             .build();
 
@@ -4235,10 +4252,10 @@ public class GroupMetadataManagerTest {
         String barTopicName = "bar";
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(new MetadataImageBuilder()
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
-                .build())
+                .build()))
             .withStreamsGroup(new StreamsGroupBuilder("foo", 10)
                 .withMember(new StreamsGroupMember.Builder("foo-1")
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS)
@@ -4301,10 +4318,10 @@ public class GroupMetadataManagerTest {
         String barTopicName = "bar";
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(new MetadataImageBuilder()
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
-                .build())
+                .build()))
             .withShareGroup(new ShareGroupBuilder("foo", 10)
                 .withMember(new ShareGroupMember.Builder("foo-1")
                     .setState(MemberState.STABLE)
@@ -9526,7 +9543,7 @@ public class GroupMetadataManagerTest {
                 .setMembers(List.of(
                     memberBuilder.build().asConsumerGroupDescribeMember(
                         new Assignment(Map.of()),
-                        new MetadataImageBuilder().build().topics()
+                        new MetadataImageBuilder().buildCoordinatorMetadataImage()
                     )
                 ))
                 .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
@@ -9566,9 +9583,9 @@ public class GroupMetadataManagerTest {
         String memberId2 = "memberId2";
         String topicName = "topicName";
         Uuid topicId = Uuid.randomUuid();
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topicId, topicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -9606,8 +9623,8 @@ public class GroupMetadataManagerTest {
         describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(consumerGroupId)
             .setMembers(List.of(
-                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Map.of()), metadataImage.topics()),
-                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap), metadataImage.topics())
+                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Map.of()), metadataImage),
+                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap), metadataImage)
             ))
             .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
             .setAssignorName("range")
@@ -10481,7 +10498,7 @@ public class GroupMetadataManagerTest {
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .addRacks()
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -10635,11 +10652,11 @@ public class GroupMetadataManagerTest {
             ))
         )));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 1)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
@@ -10796,11 +10813,11 @@ public class GroupMetadataManagerTest {
             ))
         )));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
@@ -11026,11 +11043,11 @@ public class GroupMetadataManagerTest {
             ))
         )));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 1)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
@@ -11112,10 +11129,10 @@ public class GroupMetadataManagerTest {
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
@@ -11272,11 +11289,11 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 1)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
@@ -11446,11 +11463,11 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(barTopicId, 2)))
             .build();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with two static members.
         // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
@@ -11563,11 +11580,11 @@ public class GroupMetadataManagerTest {
             ))
         )));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
@@ -11941,11 +11958,11 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(barTopicId, 2)))
             .build();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with two members.
         // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
@@ -12121,11 +12138,11 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(barTopicId, 2)))
             .build();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with two members.
         // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
@@ -12301,12 +12318,12 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(barTopicId, 2)))
             .build();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .addTopic(zarTopicId, zarTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with two members.
         // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
@@ -12502,11 +12519,11 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(fooTopicId, 3, 4, 5)))
             .build();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 2)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with two members.
         // Member 1 uses the classic protocol and static member 2 uses the consumer protocol.
@@ -12742,11 +12759,11 @@ public class GroupMetadataManagerTest {
             String memberId = Uuid.randomUuid().toString();
             MockPartitionAssignor assignor = new MockPartitionAssignor("range");
 
-            MetadataImage metadataImage = new MetadataImageBuilder()
+            CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
                 .addTopic(barTopicId, barTopicName, 1)
                 .addRacks()
-                .build();
+                .buildCoordinatorMetadataImage();
             long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
             long barTopicHash = computeTopicHash(barTopicName, metadataImage);
 
@@ -12885,10 +12902,10 @@ public class GroupMetadataManagerTest {
             ))
         )));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
             .withMetadataImage(metadataImage)
@@ -12939,11 +12956,11 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
         String instanceId = "instance-id";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
         long barTopicHash = computeTopicHash(barTopicName, metadataImage);
 
@@ -13030,10 +13047,10 @@ public class GroupMetadataManagerTest {
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         String memberId = Uuid.randomUuid().toString();
         String instanceId = "instance-id";
@@ -13152,12 +13169,12 @@ public class GroupMetadataManagerTest {
         String memberId2 = Uuid.randomUuid().toString();
         String instanceId = "instance-id";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 1)
             .addTopic(zarTopicId, zarTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         long groupMetadataHash = computeGroupHash(Map.of(
             fooTopicName, computeTopicHash(fooTopicName, metadataImage),
             barTopicName, computeTopicHash(barTopicName, metadataImage),
@@ -13381,12 +13398,12 @@ public class GroupMetadataManagerTest {
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 1)
             .addTopic(zarTopicId, zarTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
         long barTopicHash = computeTopicHash(barTopicName, metadataImage);
         long zarTopicHash = computeTopicHash(zarTopicName, metadataImage);
@@ -13620,12 +13637,12 @@ public class GroupMetadataManagerTest {
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 1)
             .addTopic(zarTopicId, zarTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
         long barTopicHash = computeTopicHash(barTopicName, metadataImage);
         long zarTopicHash = computeTopicHash(zarTopicName, metadataImage);
@@ -14008,7 +14025,7 @@ public class GroupMetadataManagerTest {
                     .addTopic(fooTopicId, fooTopicName, 6)
                     .addTopic(barTopicId, barTopicName, 3)
                     .addRacks()
-                    .build())
+                    .buildCoordinatorMetadataImage())
                 .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                     .withMember(member1)
                     .withMember(member2)
@@ -14696,11 +14713,11 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(mkAssignment(mkTopicAssignment(barTopicId, 0)))
             .build();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with three members.
         // Dynamic member 1 uses the classic protocol.
@@ -14880,11 +14897,11 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(mkAssignment(mkTopicAssignment(barTopicId, 0)))
             .build();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
         long barTopicHash = computeTopicHash(barTopicName, metadataImage);
 
@@ -15067,11 +15084,11 @@ public class GroupMetadataManagerTest {
             .setAssignedPartitions(mkAssignment(mkTopicAssignment(barTopicId, 1)))
             .build();
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
             .addTopic(barTopicId, barTopicName, 2)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         // Consumer group with four members.
         // Dynamic member 1 uses the classic protocol.
@@ -15291,15 +15308,11 @@ public class GroupMetadataManagerTest {
 
         Uuid topicId = Uuid.randomUuid();
         String topicName = "foo";
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId, topicName, 1)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
-
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
 
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -15342,7 +15355,7 @@ public class GroupMetadataManagerTest {
                         .setSubscribedTopicNames(List.of(topicName))
                         .build()
                         .asShareGroupDescribeMember(
-                            new MetadataImageBuilder().build().topics()
+                            new MetadataImageBuilder().buildCoordinatorMetadataImage()
                         )
                 ))
                 .setGroupState(ShareGroup.ShareGroupState.STABLE.toString())
@@ -15358,7 +15371,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("share");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -15372,16 +15385,12 @@ public class GroupMetadataManagerTest {
         String topicName2 = "bar";
         String groupId = "group-foo";
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId1, topicName1, 1)
             .addTopic(topicId2, topicName2, 1)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
-
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
 
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -15455,16 +15464,12 @@ public class GroupMetadataManagerTest {
         Uuid topicId2 = Uuid.randomUuid();
         String topicName2 = "bar";
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId1, topicName1, 1)
             .addTopic(topicId2, topicName2, 1)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
-
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
 
         // A first member joins to create the group.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
@@ -15515,7 +15520,7 @@ public class GroupMetadataManagerTest {
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .addRacks()
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -15532,12 +15537,14 @@ public class GroupMetadataManagerTest {
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .build();
+        
+        CoordinatorMetadataImage coordinatorMetadataImage = new KRaftCoordinatorMetadataImage(image);
 
         MetadataDelta delta = new MetadataDelta.Builder()
             .setImage(image)
             .build();
 
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(coordinatorMetadataImage, new KRaftCoordinatorMetadataDelta(delta));
 
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -15591,8 +15598,8 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, expectedMember),
             GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 1, computeGroupHash(Map.of(
-                fooTopicName, computeTopicHash(fooTopicName, image),
-                barTopicName, computeTopicHash(barTopicName, image)
+                fooTopicName, computeTopicHash(fooTopicName, coordinatorMetadataImage),
+                barTopicName, computeTopicHash(barTopicName, coordinatorMetadataImage)
             ))),
             GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
@@ -15641,12 +15648,12 @@ public class GroupMetadataManagerTest {
         Uuid zarTopicId = Uuid.randomUuid();
         String zarTopicName = "zar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .addTopic(zarTopicId, zarTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("share");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -15753,16 +15760,12 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 1)
             .addTopic(barTopicId, barTopicName, 1)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
-
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
 
         // Member 1 joins the group.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
@@ -15940,7 +15943,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
         assignor.prepareGroupAssignment(Map.of(memberId, TasksTuple.EMPTY));
 
@@ -16032,7 +16035,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
-                .build())
+                .buildCoordinatorMetadataImage())
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
                 .withMember(streamsGroupMemberBuilderWithDefaults(memberId)
                     .setMemberEpoch(10)
@@ -16086,7 +16089,7 @@ public class GroupMetadataManagerTest {
 
         // Create a context with one streams group containing two members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(new MetadataImageBuilder().build())
+            .withMetadataImage(new MetadataImageBuilder().buildCoordinatorMetadataImage())
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG, 2)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
                 .withMember(streamsGroupMemberBuilderWithDefaults(memberId1)
@@ -16134,10 +16137,10 @@ public class GroupMetadataManagerTest {
         ));
 
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
         long groupMetadataHash = computeGroupHash(Map.of(
             fooTopicName, computeTopicHash(fooTopicName, metadataImage),
             barTopicName, computeTopicHash(barTopicName, metadataImage)
@@ -16227,9 +16230,9 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology2).setSourceTopics(List.of(barTopicName))
         ));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -16308,9 +16311,9 @@ public class GroupMetadataManagerTest {
             )
         );
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -16395,10 +16398,10 @@ public class GroupMetadataManagerTest {
             )
         );
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(assignor))
@@ -16483,10 +16486,10 @@ public class GroupMetadataManagerTest {
             )
         );
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withStreamsGroupTaskAssignors(List.of(assignor))
@@ -16568,9 +16571,9 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
         ));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
         long groupMetadataHash = computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)));
 
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
@@ -16663,9 +16666,9 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
         ));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -16758,10 +16761,11 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology2).setSourceTopics(List.of(barTopicName))
         ));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
+
         long groupMetadataHash = computeGroupHash(Map.of(
             fooTopicName, computeTopicHash(fooTopicName, metadataImage),
             barTopicName, computeTopicHash(barTopicName, metadataImage)
@@ -16861,15 +16865,15 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology2).setSourceTopics(List.of(barTopicName))
         ));
 
-        MetadataImage newMetadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage newMetadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, changedPartitionCount)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        MetadataImage oldMetadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage oldMetadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
         long oldGroupMetadataHash = computeGroupHash(Map.of(
             fooTopicName, computeTopicHash(fooTopicName, oldMetadataImage),
             barTopicName, computeTopicHash(barTopicName, oldMetadataImage)
@@ -16971,10 +16975,10 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology2).setSourceTopics(List.of(barTopicName))
         ));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -16982,7 +16986,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
-                .build())
+                .buildCoordinatorMetadataImage())
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
                 .withMember(streamsGroupMemberBuilderWithDefaults(memberId1)
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -17075,7 +17079,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
-                .build())
+                .buildCoordinatorMetadataImage())
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
                 .withMember(streamsGroupMemberBuilderWithDefaults(memberId1)
                     .setMemberEpoch(10)
@@ -17144,7 +17148,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         // Prepare new assignment for the group.
@@ -17213,10 +17217,10 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology2).setSourceTopics(List.of(barTopicName))
         ));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
         long groupMetadataHash = computeGroupHash(Map.of(
             fooTopicName, computeTopicHash(fooTopicName, metadataImage),
             barTopicName, computeTopicHash(barTopicName, metadataImage)
@@ -17670,10 +17674,11 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology2).setSourceTopics(List.of(barTopicName))
         ));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
+
         long groupMetadataHash = computeGroupHash(Map.of(
             fooTopicName, computeTopicHash(fooTopicName, metadataImage),
             barTopicName, computeTopicHash(barTopicName, metadataImage)
@@ -17700,7 +17705,7 @@ public class GroupMetadataManagerTest {
                 new LogContext(),
                 groupMetadataHash,
                 StreamsTopology.fromRecord(StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology)),
-                metadataImage.topics()));
+                metadataImage));
 
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, context.streamsGroupState(groupId));
 
@@ -17756,7 +17761,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         // Member 1 joins the streams group. The request fails because the
@@ -17786,9 +17791,9 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
         ));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -17808,7 +17813,11 @@ public class GroupMetadataManagerTest {
                 .withMetadataHash(computeGroupHash(Map.of(
                     // foo only has 3 tasks stored in the metadata but foo has
                     // 6 partitions the metadata image.
-                    fooTopicName, computeTopicHash(fooTopicName, new MetadataImageBuilder().addTopic(fooTopicId, fooTopicName, 3).build())
+                    fooTopicName, computeTopicHash(
+                        fooTopicName,
+                        new MetadataImageBuilder()
+                            .addTopic(fooTopicId, fooTopicName, 3)
+                            .buildCoordinatorMetadataImage())
                 ))))
             .build();
 
@@ -17883,9 +17892,9 @@ public class GroupMetadataManagerTest {
             new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
         ));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -17905,7 +17914,11 @@ public class GroupMetadataManagerTest {
                 .withMetadataHash(computeGroupHash(Map.of(
                     // foo only has 3 partitions stored in the metadata but foo has
                     // 6 partitions the metadata image.
-                    fooTopicName, computeTopicHash(fooTopicName, new MetadataImageBuilder().addTopic(fooTopicId, fooTopicName, 3).build())
+                    fooTopicName, computeTopicHash(
+                        fooTopicName,
+                        new MetadataImageBuilder()
+                            .addTopic(fooTopicId, fooTopicName, 3)
+                            .buildCoordinatorMetadataImage())
                 ))))
             .build();
 
@@ -18006,7 +18019,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -18082,7 +18095,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -18147,7 +18160,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         assignor.prepareGroupAssignment(Map.of(memberId1, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -18306,7 +18319,7 @@ public class GroupMetadataManagerTest {
             .withStreamsGroupTaskAssignors(List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 3)
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         assignor.prepareGroupAssignment(
@@ -18511,7 +18524,7 @@ public class GroupMetadataManagerTest {
         image = delta.apply(MetadataProvenance.EMPTY);
 
         // Update metadata image with the delta.
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(delta));
 
         // Verify the groups.
         List.of("group1", "group2", "group3", "group4").forEach(groupId -> {
@@ -18525,7 +18538,7 @@ public class GroupMetadataManagerTest {
         });
 
         // Verify image.
-        assertEquals(image, context.groupMetadataManager.image());
+        assertEquals(new KRaftCoordinatorMetadataImage(image), context.groupMetadataManager.image());
     }
 
     @Test
@@ -18544,7 +18557,7 @@ public class GroupMetadataManagerTest {
                 .withStreamsGroupTaskAssignors(List.of(assignor))
                 .withMetadataImage(new MetadataImageBuilder()
                         .addTopic(fooTopicId, fooTopicName, 2)
-                        .build())
+                        .buildCoordinatorMetadataImage())
                 .build();
 
         // Prepare new assignment for the group.
@@ -18635,7 +18648,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -18722,7 +18735,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
@@ -18731,15 +18744,11 @@ public class GroupMetadataManagerTest {
             )))
         ));
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
-
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
 
         // Session timer is scheduled on first heartbeat.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result =
@@ -18859,7 +18868,7 @@ public class GroupMetadataManagerTest {
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addRacks()
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         assignor.prepareGroupAssignment(
@@ -19500,7 +19509,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("share");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withShareGroup(new ShareGroupBuilder(groupId, 1)
                 .withMember(new ShareGroupMember.Builder(memberId)
                     .setState(MemberState.STABLE)
@@ -19533,7 +19542,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("share");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withShareGroup(new ShareGroupBuilder(groupId, 1)
                 .withMember(new ShareGroupMember.Builder(memberId)
                     .setState(MemberState.STABLE)
@@ -19567,7 +19576,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("share");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withShareGroup(new ShareGroupBuilder(groupId, 1)
                 .withMember(new ShareGroupMember.Builder(memberId)
                     .setState(MemberState.STABLE)
@@ -19602,7 +19611,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("share");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
                 .withShareGroup(new ShareGroupBuilder(groupId, 1)
                     .withMember(new ShareGroupMember.Builder(memberId)
                         .setState(MemberState.STABLE)
@@ -19632,7 +19641,7 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("share");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withShareGroup(new ShareGroupBuilder(groupId, 1)
                 .withMember(new ShareGroupMember.Builder(memberId)
                     .setState(MemberState.STABLE)
@@ -19673,7 +19682,7 @@ public class GroupMetadataManagerTest {
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
-                .build())
+                .buildCoordinatorMetadataImage())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setState(MemberState.STABLE)
@@ -19699,6 +19708,7 @@ public class GroupMetadataManagerTest {
                     .setMemberId(Uuid.randomUuid().toString())
                     .setMemberEpoch(1)
                     .setSubscribedTopicNames(List.of("foo", "bar"))));
+        verify(context.metrics, times(0)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
@@ -19736,7 +19746,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 1)
                 .withMember(StreamsGroupMember.Builder.withDefaults(memberId)
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -19766,7 +19776,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 1)
                 .withMember(StreamsGroupMember.Builder.withDefaults(memberId)
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -19785,6 +19795,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of("foo", "bar"))));
+        verify(context.metrics, times(0)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
@@ -19793,7 +19804,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 1)
                 .withMember(StreamsGroupMember.Builder.withDefaults(memberId)
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -19824,7 +19835,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 1)
                 .withMember(StreamsGroupMember.Builder.withDefaults(memberId)
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -19856,7 +19867,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 1)
                 .withMember(StreamsGroupMember.Builder.withDefaults(memberId)
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -19883,7 +19894,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 1)
                 .withMember(StreamsGroupMember.Builder.withDefaults(memberId)
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -19913,7 +19924,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(MetadataImage.EMPTY)
+            .withMetadataImage(CoordinatorMetadataImage.EMPTY)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 1)
                 .withMember(StreamsGroupMember.Builder.withDefaults(memberId)
                     .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
@@ -19953,7 +19964,7 @@ public class GroupMetadataManagerTest {
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
-                .build())
+                .buildCoordinatorMetadataImage())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setState(MemberState.STABLE)
@@ -20022,7 +20033,7 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
-                .build())
+                .buildCoordinatorMetadataImage())
             .withShareGroup(new ShareGroupBuilder(groupId, 10)
                 .withMember(new ShareGroupMember.Builder(memberId1)
                     .setState(MemberState.STABLE)
@@ -20181,7 +20192,7 @@ public class GroupMetadataManagerTest {
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 2)
-                .build())
+                .buildCoordinatorMetadataImage())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setState(MemberState.STABLE)
@@ -20231,9 +20242,9 @@ public class GroupMetadataManagerTest {
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .build(12345L);
+            .buildCoordinatorMetadataImage(12345L);
         long groupMetadataHash = computeGroupHash(Map.of(
             fooTopicName, computeTopicHash(fooTopicName, metadataImage)
         ));
@@ -20335,10 +20346,10 @@ public class GroupMetadataManagerTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build(12345L);
+            .buildCoordinatorMetadataImage(12345L);
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -20449,10 +20460,10 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build(12345L);
+            .buildCoordinatorMetadataImage(12345L);
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
@@ -20623,12 +20634,12 @@ public class GroupMetadataManagerTest {
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
             .build(1L);
-        long fooTopicHash = computeTopicHash(fooTopicName, image);
-        long barTopicHash = computeTopicHash(barTopicName, image);
+        long fooTopicHash = computeTopicHash(fooTopicName, new KRaftCoordinatorMetadataImage(image));
+        long barTopicHash = computeTopicHash(barTopicName, new KRaftCoordinatorMetadataImage(image));
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .withMetadataImage(image)
+            .withMetadataImage(new KRaftCoordinatorMetadataImage(image))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setState(MemberState.STABLE)
@@ -20677,8 +20688,8 @@ public class GroupMetadataManagerTest {
             .build(2L);
 
         context.groupMetadataManager.onNewMetadataImage(
-            newImage,
-            new MetadataDelta(newImage)
+            new KRaftCoordinatorMetadataImage(newImage),
+            new KRaftCoordinatorMetadataDelta(new MetadataDelta(newImage))
         );
 
         // A member heartbeats.
@@ -20737,7 +20748,7 @@ public class GroupMetadataManagerTest {
                 List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
                     fooTopicName, fooTopicHash,
                     barTopicName, barTopicHash,
-                    foooTopicName, computeTopicHash(foooTopicName, newImage)
+                    foooTopicName, computeTopicHash(foooTopicName, new KRaftCoordinatorMetadataImage(newImage))
                 ))))
             ),
             task.result.records()
@@ -20755,10 +20766,10 @@ public class GroupMetadataManagerTest {
         String fooTopicName = "foo";
         String barTopicName = "bar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build(12345L);
+            .buildCoordinatorMetadataImage(12345L);
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
         long barTopicHash = computeTopicHash(barTopicName, metadataImage);
 
@@ -20804,7 +20815,7 @@ public class GroupMetadataManagerTest {
                 .withMetadataHash(computeGroupHash(Map.of(fooTopicName, fooTopicHash))))
             .build();
 
-        // sleep for more than REGEX_BATCH_REFRESH_INTERVAL_MS
+        // sleep for more than REGEX_BATCH_REFRESH_MIN_INTERVAL_MS
         context.time.sleep(10001L);
 
         Map<String, AuthorizationResult> acls = new HashMap<>();
@@ -20887,7 +20898,7 @@ public class GroupMetadataManagerTest {
             context.processTasks()
         );
 
-        // sleep for more than REGEX_BATCH_REFRESH_INTERVAL_MS
+        // sleep for more than REGEX_BATCH_REFRESH_MIN_INTERVAL_MS
         context.time.sleep(10001L);
 
         // Access to the bar topic is granted.
@@ -20973,6 +20984,233 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testConsumerGroupMemberJoinsRefreshTopicAuthorization() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        String barTopicName = "bar";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .addTopic(barTopicId, barTopicName, 3)
+            .buildCoordinatorMetadataImage(12345L);
+        long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
+        long barTopicHash = computeTopicHash(barTopicName, metadataImage);
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        Authorizer authorizer = mock(Authorizer.class);
+        Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, 60000)
+            .withMetadataImage(metadataImage)
+            .withAuthorizerPlugin(authorizerPlugin)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(List.of("foo"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                    .build())
+                .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicRegex("foo*")
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                    .build())
+                .withAssignment(memberId1, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
+                .withAssignment(memberId2, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 3, 4, 5)))
+                .withResolvedRegularExpression("foo*", new ResolvedRegularExpression(
+                    Set.of(fooTopicName), 0L, 0L))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(fooTopicName, fooTopicHash))))
+            .build();
+
+        // sleep for more than REGEX_BATCH_REFRESH_MIN_INTERVAL_MS
+        context.time.sleep(10001L);
+
+        Map<String, AuthorizationResult> acls = new HashMap<>();
+        acls.put(fooTopicName, AuthorizationResult.ALLOWED);
+        acls.put(barTopicName, AuthorizationResult.DENIED);
+        when(authorizer.authorize(any(), any())).thenAnswer(invocation -> {
+            List<Action> actions = invocation.getArgument(1);
+            return actions.stream()
+                .map(action -> acls.getOrDefault(action.resourcePattern().name(), AuthorizationResult.DENIED))
+                .collect(Collectors.toList());
+        });
+
+        // Member 2 heartbeats with a different regular expression.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result1 = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(10)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicRegex("foo*|bar*")
+                .setServerAssignor("range")
+                .setTopicPartitions(List.of()),
+            ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion()
+        );
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(10)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(List.of(3, 4, 5))))),
+            result1.response()
+        );
+
+        ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicRegex("foo*|bar*")
+            .setServerAssignorName("range")
+            .build();
+
+        assertRecordsEquals(
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, expectedMember2),
+                GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, "foo*")
+            ),
+            result1.records()
+        );
+
+        // Execute pending tasks.
+        assertEquals(
+            List.of(
+                new MockCoordinatorExecutor.ExecutorResult<>(
+                    groupId + "-regex",
+                    new CoordinatorResult<>(List.of(
+                        // The resolution of the new regex is persisted.
+                        GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+                            groupId,
+                            "foo*|bar*",
+                            new ResolvedRegularExpression(
+                                Set.of("foo"),
+                                12345L,
+                                context.time.milliseconds()
+                            )
+                        ),
+                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, computeGroupHash(Map.of(
+                            fooTopicName, fooTopicHash
+                        )))
+                    ))
+                )
+            ),
+            context.processTasks()
+        );
+
+        // sleep for more than REGEX_REFRESH_INTERVAL_MS
+        context.time.sleep(60001L);
+
+        // Access to the bar topic is granted.
+        acls.put(barTopicName, AuthorizationResult.ALLOWED);
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            memberId1, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2)
+            )),
+            memberId2, new MemberAssignmentImpl(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5)
+            ))
+        )));
+
+        // Member 2 heartbeats again with the same regex.
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result2 = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(10)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicRegex("foo*|bar*")
+                .setServerAssignor("range")
+                .setTopicPartitions(List.of()),
+            ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion()
+        );
+
+        expectedMember2 = new ConsumerGroupMember.Builder(memberId2)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicRegex("foo*|bar*")
+            .setServerAssignorName("range")
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 3, 4, 5)))
+            .build();
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(List.of(3, 4, 5))))),
+            result2.response()
+        );
+
+        assertRecordsEquals(
+            List.of(
+                GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 11),
+                GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember2)
+            ),
+            result2.records()
+        );
+
+        // A regex refresh is triggered and the bar topic is included.
+        assertRecordsEquals(
+            List.of(
+                // The resolution of the new regex is persisted.
+                GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
+                    groupId,
+                    "foo*|bar*",
+                    new ResolvedRegularExpression(
+                        Set.of("foo", "bar"),
+                        12345L,
+                        context.time.milliseconds()
+                    )
+                ),
+                GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 12, computeGroupHash(Map.of(
+                    fooTopicName, fooTopicHash,
+                    barTopicName, barTopicHash
+                )))
+            ),
+            context.processTasks().get(0).result.records()
+        );
+    }
+
+    @Test
     public void testResolvedRegularExpressionsRemovedWhenMembersLeaveOrFenced() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
@@ -20986,10 +21224,10 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build(1L);
+            .buildCoordinatorMetadataImage(1L);
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
         long barTopicHash = computeTopicHash(barTopicName, metadataImage);
 
@@ -21103,10 +21341,10 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
             .addTopic(barTopicId, barTopicName, 3)
-            .build(1L);
+            .buildCoordinatorMetadataImage(1L);
         long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
         long barTopicHash = computeTopicHash(barTopicName, metadataImage);
 
@@ -21259,13 +21497,12 @@ public class GroupMetadataManagerTest {
         when(shareGroup.groupId()).thenReturn(groupId);
         when(shareGroup.isEmpty()).thenReturn(false);
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(t1Uuid, t1Name, 2)
             .addTopic(t2Uuid, t2Name, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        MetadataDelta delta = new MetadataDelta(image);
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -21325,14 +21562,13 @@ public class GroupMetadataManagerTest {
         when(shareGroup.groupId()).thenReturn(groupId);
         when(shareGroup.isEmpty()).thenReturn(false);
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(t1Uuid, t1Name, 2)
             .addTopic(t2Uuid, t2Name, 2)
             .addTopic(t3Uuid, t3Name, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        MetadataDelta delta = new MetadataDelta(image);
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -21374,6 +21610,135 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testShareGroupDeleteRequestWithAlreadyDeletingTopicsButNotInMetadata() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        Uuid t2Uuid = Uuid.randomUuid();
+        Uuid t3Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        String t2Name = "t2";
+        String t3Name = "t3";
+
+        String groupId = "share-group";
+        ShareGroup shareGroup = mock(ShareGroup.class);
+        when(shareGroup.groupId()).thenReturn(groupId);
+        when(shareGroup.isEmpty()).thenReturn(false);
+
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .addTopic(t2Uuid, t2Name, 2)
+//            .addTopic(t3Uuid, t3Name, 2)  // Simulate deleting topic not present in metadata image.
+            .buildCoordinatorMetadataImage();
+
+        CoordinatorMetadataDelta delta = image.emptyDelta();
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
+
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(t1Uuid, new InitMapValue(t1Name, Set.of(0, 1), 1)),
+                Map.of(t2Uuid, new InitMapValue(t2Name, Set.of(0, 1), 1)),
+                Map.of(t3Uuid, t3Name)
+            )
+        );
+
+        context.commit();
+
+        Map<Uuid, Set<Integer>> expectedTopicPartitionMap = Map.of(
+            t1Uuid, Set.of(0, 1),
+            t2Uuid, Set.of(0, 1)
+        );
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of(t1Uuid, t1Name, t2Uuid, t2Name)  // Existing deleting topics should be ignored.
+            )
+        );
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        Optional<DeleteShareGroupStateParameters> params = context.groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records);
+        verifyShareGroupDeleteRequest(
+            params,
+            expectedTopicPartitionMap,
+            groupId,
+            true
+        );
+        assertRecordsEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testShareGroupDeleteRequestWithAlreadyDeletingTopicsButMetadataIsEmpty() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        Uuid t2Uuid = Uuid.randomUuid();
+        Uuid t3Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        String t2Name = "t2";
+        String t3Name = "t3";
+
+        String groupId = "share-group";
+        ShareGroup shareGroup = mock(ShareGroup.class);
+        when(shareGroup.groupId()).thenReturn(groupId);
+        when(shareGroup.isEmpty()).thenReturn(false);
+
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
+        CoordinatorMetadataDelta delta = image.emptyDelta();
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
+
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(t1Uuid, new InitMapValue(t1Name, Set.of(0, 1), 1)),
+                Map.of(t2Uuid, new InitMapValue(t2Name, Set.of(0, 1), 1)),
+                Map.of(t3Uuid, t3Name)
+            )
+        );
+
+        context.commit();
+
+        Map<Uuid, Set<Integer>> expectedTopicPartitionMap = Map.of(
+            t1Uuid, Set.of(0, 1),
+            t2Uuid, Set.of(0, 1)
+        );
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of(t1Uuid, t1Name, t2Uuid, t2Name)  // Existing deleting topics should be ignored.
+            )
+        );
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        Optional<DeleteShareGroupStateParameters> params = context.groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records);
+        verifyShareGroupDeleteRequest(
+            params,
+            expectedTopicPartitionMap,
+            groupId,
+            true
+        );
+        assertRecordsEquals(expectedRecords, records);
+    }
+
+    @Test
     public void testSharePartitionsEligibleForOffsetDeletionSuccess() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
@@ -21387,12 +21752,12 @@ public class GroupMetadataManagerTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId1, topicName1, 3)
             .addTopic(topicId2, topicName2, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -21478,14 +21843,14 @@ public class GroupMetadataManagerTest {
         Uuid topicId3 = Uuid.randomUuid();
         Uuid topicId4 = Uuid.randomUuid();
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId1, topicName1, 3)
             .addTopic(topicId2, topicName2, 2)
             .addTopic(topicId3, topicName3, 2)
             .addTopic(topicId4, topicName4, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -21588,11 +21953,11 @@ public class GroupMetadataManagerTest {
         String topicName2 = "topic-2";
         Uuid topicId1 = Uuid.randomUuid();
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId1, topicName1, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -21671,12 +22036,12 @@ public class GroupMetadataManagerTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId1, topicName1, 3)
             .addTopic(topicId2, topicName2, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -21756,12 +22121,12 @@ public class GroupMetadataManagerTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId1, topicName1, 3)
             .addTopic(topicId2, topicName2, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -21846,12 +22211,12 @@ public class GroupMetadataManagerTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId1, topicName1, 3)
             .addTopic(topicId2, topicName2, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -21919,12 +22284,12 @@ public class GroupMetadataManagerTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(topicId1, topicName1, 3)
             .addTopic(topicId2, topicName2, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -21958,14 +22323,14 @@ public class GroupMetadataManagerTest {
         String t1Name = "t1";
         Uuid t2Uuid = Uuid.randomUuid();
         String t2Name = "t2";
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(t1Uuid, "t1", 2)
             .addTopic(t2Uuid, "t2", 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         String groupId = "share-group";
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
 
         Uuid memberId = Uuid.randomUuid();
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
@@ -22025,9 +22390,9 @@ public class GroupMetadataManagerTest {
         image = new MetadataImageBuilder()
             .addTopic(t1Uuid, "t1", 4)
             .addTopic(t2Uuid, "t2", 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
 
         assignor.prepareGroupAssignment(new GroupAssignment(
             Map.of(
@@ -22079,6 +22444,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(Map.of(t1Uuid, Set.of(0, 1), t2Uuid, Set.of(0, 1)), context.groupMetadataManager.initializedShareGroupPartitions(groupId));
+        verify(context.metrics, times(2)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
@@ -22086,22 +22452,23 @@ public class GroupMetadataManagerTest {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         MockTime time = new MockTime();
-        int offsetWriteTimeout = 10;
+        int initRetryTimeoutMs = 10;
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
             .withTime(time)
-            .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, offsetWriteTimeout)
+            .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, initRetryTimeoutMs - 1)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, initRetryTimeoutMs)
             .build();
 
         Uuid t1Uuid = Uuid.randomUuid();
         String t1Name = "t1";
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(t1Uuid, t1Name, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         String groupId = "share-group";
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
@@ -22162,7 +22529,7 @@ public class GroupMetadataManagerTest {
                 .setDeletingTopics(List.of())
         );
 
-        long timeNow = time.milliseconds() + offsetWriteTimeout * 2 + 1;
+        long timeNow = time.milliseconds() + initRetryTimeoutMs + 1;
         time.setCurrentTimeMs(timeNow);
         memberId = Uuid.randomUuid();
         result = context.shareGroupHeartbeat(
@@ -22188,6 +22555,7 @@ public class GroupMetadataManagerTest {
             2,
             true
         );
+        verify(context.metrics, times(2)).record(SHARE_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
@@ -22200,13 +22568,13 @@ public class GroupMetadataManagerTest {
 
         Uuid t1Uuid = Uuid.randomUuid();
         String t1Name = "t1";
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(t1Uuid, t1Name, 2)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         String groupId = "share-group";
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
@@ -22265,7 +22633,7 @@ public class GroupMetadataManagerTest {
             .withShareGroupAssignor(assignor)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(topicId, topicName, 2)
-                .build()
+                .buildCoordinatorMetadataImage()
             )
             .build();
 
@@ -22351,17 +22719,18 @@ public class GroupMetadataManagerTest {
         int partitions = 1;
         String groupId = "foogrp";
         MockTime time = new MockTime();
-        int offsetWriteTimeout = 10;
+        int initRetryTimeoutMs = 10;
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
             .withTime(time)
-            .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, offsetWriteTimeout)
+            .withConfig(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, initRetryTimeoutMs - 1)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG, initRetryTimeoutMs)
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(topicId, topicName, partitions)
-                .build())
+                .buildCoordinatorMetadataImage())
             .build();
 
         // Empty on empty subscription topics
@@ -22415,16 +22784,16 @@ public class GroupMetadataManagerTest {
                 .setDeletingTopics(List.of())
         );
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(t1Id, t1Name, 2)
             .addTopic(t2Id, t2Name, 2)
             .addTopic(t3Id, t3Name, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(metadataImage, new MetadataDelta(metadataImage));
+        context.groupMetadataManager.onNewMetadataImage(metadataImage, metadataImage.emptyDelta());
 
         // Since t1 is initializing and t2 is initialized due to replay above.
-        timeNow = timeNow + 2 * offsetWriteTimeout + 1;
+        timeNow = timeNow + initRetryTimeoutMs + 1;
         time.setCurrentTimeMs(timeNow);
         assertEquals(
             Map.of(
@@ -22462,13 +22831,12 @@ public class GroupMetadataManagerTest {
             result.records()
         );
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(t1Id, t1Name, 2)
             .addTopic(t2Id, t2Name, 3)
-            .build();
+            .buildCoordinatorMetadataImage();
 
-        MetadataDelta delta = new MetadataDelta(image);
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
 
         // Cleanup happens from initialzing state only.
         context.groupMetadataManager.replay(
@@ -22541,17 +22909,19 @@ public class GroupMetadataManagerTest {
         String t4Name = "t4";
         Uuid t5Id = Uuid.randomUuid();
         String t5Name = "t5";
+        Uuid t6Id = Uuid.randomUuid();
+        String t6Name = "t6";
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(t1Id, t1Name, 2)
             .addTopic(t2Id, t2Name, 3)
             .addTopic(t3Id, t3Name, 3)
             .addTopic(t4Id, t4Name, 3)
             .addTopic(t5Id, t5Name, 3)
-            .build();
+            .addTopic(t6Id, t6Name, 3)
+            .buildCoordinatorMetadataImage();
 
-        MetadataDelta delta = new MetadataDelta(image);
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
 
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
@@ -22586,7 +22956,10 @@ public class GroupMetadataManagerTest {
                 .setDeletingTopics(List.of(
                     new ShareGroupStatePartitionMetadataValue.TopicInfo()
                         .setTopicId(t5Id)
-                        .setTopicName(t5Name)
+                        .setTopicName(t5Name),
+                    new ShareGroupStatePartitionMetadataValue.TopicInfo()
+                        .setTopicId(t6Id)
+                        .setTopicName(t6Name)
                 ))
         );
 
@@ -22619,7 +22992,7 @@ public class GroupMetadataManagerTest {
         );
 
         CoordinatorResult<Void, CoordinatorRecord> expectedResult = new CoordinatorResult<>(expectedRecords);
-        assertEquals(expectedResult, context.groupMetadataManager.maybeCleanupShareGroupState(Set.of(t1Id, t2Id)));
+        assertEquals(expectedResult, context.groupMetadataManager.maybeCleanupShareGroupState(Set.of(t1Id, t2Id, t6Id)));
     }
 
     @Test
@@ -22661,6 +23034,321 @@ public class GroupMetadataManagerTest {
         m1 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
         m2 = Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1));
         assertEquals(Map.of(t1Id, new InitMapValue(t1Name, Set.of(0), 1)), GroupMetadataManager.combineInitMaps(m1, m2));
+    }
+
+    private static Stream<CoordinatorRecord> shareGroupRecords() {
+        String groupId = "groupId";
+        String memberId = Uuid.randomUuid().toString();
+
+        return Stream.of(
+            // Tombstones
+            CoordinatorRecord.tombstone(
+                new ShareGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupMetadataKey()
+                    .setGroupId(groupId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupTargetAssignmentMemberKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupTargetAssignmentMetadataKey()
+                    .setGroupId(groupId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+            ),
+            CoordinatorRecord.tombstone(
+                new ShareGroupStatePartitionMetadataKey()
+                    .setGroupId(groupId)
+            ),
+            // Data
+            CoordinatorRecord.record(
+                new ShareGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                new ApiMessageAndVersion(
+                    new ShareGroupMemberMetadataValue()
+                        .setSubscribedTopicNames(List.of("tp1")),
+                    (short) 10
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(
+                    new ShareGroupMetadataValue()
+                        .setEpoch(1)
+                        .setMetadataHash(2L),
+                    (short) 11
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupTargetAssignmentMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(
+                    new ShareGroupTargetAssignmentMetadataValue()
+                        .setAssignmentEpoch(5),
+                    (short) 12
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupTargetAssignmentMemberKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                new ApiMessageAndVersion(new ShareGroupTargetAssignmentMemberValue()
+                    .setTopicPartitions(List.of(
+                        new ShareGroupTargetAssignmentMemberValue.TopicPartition()
+                            .setTopicId(Uuid.randomUuid())
+                            .setPartitions(List.of(0, 1, 2))
+                    )),
+                    (short) 13
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId),
+                new ApiMessageAndVersion(new ShareGroupCurrentMemberAssignmentValue()
+                    .setAssignedPartitions(List.of(
+                            new ShareGroupCurrentMemberAssignmentValue.TopicPartitions()
+                                .setTopicId(Uuid.randomUuid())
+                                .setPartitions(List.of(0, 1, 2))
+                        )
+                    )
+                    .setMemberEpoch(5)
+                    .setPreviousMemberEpoch(4)
+                    .setState((byte) 0),
+                    (short) 14
+                )
+            ),
+            CoordinatorRecord.record(
+                new ShareGroupStatePartitionMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(new ShareGroupStatePartitionMetadataValue()
+                    .setInitializingTopics(List.of())
+                    .setInitializedTopics(List.of())
+                    .setDeletingTopics(List.of()),
+                    (short) 15
+                )
+            )
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("shareGroupRecords")
+    public void testShareGroupRecordsNoExceptionOnReplay(CoordinatorRecord record) {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = spy(new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build());
+
+        assertDoesNotThrow(() -> context.replay(record));
+    }
+
+    private record PendingAssignmentCase(
+        String description,
+        String groupId,
+        ShareGroup group,
+        boolean expectedValue,
+        Runnable assertions
+    ) {
+    }
+
+    private static Stream<Function<GroupMetadataManagerTestContext, PendingAssignmentCase>> generatePendingAssignmentCases() {
+        String groupId1 = "groupId";
+        Uuid tid1 = Uuid.randomUuid();
+        String tName1 = "t1";
+        Uuid tid2 = Uuid.randomUuid();
+        String tName2 = "t2";
+
+        return Stream.of(
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.isEmpty()).thenReturn(true);
+                return new PendingAssignmentCase("Group is empty", groupId1, group, false, () -> {
+                    verify(group, times(0)).groupId();
+                    verify(group).isEmpty();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                return new PendingAssignmentCase("Group not in metadata", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                );
+                context.commit();
+                return new PendingAssignmentCase("Group metadata initialized topics empty", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of());
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Empty group subscription", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of(tName2, new SubscriptionCount(1, 1)));
+                when(group.targetAssignment()).thenReturn(Map.of());
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Subscribed topics not in metadata and empty assignment.", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                    verify(group).targetAssignment();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of(tName1, new SubscriptionCount(1, 1)));
+                when(group.targetAssignment()).thenReturn(Map.of(tName1, new Assignment(Map.of(tid1, Set.of(0, 1)))));
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Subscribed topics in metadata and assigned partitions match.", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                    verify(group).targetAssignment();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of(tName1, new SubscriptionCount(1, 1)));
+                when(group.targetAssignment()).thenReturn(Map.of(tName1, new Assignment(Map.of(tid1, Set.of(0)))));
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Subscribed topics in metadata but assigned partitions differ.", groupId1, group, true, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                    verify(group).targetAssignment();
+                });
+            },
+            (GroupMetadataManagerTestContext context) -> {
+                ShareGroup group = mock(ShareGroup.class);
+                when(group.groupId()).thenReturn(groupId1);
+                when(group.isEmpty()).thenReturn(false);
+                when(group.subscribedTopicNames()).thenReturn(Map.of(tName1, new SubscriptionCount(1, 1)));
+                when(group.targetAssignment()).thenReturn(Map.of(
+                    tName1, new Assignment(Map.of(tid1, Set.of(0, 1))),
+                    tName2, new Assignment(Map.of(tid2, Set.of(0)))
+                ));
+                context.groupMetadataManager.replay(
+                    new ShareGroupStatePartitionMetadataKey()
+                        .setGroupId(groupId1),
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializedTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName1)
+                                .setTopicId(tid1)
+                                .setPartitions(List.of(0, 1)),
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicName(tName2)
+                                .setTopicId(tid2)
+                                .setPartitions(List.of(0))
+                        ))
+                );
+                context.commit();
+                return new PendingAssignmentCase("Subscribed topics in metadata but assigned has other topics too.", groupId1, group, false, () -> {
+                    verify(group).groupId();
+                    verify(group).isEmpty();
+                    verify(group).subscribedTopicNames();
+                    verify(group).targetAssignment();
+                });
+            }
+        );
+    }
+
+    @SuppressWarnings("ClassEscapesDefinedScope")
+    @ParameterizedTest
+    @MethodSource("generatePendingAssignmentCases")
+    public void testShareGroupPendingAssignments(Function<GroupMetadataManagerTestContext, PendingAssignmentCase> testCase) {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        PendingAssignmentCase test = testCase.apply(context);
+        assertEquals(test.expectedValue, context.groupMetadataManager.initializedAssignmentPending(test.group), test.description);
+        test.assertions.run();
     }
 
     private static void checkJoinGroupResponse(

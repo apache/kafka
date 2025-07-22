@@ -307,6 +307,20 @@ Found problem:
   }
 
   @Test
+  def testFormatWithUnsupportedReleaseVersion(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val failure = assertThrows(classOf[TerseFailure], () =>
+      runFormatCommand(stream, properties, Seq("--release-version", "3.3-IV1"))).getMessage
+    assertTrue(failure.contains("Unknown metadata.version 3.3-IV1"))
+    assertTrue(failure.contains(MetadataVersion.MINIMUM_VERSION.version))
+    assertTrue(failure.contains(MetadataVersion.latestProduction().version))
+  }
+
+  @Test
   def testFormatWithReleaseVersionAsFeature(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
@@ -590,7 +604,7 @@ Found problem:
 
     assertEquals("Unknown release version '2.9-IV2'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
+      " to " + MetadataVersion.latestTesting().version, exception.getMessage
     )
 
     val exception2 = assertThrows(classOf[TerseFailure], () => {
@@ -599,7 +613,7 @@ Found problem:
 
     assertEquals("Unknown release version 'invalid'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
+      " to " + MetadataVersion.latestTesting().version, exception2.getMessage
     )
   }
 
