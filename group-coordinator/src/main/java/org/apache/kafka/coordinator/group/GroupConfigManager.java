@@ -36,7 +36,7 @@ public class GroupConfigManager implements AutoCloseable {
 
     private final Map<String, GroupConfig> configMap;
 
-    private volatile GroupMetadataManager listener;
+    private volatile GroupCoordinator groupConfigListener;
 
     public GroupConfigManager(Map<?, ?> defaultConfig) {
         this.configMap = new ConcurrentHashMap<>();
@@ -54,8 +54,8 @@ public class GroupConfigManager implements AutoCloseable {
             throw new InvalidRequestException("Group name can't be empty.");
         }
 
-        if (listener != null) {
-            listener.onGroupConfigUpdate(groupId, newGroupConfig);
+        if (groupConfigListener != null) {
+            groupConfigListener.onGroupConfigUpdate(groupId, newGroupConfig);
         }
 
         final GroupConfig newConfig = GroupConfig.fromProps(
@@ -97,8 +97,9 @@ public class GroupConfigManager implements AutoCloseable {
         GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
     }
 
-    public void registerListener(GroupMetadataManager listener) {
-        this.listener = listener;
+    // TODO docs
+    public void registerListener(GroupCoordinator groupCoordinator) {
+        this.groupConfigListener = groupCoordinator;
     }
 
     /**
@@ -106,6 +107,6 @@ public class GroupConfigManager implements AutoCloseable {
      */
     public void close() {
         configMap.clear();
-        listener = null;
+        groupConfigListener = null;
     }
 }

@@ -473,6 +473,12 @@ public interface GroupCoordinator {
         MetadataDelta delta
     );
 
+    // TODO docs
+    void onGroupConfigUpdate(
+            String groupId,
+            Properties updatedProperties
+    );
+
     /**
      * Return the configuration properties of the internal group
      * metadata topic.

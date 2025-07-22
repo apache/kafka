@@ -135,6 +135,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -271,8 +272,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withShareGroupAssignor(config.shareGroupAssignors().get(0))
                 .withAuthorizerPlugin(authorizerPlugin)
                 .build();
-
-            groupConfigManager.registerListener(groupMetadataManager);
 
             OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()
                 .withLogContext(logContext)
@@ -1117,6 +1116,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     @Override
     public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
         groupMetadataManager.onNewMetadataImage(newImage, delta);
+    }
+
+    // todo docs
+    @Override
+    public void onGroupConfigUpdate(String groupId, Properties updatedProperties) {
+        groupMetadataManager.onGroupConfigUpdate(groupId, updatedProperties);
     }
 
     private static OffsetCommitKey convertLegacyOffsetCommitKey(

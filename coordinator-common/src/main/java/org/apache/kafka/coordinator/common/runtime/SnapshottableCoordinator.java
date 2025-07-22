@@ -25,6 +25,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
+import java.util.Properties;
+
 /**
  * SnapshottableCoordinator is a wrapper on top of the coordinator state machine. This object is not accessed concurrently
  * but multiple threads access it while loading the coordinator partition and therefore requires all methods to be
@@ -209,6 +211,11 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      */
     synchronized void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
         this.coordinator.onNewMetadataImage(newImage, delta);
+    }
+
+    // TODO docs
+    synchronized void onGroupConfigUpdate(String groupId, Properties updatedProperties) {
+        this.coordinator.onGroupConfigUpdate(groupId, updatedProperties);
     }
 
     /**

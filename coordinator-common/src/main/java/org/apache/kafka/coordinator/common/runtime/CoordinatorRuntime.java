@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -2505,6 +2506,33 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 } else {
                     log.debug("Ignored new metadata image with offset {} for {} because the coordinator does not exist.",
                         newImage.offset(), tp);
+                }
+            });
+        });
+    }
+
+    // TODO docs
+    public void onGroupConfigUpdate(
+            String groupId,
+            Properties updatedProperties
+    ) {
+        throwIfNotRunning();
+
+        // Propagate updated properties to each coordinator
+        coordinators.keySet().forEach(tp -> {
+            scheduleInternalOperation("ConfigUpdateCallback(tp=" + tp + ", groupId=" + groupId + ")", tp, () -> {
+                CoordinatorContext context = coordinators.get(tp);
+                if (context != null) {
+                    context.lock.lock();
+                    try {
+                        if (context.state == CoordinatorState.ACTIVE) {
+                            // Run callback only for active coordinator
+                            log.debug("Inform coordinator about new config for group {}", groupId);
+                            context.coordinator.onGroupConfigUpdate(groupId, updatedProperties);
+                        }
+                    } finally {
+                        context.lock.unlock();
+                    }
                 }
             });
         });

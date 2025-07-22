@@ -85,8 +85,8 @@ public class GroupConfigManagerTest {
 
     @Test
     public void testConfigUpdateListenerIsCalled() {
-        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
-        configManager.registerListener(groupMetadataManager);
+        GroupCoordinator groupCoordinator = mock(GroupCoordinator.class);
+        configManager.registerListener(groupCoordinator);
         String groupId = "foo";
         Properties props = new Properties();
         props.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, 50000);
@@ -94,7 +94,7 @@ public class GroupConfigManagerTest {
 
         configManager.updateGroupConfig(groupId, props);
 
-        verify(groupMetadataManager).onGroupConfigUpdate(groupId, props);
+        verify(groupCoordinator).onGroupConfigUpdate(groupId, props);
     }
 
     public static GroupConfigManager createConfigManager() {

@@ -2213,6 +2213,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#onGroupConfigUpdate(String, Properties)}.
+     */
+    @Override
+    public void onGroupConfigUpdate(String groupId, Properties updatedProperties) {
+        throwIfNotActive();
+        runtime.onGroupConfigUpdate(groupId, updatedProperties);
+    }
+
+    /**
      * See {@link GroupCoordinator#groupMetadataTopicConfigs()}.
      */
     @Override

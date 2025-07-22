@@ -20,6 +20,8 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 
+import java.util.Properties;
+
 /**
  * CoordinatorShard is basically a replicated state machine managed by the
  * {@link CoordinatorRuntime}.
@@ -42,6 +44,9 @@ public interface CoordinatorShard<U> {
      * @param delta     The delta image.
      */
     default void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {}
+
+    // todo docs
+    default void onGroupConfigUpdate(String groupId, Properties updatedProperties) {}
 
     /**
      * The coordinator has been unloaded. This is used to apply
