@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -155,7 +154,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(ACTIVE, ctx.state);
 
         // Verify that onLoaded is called.
-        verify(coordinator, times(1)).onLoaded(MetadataImage.EMPTY);
+        verify(coordinator, times(1)).onLoaded(CoordinatorMetadataImage.EMPTY);
 
         // Verify that the listener is registered.
         verify(writer, times(1)).registerListener(
@@ -1897,11 +1896,11 @@ public class CoordinatorRuntimeTest {
         // Coordinator 0 is loaded. It should get the current image
         // that is the empty one.
         future0.complete(null);
-        verify(coordinator0).onLoaded(MetadataImage.EMPTY);
+        verify(coordinator0).onLoaded(CoordinatorMetadataImage.EMPTY);
 
         // Publish a new image.
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
-        MetadataImage newImage = delta.apply(MetadataProvenance.EMPTY);
+        CoordinatorMetadataDelta delta = new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY));
+        CoordinatorMetadataImage newImage = CoordinatorMetadataImage.EMPTY;
         runtime.onNewMetadataImage(newImage, delta);
 
         // Coordinator 0 should be notified about it.

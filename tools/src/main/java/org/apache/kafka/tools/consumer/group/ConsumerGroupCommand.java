@@ -41,6 +41,8 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -1000,6 +1002,9 @@ public class ConsumerGroupCommand {
         }
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+            // ensure all partitions are valid, otherwise throw a runtime exception
+            checkAllTopicPartitionsValid(partitionsToReset);
+
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return offsetsUtils.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
@@ -1022,6 +1027,38 @@ public class ConsumerGroupCommand {
 
             CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
+        }
+
+        private void checkAllTopicPartitionsValid(Collection<TopicPartition> partitionsToReset) {
+            // check the partitions exist
+            List<TopicPartition> partitionsNotExistList = filterNonExistentPartitions(partitionsToReset);
+            if (!partitionsNotExistList.isEmpty()) {
+                String partitionStr = partitionsNotExistList.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+                throw new UnknownTopicOrPartitionException("The partitions \"" + partitionStr + "\" do not exist");
+            }
+
+            // check the partitions have leader
+            List<TopicPartition> partitionsWithoutLeader = filterNoneLeaderPartitions(partitionsToReset);
+            if (!partitionsWithoutLeader.isEmpty()) {
+                String partitionStr = partitionsWithoutLeader.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+                throw new LeaderNotAvailableException("The partitions \"" + partitionStr + "\" have no leader");
+            }
+        }
+
+        private List<TopicPartition> filterNonExistentPartitions(Collection<TopicPartition> topicPartitions) {
+            // collect all topics
+            Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+            try {
+                List<TopicPartition> existPartitions = adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                        .stream()
+                        .flatMap(entry -> entry.getValue().partitions().stream()
+                                .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                        .toList();
+
+                return topicPartitions.stream().filter(element -> !existPartitions.contains(element)).toList();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> assignments) {
