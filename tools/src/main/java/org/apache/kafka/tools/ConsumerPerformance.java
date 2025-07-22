@@ -298,7 +298,7 @@ public class ConsumerPerformance {
                 .describedAs("milliseconds")
                 .ofType(Long.class)
                 .defaultsTo(10_000L);
-            numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
+            numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to consume.")
                 .withRequiredArg()
                 .describedAs("count")
                 .ofType(Long.class);
