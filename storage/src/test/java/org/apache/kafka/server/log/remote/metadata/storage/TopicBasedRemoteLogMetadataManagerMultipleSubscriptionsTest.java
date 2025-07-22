@@ -174,7 +174,7 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
     private void createTopic(String topic, Map<Integer, List<Integer>> replicasAssignments) {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             admin.createTopics(List.of(new NewTopic(topic, replicasAssignments)));
-            assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic, replicasAssignments.size()));
+            assertDoesNotThrow(() -> clusterInstance.waitTopicCreation(topic, replicasAssignments.size()));
         }
     }
 }

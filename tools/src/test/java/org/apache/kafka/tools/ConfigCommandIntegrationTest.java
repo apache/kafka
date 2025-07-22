@@ -224,7 +224,7 @@ public class ConfigCommandIntegrationTest {
         try (Admin client = cluster.admin()) {
             NewTopic newTopic = new NewTopic("topic", 1, (short) 1);
             client.createTopics(Set.of(newTopic)).all().get();
-            cluster.waitForTopic("topic", 1);
+            cluster.waitTopicCreation("topic", 1);
             Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
                     "--entity-type", "topics",
                     "--entity-name", "topic",
