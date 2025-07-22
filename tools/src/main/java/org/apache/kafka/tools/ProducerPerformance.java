@@ -379,7 +379,7 @@ public class ProducerPerformance {
         private long windowBytes;
         private long windowStart;
         private final boolean isSteadyState;
-        private boolean supressPrint;
+        private boolean suppressPrint;
 
         public Stats(long numRecords, boolean isSteadyState) {
             this.start = System.currentTimeMillis();
@@ -396,7 +396,7 @@ public class ProducerPerformance {
             this.totalLatency = 0;
             this.reportingInterval = 5000;
             this.isSteadyState = isSteadyState;
-            this.supressPrint = false;
+            this.suppressPrint = false;
         }
 
         public void record(int latency, int bytes, long time) {
@@ -417,7 +417,7 @@ public class ProducerPerformance {
                 if (this.isSteadyState && count == windowCount) {
                     System.out.println("In steady state.");
                 }
-                if (!this.supressPrint) {
+                if (!this.suppressPrint) {
                     printWindow();
                 }
                 newWindow();
@@ -495,7 +495,7 @@ public class ProducerPerformance {
         }
 
         public void suppressPrinting() {
-            this.supressPrint = true;
+            this.suppressPrint = true;
         }
     }
 
