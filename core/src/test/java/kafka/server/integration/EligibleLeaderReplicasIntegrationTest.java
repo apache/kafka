@@ -66,6 +66,7 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import scala.collection.Seq;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -117,7 +118,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        Seq<KafkaBroker> brokerSeq = scala.collection.JavaConverters.asScalaBuffer(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
+        Seq<KafkaBroker> brokerSeq = CollectionConverters.asScala(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
         TestUtils.waitForPartitionMetadata(brokerSeq, testTopicName, 0, 1000);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
@@ -204,7 +205,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     public void testElrMemberCanBeElected() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        Seq<KafkaBroker> brokerSeq = scala.collection.JavaConverters.asScalaBuffer(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
+        Seq<KafkaBroker> brokerSeq = CollectionConverters.asScala(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
         TestUtils.waitForPartitionMetadata(brokerSeq, testTopicName, 0, 1000);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
@@ -280,7 +281,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     public void testElrMemberShouldBeKickOutWhenUncleanShutdown() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        Seq<KafkaBroker> brokerSeq = scala.collection.JavaConverters.asScalaBuffer(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
+        Seq<KafkaBroker> brokerSeq = CollectionConverters.asScala(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
         TestUtils.waitForPartitionMetadata(brokerSeq, testTopicName, 0, 1000);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
@@ -340,7 +341,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     public void testLastKnownLeaderShouldBeElectedIfEmptyElr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        Seq<KafkaBroker> brokerSeq = scala.collection.JavaConverters.asScalaBuffer(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
+        Seq<KafkaBroker> brokerSeq = CollectionConverters.asScala(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
         TestUtils.waitForPartitionMetadata(brokerSeq, testTopicName, 0, 1000);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);

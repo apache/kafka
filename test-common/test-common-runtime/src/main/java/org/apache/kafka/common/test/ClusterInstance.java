@@ -448,12 +448,13 @@ public interface ClusterInstance {
     }
 
     default void restartDeadBrokers() {
-        if (brokers().isEmpty())
+        if (brokers().isEmpty()){
             throw new KafkaException("Must supply at least one server config.");
-        for (Map.Entry<Integer, KafkaBroker> entry : brokers().entrySet()) {
-            if (entry.getValue().isShutdown()) {
-                startBroker(entry.getKey());
-            }
         }
+        brokers().entrySet().foreach(entry -> {
+            if (!entry.getValue().isShutdown()) {
+                startBroker(id);
+            }
+        });
     }
 }
