@@ -23,7 +23,6 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -4153,6 +4152,7 @@ public class TransactionManagerTest {
         
         // Verify preparedTxnState was not set or is empty
         ProducerIdAndEpoch preparedState = transactionManager.preparedTransactionState();
+        assertEquals(ProducerIdAndEpoch.NONE, preparedState);
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
