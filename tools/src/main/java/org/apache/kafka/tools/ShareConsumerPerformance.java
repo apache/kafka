@@ -37,7 +37,6 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -396,7 +395,7 @@ public class ShareConsumerPerformance {
         }
 
         public Set<String> topic() {
-            return Collections.singleton(options.valueOf(topicOpt));
+            return Set.of(options.valueOf(topicOpt));
         }
 
         public long numMessages() {

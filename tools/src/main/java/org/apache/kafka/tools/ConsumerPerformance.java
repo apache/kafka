@@ -37,7 +37,6 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -221,8 +220,8 @@ public class ConsumerPerformance {
     }
 
     public static class ConsumerPerfRebListener implements ConsumerRebalanceListener {
-        private AtomicLong joinTimeMs;
-        private AtomicLong joinTimeMsInSingleRound;
+        private final AtomicLong joinTimeMs;
+        private final AtomicLong joinTimeMsInSingleRound;
         private long joinStartMs;
 
         public ConsumerPerfRebListener(AtomicLong joinTimeMs, long joinStartMs, AtomicLong joinTimeMsInSingleRound) {
@@ -355,7 +354,7 @@ public class ConsumerPerformance {
         }
 
         public Set<String> topic() {
-            return Collections.singleton(options.valueOf(topicOpt));
+            return Set.of(options.valueOf(topicOpt));
         }
 
         public long numMessages() {

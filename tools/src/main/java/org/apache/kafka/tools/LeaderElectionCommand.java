@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -93,7 +92,7 @@ public class LeaderElectionCommand {
         Optional<Integer> partitionOption = Optional.ofNullable(commandOptions.getPartition());
         final Optional<Set<TopicPartition>> singleTopicPartition =
             (topicOption.isPresent() && partitionOption.isPresent()) ?
-                Optional.of(Collections.singleton(new TopicPartition(topicOption.get(), partitionOption.get()))) :
+                Optional.of(Set.of(new TopicPartition(topicOption.get(), partitionOption.get()))) :
                 Optional.empty();
 
         /* Note: No need to look at --all-topic-partitions as we want this to be null if it is use.
@@ -346,7 +345,7 @@ public class LeaderElectionCommand {
             }
 
             // One and only one is required: --topic, --all-topic-partitions or --path-to-json-file
-            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = Arrays.asList(
+            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = List.of(
                 topic,
                 allTopicPartitions,
                 pathToJsonFile

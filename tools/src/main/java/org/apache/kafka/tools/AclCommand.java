@@ -40,9 +40,7 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -177,7 +175,7 @@ public class AclCommand {
 
         private static void removeAcls(Admin adminClient, Set<AccessControlEntry> acls, ResourcePatternFilter filter) throws ExecutionException, InterruptedException {
             if (acls.isEmpty()) {
-                adminClient.deleteAcls(Collections.singletonList(new AclBindingFilter(filter, AccessControlEntryFilter.ANY))).all().get();
+                adminClient.deleteAcls(List.of(new AclBindingFilter(filter, AccessControlEntryFilter.ANY))).all().get();
             } else {
                 List<AclBindingFilter> aclBindingFilters = acls.stream().map(acl -> new AclBindingFilter(filter, acl.toFilter())).collect(Collectors.toList());
                 adminClient.deleteAcls(aclBindingFilters).all().get();
@@ -249,8 +247,8 @@ public class AclCommand {
         Set<ResourcePatternFilter> transactionalIds = filters.stream().filter(f -> f.resourceType() == ResourceType.TRANSACTIONAL_ID).collect(Collectors.toSet());
         boolean enableIdempotence = opts.options.has(opts.idempotentOpt);
 
-        Set<AccessControlEntry> topicAcls = getAcl(opts, new HashSet<>(Arrays.asList(WRITE, DESCRIBE, CREATE)));
-        Set<AccessControlEntry> transactionalIdAcls = getAcl(opts, new HashSet<>(Arrays.asList(WRITE, DESCRIBE)));
+        Set<AccessControlEntry> topicAcls = getAcl(opts, Set.of(WRITE, DESCRIBE, CREATE));
+        Set<AccessControlEntry> transactionalIdAcls = getAcl(opts, Set.of(WRITE, DESCRIBE));
 
         //Write, Describe, Create permission on topics, Write, Describe on transactionalIds
         Map<ResourcePatternFilter, Set<AccessControlEntry>> result = new HashMap<>();
@@ -261,7 +259,7 @@ public class AclCommand {
             result.put(transactionalId, transactionalIdAcls);
         }
         if (enableIdempotence) {
-            result.put(CLUSTER_RESOURCE_FILTER, getAcl(opts, Collections.singleton(IDEMPOTENT_WRITE)));
+            result.put(CLUSTER_RESOURCE_FILTER, getAcl(opts, Set.of(IDEMPOTENT_WRITE)));
         }
         return result;
     }
@@ -272,8 +270,8 @@ public class AclCommand {
         Set<ResourcePatternFilter> groups = filters.stream().filter(f -> f.resourceType() == ResourceType.GROUP).collect(Collectors.toSet());
 
         //Read, Describe on topic, Read on consumerGroup
-        Set<AccessControlEntry> topicAcls = getAcl(opts, new HashSet<>(Arrays.asList(READ, DESCRIBE)));
-        Set<AccessControlEntry> groupAcls = getAcl(opts, Collections.singleton(READ));
+        Set<AccessControlEntry> topicAcls = getAcl(opts, Set.of(READ, DESCRIBE));
+        Set<AccessControlEntry> groupAcls = getAcl(opts, Set.of(READ));
 
         Map<ResourcePatternFilter, Set<AccessControlEntry>> result = new HashMap<>();
         for (ResourcePatternFilter topic : topics) {
@@ -333,9 +331,9 @@ public class AclCommand {
         if (opts.options.has(hostOptionSpec)) {
             return opts.options.valuesOf(hostOptionSpec).stream().map(String::trim).collect(Collectors.toSet());
         } else if (opts.options.has(principalOptionSpec)) {
-            return Collections.singleton(AclEntry.WILDCARD_HOST);
+            return Set.of(AclEntry.WILDCARD_HOST);
         } else {
-            return Collections.emptySet();
+            return Set.of();
         }
     }
 
@@ -345,7 +343,7 @@ public class AclCommand {
                     .map(s -> SecurityUtils.parseKafkaPrincipal(s.trim()))
                     .collect(Collectors.toSet());
         } else {
-            return Collections.emptySet();
+            return Set.of();
         }
     }
 
@@ -547,7 +545,7 @@ public class AclCommand {
             if (!options.has(bootstrapServerOpt) && !options.has(bootstrapControllerOpt)) {
                 CommandLineUtils.printUsageAndExit(parser, "One of --bootstrap-server or --bootstrap-controller must be specified");
             }
-            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = Arrays.asList(addOpt, removeOpt, listOpt);
+            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = List.of(addOpt, removeOpt, listOpt);
             long mutuallyExclusiveOptionsCount = mutuallyExclusiveOptions.stream()
                     .filter(abstractOptionSpec -> options.has(abstractOptionSpec))
                     .count();
@@ -592,10 +590,10 @@ public class AclCommand {
 
         @Override
         public String valuePattern() {
-            List<PatternType> values = Arrays.asList(PatternType.values());
+            List<PatternType> values = List.of(PatternType.values());
             List<PatternType> filteredValues = values.stream()
                     .filter(type -> type != PatternType.UNKNOWN)
-                    .collect(Collectors.toList());
+                    .toList();
             return filteredValues.stream()
                     .map(Object::toString)
                     .collect(Collectors.joining("|"));
