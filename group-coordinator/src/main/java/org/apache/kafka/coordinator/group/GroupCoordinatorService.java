@@ -725,7 +725,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
                 .map(topic -> {
                     AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                        .setTopicName(topic.topicName());
+                        .setTopicName(topic.topicName())
+                        .setTopicId(topic.topicId());
                     topic.partitions().forEach(partition -> {
                         if (partition.errorCode() != Errors.NONE.code()) {
                             topicData.partitions().add(partition);
