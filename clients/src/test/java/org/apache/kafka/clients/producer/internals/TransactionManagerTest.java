@@ -23,7 +23,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.PreparedTxnState;
+
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -4068,11 +4068,10 @@ public class TransactionManagerTest {
         transactionManager.prepareTransaction();
         assertTrue(transactionManager.isPrepared());
 
-        PreparedTxnState preparedState = transactionManager.preparedTransactionState();
-        // Validate the state contains the correct serialized producer ID and epoch
-        assertEquals(producerId + ":" + epoch, preparedState.toString());
-        assertEquals(producerId, preparedState.producerId());
-        assertEquals(epoch, preparedState.epoch());
+        ProducerIdAndEpoch preparedState = transactionManager.preparedTransactionState();
+        // Validate the state contains the correct producer ID and epoch
+        assertEquals(producerId, preparedState.producerId);
+        assertEquals(epoch, preparedState.epoch);
     }
 
     @Test
@@ -4111,11 +4110,10 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.isPrepared());
         
         // Verify preparedTxnState was set with ongoing producer ID and epoch
-        PreparedTxnState preparedState = transactionManager.preparedTransactionState();
+        ProducerIdAndEpoch preparedState = transactionManager.preparedTransactionState();
         assertNotNull(preparedState);
-        assertEquals(ongoingPid, preparedState.producerId());
-        assertEquals(ongoingEpoch, preparedState.epoch());
-        assertEquals(ongoingPid + ":" + ongoingEpoch, preparedState.toString());
+        assertEquals(ongoingPid, preparedState.producerId);
+        assertEquals(ongoingEpoch, preparedState.epoch);
     }
 
     @Test
@@ -4154,10 +4152,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.isReady());
         
         // Verify preparedTxnState was not set or is empty
-        PreparedTxnState preparedState = transactionManager.preparedTransactionState();
-        if (preparedState != null) {
-            assertFalse(preparedState.hasTransaction());
-        }
+        ProducerIdAndEpoch preparedState = transactionManager.preparedTransactionState();
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {

@@ -23,7 +23,7 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.PreparedTxnState;
+
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -1970,16 +1970,13 @@ public class TransactionManager {
     }
 
     /**
-     * Returns a PreparedTxnState object containing the producer ID and epoch
+     * Returns a ProducerIdAndEpoch object containing the producer ID and epoch
      * of the ongoing transaction.
      * This is used when preparing a transaction for a two-phase commit.
      *
-     * @return a PreparedTxnState with the current producer ID and epoch
+     * @return a ProducerIdAndEpoch with the current producer ID and epoch.
      */
-    public PreparedTxnState preparedTransactionState() {
-        if (this.preparedTxnState == ProducerIdAndEpoch.NONE) {
-            return new PreparedTxnState("");
-        }
-        return new PreparedTxnState(this.preparedTxnState.producerId + ":" + this.preparedTxnState.epoch);
+    public ProducerIdAndEpoch preparedTransactionState() {
+        return this.preparedTxnState;
     }
 }
