@@ -22,7 +22,6 @@ import org.apache.kafka.trogdor.common.JsonUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,8 +43,8 @@ public class TopicsSpecTest {
         FOO.set("topicA[0-2]", PARTSA);
 
         Map<Integer, List<Integer>> assignmentsB = new HashMap<>();
-        assignmentsB.put(0, Arrays.asList(0, 1, 2));
-        assignmentsB.put(1, Arrays.asList(2, 3, 4));
+        assignmentsB.put(0, List.of(0, 1, 2));
+        assignmentsB.put(1, List.of(2, 3, 4));
         PARTSB = new PartitionsSpec(0, (short) 0, assignmentsB, null);
         FOO.set("topicB", PARTSB);
     }

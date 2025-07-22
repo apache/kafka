@@ -146,8 +146,8 @@ public class PayloadGeneratorTest {
             new ConstantPayloadGenerator(4, new byte[0]);
         RandomComponent constantConfig = new RandomComponent(25, constantGenerator);
         
-        List<RandomComponent> components1 = new ArrayList<>(Arrays.asList(nullConfig, uniformConfig));
-        List<RandomComponent> components2 = new ArrayList<>(Arrays.asList(sequentialConfig, constantConfig));
+        List<RandomComponent> components1 = new ArrayList<>(List.of(nullConfig, uniformConfig));
+        List<RandomComponent> components2 = new ArrayList<>(List.of(sequentialConfig, constantConfig));
         byte[] expected = new byte[4];
 
         PayloadIterator iter = new PayloadIterator(
@@ -180,8 +180,8 @@ public class PayloadGeneratorTest {
         RandomComponent sequentialConfig2 = new RandomComponent(25, sequentialGenerator);
         RandomComponent nullConfig2 = new RandomComponent(25, nullGenerator);
         
-        List<RandomComponent> components3 = new ArrayList<>(Arrays.asList(sequentialConfig2, uniformConfig2, nullConfig));
-        List<RandomComponent> components4 = new ArrayList<>(Arrays.asList(uniformConfig2, sequentialConfig2, constantConfig, nullConfig2));
+        List<RandomComponent> components3 = new ArrayList<>(List.of(sequentialConfig2, uniformConfig2, nullConfig));
+        List<RandomComponent> components4 = new ArrayList<>(List.of(uniformConfig2, sequentialConfig2, constantConfig, nullConfig2));
         
         testReproducible(new RandomComponentPayloadGenerator(4, components1));
         testReproducible(new RandomComponentPayloadGenerator(123, components2));
@@ -200,8 +200,8 @@ public class PayloadGeneratorTest {
             new ConstantPayloadGenerator(4, new byte[0]);
         RandomComponent constantConfig = new RandomComponent(-25, constantGenerator);
         
-        List<RandomComponent> components1 = new ArrayList<>(Arrays.asList(nullConfig, uniformConfig));
-        List<RandomComponent> components2 = new ArrayList<>(Arrays.asList(
+        List<RandomComponent> components1 = new ArrayList<>(List.of(nullConfig, uniformConfig));
+        List<RandomComponent> components2 = new ArrayList<>(List.of(
              nullConfig, constantConfig, uniformConfig, nullConfig, uniformConfig, uniformConfig));
      
         assertThrows(IllegalArgumentException.class, () ->

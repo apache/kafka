@@ -55,7 +55,6 @@ import org.slf4j.LoggerFactory;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -472,7 +471,7 @@ public class CoordinatorClient {
         }
         List<List<String>> lines = new ArrayList<>();
         List<String> header = new ArrayList<>(
-            Arrays.asList("ID", "TYPE", "STATE", "INFO"));
+            List.of("ID", "TYPE", "STATE", "INFO"));
         lines.add(header);
         for (Map.Entry<String, TaskState> entry : response.tasks().entrySet()) {
             String taskId = entry.getKey();
