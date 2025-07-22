@@ -88,7 +88,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         try (Admin admin = clusterInstance.admin()) {
             String topic = "test-topic-exist";
             admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
-            clusterInstance.waitForTopic(topic, 1);
+            clusterInstance.waitTopicCreation(topic, 1);
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             assertTrue(doesTopicExist);
         }
@@ -137,9 +137,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         try (Admin admin = clusterInstance.admin()) {
             // Set broker id 0 as the first entry which is taken as the leader.
             admin.createTopics(List.of(new NewTopic(leaderTopic, Map.of(0, List.of(0, 1, 2))))).all().get();
-            clusterInstance.waitForTopic(leaderTopic, 1);
+            clusterInstance.waitTopicCreation(leaderTopic, 1);
             admin.createTopics(List.of(new NewTopic(followerTopic, Map.of(0, List.of(1, 2, 0))))).all().get();
-            clusterInstance.waitForTopic(followerTopic, 1);
+            clusterInstance.waitTopicCreation(followerTopic, 1);
         }
 
         final TopicIdPartition newLeaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));

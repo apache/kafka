@@ -220,7 +220,7 @@ public class LogDirsCommandTest {
     private void createTopic(ClusterInstance clusterInstance, String topic) {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0))))).topicId(topic).get());
-            assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic, 1));
+            assertDoesNotThrow(() -> clusterInstance.waitTopicCreation(topic, 1));
         }
     }
 }

@@ -36,6 +36,7 @@ import java.io.PrintStream;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -166,7 +167,7 @@ public class ConsoleShareConsumer {
             this.consumer = consumer;
             this.timeoutMs = timeoutMs;
 
-            consumer.subscribe(Collections.singletonList(topic));
+            consumer.subscribe(List.of(topic));
         }
 
         ConsumerRecord<byte[], byte[]> receive() {
