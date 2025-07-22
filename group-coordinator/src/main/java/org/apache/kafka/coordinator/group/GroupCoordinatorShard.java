@@ -1118,7 +1118,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         groupMetadataManager.onNewMetadataImage(newImage, delta);
     }
 
-    // todo docs
+    /**
+     * See {@link CoordinatorShard#onGroupConfigUpdate(String, Properties)}
+     */
     @Override
     public void onGroupConfigUpdate(String groupId, Properties updatedProperties) {
         groupMetadataManager.onGroupConfigUpdate(groupId, updatedProperties);

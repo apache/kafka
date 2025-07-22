@@ -45,7 +45,12 @@ public interface CoordinatorShard<U> {
      */
     default void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {}
 
-    // todo docs
+    /**
+     * Callback method to propagate information about config update to group
+     *
+     * @param groupId           The group for which the properties were updated
+     * @param updatedProperties The properties that were updated
+     */
     default void onGroupConfigUpdate(String groupId, Properties updatedProperties) {}
 
     /**

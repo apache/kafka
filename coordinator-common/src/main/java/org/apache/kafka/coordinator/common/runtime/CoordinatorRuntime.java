@@ -2511,7 +2511,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         });
     }
 
-    // TODO docs
+    /**
+     *  Schedule and propagate config update to each coordinator
+     *
+     * @param groupId           The group for which the properties were updated
+     * @param updatedProperties The properties that were updated
+     */
     public void onGroupConfigUpdate(
             String groupId,
             Properties updatedProperties

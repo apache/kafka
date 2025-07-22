@@ -473,7 +473,12 @@ public interface GroupCoordinator {
         MetadataDelta delta
     );
 
-    // TODO docs
+    /**
+     *  Callback method to propagate information about config update to group
+     *
+     * @param groupId           The group for which the properties were updated
+     * @param updatedProperties The properties that were updated
+     */
     void onGroupConfigUpdate(
             String groupId,
             Properties updatedProperties

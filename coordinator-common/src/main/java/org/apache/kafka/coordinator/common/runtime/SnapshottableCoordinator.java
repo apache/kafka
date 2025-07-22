@@ -213,7 +213,12 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
         this.coordinator.onNewMetadataImage(newImage, delta);
     }
 
-    // TODO docs
+    /**
+     * Callback method to propagate information about config update to group
+     *
+     * @param groupId           The group for which the properties were updated
+     * @param updatedProperties The properties that were updated
+     */
     synchronized void onGroupConfigUpdate(String groupId, Properties updatedProperties) {
         this.coordinator.onGroupConfigUpdate(groupId, updatedProperties);
     }

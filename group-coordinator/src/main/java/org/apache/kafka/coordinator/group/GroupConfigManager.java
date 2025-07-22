@@ -97,7 +97,11 @@ public class GroupConfigManager implements AutoCloseable {
         GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
     }
 
-    // TODO docs
+    /**
+     * Method to register GroupCoordinator as listener for config update. 
+     * 
+     * @see GroupCoordinator#onGroupConfigUpdate(String, Properties) 
+     */
     public void registerListener(GroupCoordinator groupCoordinator) {
         this.groupConfigListener = groupCoordinator;
     }
