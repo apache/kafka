@@ -773,9 +773,9 @@ public class NetworkClient implements KafkaClient {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
 
-            if (!atLeastOneConnectionReady
-                    && connectionStates.isReady(node.idString(), now)
-                    && selector.isChannelReady(node.idString())) {
+            // Check if we have at least one fully ready connection
+            boolean nodeReady = connectionStates.isReady(node.idString(), now) && selector.isChannelReady(node.idString());
+            if (nodeReady) {
                 atLeastOneConnectionReady = true;
             }
 
@@ -791,7 +791,10 @@ public class NetworkClient implements KafkaClient {
                     foundReady = node;
                 }
             } else if (connectionStates.isPreparingConnection(node.idString())) {
-                foundConnecting = node;
+                // Only select the first connecting node we find
+                if (foundConnecting == null) {
+                    foundConnecting = node;
+                }
             } else if (canConnect(node, now)) {
                 if (foundCanConnect == null ||
                         this.connectionStates.lastConnectAttemptMs(foundCanConnect.idString()) >
