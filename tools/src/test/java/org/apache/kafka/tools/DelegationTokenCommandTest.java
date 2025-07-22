@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.utils.Exit;
 
 import org.junit.jupiter.api.Test;
 
@@ -108,5 +109,143 @@ public class DelegationTokenCommandTest {
     private DelegationTokenCommand.DelegationTokenCommandOptions getExpireOpts(String hmac) {
         String[] args = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--expiry-time-period", "-1", "--hmac", hmac};
         return new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+    }
+
+    @Test
+    public void testCheckArgsCreateOperation() {
+        String[] args = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create", "--max-life-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions opts = new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+        
+        opts.checkArgs();
+    }
+
+    @Test
+    public void testCheckArgsRenewOperation() {
+        String[] args = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions opts = new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+        
+        opts.checkArgs();
+    }
+
+    @Test
+    public void testCheckArgsExpireOperation() {
+        String[] args = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions opts = new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+        
+        opts.checkArgs();
+    }
+
+    @Test
+    public void testCheckArgsDescribeOperation() {
+        String[] args = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe"};
+        DelegationTokenCommand.DelegationTokenCommandOptions opts = new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+        
+        opts.checkArgs();
+    }
+
+    @Test
+    public void testCheckArgsInvalidArgsForCreate() {
+        String[] args = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create", "--max-life-time-period", "604800000", "--hmac", "test-hmac"};
+        DelegationTokenCommand.DelegationTokenCommandOptions opts = new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+        
+        Exit.setExitProcedure((exitCode, message) -> {
+            throw new RuntimeException("Exit with code " + exitCode + ": " + message);
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> opts.checkArgs());
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void testCheckArgsInvalidArgsForRenew() {
+        String[] args = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac", "--renew-time-period", "604800000", "--max-life-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions opts = new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+        
+        Exit.setExitProcedure((exitCode, message) -> {
+            throw new RuntimeException("Exit with code " + exitCode + ": " + message);
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> opts.checkArgs());
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void testCheckArgsInvalidArgsForExpire() {
+        String[] args = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac", "--expiry-time-period", "604800000", "--renew-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions opts = new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+
+        Exit.setExitProcedure((exitCode, message) -> {
+            throw new RuntimeException("Exit with code " + exitCode + ": " + message);
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> opts.checkArgs());
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void testCheckArgsInvalidArgsForDescribe() {
+        String[] args = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--describe", "--renew-time-period", "604800000"};
+        DelegationTokenCommand.DelegationTokenCommandOptions opts = new DelegationTokenCommand.DelegationTokenCommandOptions(args);
+        
+        Exit.setExitProcedure((exitCode, message) -> {
+            throw new RuntimeException("Exit with code " + exitCode + ": " + message);
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> opts.checkArgs());
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void testCheckArgsMissingRequiredArgs() {
+        Exit.setExitProcedure((exitCode, message) -> {
+            throw new RuntimeException("Exit with code " + exitCode + ": " + message);
+        });
+        try {
+            String[] args1 = {"--command-config", "testfile", "--create", "--max-life-time-period", "604800000"};
+            DelegationTokenCommand.DelegationTokenCommandOptions opts1 = new DelegationTokenCommand.DelegationTokenCommandOptions(args1);
+            assertThrows(RuntimeException.class, () -> opts1.checkArgs());
+
+            String[] args2 = {"--bootstrap-server", "localhost:9092", "--create", "--max-life-time-period", "604800000"};
+            DelegationTokenCommand.DelegationTokenCommandOptions opts2 = new DelegationTokenCommand.DelegationTokenCommandOptions(args2);
+            assertThrows(RuntimeException.class, () -> opts2.checkArgs());
+
+            String[] args3 = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--create"};
+            DelegationTokenCommand.DelegationTokenCommandOptions opts3 = new DelegationTokenCommand.DelegationTokenCommandOptions(args3);
+            assertThrows(RuntimeException.class, () -> opts3.checkArgs());
+
+            String[] args4 = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--renew-time-period", "604800000"};
+            DelegationTokenCommand.DelegationTokenCommandOptions opts4 = new DelegationTokenCommand.DelegationTokenCommandOptions(args4);
+            assertThrows(RuntimeException.class, () -> opts4.checkArgs());
+
+            String[] args5 = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--renew", "--hmac", "test-hmac"};
+            DelegationTokenCommand.DelegationTokenCommandOptions opts5 = new DelegationTokenCommand.DelegationTokenCommandOptions(args5);
+            assertThrows(RuntimeException.class, () -> opts5.checkArgs());
+
+            String[] args6 = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--expiry-time-period", "604800000"};
+            DelegationTokenCommand.DelegationTokenCommandOptions opts6 = new DelegationTokenCommand.DelegationTokenCommandOptions(args6);
+            assertThrows(RuntimeException.class, () -> opts6.checkArgs());
+
+            String[] args7 = {"--bootstrap-server", "localhost:9092", "--command-config", "testfile", "--expire", "--hmac", "test-hmac"};
+            DelegationTokenCommand.DelegationTokenCommandOptions opts7 = new DelegationTokenCommand.DelegationTokenCommandOptions(args7);
+            assertThrows(RuntimeException.class, () -> opts7.checkArgs());
+
+            String[] args8 = {"--command-config", "testfile", "--describe"};
+            DelegationTokenCommand.DelegationTokenCommandOptions opts8 = new DelegationTokenCommand.DelegationTokenCommandOptions(args8);
+            assertThrows(RuntimeException.class, () -> opts8.checkArgs());
+
+            String[] args9 = {"--bootstrap-server", "localhost:9092", "--describe"};
+            DelegationTokenCommand.DelegationTokenCommandOptions opts9 = new DelegationTokenCommand.DelegationTokenCommandOptions(args9);
+            assertThrows(RuntimeException.class, () -> opts9.checkArgs());
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 }
