@@ -917,8 +917,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException {
-            if (isCancelled())
+            if (isCancelled()) {
+                logger.info("Skipping copying log segments as the current task state is changed, cancelled: {}", isCancelled());
                 return;
+            }
 
             try {
                 maybeUpdateLogStartOffsetOnBecomingLeader(log);
