@@ -691,6 +691,8 @@ public class RemoteLogManagerTest {
         long lastStableOffset = 150L;
         long logEndOffset = 150L;
 
+        when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(12L);
+        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(2L);
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
 
         // leader epoch preparation
@@ -708,6 +710,7 @@ public class RemoteLogManagerTest {
 
         when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
         when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
+        when(activeSegment.size()).thenReturn(2);
         verify(oldSegment, times(0)).readNextOffset();
         verify(activeSegment, times(0)).readNextOffset();
 
@@ -764,6 +767,8 @@ public class RemoteLogManagerTest {
         assertEquals(1, brokerTopicStats.allTopicsStats().remoteCopyRequestRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().remoteCopyBytesRate().count());
         assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().count());
+        assertEquals(10, brokerTopicStats.allTopicsStats().remoteCopyLagBytesAggrMetric().value());
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteCopyLagSegmentsAggrMetric().value());
     }
 
     @Test
