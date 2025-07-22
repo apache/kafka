@@ -38,9 +38,7 @@ import com.yammer.metrics.core.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -61,28 +59,28 @@ public class DelayedRemoteFetch extends DelayedOperation {
 
     static final Meter EXPIRED_REQUEST_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
 
-    private final Future<Void> remoteFetchTask;
-    private final CompletableFuture<RemoteLogReadResult> remoteFetchResult;
-    private final RemoteStorageFetchInfo remoteFetchInfo;
-    private final Map<TopicIdPartition, List<FetchPartitionStatus>> fetchPartitionStatus;
+    private final Map<TopicIdPartition, Future<Void>> remoteFetchTasks;
+    private final Map<TopicIdPartition, CompletableFuture<RemoteLogReadResult>> remoteFetchResults;
+    private final Map<TopicIdPartition, RemoteStorageFetchInfo> remoteFetchInfos;
+    private final Map<TopicIdPartition, FetchPartitionStatus> fetchPartitionStatus;
     private final FetchParams fetchParams;
-    private final Map<TopicIdPartition, List<LogReadResult>> localReadResults;
+    private final Map<TopicIdPartition, LogReadResult> localReadResults;
     private final Consumer<TopicPartition> partitionOrException;
-    private final Consumer<Map<TopicIdPartition, List<FetchPartitionData>>> responseCallback;
+    private final Consumer<Map<TopicIdPartition, FetchPartitionData>> responseCallback;
 
-    public DelayedRemoteFetch(Future<Void> remoteFetchTask,
-                              CompletableFuture<RemoteLogReadResult> remoteFetchResult,
-                              RemoteStorageFetchInfo remoteFetchInfo,
+    public DelayedRemoteFetch(Map<TopicIdPartition, Future<Void>> remoteFetchTasks,
+                              Map<TopicIdPartition, CompletableFuture<RemoteLogReadResult>> remoteFetchResults,
+                              Map<TopicIdPartition, RemoteStorageFetchInfo> remoteFetchInfos,
                               long remoteFetchMaxWaitMs,
-                              Map<TopicIdPartition, List<FetchPartitionStatus>> fetchPartitionStatus,
+                              Map<TopicIdPartition, FetchPartitionStatus> fetchPartitionStatus,
                               FetchParams fetchParams,
-                              Map<TopicIdPartition, List<LogReadResult>> localReadResults,
+                              Map<TopicIdPartition, LogReadResult> localReadResults,
                               Consumer<TopicPartition> partitionOrException,
-                              Consumer<Map<TopicIdPartition, List<FetchPartitionData>>> responseCallback) {
+                              Consumer<Map<TopicIdPartition, FetchPartitionData>> responseCallback) {
         super(remoteFetchMaxWaitMs);
-        this.remoteFetchTask = remoteFetchTask;
-        this.remoteFetchResult = remoteFetchResult;
-        this.remoteFetchInfo = remoteFetchInfo;
+        this.remoteFetchTasks = remoteFetchTasks;
+        this.remoteFetchResults = remoteFetchResults;
+        this.remoteFetchInfos = remoteFetchInfos;
         this.fetchPartitionStatus = fetchPartitionStatus;
         this.fetchParams = fetchParams;
         this.localReadResults = localReadResults;
@@ -99,36 +97,35 @@ public class DelayedRemoteFetch extends DelayedOperation {
      *
      * Case a: This broker is no longer the leader of the partition it tries to fetch
      * Case b: This broker does not know the partition it tries to fetch
-     * Case c: The remote storage read request completed (succeeded or failed)
+     * Case c: All the remote storage read request completed (succeeded or failed)
      * Case d: The partition is in an offline log directory on this broker
      *
      * Upon completion, should return whatever data is available for each valid partition
      */
     @Override
     public boolean tryComplete() {
-        for (Map.Entry<TopicIdPartition, List<FetchPartitionStatus>> entry : fetchPartitionStatus.entrySet()) {
+        for (Map.Entry<TopicIdPartition, FetchPartitionStatus> entry : fetchPartitionStatus.entrySet()) {
             TopicIdPartition topicPartition = entry.getKey();
-            List<FetchPartitionStatus> fetchStatusList = entry.getValue();
-            for (FetchPartitionStatus fetchStatus : fetchStatusList) {
-                LogOffsetMetadata fetchOffset = fetchStatus.startOffsetMetadata();
-                try {
-                    if (!fetchOffset.equals(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)) {
-                        partitionOrException.accept(topicPartition.topicPartition());
-                    }
-                } catch (KafkaStorageException e) { // Case d
-                    LOG.debug("Partition {} is in an offline log directory, satisfy {} immediately.", topicPartition, fetchParams);
-                    return forceComplete();
-                } catch (UnknownTopicOrPartitionException e) { // Case b
-                    LOG.debug("Broker no longer knows of partition {}, satisfy {} immediately", topicPartition, fetchParams);
-                    return forceComplete();
-                } catch (NotLeaderOrFollowerException e) { // Case a
-                    LOG.debug("Broker is no longer the leader or follower of {}, satisfy {} immediately", topicPartition, fetchParams);
-                    return forceComplete();
+            FetchPartitionStatus fetchStatus = entry.getValue();
+            LogOffsetMetadata fetchOffset = fetchStatus.startOffsetMetadata();
+            try {
+                if (!fetchOffset.equals(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)) {
+                    partitionOrException.accept(topicPartition.topicPartition());
                 }
+            } catch (KafkaStorageException e) { // Case d
+                LOG.debug("Partition {} is in an offline log directory, satisfy {} immediately.", topicPartition, fetchParams);
+                return forceComplete();
+            } catch (UnknownTopicOrPartitionException e) { // Case b
+                LOG.debug("Broker no longer knows of partition {}, satisfy {} immediately", topicPartition, fetchParams);
+                return forceComplete();
+            } catch (NotLeaderOrFollowerException e) { // Case a
+                LOG.debug("Broker is no longer the leader or follower of {}, satisfy {} immediately", topicPartition, fetchParams);
+                return forceComplete();
             }
         }
 
-        if (remoteFetchResult.isDone()) { // Case c
+        // Case c
+        if (remoteFetchResults.values().stream().allMatch(CompletableFuture::isDone)) {
             return forceComplete();
         }
         return false;
@@ -138,10 +135,13 @@ public class DelayedRemoteFetch extends DelayedOperation {
     public void onExpiration() {
         // cancel the remote storage read task, if it has not been executed yet and
         // avoid interrupting the task if it is already running as it may force closing opened/cached resources as transaction index.
-        boolean cancelled = remoteFetchTask.cancel(false);
-        if (!cancelled) {
-            LOG.debug("Remote fetch task for RemoteStorageFetchInfo: {} could not be cancelled and its isDone value is {}.", remoteFetchInfo, remoteFetchTask.isDone());
-        }
+        remoteFetchTasks.forEach(((topicIdPartition, task) -> {
+            if (task != null && !task.isDone()) {
+                if (!task.cancel(false)) {
+                    LOG.debug("Remote fetch task for remoteFetchInfo: {} could not be cancelled.", remoteFetchInfos.get(topicIdPartition));
+                }
+            }
+        }));
 
         EXPIRED_REQUEST_METER.mark();
     }
@@ -151,40 +151,36 @@ public class DelayedRemoteFetch extends DelayedOperation {
      */
     @Override
     public void onComplete() {
-        Map<TopicIdPartition, List<FetchPartitionData>> fetchPartitionData = new HashMap<>();
-
+        Map<TopicIdPartition, FetchPartitionData> fetchPartitionData = new HashMap<>();
         try {
-            for (Map.Entry<TopicIdPartition, List<LogReadResult>> entry : localReadResults.entrySet()) {
-                TopicIdPartition topicIdPartition = entry.getKey();
-                List<LogReadResult> results = entry.getValue();
-                List<FetchPartitionData> partitionDataList = fetchPartitionData.computeIfAbsent(topicIdPartition,
-                    k -> new ArrayList<>());
+            for (Map.Entry<TopicIdPartition, LogReadResult> entry : localReadResults.entrySet()) {
+                TopicIdPartition tp = entry.getKey();
+                LogReadResult result = entry.getValue();
 
-                for (LogReadResult result : results) {
-                    if (topicIdPartition.topicPartition().equals(remoteFetchInfo.topicPartition)
-                        && remoteFetchResult.isDone() && result.error() == Errors.NONE
-                        && result.info().delayedRemoteStorageFetch.isPresent()) {
+                CompletableFuture<RemoteLogReadResult> remoteFetchResult = remoteFetchResults.get(tp);
+                if (remoteFetchInfos.containsKey(tp)
+                    && remoteFetchResult.isDone() && result.error() == Errors.NONE
+                    && result.info().delayedRemoteStorageFetch.isPresent()) {
 
-                        if (remoteFetchResult.get().error.isPresent()) {
-                            partitionDataList.add(
-                                new LogReadResult(remoteFetchResult.get().error.get()).toFetchPartitionData(false));
-                        } else {
-                            FetchDataInfo info = remoteFetchResult.get().fetchDataInfo.get();
-                            partitionDataList.add(
-                                new FetchPartitionData(
-                                    result.error(),
-                                    result.highWatermark(),
-                                    result.leaderLogStartOffset(),
-                                    info.records,
-                                    Optional.empty(),
-                                    result.lastStableOffset(),
-                                    info.abortedTransactions,
-                                    result.preferredReadReplica(),
-                                    false));
-                        }
+                    if (remoteFetchResult.get().error.isPresent()) {
+                        fetchPartitionData.put(tp,
+                            new LogReadResult(remoteFetchResult.get().error.get()).toFetchPartitionData(false));
                     } else {
-                        partitionDataList.add(result.toFetchPartitionData(false));
+                        FetchDataInfo info = remoteFetchResult.get().fetchDataInfo.get();
+                        fetchPartitionData.put(tp,
+                            new FetchPartitionData(
+                                result.error(),
+                                result.highWatermark(),
+                                result.leaderLogStartOffset(),
+                                info.records,
+                                Optional.empty(),
+                                result.lastStableOffset(),
+                                info.abortedTransactions,
+                                result.preferredReadReplica(),
+                                false));
                     }
+                } else {
+                    fetchPartitionData.put(tp, result.toFetchPartitionData(false));
                 }
             }
         } catch (InterruptedException | ExecutionException e) {
