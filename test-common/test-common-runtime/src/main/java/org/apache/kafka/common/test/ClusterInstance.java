@@ -451,9 +451,9 @@ public interface ClusterInstance {
         if (brokers().isEmpty()){
             throw new KafkaException("Must supply at least one server config.");
         }
-        brokers().entrySet().foreach(entry -> {
+        brokers().entrySet().forEach(entry -> {
             if (!entry.getValue().isShutdown()) {
-                startBroker(id);
+                startBroker(entry.getKey());
             }
         });
     }

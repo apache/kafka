@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server.integration;
+package org.apache.kafka.server;
+
 import kafka.server.KafkaBroker;
-import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -48,6 +48,7 @@ import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +67,6 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import scala.collection.Seq;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -118,8 +118,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        Seq<KafkaBroker> brokerSeq = CollectionConverters.asScala(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
-        TestUtils.waitForPartitionMetadata(brokerSeq, testTopicName, 0, 1000);
+        clusterInstance.waitTopicCreation(testTopicName, 1);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
         Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -186,8 +185,8 @@ public class EligibleLeaderReplicasIntegrationTest {
         }
     }
 
-    void waitUntilOneMessageIsConsumed(Consumer consumer) {
-        TestUtils.waitUntilTrue(
+    void waitUntilOneMessageIsConsumed(Consumer consumer) throws InterruptedException {
+        TestUtils.waitForCondition(
             () -> {
                 try {
                     ConsumerRecords record = consumer.poll(Duration.ofMillis(100L));
@@ -196,8 +195,8 @@ public class EligibleLeaderReplicasIntegrationTest {
                     return false;
                 }
             },
-            () -> "fail to consume messages",
-            DEFAULT_MAX_WAIT_MS, 100L
+            DEFAULT_MAX_WAIT_MS,
+            () -> "fail to consume messages"
         );
     }
 
@@ -205,8 +204,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     public void testElrMemberCanBeElected() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        Seq<KafkaBroker> brokerSeq = CollectionConverters.asScala(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
-        TestUtils.waitForPartitionMetadata(brokerSeq, testTopicName, 0, 1000);
+        clusterInstance.waitTopicCreation(testTopicName, 1);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
         Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -281,8 +279,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     public void testElrMemberShouldBeKickOutWhenUncleanShutdown() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        Seq<KafkaBroker> brokerSeq = CollectionConverters.asScala(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
-        TestUtils.waitForPartitionMetadata(brokerSeq, testTopicName, 0, 1000);
+        clusterInstance.waitTopicCreation(testTopicName, 1);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
         Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -312,8 +309,8 @@ public class EligibleLeaderReplicasIntegrationTest {
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
 
             int brokerToBeUncleanShutdown = topicPartitionInfo.elr().get(0).id();
-            KafkaBroker broker = clusterInstance.brokers().values().stream().filter(b -> b.config().brokerId() == brokerToBeUncleanShutdown).findFirst()
-                .orElseThrow(() -> new RuntimeException("No broker found"));
+            KafkaBroker broker = clusterInstance.brokers().values().stream().filter(b -> b.config().brokerId() == brokerToBeUncleanShutdown)
+                .findFirst().get();
             Seq<File> dirs = broker.logManager().liveLogDirs();
             assertEquals(1, dirs.size());
             CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.apply(0).toString());
@@ -341,8 +338,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     public void testLastKnownLeaderShouldBeElectedIfEmptyElr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        Seq<KafkaBroker> brokerSeq = CollectionConverters.asScala(new ArrayList<>(clusterInstance.brokers().values())).toSeq();
-        TestUtils.waitForPartitionMetadata(brokerSeq, testTopicName, 0, 1000);
+        clusterInstance.waitTopicCreation(testTopicName, 1);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
         Collection<AlterConfigOp> ops = new ArrayList<>();
@@ -373,14 +369,14 @@ public class EligibleLeaderReplicasIntegrationTest {
             int lastKnownLeader = topicPartitionInfo.lastKnownElr().get(0).id();
 
             Set<Integer> initialReplicaSet = initialReplicas.stream().map(node -> node.id()).collect(Collectors.toSet());
-            for (KafkaBroker broker : clusterInstance.brokers().values()) {
-                if (initialReplicaSet.contains(broker.config().brokerId())) {
+            clusterInstance.brokers().forEach((id, broker) -> {
+                if (initialReplicaSet.contains(id)) {
                     Seq<File> dirs = broker.logManager().liveLogDirs();
                     assertEquals(1, dirs.size());
                     CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.apply(0).toString());
                     assertDoesNotThrow(() -> handler.delete());
                 }
-            }
+            });
 
             // After remove the clean shutdown file, the broker should report unclean shutdown during restart.
             topicPartitionInfo.replicas().forEach(replica -> {
@@ -399,8 +395,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize > 0 && elrSize == 0;
             });
-
-            TestUtils.waitUntilTrue(
+            TestUtils.waitForCondition(
                 () -> {
                     try {
                         TopicPartitionInfo partition = adminClient.describeTopics(List.of(testTopicName))
@@ -411,16 +406,16 @@ public class EligibleLeaderReplicasIntegrationTest {
                         return false;
                     }
                 },
-                () -> String.format("Partition metadata for %s is not correct", testTopicName),
-                DEFAULT_MAX_WAIT_MS, 100L
+                DEFAULT_MAX_WAIT_MS,
+                () -> String.format("Partition metadata for %s is not correct", testTopicName)
             );
         } finally {
             clusterInstance.restartDeadBrokers();
         }
     }
 
-    void waitForIsrAndElr(BiFunction<Integer, Integer, Boolean> isIsrAndElrSizeSatisfied) {
-        TestUtils.waitUntilTrue(
+    void waitForIsrAndElr(BiFunction<Integer, Integer, Boolean> isIsrAndElrSizeSatisfied) throws InterruptedException {
+        TestUtils.waitForCondition(
             () -> {
                 try {
                     TopicDescription topicDescription = adminClient.describeTopics(List.of(testTopicName))
@@ -431,7 +426,8 @@ public class EligibleLeaderReplicasIntegrationTest {
                     return false;
                 }
             },
-            () -> String.format("Partition metadata for %s is not propagated", testTopicName),
-            DEFAULT_MAX_WAIT_MS, 100L);
+            DEFAULT_MAX_WAIT_MS,
+            () -> String.format("Partition metadata for %s is not propagated", testTopicName)
+        );
     }
 }
