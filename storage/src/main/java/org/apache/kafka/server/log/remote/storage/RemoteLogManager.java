@@ -1031,9 +1031,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 customMetadata = remoteStorageManagerPlugin.get().copyLogSegmentData(copySegmentStartedRlsm, segmentData);
             } catch (RemoteStorageException e) {
                 logger.info("Copy failed, cleaning segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
-                long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
-                long segmentsLag = log.onlyLocalLogSegmentsCount() - 1;
-                recordLagStats(bytesLag, segmentsLag);
+                recordLagStats(log);
                 try {
                     deleteRemoteLogSegment(copySegmentStartedRlsm, ignored -> !isCancelled());
                     LOGGER.info("Cleanup completed for segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
@@ -1082,6 +1080,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             logger.info("Copied {} to remote storage with segment-id: {}",
                     logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
 
+            recordLagStats(log);
+        }
+
+        private void recordLagStats(UnifiedLog log) {
             long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
             long segmentsLag = log.onlyLocalLogSegmentsCount() - 1;
             recordLagStats(bytesLag, segmentsLag);
