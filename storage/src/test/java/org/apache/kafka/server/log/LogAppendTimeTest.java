@@ -77,7 +77,7 @@ public class LogAppendTimeTest {
             admin.createTopics(List.of(
                 new NewTopic(TOPIC, NUM_PARTITION, NUM_REPLICAS).
                     configs(Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"))));
-            clusterInstance.waitForTopic(TOPIC, NUM_PARTITION);
+            clusterInstance.waitTopicCreation(TOPIC, NUM_PARTITION);
         }
 
         testProduceConsume(clusterInstance);
