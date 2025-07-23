@@ -39,8 +39,7 @@ import static org.apache.kafka.common.test.api.TestKitDefaults.DEFAULT_CONTROLLE
 @TestTemplate
 @Timeout(60)
 @Tag("integration")
-public @interface ClusterTest {
-    Type[] types() default {};
+public @interface ClusterTest { Type[] types() default {};
     int brokers() default 0;
     int controllers() default 0;
     int disksPerBroker() default 0;
