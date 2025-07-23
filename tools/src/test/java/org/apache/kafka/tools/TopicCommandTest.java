@@ -387,7 +387,7 @@ public class TopicCommandTest {
         try (Admin adminClient = clusterInstance.admin()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
 
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
             Assertions.assertTrue(adminClient.listTopics().names().get().contains(testTopicName),
                     "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
 
@@ -411,7 +411,7 @@ public class TopicCommandTest {
         try (Admin adminClient = clusterInstance.admin()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
 
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
             Assertions.assertTrue(adminClient.listTopics().names().get().contains(testTopicName),
                     "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
 
@@ -443,7 +443,7 @@ public class TopicCommandTest {
 
         try (Admin adminClient = clusterInstance.admin()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, 2, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, 2);
+            clusterInstance.waitTopicCreation(testTopicName, 2);
             List<TopicPartitionInfo>  partitions = adminClient
                     .describeTopics(Collections.singletonList(testTopicName))
                     .allTopicNames()
@@ -461,7 +461,7 @@ public class TopicCommandTest {
 
         try (Admin adminClient = clusterInstance.admin()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, (short) 2)));
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
             List<TopicPartitionInfo> partitions = adminClient
                     .describeTopics(Collections.singletonList(testTopicName))
                     .allTopicNames()
@@ -484,7 +484,7 @@ public class TopicCommandTest {
             topicConfig.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, "1000");
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, 2, (short) 2).configs(topicConfig)));
-            clusterInstance.waitForTopic(testTopicName, 2);
+            clusterInstance.waitTopicCreation(testTopicName, 2);
 
 
             Config configs = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
@@ -503,7 +503,7 @@ public class TopicCommandTest {
                     "--topic", testTopicName);
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             // try to re-create the topic
             assertThrows(TopicExistsException.class, () -> topicService.createTopic(createOpts),
@@ -517,7 +517,7 @@ public class TopicCommandTest {
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             TopicCommand.TopicCommandOptions createOpts =
                     buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", testTopicName, "--if-not-exists");
@@ -540,7 +540,7 @@ public class TopicCommandTest {
             replicaAssignmentMap.put(2, Arrays.asList(1, 0));
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, replicaAssignmentMap)));
-            clusterInstance.waitForTopic(testTopicName, 3);
+            clusterInstance.waitTopicCreation(testTopicName, 3);
 
             List<TopicPartitionInfo> partitions = adminClient
                     .describeTopics(Collections.singletonList(testTopicName))
@@ -611,7 +611,7 @@ public class TopicCommandTest {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             String output = captureListTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--list"));
             assertTrue(output.contains(testTopicName), "Expected topic name to be present in output: " + output);
@@ -629,9 +629,9 @@ public class TopicCommandTest {
             adminClient.createTopics(Collections.singletonList(new NewTopic(topic1, partition, replicationFactor)));
             adminClient.createTopics(Collections.singletonList(new NewTopic(topic2, partition, replicationFactor)));
             adminClient.createTopics(Collections.singletonList(new NewTopic(topic3, partition, replicationFactor)));
-            clusterInstance.waitForTopic(topic1, partition);
-            clusterInstance.waitForTopic(topic2, partition);
-            clusterInstance.waitForTopic(topic3, partition);
+            clusterInstance.waitTopicCreation(topic1, partition);
+            clusterInstance.waitTopicCreation(topic2, partition);
+            clusterInstance.waitTopicCreation(topic3, partition);
 
             String output = captureListTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--list", "--topic", "kafka.*"));
             assertTrue(output.contains(topic1), "Expected topic name " + topic1 + " to be present in output: " + output);
@@ -648,7 +648,7 @@ public class TopicCommandTest {
             int partition = 2;
             short replicationFactor = 2;
             adminClient.createTopics(Collections.singletonList(new NewTopic(topic1, partition, replicationFactor)));
-            clusterInstance.waitForTopic(topic1, partition);
+            clusterInstance.waitTopicCreation(topic1, partition);
 
             String output = captureListTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--list", "--exclude-internal"));
             assertTrue(output.contains(topic1), "Expected topic name " + topic1 + " to be present in output: " + output);
@@ -664,7 +664,7 @@ public class TopicCommandTest {
             int partition = 2;
             short replicationFactor = 2;
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partition, replicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, partition);
+            clusterInstance.waitTopicCreation(testTopicName, partition);
             topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName, "--partitions", "3"));
 
             TestUtils.waitForCondition(
@@ -690,7 +690,7 @@ public class TopicCommandTest {
             short replicationFactor = 2;
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partition, replicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, partition);
+            clusterInstance.waitTopicCreation(testTopicName, partition);
 
             topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
                     "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3"));
@@ -722,7 +722,7 @@ public class TopicCommandTest {
             int partition = 2;
             short replicationFactor = 2;
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partition, replicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, partition);
+            clusterInstance.waitTopicCreation(testTopicName, partition);
 
             assertThrows(ExecutionException.class,
                     () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
@@ -740,7 +740,7 @@ public class TopicCommandTest {
             int partition = 2;
             short replicationFactor = 2;
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partition, replicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, partition);
+            clusterInstance.waitTopicCreation(testTopicName, partition);
 
             assertThrows(ExecutionException.class,
                     () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName,
@@ -757,7 +757,7 @@ public class TopicCommandTest {
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             assertThrows(ExecutionException.class,
                     () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--partitions", "-1", "--topic", testTopicName)),
@@ -806,7 +806,7 @@ public class TopicCommandTest {
             int numPartitions = 18;
             int replicationFactor = 3;
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, numPartitions, (short) replicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, numPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, numPartitions);
 
             Map<Integer, List<Integer>> assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
                     .allTopicNames().get().get(testTopicName).partitions()
@@ -851,7 +851,7 @@ public class TopicCommandTest {
             HashMap<String, String> topicConfig = new HashMap<>();
             topicConfig.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanUpPolicy);
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor).configs(topicConfig)));
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
             Config props = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
@@ -888,7 +888,7 @@ public class TopicCommandTest {
             String testTopicName = TestUtils.randomString(10);
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             // delete the NormalTopic
             TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", testTopicName);
@@ -914,7 +914,7 @@ public class TopicCommandTest {
             // create the topic with colliding chars
             String topicWithCollidingChar = "test.a";
             adminClient.createTopics(Collections.singletonList(new NewTopic(topicWithCollidingChar, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(topicWithCollidingChar, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(topicWithCollidingChar, defaultNumPartitions);
 
             // delete the topic
             TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", topicWithCollidingChar);
@@ -928,7 +928,7 @@ public class TopicCommandTest {
 
             // recreate same topic
             adminClient.createTopics(Collections.singletonList(new NewTopic(topicWithCollidingChar, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(topicWithCollidingChar, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(topicWithCollidingChar, defaultNumPartitions);
         }
     }
 
@@ -945,7 +945,7 @@ public class TopicCommandTest {
 
             // create the offset topic
             adminClient.createTopics(Collections.singletonList(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, defaultNumPartitions);
 
             // Try to delete the Topic.GROUP_METADATA_TOPIC_NAME which is allowed by default.
             // This is a difference between the new and the old command as the old one didn't allow internal topic deletion.
@@ -1002,7 +1002,7 @@ public class TopicCommandTest {
             int partition = 2;
             short replicationFactor = 2;
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partition, replicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, partition);
+            clusterInstance.waitTopicCreation(testTopicName, partition);
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName));
             String[] rows = output.split(System.lineSeparator());
@@ -1025,11 +1025,11 @@ public class TopicCommandTest {
             topics.add(new NewTopic("test-5", 100, (short) 2));
 
             adminClient.createTopics(topics);
-            clusterInstance.waitForTopic(testTopicName, 20);
-            clusterInstance.waitForTopic("test-2", 41);
-            clusterInstance.waitForTopic("test-3", 5);
-            clusterInstance.waitForTopic("test-4", 5);
-            clusterInstance.waitForTopic("test-5", 100);
+            clusterInstance.waitTopicCreation(testTopicName, 20);
+            clusterInstance.waitTopicCreation("test-2", 41);
+            clusterInstance.waitTopicCreation("test-3", 5);
+            clusterInstance.waitTopicCreation("test-4", 5);
+            clusterInstance.waitTopicCreation("test-5", 100);
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance,
                     "--describe", "--partition-size-limit-per-response=20", "--exclude-internal"));
@@ -1076,14 +1076,14 @@ public class TopicCommandTest {
             short replicationFactor = 1;
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, partitions);
+            clusterInstance.waitTopicCreation(testTopicName, partitions);
 
             // check which partition is on broker 0 which we'll kill
             clusterInstance.shutdownBroker(0);
             assertEquals(2, clusterInstance.aliveBrokers().size());
 
             // wait until the topic metadata for the test topic is propagated to each alive broker
-            clusterInstance.waitForTopic(testTopicName, 3);
+            clusterInstance.waitTopicCreation(testTopicName, 3);
 
             // grab the console output and assert
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName, "--unavailable-partitions"));
@@ -1103,7 +1103,7 @@ public class TopicCommandTest {
             int partitions = 1;
             short replicationFactor = 3;
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, partitions);
+            clusterInstance.waitTopicCreation(testTopicName, partitions);
 
             clusterInstance.shutdownBroker(0);
             Assertions.assertEquals(clusterInstance.aliveBrokers().size(), 2);
@@ -1134,7 +1134,7 @@ public class TopicCommandTest {
             int partitions = 1;
             short replicationFactor = 3;
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(topicConfig)));
-            clusterInstance.waitForTopic(testTopicName, partitions);
+            clusterInstance.waitTopicCreation(testTopicName, partitions);
 
             clusterInstance.shutdownBroker(0);
             assertEquals(2, clusterInstance.aliveBrokers().size());
@@ -1158,7 +1158,7 @@ public class TopicCommandTest {
         try (Admin adminClient = clusterInstance.admin();
              KafkaProducer<String, String> producer = createProducer(clusterInstance)) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             TopicPartition tp = new TopicPartition(testTopicName, 0);
 
@@ -1236,7 +1236,7 @@ public class TopicCommandTest {
             short replicationFactor = 6;
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(topicConfig)));
-            clusterInstance.waitForTopic(testTopicName, partitions);
+            clusterInstance.waitTopicCreation(testTopicName, partitions);
 
             clusterInstance.shutdownBroker(0);
             clusterInstance.shutdownBroker(1);
@@ -1293,7 +1293,7 @@ public class TopicCommandTest {
 
             adminClient.createTopics(newTopics);
             for (NewTopic topioc: newTopics) {
-                clusterInstance.waitForTopic(topioc.name(), partitions);
+                clusterInstance.waitTopicCreation(topioc.name(), partitions);
             }
 
             clusterInstance.shutdownBroker(0);
@@ -1334,7 +1334,7 @@ public class TopicCommandTest {
             short replicationFactor = 2;
 
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(topicConfig)));
-            clusterInstance.waitForTopic(testTopicName, partitions);
+            clusterInstance.waitTopicCreation(testTopicName, partitions);
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe"));
             assertTrue(output.contains(config), String.format("Describe output should have contained %s", config));
@@ -1346,7 +1346,7 @@ public class TopicCommandTest {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
-            clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             // test describe
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--describe", "--exclude-internal"));
@@ -1377,7 +1377,7 @@ public class TopicCommandTest {
                 Collections.singleton(new TopicPartition(testTopicName, 0))
         );
         adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
-        clusterInstance.waitForTopic(testTopicName, defaultNumPartitions);
+        clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
         String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName));
         String[] rows = output.split(System.lineSeparator());
@@ -1396,7 +1396,7 @@ public class TopicCommandTest {
             int partitions = 1;
             short replicationFactor = 3;
             adminClient.createTopics(Collections.singletonList(new NewTopic(topic, partitions, replicationFactor)));
-            clusterInstance.waitForTopic(topic, defaultNumPartitions);
+            clusterInstance.waitTopicCreation(topic, defaultNumPartitions);
 
             assertThrows(TopicExistsException.class,
                     () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", topic)));

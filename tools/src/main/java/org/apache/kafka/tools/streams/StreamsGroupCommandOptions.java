@@ -22,8 +22,6 @@ import org.apache.kafka.server.util.CommandLineUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -200,12 +198,12 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         exportOpt = parser.accepts("export", EXPORT_DOC);
         options = parser.parse(args);
 
-        allResetOffsetScenarioOpts = new HashSet<>(Arrays.asList(resetToOffsetOpt, resetShiftByOpt,
-            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt));
-        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
-        allStreamsGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt));
-        allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(inputTopicOpt, allInputTopicsOpt));
-        allDeleteInternalGroupsOpts = new HashSet<>(Arrays.asList(resetOffsetsOpt, deleteOpt));
+        allResetOffsetScenarioOpts = Set.of(resetToOffsetOpt, resetShiftByOpt,
+            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt);
+        allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
+        allStreamsGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt);
+        allDeleteOffsetsOpts = Set.of(inputTopicOpt, allInputTopicsOpt);
+        allDeleteInternalGroupsOpts = Set.of(resetOffsetsOpt, deleteOpt);
     }
 
     @SuppressWarnings("NPathComplexity")
@@ -256,7 +254,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
             CommandLineUtils.printUsageAndExit(parser,
                 "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
-        List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
+        List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt);
         if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
             CommandLineUtils.printUsageAndExit(parser,
                 "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));

@@ -94,6 +94,7 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockPartitioner;
@@ -154,7 +155,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -579,7 +579,7 @@ public class KafkaProducerTest {
         ConfigException ce = assertThrows(
             ConfigException.class,
             () -> new KafkaProducer<>(props, new StringSerializer(), new StringSerializer()));
-        assertTrue(ce.getMessage().contains("not string key"), "Unexpected exception message: " + ce.getMessage());
+        assertTrue(ce.getMessage().contains("One or more keys is not a string."), "Unexpected exception message: " + ce.getMessage());
     }
 
     @Test
@@ -1453,12 +1453,15 @@ public class KafkaProducerTest {
 
         doNothing().when(ctx.transactionManager).prepareTransaction();
 
-        PreparedTxnState expectedState = mock(PreparedTxnState.class);
-        when(ctx.transactionManager.preparedTransactionState()).thenReturn(expectedState);
+        long expectedProducerId = 12345L;
+        short expectedEpoch = 5;
+        ProducerIdAndEpoch expectedProducerIdAndEpoch = new ProducerIdAndEpoch(expectedProducerId, expectedEpoch);
+        when(ctx.transactionManager.preparedTransactionState()).thenReturn(expectedProducerIdAndEpoch);
 
         try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
             PreparedTxnState returned = producer.prepareTransaction();
-            assertSame(expectedState, returned);
+            assertEquals(expectedProducerId, returned.producerId());
+            assertEquals(expectedEpoch, returned.epoch());
 
             verify(ctx.transactionManager).prepareTransaction();
             verify(ctx.accumulator).beginFlush();
@@ -1612,11 +1615,11 @@ public class KafkaProducerTest {
         // Create prepared states with matching values
         long producerId = 12345L;
         short epoch = 5;
-        PreparedTxnState currentState = new PreparedTxnState(producerId, epoch);
         PreparedTxnState inputState = new PreparedTxnState(producerId, epoch);
+        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
         
         // Set up the transaction manager to return the prepared state
-        when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentState);
+        when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);
         
         // Should trigger commit when states match
         TransactionalRequestResult commitResult = mock(TransactionalRequestResult.class);
@@ -1650,11 +1653,11 @@ public class KafkaProducerTest {
         // Create txn prepared states with different values
         long producerId = 12345L;
         short epoch = 5;
-        PreparedTxnState currentState = new PreparedTxnState(producerId, epoch);
         PreparedTxnState inputState = new PreparedTxnState(producerId + 1, epoch);
+        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
         
         // Set up the transaction manager to return the prepared state
-        when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentState);
+        when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);
         
         // Should trigger abort when states don't match
         TransactionalRequestResult abortResult = mock(TransactionalRequestResult.class);

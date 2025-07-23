@@ -277,7 +277,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
     }
 
-    private class RocksDBDualCFIterator extends AbstractIterator<KeyValue<Bytes, byte[]>>
+    private static class RocksDBDualCFIterator extends AbstractIterator<KeyValue<Bytes, byte[]>>
         implements ManagedKeyValueIterator<Bytes, byte[]> {
 
         // RocksDB's JNI interface does not expose getters/setters that allow the
