@@ -764,7 +764,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     /**
-     * Returns the leader epoch entries within the range of the given start[exclusive] and end[inclusive] offset.
+     * Returns the leader epoch entries within the range of the given start (inclusive) and end (exclusive) offset.
      * <p>
      * Visible for testing.
      *
@@ -786,6 +786,15 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             return task.rlmTask;
         }
         return null;
+    }
+
+    public boolean isPartitionReady(TopicPartition partition) {
+        Uuid uuid = topicIdByPartitionMap.get(partition);
+        if (uuid == null) {
+            return false;
+        }
+        TopicIdPartition topicIdPartition = new TopicIdPartition(uuid, partition);
+        return remoteLogMetadataManagerPlugin.get().isReady(topicIdPartition);
     }
 
     abstract class RLMTask extends CancellableRunnable {
@@ -1659,7 +1668,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {
         int fetchMaxBytes = remoteStorageFetchInfo.fetchMaxBytes;
-        TopicPartition tp = remoteStorageFetchInfo.topicPartition;
+        TopicPartition tp = remoteStorageFetchInfo.topicIdPartition.topicPartition();
         FetchRequest.PartitionData fetchInfo = remoteStorageFetchInfo.fetchInfo;
 
         boolean includeAbortedTxns = remoteStorageFetchInfo.fetchIsolation == FetchIsolation.TXN_COMMITTED;
@@ -1715,6 +1724,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             //  - there is no minimum-one-message constraint and
             //  - the first batch size is more than maximum bytes that can be sent and
             if (!remoteStorageFetchInfo.minOneMessage && firstBatchSize > maxBytes) {
+                LOGGER.debug("Returning empty record for offset {} in partition {} because the first batch size {} " +
+                        "is greater than max fetch bytes {}", offset, tp, firstBatchSize, maxBytes);
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY);
             }
 

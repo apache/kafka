@@ -153,9 +153,9 @@ public final class MetadataImage {
         features.write(writer, options);
         cluster.write(writer, options);
         topics.write(writer, options);
-        configs.write(writer, options);
-        clientQuotas.write(writer, options);
-        producerIds.write(writer, options);
+        configs.write(writer);
+        clientQuotas.write(writer);
+        producerIds.write(writer);
         acls.write(writer);
         scram.write(writer, options);
         delegationTokens.write(writer, options);

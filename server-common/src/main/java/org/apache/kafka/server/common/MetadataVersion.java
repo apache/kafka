@@ -105,12 +105,6 @@ public enum MetadataVersion {
     // Enables async remote LIST_OFFSETS support (KIP-1075)
     IBP_4_0_IV3(25, "4.0", "IV3", false),
 
-    //
-    // NOTE: MetadataVersions after this point are unstable and may be changed.
-    // If users attempt to use an unstable MetadataVersion, they will get an error.
-    // Please move this comment when updating the LATEST_PRODUCTION constant.
-    //
-
     // Enables ELR by default for new clusters (KIP-966).
     // Share groups are preview in 4.1 (KIP-932).
     // Streams groups are early access in 4.1 (KIP-1071).
@@ -118,6 +112,12 @@ public enum MetadataVersion {
 
     // Send FETCH version 18 in the replica fetcher (KIP-1166)
     IBP_4_1_IV1(27, "4.1", "IV1", false),
+
+    //
+    // NOTE: MetadataVersions after this point are unstable and may be changed.
+    // If users attempt to use an unstable MetadataVersion, they will get an error.
+    // Please move this comment when updating the LATEST_PRODUCTION constant.
+    //
 
     // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of
     // IBP_4_2_IVx accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
@@ -157,7 +157,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV3;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_1_IV1;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 

@@ -41,6 +41,8 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -51,15 +53,11 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -82,7 +80,6 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 public class ConsumerGroupCommand {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommand.class);
 
     static final String MISSING_COLUMN_VALUE = "-";
 
@@ -123,7 +120,7 @@ public class ConsumerGroupCommand {
             return;
         }
 
-        try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Collections.emptyMap())) {
+        try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt))
                 consumerGroupService.listGroups();
             else if (opts.options.has(opts.describeOpt))
@@ -244,14 +241,14 @@ public class ConsumerGroupCommand {
         private Set<GroupState> stateValues() {
             String stateValue = opts.options.valueOf(opts.stateOpt);
             return (stateValue == null || stateValue.isEmpty())
-                ? Collections.emptySet()
+                ? Set.of()
                 : groupStatesFromString(stateValue);
         }
 
         private Set<GroupType> typeValues() {
             String typeValue = opts.options.valueOf(opts.typeOpt);
             return (typeValue == null || typeValue.isEmpty())
-                ? Collections.emptySet()
+                ? Set.of()
                 : consumerGroupTypesFromString(typeValue);
         }
 
@@ -587,13 +584,12 @@ public class ConsumerGroupCommand {
             Optional<String> clientIdOpt
         ) {
             if (topicPartitions.isEmpty()) {
-                return Collections.singleton(
+                return Set.of(
                     new PartitionAssignmentState(group, coordinator, Optional.empty(), Optional.empty(), Optional.empty(),
                         getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty(), Optional.empty())
                 );
             } else {
-                List<TopicPartition> topicPartitionsSorted = topicPartitions.stream().sorted(Comparator.comparingInt(TopicPartition::partition)).collect(Collectors.toList());
-                return describePartitions(group, coordinator, topicPartitionsSorted, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
+                return describePartitions(group, coordinator, topicPartitions, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
             }
         }
 
@@ -604,7 +600,7 @@ public class ConsumerGroupCommand {
         private Collection<PartitionAssignmentState> describePartitions(
             String group,
             Optional<Node> coordinator,
-            List<TopicPartition> topicPartitions,
+            Collection<TopicPartition> topicPartitions,
             Map<TopicPartition, OffsetAndMetadata> committedOffsets,
             Optional<String> consumerIdOpt,
             Optional<String> hostOpt,
@@ -619,7 +615,11 @@ public class ConsumerGroupCommand {
                     consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
-            return offsetsUtils.getLogEndOffsets(topicPartitions).entrySet().stream().map(logEndOffsetResult -> {
+            List<TopicPartition> topicPartitionsWithoutLeader = filterNoneLeaderPartitions(topicPartitions);
+            List<TopicPartition> topicPartitionsWithLeader = topicPartitions.stream().filter(tp -> !topicPartitionsWithoutLeader.contains(tp)).toList();
+
+            // prepare data for partitions with leaders
+            List<PartitionAssignmentState> existLeaderAssignments = offsetsUtils.getLogEndOffsets(topicPartitionsWithLeader).entrySet().stream().map(logEndOffsetResult -> {
                 if (logEndOffsetResult.getValue() instanceof OffsetsUtils.LogOffset)
                     return getDescribePartitionResult.apply(
                         logEndOffsetResult.getKey(),
@@ -631,7 +631,34 @@ public class ConsumerGroupCommand {
                     return null;
 
                 throw new IllegalStateException("Unknown LogOffset subclass: " + logEndOffsetResult.getValue());
-            }).collect(Collectors.toList());
+            }).toList();
+
+            // prepare data for partitions without leaders
+            List<PartitionAssignmentState> noneLeaderAssignments = topicPartitionsWithoutLeader.stream()
+                    .map(tp -> getDescribePartitionResult.apply(tp, Optional.empty())).toList();
+
+            // concat the data and then sort them
+            return Stream.concat(existLeaderAssignments.stream(), noneLeaderAssignments.stream())
+                    .sorted(Comparator.<PartitionAssignmentState, String>comparing(
+                            state -> state.topic.orElse(""), String::compareTo)
+                            .thenComparingInt(state -> state.partition.orElse(-1)))
+                    .collect(Collectors.toList());
+        }
+
+        private List<TopicPartition> filterNoneLeaderPartitions(Collection<TopicPartition> topicPartitions) {
+            // collect all topics
+            Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+
+            try {
+                return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                        .stream()
+                        .flatMap(entry -> entry.getValue().partitions().stream()
+                                .filter(partitionInfo -> partitionInfo.leader() == null)
+                                .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                        .toList();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
@@ -656,7 +683,7 @@ public class ConsumerGroupCommand {
                             break;
                         default:
                             printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
-                            result.put(groupId, Collections.emptyMap());
+                            result.put(groupId, Map.of());
                     }
                 } catch (InterruptedException ie) {
                     throw new RuntimeException(ie);
@@ -827,7 +854,7 @@ public class ConsumerGroupCommand {
          * Returns the state of the specified consumer group and partition assignment states
          */
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) throws Exception {
-            return collectGroupsOffsets(Collections.singletonList(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
+            return collectGroupsOffsets(List.of(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
         }
 
         /**
@@ -871,7 +898,7 @@ public class ConsumerGroupCommand {
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE))
-                    : Collections.emptyList();
+                    : List.of();
 
                 rowsWithConsumer.addAll(rowsWithoutConsumer);
 
@@ -882,7 +909,7 @@ public class ConsumerGroupCommand {
         }
 
         Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId) throws Exception {
-            return collectGroupsMembers(Collections.singleton(groupId)).get(groupId);
+            return collectGroupsMembers(Set.of(groupId)).get(groupId);
         }
 
         TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds) throws Exception {
@@ -900,7 +927,7 @@ public class ConsumerGroupCommand {
                         consumer.groupInstanceId().orElse(""),
                         consumer.assignment().topicPartitions().size(),
                         consumer.assignment().topicPartitions().stream().toList(),
-                        consumer.targetAssignment().map(a -> a.topicPartitions().stream().toList()).orElse(Collections.emptyList()),
+                        consumer.targetAssignment().map(a -> a.topicPartitions().stream().toList()).orElse(List.of()),
                         consumer.memberEpoch(),
                         consumerGroup.targetAssignmentEpoch(),
                         consumer.upgraded()
@@ -911,7 +938,7 @@ public class ConsumerGroupCommand {
         }
 
         GroupInformation collectGroupState(String groupId) throws Exception {
-            return collectGroupsState(Collections.singleton(groupId)).get(groupId);
+            return collectGroupsState(Set.of(groupId)).get(groupId);
         }
 
         TreeMap<String, GroupInformation> collectGroupsState(Collection<String> groupIds) throws Exception {
@@ -958,14 +985,14 @@ public class ConsumerGroupCommand {
                 if (!opts.options.has(opts.resetFromFileOpt))
                     CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
 
-                return Collections.emptyList();
+                return List.of();
             }
         }
 
         private Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
             try {
                 return adminClient.listConsumerGroupOffsets(
-                    Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec()),
+                    Map.of(groupId, new ListConsumerGroupOffsetsSpec()),
                     withTimeoutMs(new ListConsumerGroupOffsetsOptions())
                 ).partitionsToOffsetAndMetadata(groupId).get();
             } catch (InterruptedException | ExecutionException e) {
@@ -974,6 +1001,9 @@ public class ConsumerGroupCommand {
         }
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+            // ensure all partitions are valid, otherwise throw a runtime exception
+            checkAllTopicPartitionsValid(partitionsToReset);
+
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return offsetsUtils.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
@@ -996,6 +1026,38 @@ public class ConsumerGroupCommand {
 
             CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
+        }
+
+        private void checkAllTopicPartitionsValid(Collection<TopicPartition> partitionsToReset) {
+            // check the partitions exist
+            List<TopicPartition> partitionsNotExistList = filterNonExistentPartitions(partitionsToReset);
+            if (!partitionsNotExistList.isEmpty()) {
+                String partitionStr = partitionsNotExistList.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+                throw new UnknownTopicOrPartitionException("The partitions \"" + partitionStr + "\" do not exist");
+            }
+
+            // check the partitions have leader
+            List<TopicPartition> partitionsWithoutLeader = filterNoneLeaderPartitions(partitionsToReset);
+            if (!partitionsWithoutLeader.isEmpty()) {
+                String partitionStr = partitionsWithoutLeader.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+                throw new LeaderNotAvailableException("The partitions \"" + partitionStr + "\" have no leader");
+            }
+        }
+
+        private List<TopicPartition> filterNonExistentPartitions(Collection<TopicPartition> topicPartitions) {
+            // collect all topics
+            Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+            try {
+                List<TopicPartition> existPartitions = adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                        .stream()
+                        .flatMap(entry -> entry.getValue().partitions().stream()
+                                .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                        .toList();
+
+                return topicPartitions.stream().filter(element -> !existPartitions.contains(element)).toList();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> assignments) {
