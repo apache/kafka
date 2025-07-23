@@ -131,17 +131,26 @@ public class FollowerState implements EpochState {
         return fetchTimer.isExpired();
     }
 
+    /**
+     * Reset the fetch timeout after successful fetch from leader.
+     */
     public void resetFetchTimeoutForSuccessfulFetch(long currentTimeMs) {
-        fetchTimer.update(currentTimeMs);
-        fetchTimer.reset(fetchTimeoutMs);
+        overrideFetchTimeout(currentTimeMs, fetchTimeoutMs);
         hasFetchedFromLeader = true;
     }
 
+    /**
+     * Reset the fetch timeout after node discovers leader. This allows observers to resume fetching from leader
+     * instead of from bootstrap servers
+     */
     public void resetFetchTimeoutAfterDiscoveringLeader(long currentTimeMs) {
-        fetchTimer.update(currentTimeMs);
-        fetchTimer.reset(fetchTimeoutMs);
+        overrideFetchTimeout(currentTimeMs, fetchTimeoutMs);
     }
 
+    /**
+     * Override the fetch timeout to a specific value. This is useful for short-circuiting followers' timeouts after
+     * they receive end quorum requests
+     */
     public void overrideFetchTimeout(long currentTimeMs, long timeoutMs) {
         fetchTimer.update(currentTimeMs);
         fetchTimer.reset(timeoutMs);
