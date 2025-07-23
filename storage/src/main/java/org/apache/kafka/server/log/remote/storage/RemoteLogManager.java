@@ -1610,7 +1610,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      * does not contain any messages/records associated with them.
      *
      * @param leaderEpochs The leader epoch map to be refined.
-     * @return a map containing only the epochs and their start offsets that have associated messages/records.
+     * @return A map containing only the epochs and their start offsets that have associated messages/records.
      */
     // Visible for testing
     static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
