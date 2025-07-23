@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
@@ -27,7 +28,6 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
-import org.apache.kafka.image.MetadataImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -269,7 +269,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     /**
      * The metadata image.
      */
-    private MetadataImage metadataImage = MetadataImage.EMPTY;
+    private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
      * The members which have been updated or deleted. Deleted members
@@ -376,7 +376,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
      * @return This object.
      */
     public U withMetadataImage(
-        MetadataImage metadataImage
+        CoordinatorMetadataImage metadataImage
     ) {
         this.metadataImage = metadataImage;
         return self();
@@ -427,7 +427,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
-        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
+        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) ->

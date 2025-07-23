@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group;
+package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -74,5 +74,13 @@ public class MetadataImageBuilder {
 
     public MetadataImage build(long version) {
         return delta.apply(new MetadataProvenance(version, 0, 0L, true));
+    }
+
+    public CoordinatorMetadataImage buildCoordinatorMetadataImage() {
+        return new KRaftCoordinatorMetadataImage(build());
+    }
+
+    public CoordinatorMetadataImage buildCoordinatorMetadataImage(long version) {
+        return new KRaftCoordinatorMetadataImage(build(version));
     }
 }

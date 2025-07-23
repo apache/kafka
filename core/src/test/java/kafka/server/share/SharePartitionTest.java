@@ -1564,7 +1564,7 @@ public class SharePartitionTest {
     @Test
     public void testNextFetchOffsetWithFindAndCachedStateEmpty() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
-        sharePartition.findNextFetchOffset(true);
+        sharePartition.updateFindNextFetchOffset(true);
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(0, sharePartition.nextFetchOffset());
         assertFalse(sharePartition.findNextFetchOffset());
@@ -1573,7 +1573,7 @@ public class SharePartitionTest {
     @Test
     public void testNextFetchOffsetWithFindAndCachedState() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
-        sharePartition.findNextFetchOffset(true);
+        sharePartition.updateFindNextFetchOffset(true);
         assertTrue(sharePartition.findNextFetchOffset());
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);

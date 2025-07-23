@@ -95,11 +95,11 @@ public final class TopicsDelta {
         topicDelta.replay(record);
     }
 
-    private void maybeReplayClearElrRecord(Uuid topicId, ClearElrRecord record) {
+    private void maybeReplayClearElrRecord(Uuid topicId) {
         // Only apply the record if the topic is not deleted.
         if (!deletedTopicIds.contains(topicId)) {
             TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
-            topicDelta.replay(record);
+            topicDelta.replay();
         }
     }
 
@@ -123,15 +123,11 @@ public final class TopicsDelta {
                     record.topicName() + ": no such topic found.");
             }
 
-            maybeReplayClearElrRecord(topicId, record);
+            maybeReplayClearElrRecord(topicId);
         } else {
             // Update all the existing topics
-            image.topicsById().forEach((topicId, image) -> {
-                maybeReplayClearElrRecord(topicId, record);
-            });
-            createdTopicIds().forEach((topicId -> {
-                maybeReplayClearElrRecord(topicId, record);
-            }));
+            image.topicsById().forEach((topicId, image) -> maybeReplayClearElrRecord(topicId));
+            createdTopicIds().forEach((this::maybeReplayClearElrRecord));
         }
     }
 

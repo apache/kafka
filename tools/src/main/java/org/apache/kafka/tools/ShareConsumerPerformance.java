@@ -37,7 +37,6 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -335,7 +334,7 @@ public class ShareConsumerPerformance {
                     .describedAs("milliseconds")
                     .ofType(Long.class)
                     .defaultsTo(10_000L);
-            numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
+            numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to consume.")
                     .withRequiredArg()
                     .describedAs("count")
                     .ofType(Long.class);
@@ -396,7 +395,7 @@ public class ShareConsumerPerformance {
         }
 
         public Set<String> topic() {
-            return Collections.singleton(options.valueOf(topicOpt));
+            return Set.of(options.valueOf(topicOpt));
         }
 
         public long numMessages() {
