@@ -973,6 +973,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                             segmentIdsBeingCopied.add(segmentId);
                             try {
                                 copyLogSegment(log, candidateLogSegment.logSegment, segmentId, candidateLogSegment.nextSegmentOffset);
+                            } catch (RemoteStorageException e) {
+                                recordLagStats(log);
+                                throw e;
                             } finally {
                                 segmentIdsBeingCopied.remove(segmentId);
                             }
@@ -1031,7 +1034,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 customMetadata = remoteStorageManagerPlugin.get().copyLogSegmentData(copySegmentStartedRlsm, segmentData);
             } catch (RemoteStorageException e) {
                 logger.info("Copy failed, cleaning segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
-                recordLagStats(log);
                 try {
                     deleteRemoteLogSegment(copySegmentStartedRlsm, ignored -> !isCancelled());
                     LOGGER.info("Cleanup completed for segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
