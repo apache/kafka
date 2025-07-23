@@ -261,32 +261,32 @@ public class ClientQuotaControlManager {
         }
 
         // Ensure the quota value is valid
-        return switch (configKey.type()) {
-            case DOUBLE -> ApiError.NONE;
-            case SHORT -> {
+        switch (configKey.type()) {
+            case DOUBLE:
+                return ApiError.NONE;
+            case SHORT:
                 if (value > Short.MAX_VALUE) {
-                    yield new ApiError(Errors.INVALID_REQUEST,
+                    return new ApiError(Errors.INVALID_REQUEST,
                         "Proposed value for " + key + " is too large for a SHORT.");
                 }
-                yield getErrorForIntegralQuotaValue(value, key);
-            }
-            case INT -> {
+                return getErrorForIntegralQuotaValue(value, key);
+            case INT:
                 if (value > Integer.MAX_VALUE) {
-                    yield new ApiError(Errors.INVALID_REQUEST,
+                    return new ApiError(Errors.INVALID_REQUEST,
                         "Proposed value for " + key + " is too large for an INT.");
                 }
-                yield getErrorForIntegralQuotaValue(value, key);
-            }
-            case LONG -> {
+                return getErrorForIntegralQuotaValue(value, key);
+            case LONG: {
                 if (value > Long.MAX_VALUE) {
-                    yield new ApiError(Errors.INVALID_REQUEST,
+                    return new ApiError(Errors.INVALID_REQUEST,
                         "Proposed value for " + key + " is too large for a LONG.");
                 }
-                yield getErrorForIntegralQuotaValue(value, key);
+                return getErrorForIntegralQuotaValue(value, key);
             }
-            default -> new ApiError(Errors.UNKNOWN_SERVER_ERROR,
-                    "Unexpected config type " + configKey.type() + " should be Long or Double");
-        };
+            default:
+                return new ApiError(Errors.UNKNOWN_SERVER_ERROR,
+                        "Unexpected config type " + configKey.type() + " should be Long or Double");
+        }
     }
 
     static ApiError getErrorForIntegralQuotaValue(double value, String key) {

@@ -677,6 +677,11 @@ public final class QuorumController implements Controller {
     }
 
     // Visible for testing
+    FeatureControlManager featureControl() {
+        return featureControl;
+    }
+
+    // Visible for testing
     ConfigurationControlManager configurationControl() {
         return configurationControl;
     }
