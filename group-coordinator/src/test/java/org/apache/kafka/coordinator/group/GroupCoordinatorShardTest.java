@@ -109,9 +109,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
+import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.GROUP_EXPIRATION_KEY;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.GROUP_SIZE_COUNTER_KEY;
@@ -1218,6 +1220,32 @@ public class GroupCoordinatorShardTest {
         ));
 
         verify(groupMetadataManager).replay(key, null);
+    }
+
+    @Test
+    public void testPropagateConfigUpdateCallback() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+                new LogContext(),
+                groupMetadataManager,
+                offsetMetadataManager,
+                Time.SYSTEM,
+                new MockCoordinatorTimer<>(Time.SYSTEM),
+                mock(GroupCoordinatorConfig.class),
+                coordinatorMetrics,
+                metricsShard
+        );
+
+        String groupId = "fooup";
+        Properties newGroupConfig = new Properties();
+        newGroupConfig.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, 2);
+
+        coordinator.onGroupConfigUpdate(groupId, newGroupConfig);
+
+        verify(groupMetadataManager).onGroupConfigUpdate(groupId, newGroupConfig);
     }
     
     @Test

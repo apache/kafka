@@ -18999,7 +18999,7 @@ public class GroupMetadataManagerTest {
         // Update config to trigger rebalance
         Properties newGroupConfig = new Properties();
         newGroupConfig.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, 2);
-        context.updateGroupConfig(groupId, newGroupConfig);
+        context.groupMetadataManager.onGroupConfigUpdate(groupId, newGroupConfig);
 
         // Third heartbeat.
         context.streamsGroupHeartbeat(

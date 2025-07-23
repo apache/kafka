@@ -23,10 +23,14 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Properties;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 public class SnapshottableCoordinatorTest {
 
@@ -141,5 +145,26 @@ public class SnapshottableCoordinatorTest {
         assertThrows(IllegalStateException.class, () -> coordinator.updateLastCommittedOffset(99L));
         assertEquals(100L, coordinator.lastCommittedOffset());
         assertThrows(IllegalStateException.class, () -> coordinator.updateLastCommittedOffset(101L));
+    }
+
+    @Test
+    public void testOnGroupConfigUpdatePropagatedToUnderlyingCoordinator() {
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        MockCoordinatorShard mockCoordinatorShard = mock(MockCoordinatorShard.class);
+        SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
+                logContext,
+                snapshotRegistry,
+                mockCoordinatorShard,
+                new TopicPartition("test-topic", 0)
+        );
+
+        String groupId = "foo";
+        Properties updatedProperties = new Properties();
+        updatedProperties.put("foo", "bar");
+
+        coordinator.onGroupConfigUpdate(groupId, updatedProperties);
+
+        verify(mockCoordinatorShard).onGroupConfigUpdate(groupId, updatedProperties);
     }
 }

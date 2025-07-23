@@ -50,6 +50,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -84,6 +85,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1909,6 +1911,76 @@ public class CoordinatorRuntimeTest {
         // that is the new image.
         future1.complete(null);
         verify(coordinator1).onLoaded(newImage);
+    }
+
+    @Test
+    public void testOnGroupConfigUpdate() {
+        TopicPartition tp0 = new TopicPartition("__consumer_offsets", 0);
+        TopicPartition tp1 = new TopicPartition("__consumer_offsets", 1);
+
+        MockTimer timer = new MockTimer();
+        MockCoordinatorLoader loader = mock(MockCoordinatorLoader.class);
+        MockPartitionWriter writer = mock(MockPartitionWriter.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
+        MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+                new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                        .withTime(timer.time())
+                        .withTimer(timer)
+                        .withLoader(loader)
+                        .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                        .withEventProcessor(new DirectEventProcessor())
+                        .withPartitionWriter(writer)
+                        .withCoordinatorShardBuilderSupplier(supplier)
+                        .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                        .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                        .withSerializer(new StringSerializer())
+                        .withExecutorService(mock(ExecutorService.class))
+                        .build();
+
+        MockCoordinatorShard coordinator0 = mock(MockCoordinatorShard.class);
+        MockCoordinatorShard coordinator1 = mock(MockCoordinatorShard.class);
+
+        when(supplier.get()).thenReturn(builder);
+        when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
+        when(builder.withExecutor(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.build())
+                .thenReturn(coordinator0)
+                .thenReturn(coordinator1);
+
+        CompletableFuture<CoordinatorLoader.LoadSummary> future0 = new CompletableFuture<>();
+        when(loader.load(eq(tp0), argThat(coordinatorMatcher(runtime, tp0)))).thenReturn(future0);
+
+        CompletableFuture<CoordinatorLoader.LoadSummary> future1 = new CompletableFuture<>();
+        when(loader.load(eq(tp1), argThat(coordinatorMatcher(runtime, tp1)))).thenReturn(future1);
+
+        runtime.scheduleLoadOperation(tp0, 0);
+        runtime.scheduleLoadOperation(tp1, 0);
+
+        assertEquals(coordinator0, runtime.contextOrThrow(tp0).coordinator.coordinator());
+        assertEquals(coordinator1, runtime.contextOrThrow(tp1).coordinator.coordinator());
+
+        // Coordinator 0 is active now
+        future0.complete(null);
+
+        // Publish a new image.
+        String groupId = "foo";
+        Properties updatedProperties = new Properties();
+        updatedProperties.put("foo", "bar");
+        runtime.onGroupConfigUpdate(groupId, updatedProperties);
+
+        // Coordinator 0 should be notified about it.
+        verify(coordinator0).onGroupConfigUpdate(groupId, updatedProperties);
+
+        // Coordinator 1 should not be informed, as he wasn't active
+        verify(coordinator1, never()).onGroupConfigUpdate(groupId, updatedProperties);
     }
 
     @Test

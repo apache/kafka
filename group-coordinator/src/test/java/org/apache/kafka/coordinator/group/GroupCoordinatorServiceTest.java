@@ -5634,6 +5634,38 @@ public class GroupCoordinatorServiceTest {
         verify(mockPersister, times(1)).initializeState(ArgumentMatchers.any());
     }
 
+    @Test
+    public void testOnGroupConfigUpdatedWhenNotStarted() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+                .setConfig(createConfig())
+                .setRuntime(runtime)
+                .build();
+
+        String groupId = "foo";
+        Properties updatedProperties = new Properties();
+        updatedProperties.put("foo", "bar");
+
+        assertThrows(CoordinatorNotAvailableException.class, () -> service.onGroupConfigUpdate(groupId, updatedProperties));
+    }
+
+    @Test
+    public void testOnGroupConfigUpdatedPropagateCallbackToRuntime() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+                .setConfig(createConfig())
+                .setRuntime(runtime)
+                .build(true);
+
+        String groupId = "foo";
+        Properties updatedProperties = new Properties();
+        updatedProperties.put("foo", "bar");
+
+        service.onGroupConfigUpdate(groupId, updatedProperties);
+
+        verify(runtime).onGroupConfigUpdate(groupId, updatedProperties);
+    }
+
     @FunctionalInterface
     private interface TriFunction<A, B, C, R> {
         R apply(A a, B b, C c);
