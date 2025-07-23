@@ -35,7 +35,6 @@ import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -447,9 +446,9 @@ public interface ClusterInstance {
                 .toList();
     }
 
-    default void restartDeadBrokers() {
+    default void restartDeadBrokers() throws InterruptedException {
         if (brokers().isEmpty()) {
-            throw new KafkaException("Must supply at least one server config.");
+            throw new IllegalArgumentException("Must supply at least one server config.");
         }
         brokers().entrySet().forEach(entry -> {
             if (!entry.getValue().isShutdown()) {
