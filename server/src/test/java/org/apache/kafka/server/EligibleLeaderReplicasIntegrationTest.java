@@ -45,6 +45,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
@@ -114,7 +115,7 @@ public class EligibleLeaderReplicasIntegrationTest {
         if (adminClient != null) adminClient.close();
     }
 
-    @ClusterTest
+    @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
@@ -200,7 +201,7 @@ public class EligibleLeaderReplicasIntegrationTest {
         );
     }
 
-    @ClusterTest
+    @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testElrMemberCanBeElected() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
@@ -275,7 +276,7 @@ public class EligibleLeaderReplicasIntegrationTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testElrMemberShouldBeKickOutWhenUncleanShutdown() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
@@ -334,7 +335,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     /*
         This test is only valid for KIP-966 part 1. When the unclean recovery is implemented, it should be removed.
      */
-    @ClusterTest
+    @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testLastKnownLeaderShouldBeElectedIfEmptyElr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
