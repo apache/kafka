@@ -33,6 +33,7 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
@@ -40,7 +41,6 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
-import org.apache.kafka.image.MetadataImage;
 
 import org.slf4j.Logger;
 
@@ -1343,14 +1343,14 @@ public class ClassicGroup implements Group {
     /**
      * Convert the given ConsumerGroup to a corresponding ClassicGroup.
      *
-     * @param consumerGroup                 The converted ConsumerGroup.
-     * @param leavingMembers                The members that will not be converted in the ClassicGroup.
-     * @param joiningMember                 The member that needs to be converted and added to the ClassicGroup.
-     *                                      When not null, must have an instanceId that matches an existing member.
-     * @param logContext                    The logContext to create the ClassicGroup.
-     * @param time                          The time to create the ClassicGroup.
-     * @param metadataImage                 The MetadataImage.
-     * @return  The created ClassicGroup.
+     * @param consumerGroup  The converted ConsumerGroup.
+     * @param leavingMembers The members that will not be converted in the ClassicGroup.
+     * @param joiningMember  The member that needs to be converted and added to the ClassicGroup.
+     *                       When not null, must have an instanceId that matches an existing member.
+     * @param logContext     The logContext to create the ClassicGroup.
+     * @param time           The time to create the ClassicGroup.
+     * @param image          The MetadataImage.
+     * @return The created ClassicGroup.
      */
     public static ClassicGroup fromConsumerGroup(
         ConsumerGroup consumerGroup,
@@ -1358,7 +1358,7 @@ public class ClassicGroup implements Group {
         ConsumerGroupMember joiningMember,
         LogContext logContext,
         Time time,
-        MetadataImage metadataImage
+        CoordinatorMetadataImage image
     ) {
         ClassicGroup classicGroup = new ClassicGroup(
             logContext,
@@ -1427,7 +1427,7 @@ public class ClassicGroup implements Group {
             byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(
                     consumerGroup.targetAssignment().get(memberId).partitions(),
-                    metadataImage.topics()
+                    image
                 ),
                 ConsumerProtocol.deserializeVersion(
                     ByteBuffer.wrap(classicGroupMember.metadata(classicGroup.protocolName().orElse("")))

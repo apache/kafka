@@ -42,7 +42,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -367,7 +366,7 @@ public class OffsetsUtils {
 
             if (resetPlanForGroup == null) {
                 printError("No reset plan for group " + groupId + " found", Optional.empty());
-                return Collections.<TopicPartition, OffsetAndMetadata>emptyMap();
+                return Map.<TopicPartition, OffsetAndMetadata>of();
             }
 
             Map<TopicPartition, Long> requestedOffsets = resetPlanForGroup.keySet().stream().collect(Collectors.toMap(
@@ -376,7 +375,7 @@ public class OffsetsUtils {
 
             return checkOffsetsRange(requestedOffsets).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
-        }).orElseGet(Collections::emptyMap);
+        }).orElseGet(Map::of);
     }
 
     public Map<TopicPartition, OffsetAndMetadata> resetToCurrent(Collection<TopicPartition> partitionsToReset, Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets) {
