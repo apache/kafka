@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.jmh.assignor;
 
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
@@ -27,7 +28,6 @@ import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
-import org.apache.kafka.image.MetadataImage;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -100,7 +100,7 @@ public class StreamsStickyAssignorBenchmark {
 
         SortedMap<String, ConfiguredSubtopology> subtopologyMap = StreamsAssignorBenchmarkUtils.createSubtopologyMap(partitionCount, allTopicNames);
 
-        MetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
+        CoordinatorMetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
 
         topologyDescriber = new TopologyMetadata(metadataImage, subtopologyMap);
 

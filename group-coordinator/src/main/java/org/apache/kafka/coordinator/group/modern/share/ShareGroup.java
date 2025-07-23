@@ -22,11 +22,11 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineObject;
 
@@ -309,7 +309,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
     public ShareGroupDescribeResponseData.DescribedGroup asDescribedGroup(
         long committedOffset,
         String defaultAssignor,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         ShareGroupDescribeResponseData.DescribedGroup describedGroup = new ShareGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
@@ -320,7 +320,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asShareGroupDescribeMember(
-                    topicsImage
+                    image
                 )
             )
         );

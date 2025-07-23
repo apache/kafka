@@ -893,5 +893,8 @@ public class TopicsImageTest {
         assertEquals(expectedNames, names);
         assertThrows(UnsupportedOperationException.class, () -> map.remove(FOO_UUID));
         assertThrows(UnsupportedOperationException.class, () -> map.put(FOO_UUID, "bar"));
+
+        var result = IMAGE1.topicIdToNameView().get("zar");
+        assertNull(result);
     }
 }
