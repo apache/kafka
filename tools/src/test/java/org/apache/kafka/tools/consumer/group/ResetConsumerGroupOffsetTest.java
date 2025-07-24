@@ -162,7 +162,7 @@ public class ResetConsumerGroupOffsetTest {
     public void testResetOffsetsWithOfflinePartition(ClusterInstance cluster) throws Exception {
         String topic = generateRandomTopic();
         String group = "new.group";
-        String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", "topic:1");
+        String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":1");
         cluster.createTopic(topic, 3, (short) 2);
 
         try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args);
