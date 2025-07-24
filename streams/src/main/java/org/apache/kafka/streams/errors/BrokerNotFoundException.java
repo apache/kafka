@@ -17,14 +17,14 @@
 package org.apache.kafka.streams.errors;
 
 /**
- * @deprecated since 4.2 and should not be used any longer.
  * Indicates that none of the specified {@link org.apache.kafka.streams.StreamsConfig#BOOTSTRAP_SERVERS_CONFIG brokers}
  * could be found.
  *
  * @see org.apache.kafka.streams.StreamsConfig
+ * @deprecated since 4.2 and should not be used any longer.
  */
 @SuppressWarnings("unused")
-@Deprecated(since = "4.2", forRemoval = true)
+@Deprecated
 public class BrokerNotFoundException extends StreamsException {
 
     private static final long serialVersionUID = 1L;
