@@ -604,7 +604,7 @@ public class PersisterStateManager {
 
                             default:
                                 log.error("Unable to perform initialize state RPC for key {}: {}", partitionKey(), errorMessage);
-                                requestErrorResponse(error, null);
+                                requestErrorResponse(error, new Exception(errorMessage));
                                 return;
                         }
                     }
@@ -768,7 +768,7 @@ public class PersisterStateManager {
 
                             default:
                                 log.error("Unable to perform write state RPC for key {}: {}", partitionKey(), errorMessage);
-                                requestErrorResponse(error, null);
+                                requestErrorResponse(error, new Exception(errorMessage));
                                 return;
                         }
                     }
@@ -916,7 +916,7 @@ public class PersisterStateManager {
 
                             default:
                                 log.error("Unable to perform read state RPC for key {}: {}", partitionKey(), errorMessage);
-                                requestErrorResponse(error, null);
+                                requestErrorResponse(error, new Exception(errorMessage));
                                 return;
                         }
                     }
@@ -1064,7 +1064,7 @@ public class PersisterStateManager {
 
                             default:
                                 log.error("Unable to perform read state summary RPC for key {}: {}", partitionKey(), errorMessage);
-                                requestErrorResponse(error, null);
+                                requestErrorResponse(error, new Exception(errorMessage));
                                 return;
                         }
                     }
@@ -1209,7 +1209,7 @@ public class PersisterStateManager {
 
                             default:
                                 log.error("Unable to perform delete state RPC for key {}: {}", partitionKey(), errorMessage);
-                                requestErrorResponse(error, null);
+                                requestErrorResponse(error, new Exception(errorMessage));
                                 return;
                         }
                     }
