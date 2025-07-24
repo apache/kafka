@@ -17,6 +17,7 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -26,7 +27,9 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -51,7 +54,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -153,24 +158,31 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTest(brokers = 3)
-    public void testResetOffsetsWithOfflinePartition(ClusterInstance cluster) throws InterruptedException {
+    @ClusterTest(brokers = 5)
+    public void testResetOffsetsWithOfflinePartition(ClusterInstance cluster) throws Exception {
         String topic = generateRandomTopic();
         String group = "new.group";
-        String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":1");
+        String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", "topic:1");
         cluster.createTopic(topic, 3, (short) 2);
-        TopicPartition offlinePartition = new TopicPartition(topic, 2);
 
-        try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-            cluster.brokers().forEach((id, broker) -> {
-                if (broker.replicaManager().onlinePartition(offlinePartition).isDefined()) {
-                    System.err.println("KKKK" + broker.logManager().getLog(offlinePartition, false).get().dir());
-                    TestUtils.deleteDir(broker.logManager().getLog(offlinePartition, false).get().dir().getAbsolutePath());
-                }
-            });
+        try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args);
+             Admin admin = cluster.admin()) {
+            admin.alterPartitionReassignments(Map.of(new TopicPartition(topic, 2),
+                    Optional.of(new NewPartitionReassignment(List.of(3, 4)))));
+
+            System.err.println(admin.describeTopics(List.of(topic)).topicNameValues().get(topic).get().partitions());
+
+            TestUtils.waitForCondition(() -> {
+                List<TopicPartitionInfo> partInfo = admin.describeTopics(List.of(topic)).topicNameValues().get(topic).get().partitions();
+                System.err.println(partInfo.get(2));
+                return partInfo.get(2).replicas().stream().map(Node::id).collect(Collectors.toUnmodifiableSet()).equals(Set.of(3, 4));
+            }, "aaaa");
+
+            cluster.shutdownBroker(3);
+            cluster.shutdownBroker(4);
+            TestUtils.waitForCondition(() -> !cluster.aliveBrokers().keySet().containsAll(Set.of(3, 4)), "aaaa");
 
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
-            System.err.println("ZZZZ " + resetOffsets);
             assertTrue(resetOffsets.isEmpty());
             assertTrue(committedOffsets(cluster, topic, group).isEmpty());
         }
