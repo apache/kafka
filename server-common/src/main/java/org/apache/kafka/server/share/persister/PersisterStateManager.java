@@ -437,9 +437,9 @@ public class PersisterStateManager {
 
             FindCoordinatorResponseData.Coordinator coordinatorData = coordinators.get(0);
             Errors error = Errors.forCode(coordinatorData.errorCode());
-            String errMessage = coordinatorData.errorMessage();
-            if (errMessage == null || errMessage.isEmpty()) {
-                errMessage = error.message();
+            String errorMessage = coordinatorData.errorMessage();
+            if (errorMessage == null || errorMessage.isEmpty()) {
+                errorMessage = error.message();
             }
 
             switch (error) {
@@ -459,7 +459,7 @@ public class PersisterStateManager {
                 case COORDINATOR_LOAD_IN_PROGRESS:
                 case NOT_COORDINATOR:
                 case UNKNOWN_TOPIC_OR_PARTITION:
-                    log.debug("Received retriable error in find coordinator for {} using key {}: {}", name(), partitionKey(), errMessage);
+                    log.debug("Received retriable error in find coordinator for {} using key {}: {}", name(), partitionKey(), errorMessage);
                     if (!findCoordBackoff.canAttempt()) {
                         log.error("Exhausted max retries to find coordinator for {} using key {} without success.", name(), partitionKey());
                         findCoordinatorErrorResponse(error, new Exception("Exhausted max retries to find coordinator without success."));
@@ -471,7 +471,7 @@ public class PersisterStateManager {
 
                 default:
                     log.error("Unable to find coordinator for {} using key {}.", name(), partitionKey());
-                    findCoordinatorErrorResponse(error, new Exception(errMessage));
+                    findCoordinatorErrorResponse(error, new Exception(errorMessage));
             }
         }
 
