@@ -702,8 +702,6 @@ public class ResetConsumerGroupOffsetTest {
             assertDoesNotThrow(() -> resetOffsets(service));
             // shutdown a broker to make some partitions missing leader
             cluster.shutdownBroker(0);
-            TestUtils.waitForCondition(() -> !cluster.aliveBrokers().containsKey(0),
-                    "The cluster did not shut down the broker within the expected time.");
             assertThrows(LeaderNotAvailableException.class, () -> resetOffsets(service));
         }
     }
