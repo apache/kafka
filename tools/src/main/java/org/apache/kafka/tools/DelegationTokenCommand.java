@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -106,7 +105,7 @@ public class DelegationTokenCommand {
         CreateDelegationTokenResult createResult = adminClient.createDelegationToken(createDelegationTokenOptions);
         DelegationToken token = createResult.delegationToken().get();
         System.out.println("Created delegation token with tokenId : " + token.tokenInfo().tokenId());
-        printToken(Collections.singletonList(token));
+        printToken(List.of(token));
 
         return token;
     }

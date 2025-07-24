@@ -764,7 +764,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     /**
-     * Returns the leader epoch entries within the range of the given start[exclusive] and end[inclusive] offset.
+     * Returns the leader epoch entries within the range of the given start (inclusive) and end (exclusive) offset.
      * <p>
      * Visible for testing.
      *
@@ -786,6 +786,15 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             return task.rlmTask;
         }
         return null;
+    }
+
+    public boolean isPartitionReady(TopicPartition partition) {
+        Uuid uuid = topicIdByPartitionMap.get(partition);
+        if (uuid == null) {
+            return false;
+        }
+        TopicIdPartition topicIdPartition = new TopicIdPartition(uuid, partition);
+        return remoteLogMetadataManagerPlugin.get().isReady(topicIdPartition);
     }
 
     abstract class RLMTask extends CancellableRunnable {
