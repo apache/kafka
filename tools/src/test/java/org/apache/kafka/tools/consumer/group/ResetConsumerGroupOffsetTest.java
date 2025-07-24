@@ -165,8 +165,7 @@ public class ResetConsumerGroupOffsetTest {
         String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":1");
         cluster.createTopic(topic, 3, (short) 2);
 
-        try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args);
-             Admin admin = cluster.admin()) {
+        try (Admin admin = cluster.admin(); ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
             admin.alterPartitionReassignments(Map.of(new TopicPartition(topic, 2),
                     Optional.of(new NewPartitionReassignment(List.of(3, 4)))));
 
