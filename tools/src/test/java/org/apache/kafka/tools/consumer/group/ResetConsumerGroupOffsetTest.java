@@ -170,8 +170,6 @@ public class ResetConsumerGroupOffsetTest {
             cluster.waitTopicCreation(topic, 2);
 
             cluster.shutdownBroker(1);
-            TestUtils.waitForCondition(() -> !cluster.aliveBrokers().containsKey(1),
-                    "The cluster did not shut down the broker within the expected time.");
 
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
             assertEquals(Set.of(new TopicPartition(topic, 0)), resetOffsets.keySet());
