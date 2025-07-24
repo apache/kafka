@@ -94,7 +94,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * {@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED} - This state indicates that the segment copying to remote storage is finished.
      * <br>
      * The leader broker copies the log segments to the remote storage and puts the remote log segment metadata with the
-     * state as “COPY_SEGMENT_STARTED” and updates the state as “COPY_SEGMENT_FINISHED” once the copy is successful.
+     * state as "COPY_SEGMENT_STARTED" and updates the state as "COPY_SEGMENT_FINISHED" once the copy is successful.
      * <p></p>
      * {@link RemoteLogSegmentState#DELETE_SEGMENT_STARTED} - This state indicates that the segment deletion is started but not yet finished.
      * {@link RemoteLogSegmentState#DELETE_SEGMENT_FINISHED} - This state indicates that the segment is deleted successfully.
@@ -243,4 +243,17 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
         return true;
     }
 
+    /**
+     * Register a listener for when the broker is ready to serve requests.
+     * This method will be called during initialization if the implementation 
+     * supports delayed initialization until the broker can process requests.
+     * 
+     * The default implementation does nothing, allowing implementations that don't 
+     * need delayed initialization to ignore this method.
+     * 
+     * @param brokerReadyFuture A CompletableFuture that completes when broker is ready to serve requests
+     */
+    default void onBrokerReadyForRequests(CompletableFuture<Void> brokerReadyFuture) {
+        // Default implementation is empty - implementations can override if needed
+    }
 }
