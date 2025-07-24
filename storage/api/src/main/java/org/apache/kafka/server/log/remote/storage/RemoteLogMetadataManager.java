@@ -94,7 +94,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * {@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED} - This state indicates that the segment copying to remote storage is finished.
      * <br>
      * The leader broker copies the log segments to the remote storage and puts the remote log segment metadata with the
-     * state as "COPY_SEGMENT_STARTED" and updates the state as "COPY_SEGMENT_FINISHED" once the copy is successful.
+     * state as “COPY_SEGMENT_STARTED” and updates the state as “COPY_SEGMENT_FINISHED” once the copy is successful.
      * <p></p>
      * {@link RemoteLogSegmentState#DELETE_SEGMENT_STARTED} - This state indicates that the segment deletion is started but not yet finished.
      * {@link RemoteLogSegmentState#DELETE_SEGMENT_FINISHED} - This state indicates that the segment is deleted successfully.
