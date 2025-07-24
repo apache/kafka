@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -27,9 +26,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.GroupState;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -54,7 +51,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -163,16 +159,10 @@ public class ResetConsumerGroupOffsetTest {
         String topic = generateRandomTopic();
         String group = "new.group";
         String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":1");
-        cluster.createTopic(topic, 3, (short) 2);
 
         try (Admin admin = cluster.admin(); ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-            admin.alterPartitionReassignments(Map.of(new TopicPartition(topic, 2),
-                    Optional.of(new NewPartitionReassignment(List.of(3, 4)))));
-
-            TestUtils.waitForCondition(() -> {
-                List<TopicPartitionInfo> partInfo = admin.describeTopics(List.of(topic)).topicNameValues().get(topic).get().partitions();
-                return partInfo.get(2).replicas().stream().map(Node::id).collect(Collectors.toUnmodifiableSet()).equals(Set.of(3, 4));
-            }, "Partitions did not complete reassignment to the target broker(s) within the expected time.");
+            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0, 1), 1, List.of(1, 2), 2, List.of(3, 4)))));
+            cluster.waitTopicCreation(topic, 3);
 
             cluster.shutdownBroker(3);
             cluster.shutdownBroker(4);
