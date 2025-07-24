@@ -653,8 +653,9 @@ public class ConsumerGroupCommand {
                 return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
                         .stream()
                         .flatMap(entry -> entry.getValue().partitions().stream()
-                                .filter(partitionInfo -> partitionInfo.leader() == null && topicPartitions.contains(new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                                .filter(partitionInfo -> partitionInfo.leader() == null)
                                 .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                                .filter(topicPartitions::contains)
                         .toList();
             } catch (Exception e) {
                 throw new RuntimeException(e);
