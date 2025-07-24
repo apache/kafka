@@ -242,4 +242,5 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     default boolean isReady(TopicIdPartition topicIdPartition) {
         return true;
     }
+
 }
