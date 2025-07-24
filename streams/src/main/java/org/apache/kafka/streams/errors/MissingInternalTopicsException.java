@@ -14,28 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.common;
+package org.apache.kafka.streams.errors;
 
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigException;
+import java.util.List;
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
+public class MissingInternalTopicsException extends StreamsException {
 
-public class MetadataVersionValidator implements Validator {
+    private static final long serialVersionUID = 1L;
 
-    @Override
-    public void ensureValid(String name, Object value) {
-        try {
-            MetadataVersion.fromVersionString(value.toString());
-        } catch (IllegalArgumentException e) {
-            throw new ConfigException(name, value.toString(), e.getMessage());
-        }
+    private final List<String> topics;
+
+    /** 
+     * Constructs a new MissingInternalTopicsException.
+     * 
+     * @param message The detail message
+     * @param topics the list of missing internal topic names
+     */
+    public MissingInternalTopicsException(final String message, final List<String> topics) {
+        super(message);
+        this.topics = topics;
     }
 
-    @Override
-    public String toString() {
-        return "[" + Arrays.stream(MetadataVersion.VERSIONS).map(MetadataVersion::version).collect(
-             Collectors.joining(", ")) + "]";
+    /**
+     * Returns the list of missing internal topics that caused the exception.
+     */
+    public List<String> topics() {
+        return topics;
     }
 }

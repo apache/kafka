@@ -14,20 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.quota;
 
-package org.apache.kafka.server.common;
+/**
+ * The ControllerMutationQuota trait defines a quota for a given user/clientId pair. Such
+ * quota is not meant to be cached forever but rather during the lifetime of processing
+ * a request.
+ */
+public interface ControllerMutationQuota {
+    boolean isExceeded();
+    void record(double permits);
+    int throttleTime();
 
-import org.junit.jupiter.api.Test;
+    ControllerMutationQuota UNBOUNDED_CONTROLLER_MUTATION_QUOTA = new ControllerMutationQuota() {
+        @Override
+        public boolean isExceeded() {
+            return false;
+        }
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+        @Override
+        public void record(double permits) {
+        }
 
-public class MetadataVersionValidatorTest {
-
-    @Test
-    public void testMetadataVersionValidator() {
-        String str = new MetadataVersionValidator().toString();
-        String[] apiVersions = str.substring(1).split(",");
-        assertEquals(MetadataVersion.VERSIONS.length, apiVersions.length);
-    }
-
+        @Override
+        public int throttleTime() {
+            return 0;
+        }
+    };
 }

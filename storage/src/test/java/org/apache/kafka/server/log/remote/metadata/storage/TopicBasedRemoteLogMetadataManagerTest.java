@@ -17,7 +17,10 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -46,9 +49,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ClusterTestDefaults(brokers = 3)
 public class TopicBasedRemoteLogMetadataManagerTest {
@@ -66,7 +72,6 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         if (remoteLogMetadataManager == null)
             remoteLogMetadataManager = RemoteLogMetadataManagerTestUtils.builder()
                 .bootstrapServers(clusterInstance.bootstrapServers())
-                .startConsumerThread(true)
                 .remotePartitionMetadataStore(() -> spyRemotePartitionMetadataEventHandler)
                 .build();
         return remoteLogMetadataManager;
@@ -82,19 +87,38 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         try (Admin admin = clusterInstance.admin()) {
             String topic = "test-topic-exist";
             admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
-            clusterInstance.waitForTopic(topic, 1);
+            clusterInstance.waitTopicCreation(topic, 1);
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             assertTrue(doesTopicExist);
         }
     }
 
     @ClusterTest
-    public void testTopicDoesNotExist() {
+    public void testTopicDoesNotExist() throws ExecutionException, InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
             String topic = "dummy-test-topic";
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             assertFalse(doesTopicExist);
         }
+    }
+
+    @ClusterTest
+    public void testDoesTopicExistWithAdminClientExecutionError() throws ExecutionException, InterruptedException {
+        // Create a mock Admin client that throws an ExecutionException (not UnknownTopicOrPartitionException)
+        Admin mockAdmin = mock(Admin.class);
+        DescribeTopicsResult mockDescribeTopicsResult = mock(DescribeTopicsResult.class);
+        KafkaFuture<TopicDescription> mockFuture = mock(KafkaFuture.class);
+        
+        String topic = "test-topic";
+        
+        // Set up the mock to throw a RuntimeException wrapped in ExecutionException
+        when(mockAdmin.describeTopics(anySet())).thenReturn(mockDescribeTopicsResult);
+        when(mockDescribeTopicsResult.topicNameValues()).thenReturn(Map.of(topic, mockFuture));
+        when(mockFuture.get()).thenThrow(new ExecutionException("Admin client connection error", new RuntimeException("Connection failed")));
+        
+        // The method should re-throw the ExecutionException since it's not an UnknownTopicOrPartitionException
+        TopicBasedRemoteLogMetadataManager rlmm = topicBasedRlmm();
+        assertThrows(ExecutionException.class, () -> rlmm.doesTopicExist(mockAdmin, topic));
     }
 
     @ClusterTest
@@ -112,9 +136,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         try (Admin admin = clusterInstance.admin()) {
             // Set broker id 0 as the first entry which is taken as the leader.
             admin.createTopics(List.of(new NewTopic(leaderTopic, Map.of(0, List.of(0, 1, 2))))).all().get();
-            clusterInstance.waitForTopic(leaderTopic, 1);
+            clusterInstance.waitTopicCreation(leaderTopic, 1);
             admin.createTopics(List.of(new NewTopic(followerTopic, Map.of(0, List.of(1, 2, 0))))).all().get();
-            clusterInstance.waitForTopic(followerTopic, 1);
+            clusterInstance.waitTopicCreation(followerTopic, 1);
         }
 
         final TopicIdPartition newLeaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));

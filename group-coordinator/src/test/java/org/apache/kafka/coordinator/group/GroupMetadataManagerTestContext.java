@@ -53,6 +53,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
@@ -115,7 +116,6 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
@@ -462,7 +462,7 @@ public class GroupMetadataManagerTestContext {
         private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
         private final LogContext logContext = new LogContext();
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        private MetadataImage metadataImage;
+        private CoordinatorMetadataImage metadataImage;
         private GroupConfigManager groupConfigManager;
         private final List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private final List<StreamsGroupBuilder> streamsGroupBuilders = new ArrayList<>();
@@ -478,7 +478,7 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withMetadataImage(MetadataImage metadataImage) {
+        public Builder withMetadataImage(CoordinatorMetadataImage metadataImage) {
             this.metadataImage = metadataImage;
             return this;
         }
@@ -519,7 +519,7 @@ public class GroupMetadataManagerTestContext {
         }
 
         public GroupMetadataManagerTestContext build() {
-            if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
+            if (metadataImage == null) metadataImage = CoordinatorMetadataImage.EMPTY;
             if (groupConfigManager == null) groupConfigManager = createConfigManager();
 
             config.putIfAbsent(
@@ -554,7 +554,7 @@ public class GroupMetadataManagerTestContext {
             );
 
             consumerGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
-            shareGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
+            shareGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
             streamsGroupBuilders.forEach(builder -> {
                 builder.build().forEach(context::replay);
                 StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(builder.groupId());
@@ -563,7 +563,7 @@ public class GroupMetadataManagerTestContext {
                         new LogContext(),
                         0,
                         group.topology().get(),
-                        metadataImage.topics())
+                        metadataImage)
                     );
                 }
             });
