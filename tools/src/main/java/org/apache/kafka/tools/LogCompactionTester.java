@@ -257,7 +257,7 @@ public class LogCompactionTester {
                 brokerUrl, topics, messages,
                 compressionType, dups, percentDeletes);
         System.out.println("Sleeping for " + sleepSecs + "seconds...");
-        Thread.sleep(sleepSecs * 1000L);
+        TimeUnit.MILLISECONDS.sleep(sleepSecs * 1000L);
         System.out.println("Consuming messages...");
         Path consumedDataFilePath = consumeMessages(brokerUrl, topics);
 
@@ -359,20 +359,8 @@ public class LogCompactionTester {
         ProcessBuilder builder = new ProcessBuilder(
                 "sort", "--key=1,2", "--stable", "--buffer-size=20%",
                 "--temporary-directory=" + tempDir.toString(), file.getAbsolutePath());
+        builder.redirectError(ProcessBuilder.Redirect.INHERIT);
         Process process = builder.start();
-
-        // async read from the process's stderr to prevent blocking if the buffer fills up
-        CompletableFuture.runAsync(() -> {
-            try (BufferedReader errReader = new BufferedReader(
-                    new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = errReader.readLine()) != null) {
-                    System.err.println("[sort stderr] " + line);
-                }
-            } catch (IOException e) {
-                System.err.println("Failed to read sort stderr: " + e.getMessage());
-            }
-        });
 
         // async wait for the process to complete and log a message if it exits abnormally
         CompletableFuture.runAsync(() -> {
