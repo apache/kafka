@@ -17,12 +17,11 @@
 package org.apache.kafka.streams.examples.pageview;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.connect.json.JsonDeserializer;
-import org.apache.kafka.connect.json.JsonSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -35,10 +34,13 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.io.IOException;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -56,6 +58,64 @@ import java.util.Properties;
  */
 public class PageViewUntypedDemo {
 
+    /**
+     * Custom JSON serializer for JsonNode objects using Jackson ObjectMapper.
+     */
+    public static class JsonNodeSerializer implements Serializer<JsonNode> {
+        private final ObjectMapper objectMapper = new ObjectMapper();
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            // No configuration needed
+        }
+
+        @Override
+        public byte[] serialize(String topic, JsonNode data) {
+            if (data == null) {
+                return null;
+            }
+            try {
+                return objectMapper.writeValueAsBytes(data);
+            } catch (IOException e) {
+                throw new SerializationException("Error serializing JSON message", e);
+            }
+        }
+
+        @Override
+        public void close() {
+            // No resources to close
+        }
+    }
+
+    /**
+     * Custom JSON deserializer for JsonNode objects using Jackson ObjectMapper.
+     */
+    public static class JsonNodeDeserializer implements Deserializer<JsonNode> {
+        private final ObjectMapper objectMapper = new ObjectMapper();
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            // No configuration needed
+        }
+
+        @Override
+        public JsonNode deserialize(String topic, byte[] data) {
+            if (data == null) {
+                return null;
+            }
+            try {
+                return objectMapper.readTree(data);
+            } catch (IOException e) {
+                throw new SerializationException("Error deserializing JSON message", e);
+            }
+        }
+
+        @Override
+        public void close() {
+            // No resources to close
+        }
+    }
+
     public static void main(final String[] args) throws Exception {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-untyped");
@@ -68,8 +128,8 @@ public class PageViewUntypedDemo {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Serializer<JsonNode> jsonSerializer = new JsonSerializer();
-        final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
+        final Serializer<JsonNode> jsonSerializer = new JsonNodeSerializer();
+        final Deserializer<JsonNode> jsonDeserializer = new JsonNodeDeserializer();
         final Serde<JsonNode> jsonSerde = Serdes.serdeFrom(jsonSerializer, jsonDeserializer);
 
         final Consumed<String, JsonNode> consumed = Consumed.with(Serdes.String(), jsonSerde);
@@ -77,15 +137,33 @@ public class PageViewUntypedDemo {
 
         final KTable<String, JsonNode> users = builder.table("streams-userprofile-input", consumed);
 
-        final KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
+        final KTable<String, String> userRegions = users.mapValues(record -> {
+            if (record != null && record.has("region") && record.get("region") != null) {
+                return record.get("region").textValue();
+            }
+            return "UNKNOWN";
+        });
 
         final Duration duration24Hours = Duration.ofHours(24);
 
         final KStream<JsonNode, JsonNode> regionCount = views
             .leftJoin(userRegions, (view, region) -> {
                 final ObjectNode jNode = JsonNodeFactory.instance.objectNode();
-                return (JsonNode) jNode.put("user", view.get("user").textValue())
-                        .put("page", view.get("page").textValue())
+
+                // Safely extract user field
+                String user = "UNKNOWN";
+                if (view != null && view.has("user") && view.get("user") != null) {
+                    user = view.get("user").textValue();
+                }
+
+                // Safely extract page field
+                String page = "UNKNOWN";
+                if (view != null && view.has("page") && view.get("page") != null) {
+                    page = view.get("page").textValue();
+                }
+
+                return (JsonNode) jNode.put("user", user)
+                        .put("page", page)
                         .put("region", region == null ? "UNKNOWN" : region);
 
             })
