@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.server;
 
-import kafka.server.KafkaBroker;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -66,8 +64,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
-
-import scala.collection.Seq;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -162,9 +158,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(0).id());
             clusterInstance.shutdownBroker(initialReplicas.get(1).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 2 && elrSize == 1;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 2 && elrSize == 1);
 
             // Now the partition is under min ISR. HWM should not advance.
             producer.send(new ProducerRecord<>(testTopicName, "1", "1")).get();
@@ -174,9 +168,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             // Restore the min ISR and the previous log should be visible.
             clusterInstance.startBroker(initialReplicas.get(1).id());
             clusterInstance.startBroker(initialReplicas.get(0).id());
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 4 && elrSize == 0;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 4 && elrSize == 0);
 
             waitUntilOneMessageIsConsumed(consumer);
         } finally {
@@ -227,15 +219,11 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(1).id());
             clusterInstance.shutdownBroker(initialReplicas.get(2).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 1 && elrSize == 2;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2);
 
             clusterInstance.shutdownBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 3;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3);
 
             topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -250,9 +238,7 @@ public class EligibleLeaderReplicasIntegrationTest {
                 .filter(node -> node.id() != expectLastKnownLeader).toList().get(0).id();
 
             clusterInstance.startBroker(expectLeader);
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 1 && elrSize == 2;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2);
 
             topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -263,9 +249,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             topicPartitionInfo.replicas().stream().filter(node -> node.id() != expectLeader).limit(2)
                 .forEach(node -> clusterInstance.startBroker(node.id()));
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 3 && elrSize == 0;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 3 && elrSize == 0);
 
             topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -303,26 +287,23 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(2).id());
             clusterInstance.shutdownBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 3;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3);
             topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
 
             int brokerToBeUncleanShutdown = topicPartitionInfo.elr().get(0).id();
-            KafkaBroker broker = clusterInstance.brokers().values().stream().filter(b -> b.config().brokerId() == brokerToBeUncleanShutdown)
+            var broker = clusterInstance.brokers().values().stream().filter(b -> b.config().brokerId() == brokerToBeUncleanShutdown)
                 .findFirst().get();
-            Seq<File> dirs = broker.logManager().liveLogDirs();
+            List<File> dirs = new ArrayList<>();
+            broker.logManager().liveLogDirs().foreach(dirs::add);
             assertEquals(1, dirs.size());
-            CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.apply(0).toString());
+            CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.get(0).toString());
             assertTrue(handler.exists());
-            assertDoesNotThrow(() -> handler.delete());
+            assertDoesNotThrow(handler::delete);
 
             // After remove the clean shutdown file, the broker should report unclean shutdown during restart.
             clusterInstance.startBroker(brokerToBeUncleanShutdown);
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 2;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 2);
             topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertNull(topicPartitionInfo.leader());
@@ -362,9 +343,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(2).id());
             clusterInstance.shutdownBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 3;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3);
             topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             int lastKnownLeader = topicPartitionInfo.lastKnownElr().get(0).id();
@@ -372,10 +351,11 @@ public class EligibleLeaderReplicasIntegrationTest {
             Set<Integer> initialReplicaSet = initialReplicas.stream().map(node -> node.id()).collect(Collectors.toSet());
             clusterInstance.brokers().forEach((id, broker) -> {
                 if (initialReplicaSet.contains(id)) {
-                    Seq<File> dirs = broker.logManager().liveLogDirs();
+                    List<File> dirs = new ArrayList<>();
+                    broker.logManager().liveLogDirs().foreach(dirs::add);
                     assertEquals(1, dirs.size());
-                    CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.apply(0).toString());
-                    assertDoesNotThrow(() -> handler.delete());
+                    CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.get(0).toString());
+                    assertDoesNotThrow(handler::delete);
                 }
             });
 
@@ -383,9 +363,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             topicPartitionInfo.replicas().forEach(replica -> {
                 if (replica.id() != lastKnownLeader) clusterInstance.startBroker(replica.id());
             });
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 1;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 1);
             topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertNull(topicPartitionInfo.leader());
@@ -393,9 +371,7 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             // Now if the last known leader goes through unclean shutdown, it will still be elected.
             clusterInstance.startBroker(lastKnownLeader);
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize > 0 && elrSize == 0;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize > 0 && elrSize == 0);
             TestUtils.waitForCondition(
                 () -> {
                     try {

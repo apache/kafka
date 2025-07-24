@@ -451,7 +451,7 @@ public interface ClusterInstance {
             throw new IllegalArgumentException("Must supply at least one server config.");
         }
         brokers().entrySet().forEach(entry -> {
-            if (!entry.getValue().isShutdown()) {
+            if (entry.getValue().isShutdown()) {
                 startBroker(entry.getKey());
             }
         });
