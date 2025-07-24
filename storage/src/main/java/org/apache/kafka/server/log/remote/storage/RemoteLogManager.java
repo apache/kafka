@@ -230,7 +230,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         this.endpoint = endpoint;
 
         remoteStorageManagerPlugin = configAndWrapRsmPlugin(createRemoteStorageManager());
-        remoteLogMetadataManagerPlugin = wrapRlmmPlugin(createRemoteLogMetadataManager());
+        remoteLogMetadataManagerPlugin = configAndWrapRlmmPlugin(createRemoteLogMetadataManager());
 
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
         rlmFetchQuotaManager = createRLMFetchQuotaManager();
