@@ -3415,7 +3415,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             quorumConfig.requestTimeoutMs(),
             quorum.localReplicaKeyOrThrow(),
-            localListeners
+            localListeners,
+            !quorumConfig.autoJoin()
         );
     }
 

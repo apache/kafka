@@ -327,7 +327,8 @@ public class KafkaNetworkChannelTest {
                     clusterId,
                     requestTimeoutMs,
                     ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
-                    Endpoints.empty()
+                    Endpoints.empty(),
+                    true
                 );
 
             case REMOVE_RAFT_VOTER:

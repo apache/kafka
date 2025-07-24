@@ -91,7 +91,14 @@ public class KafkaRaftClientAutoJoinTest {
 
         // the replica should send add voter again because the completed fetch
         // did not update the voter set, and its timer has expired
-        pollAndSendAddVoter(context, newVoter);
+        final var addVoterRequest = pollAndSendAddVoter(context, newVoter);
+
+        // deliver the add voter response, this is possible before a completed fetch because of KIP-1186
+        context.deliverResponse(
+            addVoterRequest.correlationId(),
+            addVoterRequest.destination(),
+            RaftUtil.addVoterResponse(Errors.NONE, Errors.NONE.message())
+        );
 
         // verify the replica can perform a fetch to commit the new voter set while the add
         // voter request is still in-flight
@@ -136,7 +143,14 @@ public class KafkaRaftClientAutoJoinTest {
         context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
 
         // the next request should be an add voter request
-        pollAndSendAddVoter(context, newFollowerKey);
+        final var addVoterRequest = pollAndSendAddVoter(context, newFollowerKey);
+
+        // deliver the add voter response, this is possible before a completed fetch because of KIP-1186
+        context.deliverResponse(
+            addVoterRequest.correlationId(),
+            addVoterRequest.destination(),
+            RaftUtil.addVoterResponse(Errors.NONE, Errors.NONE.message())
+        );
 
         // verify the replica can perform a fetch to commit the new voter set while the add
         // voter request is still in-flight
@@ -262,7 +276,8 @@ public class KafkaRaftClientAutoJoinTest {
         context.pollUntilRequest();
         return context.assertSentAddVoterRequest(
             newVoter,
-            context.client.quorum().localVoterNodeOrThrow().listeners()
+            context.client.quorum().localVoterNodeOrThrow().listeners(),
+            false
         );
     }
 

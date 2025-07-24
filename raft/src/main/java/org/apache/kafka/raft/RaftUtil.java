@@ -526,14 +526,16 @@ public class RaftUtil {
         String clusterId,
         int timeoutMs,
         ReplicaKey voter,
-        Endpoints listeners
+        Endpoints listeners,
+        boolean ackWhenCommitted
     ) {
         return new AddRaftVoterRequestData()
             .setClusterId(clusterId)
             .setTimeoutMs(timeoutMs)
             .setVoterId(voter.id())
             .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
-            .setListeners(listeners.toAddVoterRequest());
+            .setListeners(listeners.toAddVoterRequest())
+            .setAckWhenCommitted(ackWhenCommitted);
     }
 
     public static AddRaftVoterResponseData addVoterResponse(
