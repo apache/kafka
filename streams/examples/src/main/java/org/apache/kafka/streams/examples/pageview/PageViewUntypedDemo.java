@@ -137,33 +137,15 @@ public class PageViewUntypedDemo {
 
         final KTable<String, JsonNode> users = builder.table("streams-userprofile-input", consumed);
 
-        final KTable<String, String> userRegions = users.mapValues(record -> {
-            if (record != null && record.has("region") && record.get("region") != null) {
-                return record.get("region").textValue();
-            }
-            return "UNKNOWN";
-        });
+        final KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
 
         final Duration duration24Hours = Duration.ofHours(24);
 
         final KStream<JsonNode, JsonNode> regionCount = views
             .leftJoin(userRegions, (view, region) -> {
                 final ObjectNode jNode = JsonNodeFactory.instance.objectNode();
-
-                // Safely extract user field
-                String user = "UNKNOWN";
-                if (view != null && view.has("user") && view.get("user") != null) {
-                    user = view.get("user").textValue();
-                }
-
-                // Safely extract page field
-                String page = "UNKNOWN";
-                if (view != null && view.has("page") && view.get("page") != null) {
-                    page = view.get("page").textValue();
-                }
-
-                return (JsonNode) jNode.put("user", user)
-                        .put("page", page)
+                return (JsonNode) jNode.put("user", view.get("user").textValue())
+                        .put("page", view.get("page").textValue())
                         .put("region", region == null ? "UNKNOWN" : region);
 
             })
