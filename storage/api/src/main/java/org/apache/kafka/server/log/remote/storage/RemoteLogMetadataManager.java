@@ -244,16 +244,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     }
 
     /**
-     * Register a listener for when the broker is ready to serve requests.
-     * This method will be called during initialization if the implementation 
-     * supports delayed initialization until the broker can process requests.
-     * 
-     * The default implementation does nothing, allowing implementations that don't 
-     * need delayed initialization to ignore this method.
-     * 
-     * @param brokerReadyFuture A CompletableFuture that completes when broker is ready to serve requests
+     * This method will be called during broker startup for the implementation
+     * which needs delayed initialization until the broker can process requests.
      */
-    default void onBrokerReadyForRequests(CompletableFuture<Void> brokerReadyFuture) {
-        // Default implementation is empty - implementations can override if needed
+    default void onBrokerReadyForRequests() {
     }
 }

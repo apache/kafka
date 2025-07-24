@@ -296,7 +296,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 // successful.
                 initializationThread = KafkaThread.nonDaemon(
                         "RLMMInitializationThread", () -> initializeResources(rlmmConfig));
-                initializationThread.start();
                 log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
             } else {
                 log.info("Skipping configure as it is already configured.");
@@ -369,6 +368,11 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             log.error("Encountered error while initializing topic-based RLMM resources", e);
             initializationFailed = true;
         }
+    }
+    @Override
+    public void onBrokerReadyForRequests() {
+        log.info("Broker is ready for requests, now initializing RLMM resources");
+        initializationThread.start();
     }
 
     boolean doesTopicExist(Admin admin, String topic) throws ExecutionException, InterruptedException {
