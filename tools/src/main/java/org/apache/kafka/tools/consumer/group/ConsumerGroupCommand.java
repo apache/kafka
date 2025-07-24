@@ -653,7 +653,7 @@ public class ConsumerGroupCommand {
                 return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
                         .stream()
                         .flatMap(entry -> entry.getValue().partitions().stream()
-                                .filter(partitionInfo -> partitionInfo.leader() == null)
+                                .filter(partitionInfo -> topicPartitions.contains(new TopicPartition(entry.getKey(), partitionInfo.partition())) && partitionInfo.leader() == null)
                                 .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
                         .toList();
             } catch (Exception e) {
@@ -1054,7 +1054,7 @@ public class ConsumerGroupCommand {
                                 .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
                         .toList();
 
-                return topicPartitions.stream().filter(element -> !existPartitions.contains(element)).toList();
+                return topicPartitions.stream().filter(tp -> !existPartitions.contains(tp)).toList();
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }

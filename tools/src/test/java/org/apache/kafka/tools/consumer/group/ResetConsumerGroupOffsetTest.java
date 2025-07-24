@@ -170,21 +170,18 @@ public class ResetConsumerGroupOffsetTest {
             admin.alterPartitionReassignments(Map.of(new TopicPartition(topic, 2),
                     Optional.of(new NewPartitionReassignment(List.of(3, 4)))));
 
-            System.err.println(admin.describeTopics(List.of(topic)).topicNameValues().get(topic).get().partitions());
-
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> partInfo = admin.describeTopics(List.of(topic)).topicNameValues().get(topic).get().partitions();
-                System.err.println(partInfo.get(2));
                 return partInfo.get(2).replicas().stream().map(Node::id).collect(Collectors.toUnmodifiableSet()).equals(Set.of(3, 4));
-            }, "aaaa");
+            }, "Partitions did not complete reassignment to the target broker(s) within the expected time.");
 
             cluster.shutdownBroker(3);
             cluster.shutdownBroker(4);
-            TestUtils.waitForCondition(() -> !cluster.aliveBrokers().keySet().containsAll(Set.of(3, 4)), "aaaa");
+            TestUtils.waitForCondition(() -> !cluster.aliveBrokers().keySet().containsAll(Set.of(3, 4)),
+                    "The cluster did not shut down the broker within the expected time.");
 
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
-            assertTrue(resetOffsets.isEmpty());
-            assertTrue(committedOffsets(cluster, topic, group).isEmpty());
+            assertEquals(Set.of(new TopicPartition(topic, 1)), resetOffsets.keySet());
         }
     }
 
