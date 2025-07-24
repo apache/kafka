@@ -287,6 +287,11 @@ public class TestUtils {
         return tempDirectory(rootFile.toPath(), null);
     }
 
+    public static boolean deleteDir(String root) {
+        File rootFile = new File(root);
+        return rootFile.delete();
+    }
+
     /**
      * Create a temporary relative directory in the specified parent directory with the given prefix.
      *
