@@ -221,7 +221,7 @@ public class PersisterStateManager {
     public abstract class PersisterStateManagerHandler implements RequestCompletionHandler {
         protected Node coordinatorNode;
         private final BackoffManager findCoordBackoff;
-        protected final Logger log = LoggerFactory.getLogger(getClass());
+        protected final Logger log;
         private Consumer<ClientResponse> onCompleteCallback;
         protected final SharePartitionKey partitionKey;
 
@@ -237,6 +237,11 @@ public class PersisterStateManager {
             this.onCompleteCallback = response -> {
             }; // noop
             partitionKey = SharePartitionKey.getInstance(groupId, topicId, partition);
+            String canonicalName = getClass().getCanonicalName();
+            if (canonicalName == null) {
+                canonicalName = getClass().getName();
+            }
+            log = LoggerFactory.getLogger(canonicalName);
         }
 
         /**
