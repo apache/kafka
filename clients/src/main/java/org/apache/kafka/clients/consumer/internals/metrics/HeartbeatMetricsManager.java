@@ -40,8 +40,8 @@ public class HeartbeatMetricsManager extends AbstractMetricsManager {
         this(metrics, CONSUMER_METRIC_GROUP_PREFIX);
     }
 
-    public HeartbeatMetricsManager(Metrics metrics, String metricGroupPrefix______) {
-        super(metrics, metricGroupPrefix______ + COORDINATOR_METRICS_SUFFIX);
+    public HeartbeatMetricsManager(Metrics metrics, String metricGroupPrefix) {
+        super(metrics, metricGroupPrefix + COORDINATOR_METRICS_SUFFIX);
 
         heartbeatResponseTimeMax = newMetricName("heartbeat-response-time-max",
             "The max time taken to receive a response to a heartbeat request");
