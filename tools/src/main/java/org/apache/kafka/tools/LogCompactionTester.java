@@ -359,7 +359,19 @@ public class LogCompactionTester {
                 "sort", "--key=1,2", "--stable", "--buffer-size=20%",
                 "--temporary-directory=" + tempDir.toString(), file.getAbsolutePath());
         builder.redirectError(ProcessBuilder.Redirect.INHERIT);
-        Process process = builder.start();
+        
+        Process process;
+        try {
+            process = builder.start();
+        } catch (IOException e) {
+            // clean up temp directory if process fails to start
+            try {
+                Files.deleteIfExists(tempDir);
+            } catch (IOException cleanupException) {
+                e.addSuppressed(cleanupException);
+            }
+            throw new IOException("Failed to start sort process. Ensure 'sort' command is available.", e);
+        }
 
         return new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8),
