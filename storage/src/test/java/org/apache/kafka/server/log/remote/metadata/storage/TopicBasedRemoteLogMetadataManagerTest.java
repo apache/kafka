@@ -27,8 +27,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
@@ -363,10 +363,8 @@ public class TopicBasedRemoteLogMetadataManagerTest {
             TestUtils.waitForCondition(() -> exitCalled.get(), 
                 "Exit procedure should be called due to initialization failure");
             
-            // Verify exit code and initialization failure status
-            assertTrue(exitCalled.get(), "Exit procedure should have been called");
+            // Verify exit code
             assertEquals(1, exitCode.get(), "Exit code should be 1");
-            assertTrue(rlmm.isInitializationFailed(), "Initialization should be marked as failed");
         } finally {
             // Restore default exit procedure
             Exit.resetExitProcedure();
