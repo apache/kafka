@@ -213,6 +213,11 @@
         Set <code>unstable.feature.versions.enable=true</code> for controllers and brokers, and
         set <code>unstable.api.versions.enable=true</code> on the brokers as well. In your Kafka Streams application
         configuration, set <code>group.protocol=streams</code>.
+        Besides, the `streams.version` also needs to be upgraded. To do this, run
+	<code>./bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature streams.version=1</code>
+	to upgrade, or use Admin#updateFeatures API to update "streams.version". After the feature is updated, check
+	<code>./bin/kafka-features.sh --bootstrap-server localhost:9092 describe</code>
+	and "streams.version" should now has FinializedVersionLevel 1.
     </p>
 
     <p>
@@ -357,7 +362,7 @@
         Upgraded RocksDB dependency to version 9.7.3 (from 7.9.2). This upgrade incorporates various improvements and optimizations within RocksDB. However, it also introduces some API changes.
         The <code>org.rocksdb.AccessHint</code> class, along with its associated methods, has been removed.
         Several methods related to compressed block cache configuration in the <code>BlockBasedTableConfig</code> class have been removed, including <code>blockCacheCompressedNumShardBits</code>, <code>blockCacheCompressedSize</code>, and their corresponding setters. These functionalities are now consolidated under the <code>cache</code> option, and developers should configure their compressed block cache using the <code>setCache</code> method instead.
-        The <code>NO_FILE_CLOSES</code> field has been removed from the <code>org.rocksdb.TickerTypeenum</code> as a result the <code>number-open-files</code> metrics does not work as expected. Metric <code>number-open-files</code> returns constant -1 from now on until it will officially be removed.
+	The <code>NO_FILE_CLOSES</code> field has been removed from the <code>org.rocksdb.TickerTypeenum</code> as a result the <code>number-open-files</code> metrics does not work as expected. Metric <code>number-open-files</code> returns constant -1 from now on until it will officially be removed.
         The <code>org.rocksdb.Options.setLogger()</code> method now accepts a <code>LoggerInterface</code> as a parameter instead of the previous <code>Logger</code>.
         Some data types used in RocksDB's Java API have been modified. These changes, along with the removed class, field, and new methods, are primarily relevant to users implementing custom RocksDB configurations.
         These changes are expected to be largely transparent to most Kafka Streams users. However, those employing advanced RocksDB customizations within their Streams applications, particularly through the <code>rocksdb.config.setter</code>, are advised to consult the detailed RocksDB 9.7.3 changelog to ensure a smooth transition and adapt their configurations as needed. Specifically, users leveraging the removed <code>AccessHint</code> class, the removed methods from the <code>BlockBasedTableConfig</code> class, the <code>NO_FILE_CLOSES</code> field from <code>TickerType</code>, or relying on the previous signature of <code>setLogger()</code> will need to update their implementations.
@@ -1262,7 +1267,7 @@
 
     <p>
         We added a new serde for UUIDs (<code>Serdes.UUIDSerde</code>) that you can use via <code>Serdes.UUID()</code>
-    (cf. <a href="https://cwiki.apache.org/confluence/x/26hjB">KIP-206</a>).
+	(cf. <a href="https://cwiki.apache.org/confluence/x/26hjB">KIP-206</a>).
     </p>
 
     <p>
@@ -1297,10 +1302,10 @@
         If you implement custom windows, you should update your code accordingly.
         Similarly, <code>WindowBytesStoreSupplier#segments()</code> was deprecated and replaced with <code>WindowBytesStoreSupplier#segmentInterval()</code>.
         If you implement custom window store, you need to update your code accordingly.
-        Finally, <code>Stores#persistentWindowStore(...)</code> were deprecated and replaced with a new overload that does not allow to specify the number of segments any longer.
+	    Finally, <code>Stores#persistentWindowStore(...)</code> were deprecated and replaced with a new overload that does not allow to specify the number of segments any longer.
         For more details, see <a href="https://cwiki.apache.org/confluence/x/mQU0BQ">KIP-319</a>
         (note: <a href="https://cwiki.apache.org/confluence/x/sQU0BQ">KIP-328</a> and 
-        <a href="https://cwiki.apache.org/confluence/x/IBNPBQ">KIP-358</a> 'overlap' with KIP-319).
+	    <a href="https://cwiki.apache.org/confluence/x/IBNPBQ">KIP-358</a> 'overlap' with KIP-319).
     </p>
 
     <p>
@@ -1466,9 +1471,9 @@
     </p>
 
     <p>
-        There is a new artifact <code>kafka-streams-test-utils</code> providing a <code>TopologyTestDriver</code>, <code>ConsumerRecordFactory</code>, and <code>OutputVerifier</code> class.
-        You can include the new artifact as a regular dependency to your unit tests and use the test driver to test your business logic of your Kafka Streams application.
-        For more details, see <a href="https://cwiki.apache.org/confluence/x/EQOHB">KIP-247</a>.
+	    There is a new artifact <code>kafka-streams-test-utils</code> providing a <code>TopologyTestDriver</code>, <code>ConsumerRecordFactory</code>, and <code>OutputVerifier</code> class.
+	    You can include the new artifact as a regular dependency to your unit tests and use the test driver to test your business logic of your Kafka Streams application.
+	    For more details, see <a href="https://cwiki.apache.org/confluence/x/EQOHB">KIP-247</a>.
     </p>
 
     <p>
@@ -1486,10 +1491,10 @@
     </ul>
 
     <p>
-    New method in <code>GlobalKTable</code>
+	New method in <code>GlobalKTable</code>
     </p>
     <ul>
-    <li> A method has been provided such that it will return the store name associated with the <code>GlobalKTable</code> or <code>null</code> if the store name is non-queryable. </li>
+	<li> A method has been provided such that it will return the store name associated with the <code>GlobalKTable</code> or <code>null</code> if the store name is non-queryable. </li>
     </ul>
 
     <p>
