@@ -154,23 +154,27 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTest(brokers = 5)
-    public void testResetOffsetsWithOfflinePartition(ClusterInstance cluster) throws Exception {
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
+        }
+    )
+    public void testResetOffsetsWithOfflinePartitionNotInResetTarget(ClusterInstance cluster) throws Exception {
         String topic = generateRandomTopic();
         String group = "new.group";
-        String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":1");
+        String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":0");
 
         try (Admin admin = cluster.admin(); ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0, 1), 1, List.of(1, 2), 2, List.of(3, 4)))));
-            cluster.waitTopicCreation(topic, 3);
+            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0), 1, List.of(1)))));
+            cluster.waitTopicCreation(topic, 2);
 
-            cluster.shutdownBroker(3);
-            cluster.shutdownBroker(4);
-            TestUtils.waitForCondition(() -> !cluster.aliveBrokers().keySet().containsAll(Set.of(3, 4)),
+            cluster.shutdownBroker(1);
+            TestUtils.waitForCondition(() -> !cluster.aliveBrokers().containsKey(1),
                     "The cluster did not shut down the broker within the expected time.");
 
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
-            assertEquals(Set.of(new TopicPartition(topic, 1)), resetOffsets.keySet());
+            assertEquals(Set.of(new TopicPartition(topic, 0)), resetOffsets.keySet());
         }
     }
 
