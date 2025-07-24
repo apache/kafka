@@ -133,7 +133,7 @@ public class ConsumerGroupCommand {
                     String exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset);
                     System.out.println(exported);
                 } else
-                    printOffsetsToReset(offsetsToReset);
+                    OffsetsUtils.printOffsetsToReset(offsetsToReset);
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 consumerGroupService.deleteOffsets();
             }
@@ -177,21 +177,6 @@ public class ConsumerGroupCommand {
     static void printError(String msg, Optional<Throwable> e) {
         System.out.println("\nError: " + msg);
         e.ifPresent(Throwable::printStackTrace);
-    }
-
-    static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
-        String format = "%n%-30s %-30s %-10s %-15s";
-        if (!groupAssignmentsToReset.isEmpty())
-            System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
-
-        groupAssignmentsToReset.forEach((groupId, assignment) ->
-            assignment.forEach((consumerAssignment, offsetAndMetadata) ->
-                System.out.printf(format,
-                    groupId,
-                    consumerAssignment.topic(),
-                    consumerAssignment.partition(),
-                    offsetAndMetadata.offset())));
-        System.out.println();
     }
 
     @SuppressWarnings("ClassFanOutComplexity")

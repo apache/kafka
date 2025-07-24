@@ -68,6 +68,21 @@ public class OffsetsUtils {
         this.parser = parser;
     }
 
+    public static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
+        String format = "%n%-30s %-30s %-10s %-15s";
+        if (!groupAssignmentsToReset.isEmpty())
+            System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
+
+        groupAssignmentsToReset.forEach((groupId, assignment) ->
+            assignment.forEach((consumerAssignment, offsetAndMetadata) ->
+                System.out.printf(format,
+                    groupId,
+                    consumerAssignment.topic(),
+                    consumerAssignment.partition(),
+                    offsetAndMetadata.offset())));
+        System.out.println();
+    }
+
     public Optional<Map<String, Map<TopicPartition, OffsetAndMetadata>>> resetPlanFromFile() {
         if (opts.resetFromFileOpt != null && !opts.resetFromFileOpt.isEmpty()) {
             try {
@@ -467,6 +482,16 @@ public class OffsetsUtils {
             this.resetToDatetimeOpt = resetToDatetimeOpt;
             this.resetByDurationOpt = resetByDurationOpt;
             this.resetShiftByOpt = resetShiftByOpt;
+            this.timeoutMsOpt = timeoutMsOpt;
+        }
+
+        public OffsetsUtilsOptions(
+            List<String> groupOpt,
+            List<String> resetToDatetimeOpt,
+            long timeoutMsOpt) {
+
+            this.groupOpt = groupOpt;
+            this.resetToDatetimeOpt = resetToDatetimeOpt;
             this.timeoutMsOpt = timeoutMsOpt;
         }
     }
