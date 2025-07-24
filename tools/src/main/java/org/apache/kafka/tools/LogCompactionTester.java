@@ -52,7 +52,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
@@ -361,18 +360,6 @@ public class LogCompactionTester {
                 "--temporary-directory=" + tempDir.toString(), file.getAbsolutePath());
         builder.redirectError(ProcessBuilder.Redirect.INHERIT);
         Process process = builder.start();
-
-        // async wait for the process to complete and log a message if it exits abnormally
-        CompletableFuture.runAsync(() -> {
-            try {
-                int exitCode = process.waitFor();
-                if (exitCode != 0) {
-                    System.err.println("Sort process exited abnormally with code " + exitCode + ".");
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        });
 
         return new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8),
