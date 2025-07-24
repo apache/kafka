@@ -215,10 +215,10 @@
         configuration, set <code>group.protocol=streams</code>.
     </p>
     <p>
-        Besides, the `streams.version` also needs to be upgraded. To do this, run 
-        <code>./bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature streams.version=1</code> 
-        to upgrade, or use Admin#updateFeatures API to update "streams.version". After the feature is updated, check 
-        <code>./bin/kafka-features.sh --bootstrap-server localhost:9092 describe</code> 
+        Besides, the `streams.version` also needs to be upgraded. To do this, run
+        <code>./bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature streams.version=1</code>
+        to upgrade, or use Admin#updateFeatures API to update "streams.version". After the feature is updated, check
+        <code>./bin/kafka-features.sh --bootstrap-server localhost:9092 describe</code>
         and "streams.version" should now has FinializedVersionLevel 1.
     </p>
 
@@ -229,6 +229,11 @@
         <code>group.id</code> by any consumer ("classic" or "consumer") nor share-group application.
         It is also possible to delete a previous consumer group using <code>kafka-consumer-groups.sh</code> before
         starting the application with the new protocol, which will however also delete all offsets for that group.
+        Besides, the `streams.version` also needs to be upgraded. To do this, run
+        <code>./bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature streams.version=1</code>
+        to upgrade, or use Admin#updateFeatures API to update "streams.version". After the feature is updated, check
+        <code>./bin/kafka-features.sh --bootstrap-server localhost:9092 describe</code>
+        and "streams.version" should now has FinializedVersionLevel 1.
     </p>
 
     <p>
@@ -256,7 +261,7 @@
         You can enable this feature via <code>StreamsConfig</code> using the <code>StreamsConfig#ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG</code> parameter.
         When set to <code>true</code>, the application will refuse to start if any internal resource has an auto-generated name.
     </p>
-    
+
     <h3><a id="streams_api_changes_400" href="#streams_api_changes_400">Streams API changes in 4.0.0</a></h3>
 
     <p>
@@ -411,7 +416,7 @@
     </p>
 
     <p>
-        The Processor API now support so-called read-only state stores, added via 
+        The Processor API now support so-called read-only state stores, added via
         <a href="https://cwiki.apache.org/confluence/x/q53kCw">KIP-813</a>.
         These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
         similar to <code>KTables</code> with source-topic optimization enabled.
@@ -541,7 +546,7 @@
     </p>
 
     <h3><a id="streams_api_changes_350" href="#streams_api_changes_350">Streams API changes in 3.5.0</a></h3>
-    <p>      
+    <p>
       A new state store type, versioned key-value stores, was introduced in
       <a href="https://cwiki.apache.org/confluence/x/AIwODg">KIP-889</a> and
       <a href="https://cwiki.apache.org/confluence/x/QorFDg">KIP-914</a>.
@@ -561,7 +566,7 @@
       updates DSL processing semantics if a user opts-in to use the new versioned key-value stores.
       Using the new versioned key-value stores, DSL processing are able to handle out-of-order data better:
       For example, late record may be dropped and stream-table joins do a timestamped based lookup into the table.
-      Table aggregations and primary/foreign-key table-table joins are also improved. 
+      Table aggregations and primary/foreign-key table-table joins are also improved.
       Note: versioned key-value stores are not supported for global-KTable and don't work with <code>suppress()</code>.
     </p>
 
@@ -1053,23 +1058,23 @@
     </p>
 
     <h3 class="anchor-heading"><a id="streams_api_changes_240" class="anchor-link"></a><a href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
-    <p>     
-         As of 2.4.0 Kafka Streams offers a KTable-KTable foreign-key join (as per <a href="https://cwiki.apache.org/confluence/x/pJlzB">KIP-213</a>). 
-         This joiner allows for records to be joined between two KTables with different keys. 
-         Both <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#ktable-ktable-fk-join">INNER and LEFT foreign-key joins</a> 
+    <p>
+         As of 2.4.0 Kafka Streams offers a KTable-KTable foreign-key join (as per <a href="https://cwiki.apache.org/confluence/x/pJlzB">KIP-213</a>).
+         This joiner allows for records to be joined between two KTables with different keys.
+         Both <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#ktable-ktable-fk-join">INNER and LEFT foreign-key joins</a>
          are supported.
     </p>
     <p>
         In the 2.4 release, you now can name all operators in a Kafka Streams DSL topology via
         <a href="https://cwiki.apache.org/confluence/x/xikYBQ">KIP-307</a>.
-        Giving your operators meaningful names makes it easier to understand the topology 
-        description (<code>Topology#describe()#toString()</code>) and 
+        Giving your operators meaningful names makes it easier to understand the topology
+        description (<code>Topology#describe()#toString()</code>) and
         understand the full context of what your Kafka Streams application is doing.
         <br />
-        There are new overloads on most <code>KStream</code> and <code>KTable</code> methods 
-        that accept a <code>Named</code> object.  Typically you'll provide a name for the DSL operation by 
-        using <code>Named.as("my operator name")</code>.  Naming of repartition topics for aggregation 
-        operations will still use <code>Grouped</code> and join operations will use 
+        There are new overloads on most <code>KStream</code> and <code>KTable</code> methods
+        that accept a <code>Named</code> object.  Typically you'll provide a name for the DSL operation by
+        using <code>Named.as("my operator name")</code>.  Naming of repartition topics for aggregation
+        operations will still use <code>Grouped</code> and join operations will use
         either <code>Joined</code> or the new <code>StreamJoined</code> object.
 
     </p>
@@ -1141,7 +1146,7 @@
         Hence, this feature won't be supported in the future any longer and you need to updated your code accordingly.
         If you use a custom <code>PartitionGrouper</code> and stop to use it, the created tasks might change.
         Hence, you will need to reset your application to upgrade it.
-    
+
 
     <h3 class="anchor-heading"><a id="streams_api_changes_230" class="anchor-link"></a><a href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
 
@@ -1306,7 +1311,7 @@
         If you implement custom window store, you need to update your code accordingly.
         Finally, <code>Stores#persistentWindowStore(...)</code> were deprecated and replaced with a new overload that does not allow to specify the number of segments any longer.
         For more details, see <a href="https://cwiki.apache.org/confluence/x/mQU0BQ">KIP-319</a>
-        (note: <a href="https://cwiki.apache.org/confluence/x/sQU0BQ">KIP-328</a> and 
+        (note: <a href="https://cwiki.apache.org/confluence/x/sQU0BQ">KIP-328</a> and
         <a href="https://cwiki.apache.org/confluence/x/IBNPBQ">KIP-358</a> 'overlap' with KIP-319).
     </p>
 
