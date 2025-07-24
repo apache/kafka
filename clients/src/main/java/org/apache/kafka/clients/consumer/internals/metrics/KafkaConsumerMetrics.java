@@ -20,16 +20,13 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRICS_SUFFIX;
 
-public class KafkaConsumerMetrics implements AutoCloseable {
-    private final Metrics metrics;
+public class KafkaConsumerMetrics extends AbstractMetricsManager {
+
     private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
@@ -40,8 +37,8 @@ public class KafkaConsumerMetrics implements AutoCloseable {
     private long timeSinceLastPollMs;
 
     public KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
-        this.metrics = metrics;
-        final String metricGroupName = metricGrpPrefix + CONSUMER_METRICS_SUFFIX;
+        super(metrics, metricGrpPrefix + CONSUMER_METRICS_SUFFIX);
+
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
                 // if no poll is ever triggered, just return -1.
@@ -49,45 +46,43 @@ public class KafkaConsumerMetrics implements AutoCloseable {
             else
                 return TimeUnit.SECONDS.convert(now - lastPollMs, TimeUnit.MILLISECONDS);
         };
-        this.lastPollMetricName = metrics.metricName("last-poll-seconds-ago",
-            metricGroupName, "The number of seconds since the last poll() invocation.");
+        this.lastPollMetricName = newMetricName(
+            "last-poll-seconds-ago",
+            "The number of seconds since the last poll() invocation."
+        );
         metrics.addMetric(lastPollMetricName, lastPoll);
 
-        this.timeBetweenPollSensor = metrics.sensor("time-between-poll");
-        this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-avg",
-                metricGroupName,
-                "The average delay between invocations of poll() in milliseconds."),
-                new Avg());
-        this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-max",
-                metricGroupName,
-                "The max delay between invocations of poll() in milliseconds."),
-                new Max());
+        this.timeBetweenPollSensor = newSensorBuilder("time-between-poll")
+            .withAvg(
+                "time-between-poll-avg",
+                "The average delay between invocations of poll() in milliseconds."
+            )
+            .withMax(
+                "time-between-poll-max",
+                "The max delay between invocations of poll() in milliseconds."
+            )
+            .sensor();
 
-        this.pollIdleSensor = metrics.sensor("poll-idle-ratio-avg");
-        this.pollIdleSensor.add(metrics.metricName("poll-idle-ratio-avg",
-                metricGroupName,
-                "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
-                new Avg());
+        this.pollIdleSensor = newSensorBuilder("poll-idle-ratio-avg")
+            .withAvg(
+                "poll-idle-ratio-avg",
+                "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."
+            )
+            .sensor();
 
-        this.commitSyncSensor = metrics.sensor("commit-sync-time-ns-total");
-        this.commitSyncSensor.add(
-            metrics.metricName(
+        this.commitSyncSensor = newSensorBuilder("commit-sync-time-ns-total")
+            .withCumulativeSum(
                 "commit-sync-time-ns-total",
-                metricGroupName,
                 "The total time the consumer has spent in commitSync in nanoseconds"
-            ),
-            new CumulativeSum()
-        );
+            )
+            .sensor();
 
-        this.committedSensor = metrics.sensor("committed-time-ns-total");
-        this.committedSensor.add(
-            metrics.metricName(
+        this.committedSensor = newSensorBuilder("committed-time-ns-total")
+            .withCumulativeSum(
                 "committed-time-ns-total",
-                metricGroupName,
                 "The total time the consumer has spent in committed in nanoseconds"
-            ),
-            new CumulativeSum()
-        );
+            )
+            .sensor();
     }
 
     public void recordPollStart(long pollStartMs) {
@@ -109,14 +104,5 @@ public class KafkaConsumerMetrics implements AutoCloseable {
 
     public void recordCommitted(long duration) {
         this.committedSensor.record(duration);
-    }
-
-    @Override
-    public void close() {
-        metrics.removeMetric(lastPollMetricName);
-        metrics.removeSensor(timeBetweenPollSensor.name());
-        metrics.removeSensor(pollIdleSensor.name());
-        metrics.removeSensor(commitSyncSensor.name());
-        metrics.removeSensor(committedSensor.name());
     }
 }

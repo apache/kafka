@@ -19,13 +19,11 @@ package org.apache.kafka.clients.consumer.internals.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Max;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class RebalanceCallbackMetricsManager {
+public class RebalanceCallbackMetricsManager extends AbstractMetricsManager {
     final MetricName partitionRevokeLatencyAvg;
     final MetricName partitionAssignLatencyAvg;
     final MetricName partitionLostLatencyAvg;
@@ -41,36 +39,34 @@ public class RebalanceCallbackMetricsManager {
     }
 
     public RebalanceCallbackMetricsManager(Metrics metrics, String grpMetricsPrefix) {
-        final String metricGroupName = grpMetricsPrefix + COORDINATOR_METRICS_SUFFIX;
-        partitionRevokeCallbackSensor = metrics.sensor("partition-revoked-latency");
-        partitionRevokeLatencyAvg = metrics.metricName("partition-revoked-latency-avg",
-            metricGroupName,
+        super(metrics, grpMetricsPrefix + COORDINATOR_METRICS_SUFFIX);
+
+        partitionRevokeLatencyAvg = newMetricName("partition-revoked-latency-avg",
             "The average time taken for a partition-revoked rebalance listener callback");
-        partitionRevokeCallbackSensor.add(partitionRevokeLatencyAvg, new Avg());
-        partitionRevokeLatencyMax = metrics.metricName("partition-revoked-latency-max",
-            metricGroupName,
+        partitionRevokeLatencyMax = newMetricName("partition-revoked-latency-max",
             "The max time taken for a partition-revoked rebalance listener callback");
-        partitionRevokeCallbackSensor.add(partitionRevokeLatencyMax, new Max());
+        partitionRevokeCallbackSensor = newSensorBuilder("partition-revoked-latency")
+            .withAvg(partitionRevokeLatencyAvg)
+            .withMax(partitionRevokeLatencyMax)
+            .sensor();
 
-        partitionAssignCallbackSensor = metrics.sensor("partition-assigned-latency");
-        partitionAssignLatencyAvg = metrics.metricName("partition-assigned-latency-avg",
-            metricGroupName,
+        partitionAssignLatencyAvg = newMetricName("partition-assigned-latency-avg",
             "The average time taken for a partition-assigned rebalance listener callback");
-        partitionAssignCallbackSensor.add(partitionAssignLatencyAvg, new Avg());
-        partitionAssignLatencyMax = metrics.metricName("partition-assigned-latency-max",
-            metricGroupName,
+        partitionAssignLatencyMax = newMetricName("partition-assigned-latency-max",
             "The max time taken for a partition-assigned rebalance listener callback");
-        partitionAssignCallbackSensor.add(partitionAssignLatencyMax, new Max());
+        partitionAssignCallbackSensor = newSensorBuilder("partition-assigned-latency")
+            .withAvg(partitionAssignLatencyAvg)
+            .withMax(partitionAssignLatencyMax)
+            .sensor();
 
-        partitionLostCallbackSensor = metrics.sensor("partition-lost-latency");
-        partitionLostLatencyAvg = metrics.metricName("partition-lost-latency-avg",
-            metricGroupName,
+        partitionLostLatencyAvg = newMetricName("partition-lost-latency-avg",
             "The average time taken for a partition-lost rebalance listener callback");
-        partitionLostCallbackSensor.add(partitionLostLatencyAvg, new Avg());
-        partitionLostLatencyMax = metrics.metricName("partition-lost-latency-max",
-            metricGroupName,
+        partitionLostLatencyMax = newMetricName("partition-lost-latency-max",
             "The max time taken for a partition-lost rebalance listener callback");
-        partitionLostCallbackSensor.add(partitionLostLatencyMax, new Max());
+        partitionLostCallbackSensor = newSensorBuilder("partition-lost-latency")
+            .withAvg(partitionLostLatencyAvg)
+            .withMax(partitionLostLatencyMax)
+            .sensor();
     }
 
     public void recordPartitionsRevokedLatency(long latencyMs) {

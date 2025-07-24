@@ -29,6 +29,7 @@ public class FetchMetricsRegistry {
     private static final String DEPRECATED_TOPIC_METRICS_MESSAGE = "Note: For topic names with periods (.), an additional "
         + "metric with underscores is emitted. However, the periods replaced metric is deprecated. Please use the metric with actual topic name instead.";
 
+    public final String groupName;
     public MetricNameTemplate fetchSizeAvg;
     public MetricNameTemplate fetchSizeMax;
     public MetricNameTemplate bytesConsumedRate;
@@ -68,9 +69,8 @@ public class FetchMetricsRegistry {
     }
 
     public FetchMetricsRegistry(Set<String> tags, String metricGrpPrefix) {
-
         /* Client level */
-        String groupName = metricGrpPrefix + "-fetch-manager-metrics";
+        this.groupName = metricGrpPrefix + "-fetch-manager-metrics";
 
         this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName,
                 "The average number of bytes fetched per request", tags);

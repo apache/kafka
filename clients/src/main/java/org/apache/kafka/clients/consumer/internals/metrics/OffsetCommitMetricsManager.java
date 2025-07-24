@@ -19,15 +19,12 @@ package org.apache.kafka.clients.consumer.internals.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class OffsetCommitMetricsManager {
+public class OffsetCommitMetricsManager extends AbstractMetricsManager {
     final MetricName commitLatencyAvg;
     final MetricName commitLatencyMax;
     final MetricName commitRate;
@@ -35,25 +32,22 @@ public class OffsetCommitMetricsManager {
     private final Sensor commitSensor;
 
     public OffsetCommitMetricsManager(Metrics metrics) {
-        final String metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
-        commitSensor = metrics.sensor("commit-latency");
-        commitLatencyAvg = metrics.metricName("commit-latency-avg",
-            metricGroupName,
+        super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
+
+        commitLatencyAvg = newMetricName("commit-latency-avg",
             "The average time taken for a commit request");
-        commitSensor.add(commitLatencyAvg, new Avg());
-        commitLatencyMax = metrics.metricName("commit-latency-max",
-            metricGroupName,
+        commitLatencyMax = newMetricName("commit-latency-max",
             "The max time taken for a commit request");
-        commitSensor.add(commitLatencyMax, new Max());
-        commitRate = metrics.metricName("commit-rate",
-            metricGroupName,
+        commitRate = newMetricName("commit-rate",
             "The number of commit calls per second");
-        commitTotal = metrics.metricName("commit-total",
-            metricGroupName,
+        commitTotal = newMetricName("commit-total",
             "The total number of commit calls");
-        commitSensor.add(new Meter(new WindowedCount(),
-            commitRate,
-            commitTotal));
+
+        commitSensor = newSensorBuilder("commit-latency")
+            .withAvg(commitLatencyAvg)
+            .withMax(commitLatencyMax)
+            .withMeter(new WindowedCount(), commitRate, commitTotal)
+            .sensor();
     }
 
     public void recordRequestLatency(long responseLatencyMs) {

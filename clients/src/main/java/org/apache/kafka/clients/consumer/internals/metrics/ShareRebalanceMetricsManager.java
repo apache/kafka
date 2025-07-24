@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
@@ -36,16 +35,16 @@ public final class ShareRebalanceMetricsManager extends RebalanceMetricsManager 
     private long lastRebalanceStartMs = -1L;
 
     public ShareRebalanceMetricsManager(Metrics metrics) {
-        super(CONSUMER_SHARE_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
-
-        rebalanceTotal = createMetric(metrics, "rebalance-total",
+        super(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
+        rebalanceTotal = newMetricName("rebalance-total",
                 "The total number of rebalance events");
-        rebalanceRatePerHour = createMetric(metrics, "rebalance-rate-per-hour",
+        rebalanceRatePerHour = newMetricName("rebalance-rate-per-hour",
                 "The number of rebalance events per hour");
 
-        rebalanceSensor = metrics.sensor("rebalance-latency");
-        rebalanceSensor.add(rebalanceTotal, new CumulativeCount());
-        rebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount()));
+        rebalanceSensor = newSensorBuilder("rebalance-latency")
+            .withCumulativeCount(rebalanceTotal)
+            .withMeasurableStat(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount()))
+            .sensor();
     }
 
     public void recordRebalanceStarted(long nowMs) {

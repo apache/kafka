@@ -17,10 +17,14 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeCount;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
@@ -29,6 +33,7 @@ import org.apache.kafka.common.metrics.stats.Value;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -43,15 +48,18 @@ public class SensorBuilder {
 
     private final boolean preexisting;
 
+    private final String group;
+
     private final Map<String, String> tags;
 
-    public SensorBuilder(Metrics metrics, String name) {
-        this(metrics, name, Collections::emptyMap);
+    public SensorBuilder(Metrics metrics, String name, String group) {
+        this(metrics, name, group, Collections::emptyMap);
     }
 
-    public SensorBuilder(Metrics metrics, String name, Supplier<Map<String, String>> tagsSupplier) {
-        this.metrics = metrics;
-        Sensor s = metrics.getSensor(name);
+    public SensorBuilder(Metrics metrics, String name, String group, Supplier<Map<String, String>> tagsSupplier) {
+        this.metrics = Objects.requireNonNull(metrics);
+        this.group = Objects.requireNonNull(group);
+        Sensor s = metrics.getSensor(Objects.requireNonNull(name));
 
         if (s != null) {
             sensor = s;
@@ -64,52 +72,179 @@ public class SensorBuilder {
         }
     }
 
-    SensorBuilder withAvg(MetricNameTemplate name) {
+    public SensorBuilder withAvg(MetricName name) {
         if (!preexisting)
-            sensor.add(metrics.metricInstance(name, tags), new Avg());
+            sensor.add(name, new Avg());
 
         return this;
     }
 
-    SensorBuilder withMin(MetricNameTemplate name) {
+    public SensorBuilder withAvg(String name, String description) {
         if (!preexisting)
-            sensor.add(metrics.metricInstance(name, tags), new Min());
+            sensor.add(newMetricName(name, description), new Avg());
 
         return this;
     }
 
-    SensorBuilder withMax(MetricNameTemplate name) {
+    public SensorBuilder withAvg(MetricNameTemplate name) {
         if (!preexisting)
-            sensor.add(metrics.metricInstance(name, tags), new Max());
+            sensor.add(newMetricName(name), new Avg());
 
         return this;
     }
 
-    SensorBuilder withValue(MetricNameTemplate name) {
+    public SensorBuilder withMin(MetricName name) {
         if (!preexisting)
-            sensor.add(metrics.metricInstance(name, tags), new Value());
+            sensor.add(name, new Min());
 
         return this;
     }
 
-    SensorBuilder withMeter(MetricNameTemplate rateName, MetricNameTemplate totalName) {
+    public SensorBuilder withMin(MetricNameTemplate name) {
+        if (!preexisting)
+            sensor.add(newMetricName(name), new Min());
+
+        return this;
+    }
+
+    public SensorBuilder withMax(MetricName name) {
+        if (!preexisting)
+            sensor.add(name, new Max());
+
+        return this;
+    }
+
+    public SensorBuilder withMax(String name, String description) {
+        if (!preexisting)
+            sensor.add(newMetricName(name, description), new Max());
+
+        return this;
+    }
+
+    public SensorBuilder withMax(MetricNameTemplate name) {
+        if (!preexisting)
+            sensor.add(newMetricName(name), new Max());
+
+        return this;
+    }
+
+    public SensorBuilder withValue(MetricName name) {
+        if (!preexisting)
+            sensor.add(name, new Value());
+
+        return this;
+    }
+
+    public SensorBuilder withValue(String name, String description) {
+        if (!preexisting)
+            sensor.add(newMetricName(name, description), new Value());
+
+        return this;
+    }
+
+    public SensorBuilder withValue(MetricNameTemplate name) {
+        if (!preexisting)
+            sensor.add(newMetricName(name), new Value());
+
+        return this;
+    }
+
+    public SensorBuilder withMeter(MetricNameTemplate rateName, MetricNameTemplate totalName) {
         if (!preexisting) {
-            sensor.add(new Meter(metrics.metricInstance(rateName, tags), metrics.metricInstance(totalName, tags)));
+            sensor.add(new Meter(newMetricName(rateName), newMetricName(totalName)));
         }
 
         return this;
     }
 
-    SensorBuilder withMeter(SampledStat sampledStat, MetricNameTemplate rateName, MetricNameTemplate totalName) {
+    public SensorBuilder withMeter(SampledStat sampledStat, MetricName rateName, MetricName totalName) {
         if (!preexisting) {
-            sensor.add(new Meter(sampledStat, metrics.metricInstance(rateName, tags), metrics.metricInstance(totalName, tags)));
+            sensor.add(new Meter(sampledStat, rateName, totalName));
         }
 
         return this;
     }
 
-    Sensor build() {
+    public SensorBuilder withMeter(SampledStat sampledStat, MetricNameTemplate rateName, MetricNameTemplate totalName) {
+        if (!preexisting) {
+            sensor.add(new Meter(sampledStat, newMetricName(rateName), newMetricName(totalName)));
+        }
+
+        return this;
+    }
+
+    public SensorBuilder withCumulativeSum(MetricName name) {
+        if (!preexisting)
+            sensor.add(name, new CumulativeSum());
+
+        return this;
+    }
+
+    public SensorBuilder withCumulativeSum(String name, String description) {
+        if (!preexisting)
+            sensor.add(newMetricName(name, description), new CumulativeSum());
+
+        return this;
+    }
+
+    public SensorBuilder withCumulativeSum(MetricNameTemplate name) {
+        if (!preexisting)
+            sensor.add(newMetricName(name), new CumulativeSum());
+
+        return this;
+    }
+
+    public SensorBuilder withCumulativeCount(MetricName name) {
+        if (!preexisting)
+            sensor.add(name, new CumulativeCount());
+
+        return this;
+    }
+
+    public SensorBuilder withCumulativeCount(String name, String description) {
+        if (!preexisting)
+            sensor.add(newMetricName(name, description), new CumulativeCount());
+
+        return this;
+    }
+
+    public SensorBuilder withCumulativeCount(MetricNameTemplate name) {
+        if (!preexisting)
+            sensor.add(newMetricName(name), new CumulativeCount());
+
+        return this;
+    }
+
+    public SensorBuilder withMeasurableStat(MetricName name, MeasurableStat measurableStat) {
+        if (!preexisting)
+            sensor.add(name, measurableStat);
+
+        return this;
+    }
+
+    public SensorBuilder withMeasurableStat(String name, String description, MeasurableStat measurableStat) {
+        if (!preexisting)
+            sensor.add(newMetricName(name, description), measurableStat);
+
+        return this;
+    }
+
+    public SensorBuilder withMeasurableStat(MetricNameTemplate name, MeasurableStat measurableStat) {
+        if (!preexisting)
+            sensor.add(newMetricName(name), measurableStat);
+
+        return this;
+    }
+
+    public Sensor sensor() {
         return sensor;
     }
 
+    private MetricName newMetricName(String name, String description) {
+        return new MetricName(name, group, description, tags);
+    }
+
+    private MetricName newMetricName(MetricNameTemplate name) {
+        return metrics.metricInstance(name, tags);
+    }
 }

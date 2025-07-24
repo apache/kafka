@@ -23,6 +23,7 @@ import java.util.Set;
 
 public class ShareFetchMetricsRegistry {
 
+    public final String groupName;
     public MetricNameTemplate fetchSizeAvg;
     public MetricNameTemplate fetchSizeMax;
     public MetricNameTemplate bytesFetchedRate;
@@ -53,7 +54,7 @@ public class ShareFetchMetricsRegistry {
     public ShareFetchMetricsRegistry(Set<String> tags, String metricGrpPrefix) {
 
         /* Client level */
-        String groupName = metricGrpPrefix + "-fetch-manager-metrics";
+        this.groupName = metricGrpPrefix + "-fetch-manager-metrics";
 
         this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName,
                 "The average number of bytes fetched per request", tags);

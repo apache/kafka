@@ -20,10 +20,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.CumulativeCount;
-import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
@@ -48,33 +44,35 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
     private long lastRebalanceStartMs = -1L;
 
     public ConsumerRebalanceMetricsManager(Metrics metrics) {
-        super(CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
+        super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 
-        rebalanceLatencyAvg = createMetric(metrics, "rebalance-latency-avg",
+        rebalanceLatencyAvg = newMetricName("rebalance-latency-avg",
                 "The average time in ms taken for a group to complete a rebalance");
-        rebalanceLatencyMax = createMetric(metrics, "rebalance-latency-max",
+        rebalanceLatencyMax = newMetricName("rebalance-latency-max",
                 "The max time in ms taken for a group to complete a rebalance");
-        rebalanceLatencyTotal = createMetric(metrics, "rebalance-latency-total",
+        rebalanceLatencyTotal = newMetricName("rebalance-latency-total",
                 "The total number of milliseconds spent in rebalances");
-        rebalanceTotal = createMetric(metrics, "rebalance-total",
+        rebalanceTotal = newMetricName("rebalance-total",
                 "The total number of rebalance events");
-        rebalanceRatePerHour = createMetric(metrics, "rebalance-rate-per-hour",
+        rebalanceRatePerHour = newMetricName("rebalance-rate-per-hour",
                 "The number of rebalance events per hour");
-        failedRebalanceTotal = createMetric(metrics, "failed-rebalance-total",
+        failedRebalanceTotal = newMetricName("failed-rebalance-total",
                 "The total number of failed rebalance events");
-        failedRebalanceRate = createMetric(metrics, "failed-rebalance-rate-per-hour",
+        failedRebalanceRate = newMetricName("failed-rebalance-rate-per-hour",
                 "The number of failed rebalance events per hour");
 
-        successfulRebalanceSensor = metrics.sensor("rebalance-latency");
-        successfulRebalanceSensor.add(rebalanceLatencyAvg, new Avg());
-        successfulRebalanceSensor.add(rebalanceLatencyMax, new Max());
-        successfulRebalanceSensor.add(rebalanceLatencyTotal, new CumulativeSum());
-        successfulRebalanceSensor.add(rebalanceTotal, new CumulativeCount());
-        successfulRebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount()));
+        successfulRebalanceSensor = newSensorBuilder("rebalance-latency")
+            .withAvg(rebalanceLatencyAvg)
+            .withMax(rebalanceLatencyMax)
+            .withCumulativeSum(rebalanceLatencyTotal)
+            .withCumulativeCount(rebalanceTotal)
+            .withMeasurableStat(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount()))
+            .sensor();
 
-        failedRebalanceSensor = metrics.sensor("failed-rebalance");
-        failedRebalanceSensor.add(failedRebalanceTotal, new CumulativeSum());
-        failedRebalanceSensor.add(failedRebalanceRate, new Rate(TimeUnit.HOURS, new WindowedCount()));
+        failedRebalanceSensor = newSensorBuilder("failed-rebalance")
+            .withCumulativeSum(failedRebalanceTotal)
+            .withMeasurableStat(failedRebalanceRate, new Rate(TimeUnit.HOURS, new WindowedCount()))
+            .sensor();
 
         Measurable lastRebalance = (config, now) -> {
             if (lastRebalanceEndMs == -1L)
@@ -82,7 +80,7 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
             else
                 return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
         };
-        lastRebalanceSecondsAgo = createMetric(metrics,
+        lastRebalanceSecondsAgo = newMetricName(
                 "last-rebalance-seconds-ago",
                 "The number of seconds since the last rebalance event");
         metrics.addMetric(lastRebalanceSecondsAgo, lastRebalance);
