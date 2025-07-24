@@ -3727,6 +3727,18 @@ public class RemoteLogManagerTest {
     }
 
     @Test
+    public void testIsPartitionReady() throws InterruptedException {
+        assertFalse(remoteLogManager.isPartitionReady(leaderTopicIdPartition.topicPartition()));
+        remoteLogManager.onLeadershipChange(
+                Set.of(mockPartition(leaderTopicIdPartition)),
+                Set.of(mockPartition(followerTopicIdPartition)),
+                topicIds
+        );
+        assertTrue(remoteLogManager.isPartitionReady(leaderTopicIdPartition.topicPartition()));
+        assertTrue(remoteLogManager.isPartitionReady(followerTopicIdPartition.topicPartition()));
+    }
+
+    @Test
     public void testMonitorableRemoteLogStorageManager() throws IOException {
         Properties props = new Properties();
         props.putAll(brokerConfig);

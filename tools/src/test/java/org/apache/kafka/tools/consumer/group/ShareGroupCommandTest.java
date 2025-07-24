@@ -626,7 +626,7 @@ public class ShareGroupCommandTest {
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete-offsets] takes the following options: [topic], [group]"));
+            assertTrue(message.contains("Option [delete-offsets] takes the following options: [group], [topic]"));
             exited.set(true);
         }));
         try {
@@ -646,7 +646,7 @@ public class ShareGroupCommandTest {
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete-offsets] takes the following options: [topic], [group]"));
+            assertTrue(message.contains("Option [delete-offsets] takes the following options: [group], [topic]"));
             exited.set(true);
         }));
         try {
