@@ -4376,24 +4376,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val config = createConfig
     client = Admin.create(config)
 
-    val featureUpdates = Collections.singletonMap("streams.version", new FeatureUpdate(1.toShort, FeatureUpdate.UpgradeType.UPGRADE))
-    client.updateFeatures(featureUpdates, new UpdateFeaturesOptions()).all.get()
-
-    client.createTopics(util.Set.of(
-      new NewTopic(testTopicName, testNumPartitions, 1.toShort),
-      new NewTopic(testOutputTopicName, testNumPartitions, 1.toShort)
-    )).all().get()
-    waitForTopics(client, Seq(testTopicName, testOutputTopicName), List())
-
-    val producer = createProducer()
-    try {
-      producer.send(new ProducerRecord(testTopicName, 0, "key".getBytes, "value".getBytes)).get()
-    } finally {
-      Utils.closeQuietly(producer, "producer")
-    }
+    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
 
     val streamsConfig = new Properties(streamsGroupConfig)
-    streamsConfig.putAll(streamsGroupConfig)
     streamsConfig.put( StreamsConfig.APPLICATION_ID_CONFIG, streamsGroupId)
     streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
