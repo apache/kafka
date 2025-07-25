@@ -30,11 +30,12 @@ import kafka.security.JaasTestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.internals.{AsyncKafkaConsumer, StreamsRebalanceData}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
-import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serdes, Serializer}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.MetadataLogConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
+import org.apache.kafka.streams.StreamsConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -56,6 +57,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val superuserClientConfig = new Properties
   val serverConfig = new Properties
   val controllerConfig = new Properties
+  var streamsGroupConfig = new Properties
 
   private val consumers = mutable.Buffer[Consumer[_, _]]()
   private val shareConsumers = mutable.Buffer[ShareConsumer[_, _]]()
@@ -159,6 +161,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     streamsConsumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+
+    streamsGroupConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    streamsGroupConfig.putIfAbsent(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, classOf[Serdes.ByteArraySerde].getName)
+    streamsGroupConfig.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, classOf[Serdes.ByteArraySerde].getName)
 
     doSuperuserSetup(testInfo)
 

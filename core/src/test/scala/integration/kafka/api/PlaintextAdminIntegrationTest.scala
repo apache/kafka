@@ -56,6 +56,7 @@ import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVe
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
+import org.apache.kafka.streams.{KafkaStreams, StreamsBuilder, StreamsConfig}
 import org.apache.kafka.test.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
 import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
@@ -4361,6 +4362,90 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           }
         }
       }
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
+  def testDescribeStreamsGroups(groupProtocol: String): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testOutputTopicName = "test_output_topic"
+    val testNumPartitions = 1
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    val featureUpdates = Collections.singletonMap("streams.version", new FeatureUpdate(1.toShort, FeatureUpdate.UpgradeType.UPGRADE))
+    client.updateFeatures(featureUpdates, new UpdateFeaturesOptions()).all.get()
+
+    client.createTopics(util.Set.of(
+      new NewTopic(testTopicName, testNumPartitions, 1.toShort),
+      new NewTopic(testOutputTopicName, testNumPartitions, 1.toShort)
+    )).all().get()
+    waitForTopics(client, Seq(testTopicName, testOutputTopicName), List())
+
+    val producer = createProducer()
+    try {
+      producer.send(new ProducerRecord(testTopicName, 0, "key".getBytes, "value".getBytes)).get()
+    } finally {
+      Utils.closeQuietly(producer, "producer")
+    }
+
+    val streamsConfig = new Properties(streamsGroupConfig)
+    streamsConfig.putAll(streamsGroupConfig)
+    streamsConfig.put( StreamsConfig.APPLICATION_ID_CONFIG, streamsGroupId)
+    streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
+    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
+
+    val builder = new StreamsBuilder()
+    builder.stream[String, String](testTopicName).to(testOutputTopicName)
+    val streams = new KafkaStreams(builder.build(), streamsConfig)
+
+    try {
+      streams.cleanUp()
+      streams.start()
+
+      TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
+
+      TestUtils.waitUntilTrue(() => {
+        client.listGroups().all().get().stream()
+          .anyMatch(g => g.groupId() == streamsGroupId)
+      }, "Streams group not ready to describe yet")
+
+      TestUtils.waitUntilTrue(() => {
+        try {
+          val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
+          val group = describedGroups.get(streamsGroupId)
+          if (group != null) {
+            group.groupState() == GroupState.STABLE && !group.subtopologies().isEmpty
+          } else {
+            false
+          }
+        } catch {
+          case _: Exception => false
+        }
+      }, "Stream group not fully initialized with topology")
+
+      // Verify the describe call works correctly
+      val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
+      val group = describedGroups.get(streamsGroupId)
+
+      assertNotNull(group)
+      assertEquals(streamsGroupId, group.groupId())
+      assertFalse(group.members().isEmpty)
+      assertNotNull(group.subtopologies())
+      assertFalse(group.subtopologies().isEmpty)
+
+      // Verify the topology contains the expected source and sink topics
+      val subtopologies = group.subtopologies().asScala
+      assertTrue(subtopologies.exists(subtopology =>
+        subtopology.sourceTopics().contains(testTopicName)))
+
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
     }
   }
 }
