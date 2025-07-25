@@ -45,6 +45,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -68,6 +69,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
+
 public class PartitionGroupTest {
 
     private final long maxTaskIdleMs = StreamsConfig.MAX_TASK_IDLE_MS_DISABLED;
@@ -90,6 +93,7 @@ public class PartitionGroupTest {
     private final Metrics metrics = new Metrics();
     private final Sensor enforcedProcessingSensor = metrics.sensor(UUID.randomUUID().toString());
     private final MetricName lastLatenessValue = new MetricName("record-lateness-last-value", "", "", mkMap());
+    private final MetricName totalBytesValue = new MetricName("total-bytes-last-value", "", "", mkMap());
 
 
     private static Sensor getValueSensor(final Metrics metrics, final MetricName metricName) {
@@ -486,6 +490,7 @@ public class PartitionGroupTest {
                 tp -> OptionalLong.of(0L),
                 getValueSensor(metrics, lastLatenessValue),
                 enforcedProcessingSensor,
+                getValueSensor(metrics, totalBytesValue),
                 10
             );
 
@@ -549,6 +554,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             maxTaskIdleMs
         );
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -582,6 +588,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             maxTaskIdleMs
         );
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -614,6 +621,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             maxTaskIdleMs
         );
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -699,6 +707,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             StreamsConfig.MAX_TASK_IDLE_MS_DISABLED
         );
 
@@ -737,6 +746,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             0L
         );
 
@@ -776,6 +786,7 @@ public class PartitionGroupTest {
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             0L
         );
 
@@ -813,6 +824,7 @@ public class PartitionGroupTest {
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             0L
         );
 
@@ -850,6 +862,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             1L
         );
         group.updateLags();
@@ -912,6 +925,81 @@ public class PartitionGroupTest {
         }
     }
 
+    @Test
+    public void shouldUpdateTotalBytesBufferedOnRecordsAdditionAndConsumption() {
+        final PartitionGroup group = getBasicGroup();
+
+        assertEquals(0, group.numBuffered());
+        assertEquals(0L, group.totalBytesBuffered());
+
+        // add three 3 records with timestamp 1, 5, 3 to partition-1
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+            new ConsumerRecord<>("topic", 1, 1L, new MockTime().milliseconds(), TimestampType.CREATE_TIME, recordKey.length, recordValue.length, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>("topic", 1, 5L, new MockTime().milliseconds(), TimestampType.CREATE_TIME, recordKey.length, recordValue.length, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>("topic", 1, 3L, new MockTime().milliseconds(), TimestampType.CREATE_TIME, recordKey.length, recordValue.length, recordKey, recordValue, new RecordHeaders(), Optional.empty()));
+
+        long partition1TotalBytes = getBytesBufferedForRawRecords(list1);
+        group.addRawRecords(partition1, list1);
+
+        verifyBuffered(3, 3, 0, group);
+        assertEquals(group.totalBytesBuffered(), partition1TotalBytes);
+        assertEquals(-1L, group.streamTime());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+        assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition1TotalBytes));
+
+        StampedRecord record;
+        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+
+        // get first two records from partition 1
+        record = group.nextRecord(info, time.milliseconds());
+        assertEquals(record.timestamp, 1L);
+        record = group.nextRecord(info, time.milliseconds());
+        assertEquals(record.timestamp, 5L);
+
+        partition1TotalBytes -= getBytesBufferedForRawRecords(Arrays.asList(list1.get(0), list1.get(0)));
+        assertEquals(group.totalBytesBuffered(), partition1TotalBytes);
+        assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition1TotalBytes));
+
+        // add three 3 records with timestamp 2, 4, 6 to partition-2
+        final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
+            new ConsumerRecord<>("topic", 2, 2L, record.timestamp, TimestampType.CREATE_TIME, recordKey.length, recordValue.length, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>("topic", 2, 4L, record.timestamp, TimestampType.CREATE_TIME, recordKey.length, recordValue.length, recordKey, recordValue, new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>("topic", 2, 6L, record.timestamp, TimestampType.CREATE_TIME, recordKey.length, recordValue.length, recordKey, recordValue, new RecordHeaders(), Optional.empty()));
+
+        long partition2TotalBytes = getBytesBufferedForRawRecords(list2);
+        group.addRawRecords(partition2, list2);
+        // 1:[3]
+        // 2:[2, 4, 6]
+        assertEquals(group.totalBytesBuffered(), partition2TotalBytes + partition1TotalBytes);
+        assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition2TotalBytes + partition1TotalBytes));
+
+        // get one record, next record should be ts=2 from partition 2
+        record = group.nextRecord(info, time.milliseconds());
+        // 1:[3]
+        // 2:[4, 6]
+        partition2TotalBytes -= getBytesBufferedForRawRecords(Collections.singletonList(list2.get(0)));
+        assertEquals(group.totalBytesBuffered(), partition2TotalBytes + partition1TotalBytes);
+        assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition2TotalBytes + partition1TotalBytes));
+        assertEquals(record.timestamp, 2L);
+
+        // get one record, next up should have ts=3 from partition 1 (even though it has seen a larger max timestamp =5)
+        record = group.nextRecord(info, time.milliseconds());
+        // 1:[]
+        // 2:[4, 6]
+        partition1TotalBytes -= getBytesBufferedForRawRecords(Collections.singletonList(list2.get(2)));
+        assertEquals(group.totalBytesBuffered(), partition2TotalBytes + partition1TotalBytes);
+        assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition2TotalBytes + partition1TotalBytes));
+        assertEquals(record.timestamp, 3L);
+    }
+
+    private long getBytesBufferedForRawRecords(final List<ConsumerRecord<byte[], byte[]>> rawRecords) {
+        long rawRecordsSizeInBytes = 0L;
+        for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
+            rawRecordsSizeInBytes += consumerRecordSizeInBytes(rawRecord);
+        }
+        return rawRecordsSizeInBytes;
+    }
+
     private void hasNoFetchedLag(final PartitionGroup group, final TopicPartition partition) {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(PartitionGroup.class)) {
             appender.setClassLogger(PartitionGroup.class, Level.TRACE);
@@ -954,6 +1042,7 @@ public class PartitionGroupTest {
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             10L
         );
 
@@ -991,6 +1080,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             maxTaskIdleMs
         );
     }

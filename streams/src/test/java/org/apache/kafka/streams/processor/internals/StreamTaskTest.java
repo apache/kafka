@@ -293,6 +293,7 @@ public class StreamTaskTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     private static StreamsConfig createConfig(
         final String eosConfig,
         final String enforcedProcessingValue,
