@@ -128,7 +128,6 @@ public class StreamsGroupCommand {
             return EXIT_CODE_SUCCESS;
         } catch (IllegalArgumentException e) {
             CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
-            return EXIT_CODE_ERROR;
         } catch (Throwable e) {
             printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
             return EXIT_CODE_ERROR;
