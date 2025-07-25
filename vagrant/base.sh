@@ -38,6 +38,8 @@ fetch_jdk_tgz() {
 
 JDK_MAJOR="${JDK_MAJOR:-17}"
 JDK_FULL="${JDK_FULL:-17-linux-x64}"
+echo "JDK_MAJOR=$JDK_MAJOR JDK_ARCH=$JDK_ARCH"
+export DEBIAN_FRONTEND=noninteractive
 
 if [ -z `which javac` ]; then
     apt-get -y update

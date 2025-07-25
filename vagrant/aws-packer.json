@@ -1,0 +1,62 @@
+{
+  "variables": {
+    "aws_access_key": "",
+    "aws_secret_key": "",
+    "region": "",
+    "source_ami": "",
+    "ami_name": "",
+    "instance_type": "",
+    "ssh_account": "ubuntu",
+    "linux_distro": "ubuntu",
+    "jdk_version": "8",
+    "jdk_arch": "x64",
+    "enable_ena_driver_install": "true"
+
+  },
+  "builders": [{
+    "type": "amazon-ebs",
+    "iam_instance_profile": "semaphore-access",
+    "region": "{{user `region`}}",
+    "subnet_id": "{{user `subnet_id`}}",
+    "source_ami": "{{user `source_ami`}}",
+    "instance_type": "{{user `instance_type`}}",
+    "ssh_username": "{{user `ssh_account`}}",
+    "ami_name": "{{user `ami_name`}}",
+    "aws_polling": {
+      "delay_seconds": 60,
+      "max_attempts": 60
+    },
+    "security_group_id": "{{user `security_group_id`}}",
+    "tags": {
+      "Owner": "ce-kafka",
+      "Service": "ce-kafka",
+      "Type": "Base",
+      "role": "ce-kafka",
+      "CreatedBy": "kafka-system-test"
+    },
+    "launch_block_device_mappings": [{
+      "device_name": "/dev/sda1",
+      "volume_size": 60,
+      "volume_type": "gp3",
+      "delete_on_termination": true
+    }],
+    "ena_support": true
+  }],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": ["while [ ! -f /var/lib/cloud/instance/boot-finished ]; do echo 'Waiting for cloud-init...'; sleep 1; done"]
+    },
+    {
+      "environment_vars": [
+        "JDK_MAJOR={{ user `jdk_version` }}",
+        "JDK_ARCH={{ user `jdk_arch` }}"
+      ],
+      "execute_command": "echo 'packer' | {{ .Vars }} sudo -E -S bash '{{ .Path }}'",
+      "type": "shell",
+      "scripts": [
+        "../vagrant/base.sh"
+      ]
+    }
+  ]
+}
