@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.tools.OffsetsUtils;
@@ -79,7 +80,8 @@ import joptsimple.OptionException;
 
 
 public class StreamsGroupCommand {
-
+    private static final int EXIT_CODE_SUCCESS = 0;
+    private static final int EXIT_CODE_ERROR = 1;
     static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
@@ -97,13 +99,13 @@ public class StreamsGroupCommand {
             if (numberOfActions != 1)
                 CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
 
-            run(opts);
+            Exit.exit(run(opts));
         } catch (OptionException e) {
             CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
         }
     }
 
-    public static void run(StreamsGroupCommandOptions opts) {
+    public static int run(StreamsGroupCommandOptions opts) {
         try (StreamsGroupService streamsGroupService = new StreamsGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt)) {
                 streamsGroupService.listGroups();
@@ -123,10 +125,13 @@ public class StreamsGroupCommand {
             } else {
                 throw new IllegalArgumentException("Unknown action!");
             }
+            return EXIT_CODE_SUCCESS;
         } catch (IllegalArgumentException e) {
             CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
+            return EXIT_CODE_ERROR;
         } catch (Throwable e) {
             printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
+            return EXIT_CODE_ERROR;
         }
     }
 
