@@ -1,0 +1,85 @@
+{
+  "variables": {
+    "aws_access_key": "",
+    "aws_secret_key": "",
+    "region": "",
+    "vpc_id": "",
+    "subnet_id": "",
+    "source_ami": "",
+    "ami_name": "",
+    "install_type": "",
+    "resource_url": "",
+    "instance_type": "",
+    "ssh_account": "ubuntu",
+    "linux_distro": "ubuntu",
+    "jdk_version": "8",
+    "jdk_arch": "x64",
+    "mvn_user": "{{env `ORG_GRADLE_PROJECT_mavenUsername`}}",
+    "mvn_pass": "{{env `ORG_GRADLE_PROJECT_mavenPassword`}}"
+  },
+  "builders": [{
+    "type": "amazon-ebs",
+    "iam_instance_profile": "semaphore-access",
+    "region": "{{user `region`}}",
+    "subnet_id": "{{user `subnet_id`}}",
+    "vpc_id": "{{user `vpc_id`}}",
+    "source_ami": "{{user `source_ami`}}",
+    "instance_type": "{{user `instance_type`}}",
+    "ssh_username": "{{user `ssh_account`}}",
+    "ami_name": "{{user `ami_name`}}",
+    "aws_polling": {
+      "delay_seconds": 60,
+      "max_attempts": 60
+    },
+    "security_group_id": "{{user `security_group_id`}}",
+    "tags": {
+      "Owner": "ce-kafka",
+      "Service": "ce-kafka",
+      "Type": "Worker",
+      "role": "kafka-worker",
+      "CreatedBy": "kafka-system-test",
+      "Name": "{{user `instance_name`}}",
+      "ResourceUrl": "{{user `resource_url`}}",
+      "NightlyRun": "{{user `nightly_run`}}",
+      "Distro": "{{user `linux_distro`}}",
+      "JdkVersion": "{{user `jdk_version`}}",
+      "Arch": "{{user `jdk_arch`}}"
+    },
+    "launch_block_device_mappings": [{
+      "device_name": "/dev/sda1",
+      "volume_size": "{{user `volume_size`}}",
+      "volume_type": "gp3",
+      "delete_on_termination": true
+    }]
+  }],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": [
+        "sudo mkdir -p /vagrant",
+        "sudo mkdir -p ~/.m2",
+        "sudo chown -R {{user `ssh_account`}}:{{user `ssh_account`}} ~/.m2",
+        "sudo chown -R {{user `ssh_account`}}:{{user `ssh_account`}} /vagrant",
+        "sudo ln -s /vagrant /opt/kafka",
+        "sudo mkdir -p /mnt",
+        "sudo chmod a+rwx /mnt",
+        "sudo chmod a+rw /opt"
+      ]
+    },
+    {
+      "type": "file",
+      "source": "/home/semaphore/kafka-overlay/kafka/",
+      "destination": "/vagrant/"
+    },
+    {
+      "type": "file",
+      "source": "/home/semaphore/.m2/settings.xml",
+      "destination": "~/.m2/settings.xml"
+    },
+    {
+      "type": "file",
+      "source": "/home/semaphore/.m2/",
+      "destination": "/vagrant/.m2"
+    }
+  ]
+}

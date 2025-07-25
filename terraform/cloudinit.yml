@@ -1,0 +1,21 @@
+# Copyright 2024 Confluent Inc.
+groups:
+  - ce-kafka
+
+users:
+  - default
+  - name: terraform
+    gecos: terraform
+    shell: /bin/bash
+    primary_group: muckrake
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin, sudo, ubuntu, adm, dialout, cdrom, floppy, audio, dip, video, plugdev, netdev, lxd
+    lock_passwd: false
+    ssh_authorized_keys:
+      - ${ public_key }
+
+runcmd:
+  - bash /vagrant/vagrant/base.sh
+  - sudo chmod a+rwx /mnt
+  - python3.11 -m pip install -U pip
+  - python3.11 -m pip install -r /vagrant/resources/requirements.txt

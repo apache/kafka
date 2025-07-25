@@ -297,7 +297,14 @@ if (repo != null) {
         'clients/src/test/resources/serializedData/*',
         'docker/test/fixtures/secrets/*',
         'docker/examples/fixtures/secrets/*',
-        'docker/docker_official_images/.gitkeep'
+        'docker/docker_official_images/.gitkeep',
+        'sonar-project.properties',
+        'vagrant/cloudwatch-agent-setup.sh',
+        'vagrant/cloudwatch-agent-configuration.json',
+        'vagrant/aws-packer.json',
+        'vagrant/worker-ami.json',
+        'ssh_checkers/aws_checker.py',
+        'terraform/*'
     ])
   }
 } else {
