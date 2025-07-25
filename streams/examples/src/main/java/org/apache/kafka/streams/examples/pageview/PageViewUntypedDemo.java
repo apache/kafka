@@ -40,8 +40,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Properties;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Demonstrates how to perform a join between a KStream and a KTable, i.e. an example of a stateful computation,
