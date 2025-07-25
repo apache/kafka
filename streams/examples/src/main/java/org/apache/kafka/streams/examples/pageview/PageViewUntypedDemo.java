@@ -41,6 +41,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
+import java.util.Map;
 
 /**
  * Demonstrates how to perform a join between a KStream and a KTable, i.e. an example of a stateful computation,
@@ -64,15 +65,25 @@ public class PageViewUntypedDemo {
         private final ObjectMapper objectMapper = new ObjectMapper();
 
         @Override
-        public byte[] serialize(String topic, JsonNode data) {
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
+            // No configuration needed
+        }
+
+        @Override
+        public byte[] serialize(final String topic, final JsonNode data) {
             if (data == null) {
                 return null;
             }
             try {
                 return objectMapper.writeValueAsBytes(data);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new SerializationException("Error serializing JSON message", e);
             }
+        }
+
+        @Override
+        public void close() {
+            // No resources to close
         }
     }
 
@@ -83,15 +94,25 @@ public class PageViewUntypedDemo {
         private final ObjectMapper objectMapper = new ObjectMapper();
 
         @Override
-        public JsonNode deserialize(String topic, byte[] data) {
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
+            // No configuration needed
+        }
+
+        @Override
+        public JsonNode deserialize(final String topic, final byte[] data) {
             if (data == null) {
                 return null;
             }
             try {
                 return objectMapper.readTree(data);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new SerializationException("Error deserializing JSON message", e);
             }
+        }
+
+        @Override
+        public void close() {
+            // No resources to close
         }
     }
 
