@@ -272,11 +272,11 @@ public class RequestManagerTest {
         );
         assertFalse(cache.hasRequestTimedOut(bootstrapNode1, time.milliseconds()));
 
-        time.sleep(requestTimeoutMs / 2);
+        time.sleep(requestTimeoutMs - 1);
         assertFalse(cache.hasRequestTimedOut(bootstrapNode1, time.milliseconds()));
 
         // Timeout the request
-        time.sleep(requestTimeoutMs / 2);
+        time.sleep(1);
         assertTrue(cache.hasRequestTimedOut(bootstrapNode1, time.milliseconds()));
     }
 
