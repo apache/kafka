@@ -45,6 +45,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
@@ -58,7 +59,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
@@ -2218,7 +2218,7 @@ public class KafkaProducerTest {
             eq(timestamp),                                   // 2
             eq(serializedKey),                               // 3
             eq(serializedValue),                             // 4
-            eq(Record.EMPTY_HEADERS),                        // 5
+            any(Header[].class),                             // 5
             any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             eq(true),
@@ -2276,7 +2276,7 @@ public class KafkaProducerTest {
             eq(timestamp),                                   // 2
             eq(serializedKey),                               // 3
             eq(serializedValue),                             // 4
-            eq(Record.EMPTY_HEADERS),                        // 5
+            any(Header[].class),                             // 5
             any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             eq(true), // abortOnNewBatch
@@ -2300,7 +2300,7 @@ public class KafkaProducerTest {
             eq(timestamp),                                   // 2
             eq(serializedKey),                               // 3
             eq(serializedValue),                             // 4
-            eq(Record.EMPTY_HEADERS),                        // 5
+            any(Header[].class),                             // 5
             any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             eq(false), // abortOnNewBatch

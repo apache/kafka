@@ -65,11 +65,11 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
 
     producer1 = TestUtils.createProducer(bootstrapServers(), acks = 0, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
-      bufferSize = producerBufferSize)
+      bufferSize = producerBufferSize, enableKafka19012Instrumentation = false)
     producer2 = TestUtils.createProducer(bootstrapServers(), acks = 1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
-      bufferSize = producerBufferSize)
+      bufferSize = producerBufferSize, enableKafka19012Instrumentation = false)
     producer3 = TestUtils.createProducer(bootstrapServers(), acks = -1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
-      bufferSize = producerBufferSize)
+      bufferSize = producerBufferSize, enableKafka19012Instrumentation = false)
   }
 
   @AfterEach
@@ -174,7 +174,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     createTopic(topic1, replicationFactor = numServers)
 
     // producer with incorrect broker list
-    producer4 = TestUtils.createProducer("localhost:8686,localhost:4242", acks = 1, maxBlockMs = 10000L, bufferSize = producerBufferSize)
+    producer4 = TestUtils.createProducer("localhost:8686,localhost:4242", acks = 1, maxBlockMs = 10000L, bufferSize = producerBufferSize, enableKafka19012Instrumentation = false)
 
     // send a record with incorrect broker list
     val record = new ProducerRecord(topic1, null, "key".getBytes, "value".getBytes)

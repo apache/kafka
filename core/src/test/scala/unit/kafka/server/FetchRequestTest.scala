@@ -638,7 +638,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
     // Produce messages (v2)
     producer = TestUtils.createProducer(bootstrapServers(),
       keySerializer = new StringSerializer,
-      valueSerializer = new StringSerializer)
+      valueSerializer = new StringSerializer,
+      enableKafka19012Instrumentation = false)
     producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key1", "value1")).get
     producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
@@ -687,7 +688,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val producer1 = TestUtils.createProducer(bootstrapServers(),
       compressionType = CompressionType.GZIP.name,
       keySerializer = new StringSerializer,
-      valueSerializer = new StringSerializer)
+      valueSerializer = new StringSerializer,
+      enableKafka19012Instrumentation = false)
     producer1.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key1", "value1")).get
     producer1.close()
@@ -695,7 +697,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val producer2 = TestUtils.createProducer(bootstrapServers(),
       compressionType = CompressionType.ZSTD.name,
       keySerializer = new StringSerializer,
-      valueSerializer = new StringSerializer)
+      valueSerializer = new StringSerializer,
+      enableKafka19012Instrumentation = false)
     producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
       "key2", "value2")).get
     producer2.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,

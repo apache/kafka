@@ -182,6 +182,7 @@ public class TransactionManagerTest {
         this.brokerNode = new Node(0, "localhost", 2211);
         this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L, 0L,
                 deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+                Optional.of(new Kafka19012Instrumentation(logContext, metrics)),
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
@@ -694,6 +695,7 @@ public class TransactionManagerTest {
 
         RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, CompressionType.NONE, 0, 0L, 0L,
                 deliveryTimeout, metrics, "", time, apiVersions, transactionManager,
+                Optional.of(new Kafka19012Instrumentation(logContext, metrics)),
                 new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""));
 
         Sender sender = new Sender(logContext, this.client, this.metadata, accumulator, false,
@@ -764,7 +766,7 @@ public class TransactionManagerTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(64),
                 CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         long currentTimeMs = time.milliseconds();
-        ProducerBatch batch = new ProducerBatch(tp, builder, currentTimeMs);
+        ProducerBatch batch = new ProducerBatch(tp, builder, currentTimeMs, Optional.of(new Kafka19012Instrumentation(logContext, new Metrics())));
         batch.tryAppend(currentTimeMs, new byte[0], value.getBytes(), new Header[0], null, currentTimeMs);
         return batch;
     }

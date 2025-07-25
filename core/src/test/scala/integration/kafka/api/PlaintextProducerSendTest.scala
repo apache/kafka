@@ -255,6 +255,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   def testSendRecordBatchWithMaxRequestSizeAndHigher(quorum: String): Unit = {
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    producerProps.put(ProducerConfig.ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG, "false")
     val producer = registerProducer(new KafkaProducer(producerProps, new ByteArraySerializer, new ByteArraySerializer))
 
     val keyLengthSize = 1

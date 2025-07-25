@@ -79,7 +79,7 @@ class BaseFetchRequestTest extends BaseRequestTest {
 
   protected def initProducer(): Unit = {
     producer = TestUtils.createProducer(bootstrapServers(),
-      keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
+      keySerializer = new StringSerializer, valueSerializer = new StringSerializer, enableKafka19012Instrumentation = false)
   }
 
   protected def createTopics(numTopics: Int, numPartitions: Int, configs: Map[String, String] = Map.empty): Map[TopicPartition, Int] = {

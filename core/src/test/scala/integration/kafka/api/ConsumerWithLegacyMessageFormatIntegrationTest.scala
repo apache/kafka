@@ -105,6 +105,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     val prop = new Properties()
     // idempotence producer doesn't support old version of messages
     prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
+    prop.setProperty(ProducerConfig.ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG, "false")
     val producer = createProducer(configOverrides = prop)
     createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 2, recordsPerPartition = 100)
     val props = new Properties()

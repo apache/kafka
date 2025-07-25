@@ -94,6 +94,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val prop = new Properties()
     // idempotence producer doesn't support old version of messages
     prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
+    prop.setProperty(ProducerConfig.ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG, "false")
     val producer = createProducer(configOverrides = prop)
     sendRecords(producer, numRecords, recordSize, tp)
 

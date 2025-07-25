@@ -79,6 +79,7 @@ class ProducerCompressionTest extends QuorumTestHarness {
     producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression)
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000")
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "200")
+    producerProps.put(ProducerConfig.ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG, "false")
     val producer = new KafkaProducer(producerProps, new ByteArraySerializer, new ByteArraySerializer)
     val consumer = TestUtils.createConsumer(bootstrapServers)
 

@@ -141,7 +141,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       assertEquals(newSegmentSize, log.config.segmentSize)
     }
 
-    (1 to 50).foreach(i => TestUtils.produceMessage(brokers, tp.topic, i.toString))
+    (1 to 50).foreach(i => TestUtils.produceMessage(brokers, tp.topic, i.toString, enableKafka19012Instrumentation = false))
     // Verify that the new config is used for all segments
     assertTrue(log.logSegments.stream.allMatch(_.size > 1000), "Log segment size change not applied")
   }

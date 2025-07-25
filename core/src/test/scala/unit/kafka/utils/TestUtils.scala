@@ -848,7 +848,8 @@ object TestUtils extends Logging {
                            saslProperties: Option[Properties] = None,
                            keySerializer: Serializer[K] = new ByteArraySerializer,
                            valueSerializer: Serializer[V] = new ByteArraySerializer,
-                           enableIdempotence: Boolean = false): KafkaProducer[K, V] = {
+                           enableIdempotence: Boolean = false,
+                           enableKafka19012Instrumentation: Boolean = true): KafkaProducer[K, V] = {
     val producerProps = new Properties
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
@@ -861,6 +862,7 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotence.toString)
+    producerProps.put(ProducerConfig.ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG, enableKafka19012Instrumentation.toString)
     producerProps ++= producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
     new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
@@ -1595,9 +1597,10 @@ object TestUtils extends Logging {
       message: String,
       timestamp: java.lang.Long = null,
       deliveryTimeoutMs: Int = 30 * 1000,
-      requestTimeoutMs: Int = 20 * 1000): Unit = {
+      requestTimeoutMs: Int = 20 * 1000,
+      enableKafka19012Instrumentation: Boolean = true): Unit = {
     val producer = createProducer(plaintextBootstrapServers(brokers),
-      deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs)
+      deliveryTimeoutMs = deliveryTimeoutMs, requestTimeoutMs = requestTimeoutMs, enableKafka19012Instrumentation = enableKafka19012Instrumentation)
     try {
       producer.send(new ProducerRecord(topic, null, timestamp, topic.getBytes, message.getBytes)).get
     } finally {

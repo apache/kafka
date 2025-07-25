@@ -102,6 +102,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -162,6 +163,7 @@ public class SenderTest {
     private Sender sender = null;
     private SenderMetricsRegistry senderMetricsRegistry = null;
     private final LogContext logContext = new LogContext();
+    private Optional<Kafka19012Instrumentation> kafka19012Instrumentation;
 
     @BeforeEach
     public void setup() {
@@ -342,6 +344,7 @@ public class SenderTest {
         metrics.close();
         Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
         metrics = new Metrics(new MetricConfig().tags(clientTags));
+        kafka19012Instrumentation = Optional.of(new Kafka19012Instrumentation(logContext, metrics));
         SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics);
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                 1, metricsRegistry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
@@ -569,7 +572,7 @@ public class SenderTest {
             RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42);
             long totalSize = 1024 * 1024;
             accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L, 0L,
-                DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, apiVersions, null,
+                DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, apiVersions, null, kafka19012Instrumentation,
                 new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
 
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
@@ -2421,7 +2424,7 @@ public class SenderTest {
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         try (Metrics m = new Metrics()) {
             accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.GZIP,
-                0, 0L, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager,
+                0, 0L, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager, kafka19012Instrumentation,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"));
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
@@ -3167,7 +3170,7 @@ public class SenderTest {
             // lingerMs is 0 to send batch as soon as any records are available on it.
             this.accumulator = new RecordAccumulator(logContext, batchSize,
                 CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
-                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
+                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, kafka19012Instrumentation, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
                 10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null,
@@ -3248,6 +3251,7 @@ public class SenderTest {
         metrics.close();
         Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
         metrics = new Metrics(new MetricConfig().tags(clientTags));
+        kafka19012Instrumentation = Optional.of(new Kafka19012Instrumentation(logContext, metrics));
         TransactionManager transactionManager = mock(TransactionManager.class);
         SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics);
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3281,7 +3285,7 @@ public class SenderTest {
             // lingerMs is 0 to send batch as soon as any records are available on it.
             this.accumulator = new RecordAccumulator(logContext, batchSize,
                 CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
-                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
+                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, kafka19012Instrumentation, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
                 10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null,
@@ -3361,7 +3365,7 @@ public class SenderTest {
             // lingerMs is 0 to send batch as soon as any records are available on it.
             this.accumulator = new RecordAccumulator(logContext, batchSize,
                 CompressionType.NONE, 0, 10L, retryBackoffMaxMs,
-                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, pool);
+                DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, null, kafka19012Instrumentation, pool);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL,
                 10, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null,
@@ -3660,10 +3664,11 @@ public class SenderTest {
         String metricGrpName = "producer-metrics";
         MetricConfig metricConfig = new MetricConfig().tags(Collections.singletonMap("client-id", CLIENT_ID));
         this.metrics = new Metrics(metricConfig, time);
+        this.kafka19012Instrumentation = Optional.of(new Kafka19012Instrumentation(logContext, metrics));
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 
         this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, lingerMs, 0L, 0L,
-            DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, transactionManager, pool);
+            DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, apiVersions, transactionManager, kafka19012Instrumentation, pool);
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,
             retries, this.senderMetricsRegistry, this.time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);

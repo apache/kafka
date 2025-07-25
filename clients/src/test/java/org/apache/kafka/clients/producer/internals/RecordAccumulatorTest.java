@@ -119,6 +119,7 @@ public class RecordAccumulatorTest {
     private Metrics metrics = new Metrics(time);
     private final long maxBlockTimeMs = 1000;
     private final LogContext logContext = new LogContext();
+    private final Optional<Kafka19012Instrumentation> kafka19012Instrumentation = Optional.of(new Kafka19012Instrumentation(logContext, metrics));
 
     @BeforeEach void setup() {}
 
@@ -460,6 +461,7 @@ public class RecordAccumulatorTest {
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
             CompressionType.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
             deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+            kafka19012Instrumentation,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
@@ -525,6 +527,7 @@ public class RecordAccumulatorTest {
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
                 CompressionType.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
                 deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+                kafka19012Instrumentation,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
@@ -586,6 +589,7 @@ public class RecordAccumulatorTest {
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
                 CompressionType.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
                 deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+                kafka19012Instrumentation,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
@@ -981,6 +985,7 @@ public class RecordAccumulatorTest {
         TransactionManager transactionManager = new TransactionManager(new LogContext(), null, 0, retryBackoffMs, apiVersions);
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
             CompressionType.NONE, lingerMs, retryBackoffMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+            kafka19012Instrumentation,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         assertThrows(UnsupportedVersionException.class,
             () -> accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, 0, false, time.milliseconds(), cluster));
@@ -1040,7 +1045,7 @@ public class RecordAccumulatorTest {
         // Create a big batch
         ByteBuffer buffer = ByteBuffer.allocate(4096);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        ProducerBatch batch = new ProducerBatch(tp1, builder, now, true);
+        ProducerBatch batch = new ProducerBatch(tp1, builder, now, true, kafka19012Instrumentation);
 
         byte[] value = new byte[1024];
         final AtomicInteger acked = new AtomicInteger(0);
@@ -1367,6 +1372,7 @@ public class RecordAccumulatorTest {
             int batchSize = 128;
             RecordAccumulator accum = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L, 0L,
                 3200, config, metrics, "producer-metrics", time, new ApiVersions(), null,
+                kafka19012Instrumentation,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"));
 
             byte[] largeValue = new byte[batchSize];
@@ -1496,6 +1502,7 @@ public class RecordAccumulatorTest {
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
             CompressionType.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
             deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+            kafka19012Instrumentation,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         // Create 1 batch(batchA) to be produced to partition1.
@@ -1760,6 +1767,7 @@ public class RecordAccumulatorTest {
             time,
             new ApiVersions(),
             txnManager,
+            kafka19012Instrumentation,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
     }
 }

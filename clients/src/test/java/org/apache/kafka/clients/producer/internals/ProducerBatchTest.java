@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -23,12 +24,14 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
@@ -59,10 +62,11 @@ public class ProducerBatchTest {
 
     private final MemoryRecordsBuilder memoryRecordsBuilder = MemoryRecords.builder(ByteBuffer.allocate(512),
             CompressionType.NONE, TimestampType.CREATE_TIME, 128);
+    private final Optional<Kafka19012Instrumentation> kafka19012Instrumentation = Optional.of(new Kafka19012Instrumentation(new LogContext(), new Metrics()));
 
     @Test
     public void testBatchAbort() throws Exception {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now, kafka19012Instrumentation);
         MockCallback callback = new MockCallback();
         FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
 
@@ -89,7 +93,7 @@ public class ProducerBatchTest {
 
     @Test
     public void testBatchCannotAbortTwice() throws Exception {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now, kafka19012Instrumentation);
         MockCallback callback = new MockCallback();
         FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
         KafkaException exception = new KafkaException();
@@ -117,7 +121,7 @@ public class ProducerBatchTest {
 
     @Test
     public void testBatchCannotCompleteTwice() throws Exception {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now, kafka19012Instrumentation);
         MockCallback callback = new MockCallback();
         FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, callback, now);
         batch.complete(500L, 10L);
@@ -139,7 +143,7 @@ public class ProducerBatchTest {
                     compressionType,
                     TimestampType.CREATE_TIME,
                     0L);
-            ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
+            ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now, kafka19012Instrumentation);
             Header header = new RecordHeader("header-key", "header-value".getBytes());
 
             while (true) {
@@ -178,7 +182,7 @@ public class ProducerBatchTest {
                 MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic,
                         compressionType, TimestampType.CREATE_TIME, 0L);
 
-                ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
+                ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now, kafka19012Instrumentation);
                 while (true) {
                     FutureRecordMetadata future = batch.tryAppend(now, "hi".getBytes(), "there".getBytes(),
                             Record.EMPTY_HEADERS, null, now);
@@ -210,7 +214,7 @@ public class ProducerBatchTest {
     @Test
     public void testBatchExpiration() {
         long deliveryTimeoutMs = 10240;
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now, kafka19012Instrumentation);
         // Set `now` to 2ms before the create time.
         assertFalse(batch.hasReachedDeliveryTimeout(deliveryTimeoutMs, now - 2));
         // Set `now` to deliveryTimeoutMs.
@@ -223,7 +227,7 @@ public class ProducerBatchTest {
      */
     @Test
     public void testBatchExpirationAfterReenqueue() {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now, kafka19012Instrumentation);
         // Set batch.retry = true
         batch.reenqueued(now);
         // Set `now` to 2ms before the create time.
@@ -232,7 +236,7 @@ public class ProducerBatchTest {
 
     @Test
     public void testShouldNotAttemptAppendOnceRecordsBuilderIsClosedForAppends() {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now, kafka19012Instrumentation);
         FutureRecordMetadata result0 = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
         assertNotNull(result0);
         assertTrue(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10], Record.EMPTY_HEADERS));
@@ -273,7 +277,7 @@ public class ProducerBatchTest {
 
     @Test
     public void testWithLeaderChangesAcrossRetries() {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now, kafka19012Instrumentation);
 
         // Starting state for the batch, no attempt made to send it yet.
         assertEquals(OptionalInt.empty(), batch.currentLeaderEpoch());
@@ -336,7 +340,8 @@ public class ProducerBatchTest {
         ProducerBatch batch = new ProducerBatch(
             new TopicPartition("topic", 1),
             memoryRecordsBuilder,
-            now
+            now,
+            kafka19012Instrumentation
         );
 
         List<FutureRecordMetadata> futures = new ArrayList<>(recordCount);

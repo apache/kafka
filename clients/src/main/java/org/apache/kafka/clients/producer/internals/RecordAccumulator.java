@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
@@ -90,6 +91,7 @@ public class RecordAccumulator {
     private final Set<TopicPartition> muted;
     private final Map<String, Integer> nodesDrainIndex;
     private final TransactionManager transactionManager;
+    private final Optional<Kafka19012Instrumentation> kafka19012Instrumentation;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
 
     /**
@@ -112,6 +114,7 @@ public class RecordAccumulator {
      * @param apiVersions Request API versions for current connected brokers
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
+     * @param kafka19012Instrumentation Utility class that captures metrics associated with tracking down KAFKA-19012
      * @param bufferPool The buffer pool
      */
     public RecordAccumulator(LogContext logContext,
@@ -127,6 +130,7 @@ public class RecordAccumulator {
                              Time time,
                              ApiVersions apiVersions,
                              TransactionManager transactionManager,
+                             Optional<Kafka19012Instrumentation> kafka19012Instrumentation,
                              BufferPool bufferPool) {
         this.logContext = logContext;
         this.log = logContext.logger(RecordAccumulator.class);
@@ -150,6 +154,7 @@ public class RecordAccumulator {
         this.apiVersions = apiVersions;
         nodesDrainIndex = new HashMap<>();
         this.transactionManager = transactionManager;
+        this.kafka19012Instrumentation = kafka19012Instrumentation;
         registerMetrics(metrics, metricGrpName);
     }
 
@@ -172,6 +177,7 @@ public class RecordAccumulator {
      * @param apiVersions Request API versions for current connected brokers
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
+     * @param kafka19012Instrumentation Utility class that captures metrics associated with tracking down KAFKA-19012
      * @param bufferPool The buffer pool
      */
     public RecordAccumulator(LogContext logContext,
@@ -186,6 +192,7 @@ public class RecordAccumulator {
                              Time time,
                              ApiVersions apiVersions,
                              TransactionManager transactionManager,
+                             Optional<Kafka19012Instrumentation> kafka19012Instrumentation,
                              BufferPool bufferPool) {
         this(logContext,
             batchSize,
@@ -200,6 +207,7 @@ public class RecordAccumulator {
             time,
             apiVersions,
             transactionManager,
+            kafka19012Instrumentation,
             bufferPool);
     }
 
@@ -407,8 +415,9 @@ public class RecordAccumulator {
             return appendResult;
         }
 
+        kafka19012Instrumentation.ifPresent(i -> i.checkBuffer(topic, buffer.position()));
         MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, apiVersions.maxUsableProduceMagic());
-        ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs, kafka19012Instrumentation);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
 

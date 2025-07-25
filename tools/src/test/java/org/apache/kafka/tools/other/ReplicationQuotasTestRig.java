@@ -388,6 +388,7 @@ public class ReplicationQuotasTestRig {
                 Option.empty(),
                 new ByteArraySerializer(),
                 new ByteArraySerializer(),
+                false,
                 false
             );
         }

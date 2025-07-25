@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
+import org.apache.kafka.clients.producer.internals.Kafka19012Instrumentation;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
@@ -262,6 +263,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+    private final Optional<Kafka19012Instrumentation> kafka19012Instrumentation;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -420,6 +422,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             this.apiVersions = new ApiVersions();
             this.transactionManager = configureTransactionState(config, logContext);
+
+            if (config.getBoolean(ProducerConfig.ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG))
+                this.kafka19012Instrumentation = Optional.of(new Kafka19012Instrumentation(logContext, metrics));
+            else
+                this.kafka19012Instrumentation = Optional.empty();
+
             // There is no need to do work required for adaptive partitioning, if we use a custom partitioner.
             boolean enableAdaptivePartitioning = partitioner == null &&
                 config.getBoolean(ProducerConfig.PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG);
@@ -443,6 +451,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     time,
                     apiVersions,
                     transactionManager,
+                    kafka19012Instrumentation,
                     new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
 
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
@@ -506,6 +515,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
         this.apiVersions = new ApiVersions();
         this.transactionManager = transactionManager;
+        if (config.getBoolean(ProducerConfig.ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG))
+            this.kafka19012Instrumentation = Optional.of(new Kafka19012Instrumentation(logContext, metrics));
+        else
+            this.kafka19012Instrumentation = Optional.empty();
         this.accumulator = accumulator;
         this.errors = this.metrics.sensor("errors");
         this.metadata = metadata;
@@ -984,6 +997,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
+        kafka19012Instrumentation.ifPresent(i -> i.addTopicHeader(record));
+
         // Append callback takes care of the following:
         //  - call interceptors and user callback on completion
         //  - remember partition that is calculated in RecordAccumulator.append

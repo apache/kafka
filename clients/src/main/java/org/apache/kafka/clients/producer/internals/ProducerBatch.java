@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -70,6 +71,7 @@ public final class ProducerBatch {
     private final MemoryRecordsBuilder recordsBuilder;
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
+    private final Optional<Kafka19012Instrumentation> kafka19012Instrumentation;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
 
     int recordCount;
@@ -85,11 +87,11 @@ public final class ProducerBatch {
     // Tracks the attempt in which leader was changed to currentLeaderEpoch for the 1st time.
     private int attemptsWhenLeaderLastChanged;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
-        this(tp, recordsBuilder, createdMs, false);
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, Optional<Kafka19012Instrumentation> kafka19012Instrumentation) {
+        this(tp, recordsBuilder, createdMs, false, kafka19012Instrumentation);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch, Optional<Kafka19012Instrumentation> kafka19012Instrumentation) {
         this.createdMs = createdMs;
         this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;
@@ -98,6 +100,7 @@ public final class ProducerBatch {
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.retry = false;
         this.isSplitBatch = isSplitBatch;
+        this.kafka19012Instrumentation = kafka19012Instrumentation;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
                                                                                 recordsBuilder.compressionType());
         this.currentLeaderEpoch = OptionalInt.empty();
@@ -143,6 +146,8 @@ public final class ProducerBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+        kafka19012Instrumentation.ifPresent(i -> i.checkHeadersForTryAppend(topicPartition.topic(), headers));
+
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
@@ -168,6 +173,8 @@ public final class ProducerBatch {
      * @return true if the record has been successfully appended, false otherwise.
      */
     private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
+        kafka19012Instrumentation.ifPresent(i -> i.checkHeadersForTryAppendForSplit(topicPartition.topic(), headers));
+
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return false;
         } else {
@@ -387,7 +394,7 @@ public final class ProducerBatch {
         // with how normal batches are handled).
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
                 TimestampType.CREATE_TIME, 0L);
-        return new ProducerBatch(topicPartition, builder, this.createdMs, true);
+        return new ProducerBatch(topicPartition, builder, this.createdMs, true, kafka19012Instrumentation);
     }
 
     public boolean isCompressed() {

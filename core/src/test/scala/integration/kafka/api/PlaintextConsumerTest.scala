@@ -1600,6 +1600,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
     // send some messages.
+    producerConfig.setProperty(ProducerConfig.ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG, "false")
     val producer = createProducer()
     sendRecords(producer, numMessages, tp)
     // Test subscribe
@@ -1640,6 +1641,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
     // send some messages.
+    producerConfig.setProperty(ProducerConfig.ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG, "false")
     val producer = createProducer()
     sendRecords(producer, numMessages, tp)
     // Test subscribe

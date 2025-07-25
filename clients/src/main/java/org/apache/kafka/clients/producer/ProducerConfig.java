@@ -338,6 +338,11 @@ public class ProducerConfig extends AbstractConfig {
             "By default the TransactionId is not configured, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
+    /** <code>enable.kafka19012.instrumentation</code> */
+    public static final String ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG = "enable.kafka19012.instrumentation";
+    public static final String ENABLE_KAFKA19012_INSTRUMENTATION_DOC = "When set to 'true', the producer will add a header with the topic name during Producer.send(). " +
+            "header is checked during the PRODUCE request process";
+
     /**
      * <code>security.providers</code>
      */
@@ -510,7 +515,12 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                        TRANSACTIONAL_ID_DOC)
+                                .define(ENABLE_KAFKA19012_INSTRUMENTATION_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        ENABLE_KAFKA19012_INSTRUMENTATION_DOC);
     }
 
     @Override
