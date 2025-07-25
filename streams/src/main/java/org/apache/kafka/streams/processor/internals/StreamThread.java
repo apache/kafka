@@ -365,6 +365,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
+    private final AtomicLong maxBufferSizeBytes = new AtomicLong(-1L);
     private final boolean eosEnabled;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
@@ -386,6 +387,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final Time time,
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
+                                      final long maxBufferSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final StandbyUpdateListener userStandbyUpdateListener,
@@ -529,7 +531,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsUncaughtExceptionHandler,
             cache::resize,
             mainConsumerSetup.streamsRebalanceData,
-            streamsMetadataState
+            streamsMetadataState,
+            maxBufferSizeBytes
         );
 
         return streamThread.updateThreadMetadata(adminClientId(clientId));
@@ -778,7 +781,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
                         final java.util.function.Consumer<Long> cacheResizer,
                         final Optional<StreamsRebalanceData> streamsRebalanceData,
-                        final StreamsMetadataState streamsMetadataState
+                        final StreamsMetadataState streamsMetadataState,
+                        final long maxBufferSizeBytes
                         ) {
         super(threadId);
         this.stateLock = new Object();
@@ -858,6 +862,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
+        this.maxBufferSizeBytes.set(maxBufferSizeBytes);
         this.stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
         this.processingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
         this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
@@ -1172,8 +1177,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
-    public void resizeCache(final long size) {
-        cacheResizeSize.set(size);
+    public void resizeCacheAndBufferMemory(final long cacheSize, final long maxBufferSize) {
+        cacheResizeSize.set(cacheSize);
+        maxBufferSizeBytes.set(maxBufferSize);
+    }
+
+    public long getCacheSize() {
+        return cacheResizeSize.get();
+    }
+
+    public long getMaxBufferSize() {
+        return maxBufferSizeBytes.get();
     }
 
     /**
@@ -1248,6 +1262,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                 }
 
                 log.debug("Processing tasks with {} iterations.", numIterations);
+                final long bufferSizeOld = taskManager.getInputBufferSizeInBytes();
                 final int processed = taskManager.process(numIterations, time);
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
@@ -1264,6 +1279,17 @@ public class StreamThread extends Thread implements ProcessingThread {
 
                     totalProcessed += processed;
                     totalRecordsProcessedSinceLastSummary += processed;
+                    final long bufferSize = taskManager.getInputBufferSizeInBytes();
+                    // The total bytes buffered had exceeded the max buffer size and with the processing
+                    // of this batch has fallen down below the threshold. We can resume non-empty partitions
+                    if (bufferSizeOld > maxBufferSizeBytes.get() &&
+                        bufferSize <= maxBufferSizeBytes.get()
+                        && !mainConsumer.paused().isEmpty()) {
+                        final Set<TopicPartition> pausedPartitions = mainConsumer.paused();
+                        log.info("Buffered records size {} bytes falls below {}. Resuming all the paused partitions {} in the consumer",
+                            bufferSize, maxBufferSizeBytes.get(), pausedPartitions);
+                        mainConsumer.resume(pausedPartitions);
+                    }
                 }
 
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
@@ -1460,7 +1486,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
-    private long pollPhase() {
+     // Visible for testing
+     long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
@@ -1507,6 +1534,19 @@ public class StreamThread extends Thread implements ProcessingThread {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
         }
+         // Check buffer size after adding records to tasks
+         final long bufferSize = taskManager.getInputBufferSizeInBytes();
+         // Pausing partitions as the buffer size now exceeds max buffer size
+         if (maxBufferSizeBytes.get() != -1 && bufferSize > maxBufferSizeBytes.get()) {
+             final Set<TopicPartition> nonEmptyPartitions = taskManager.nonEmptyPartitions();
+             log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
+                 bufferSize, maxBufferSizeBytes.get(), nonEmptyPartitions);
+             // Only non-empty partitions are paused here. Reason is that, if a task has multiple partitions with
+             // some of them empty, then in that case pausing even empty partitions would sacrifice ordered processing
+             // and even lead to temporal deadlock. More explanation can be found here:
+             // https://issues.apache.org/jira/browse/KAFKA-13152
+             mainConsumer.pause(nonEmptyPartitions);
+         }
         if (!records.nextOffsets().isEmpty()) {
             taskManager.updateNextOffsets(records.nextOffsets());
         }
