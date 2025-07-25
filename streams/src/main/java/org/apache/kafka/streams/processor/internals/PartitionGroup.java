@@ -264,7 +264,6 @@ class PartitionGroup extends AbstractPartitionGroup {
             record = queue.poll(wallClockTime);
 
             if (record != null) {
-                --totalBuffered;
                 totalBytesBuffered -= oldBufferSize - queue.getTotalBytesBuffered();
                 totalInputBufferBytesSensor.record(totalBytesBuffered);
 
