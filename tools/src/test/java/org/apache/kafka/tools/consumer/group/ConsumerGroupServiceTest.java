@@ -314,14 +314,10 @@ public class ConsumerGroupServiceTest {
     }
 
     private DescribeTopicsResult describeTopicsResult(Collection<String> topics) {
-        Map<String, TopicDescription> topicDescriptions = new HashMap<>();
-
-        topics.forEach(topic -> {
-            List<TopicPartitionInfo> partitions = IntStream.range(0, NUM_PARTITIONS)
-                    .mapToObj(i -> new TopicPartitionInfo(i, Node.noNode(), List.of(), List.of()))
-                    .toList();
-            topicDescriptions.put(topic, new TopicDescription(topic, false, partitions));
-        });
+        var topicDescriptions  = topics.stream().collect(Collectors.toMap(Function.identity(),
+            topic -> new TopicDescription(topic, false, IntStream.range(0, NUM_PARTITIONS)
+                .mapToObj(i -> new TopicPartitionInfo(i, Node.noNode(), List.of(), List.of()))
+                .toList())));
         return AdminClientTestUtils.describeTopicsResult(topicDescriptions);
     }
 

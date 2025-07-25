@@ -109,7 +109,7 @@ public class ClusterToolTest {
         int id = clusterInstance.controllerIds().iterator().next();
         String format = "%-10s %-9s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s";
         String expected = String.format(format, "ID", "HOST", "PORT", "RACK", "ENDPOINT_TYPE", id, "localhost", port, "null", "controller");
-        assertEquals(output, expected);
+        assertEquals(expected, output);
     }
 
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})

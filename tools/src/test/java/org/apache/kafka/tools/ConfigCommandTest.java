@@ -501,9 +501,9 @@ public class ConfigCommandTest {
 
     private Entry<List<String>, Map<String, String>> argsAndExpectedEntity(Optional<String> entityName, String entityType) {
         String command = switch (entityType) {
-            case ClientQuotaEntity.USER -> "users";
-            case ClientQuotaEntity.CLIENT_ID -> "clients";
-            case ClientQuotaEntity.IP -> "ips";
+            case ClientQuotaEntity.USER -> ConfigType.USER.value();
+            case ClientQuotaEntity.CLIENT_ID -> ConfigType.CLIENT.value();
+            case ClientQuotaEntity.IP -> ConfigType.IP.value();
             default -> throw new IllegalArgumentException("Unknown command: " + entityType);
         };
 

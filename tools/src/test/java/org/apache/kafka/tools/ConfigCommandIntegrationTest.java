@@ -277,8 +277,7 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest
     public void testGroupConfigUpdateUsingKraft() throws Exception {
         List<String> alterOpts = Stream.concat(entityOp(Optional.of(defaultGroupName)).stream(),
-                Stream.of("--entity-type", "groups", "--alter"))
-            .toList();
+            Stream.of("--entity-type", "groups", "--alter")).toList();
         verifyGroupConfigUpdate(alterOpts);
 
         // Test for the --group alias
@@ -347,8 +346,7 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest(types = {Type.KRAFT})
     public void testClientMetricsConfigUpdate() throws Exception {
         List<String> alterOpts = Stream.concat(entityOp(Optional.of(defaultClientMetricsName)).stream(),
-                        Stream.of("--entity-type", "client-metrics", "--alter"))
-            .toList();
+            Stream.of("--entity-type", "client-metrics", "--alter")).toList();
         verifyClientMetricsConfigUpdate(alterOpts);
 
         // Test for the --client-metrics alias

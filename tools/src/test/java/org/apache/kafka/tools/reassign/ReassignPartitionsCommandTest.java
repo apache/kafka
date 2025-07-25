@@ -640,8 +640,7 @@ public class ReassignPartitionsCommandTest {
                                                        int brokerId,
                                                        List<Integer> replicas) throws ExecutionException, InterruptedException {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            DescribeLogDirsResult describeLogDirsResult = admin.describeLogDirs(
-                    IntStream.range(0, 4).boxed().toList());
+            DescribeLogDirsResult describeLogDirsResult = admin.describeLogDirs(IntStream.range(0, 4).boxed().toList());
 
             BrokerDirs logDirInfo = new BrokerDirs(describeLogDirsResult, brokerId);
             assertTrue(logDirInfo.futureLogDirs.isEmpty());

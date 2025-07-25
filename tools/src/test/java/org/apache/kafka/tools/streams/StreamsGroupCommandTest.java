@@ -481,14 +481,10 @@ public class StreamsGroupCommandTest {
     }
 
     private DescribeTopicsResult describeTopicsResult(Collection<String> topics, int numOfPartitions) {
-        Map<String, TopicDescription> topicDescriptions = new HashMap<>();
-
-        topics.forEach(topic -> {
-            List<TopicPartitionInfo> partitions = IntStream.range(0, numOfPartitions)
+        var topicDescriptions = topics.stream().collect(Collectors.toMap(Function.identity(),
+            topic -> new TopicDescription(topic, false, IntStream.range(0, numOfPartitions)
                 .mapToObj(i -> new TopicPartitionInfo(i, null, List.of(), List.of()))
-                .toList();
-            topicDescriptions.put(topic, new TopicDescription(topic, false, partitions));
-        });
+                .toList())));
         return AdminClientTestUtils.describeTopicsResult(topicDescriptions);
     }
 
