@@ -1617,51 +1617,24 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     /**
      * Returns a map containing the epoch vs start-offset for the given leader epoch map by filtering the epochs that
      * does not contain any messages/records associated with them.
-     * For ex:
-     * <pre>
-     * {@code
-     *  <epoch - start offset>
-     *  0 - 0
-     *  1 - 10
-     *  2 - 20
-     *  3 - 30
-     *  4 - 40
-     *  5 - 60  // epoch 5 does not have records or messages associated with it
-     *  6 - 60
-     *  7 - 70
-     * }
-     * </pre>
-     * When the above leaderEpochMap is passed to this method, it returns the following map:
-     * <pre>
-     * {@code
-     *  <epoch - start offset>
-     *  0 - 0
-     *  1 - 10
-     *  2 - 20
-     *  3 - 30
-     *  4 - 40
-     *  6 - 60
-     *  7 - 70
-     * }
-     * </pre>
+     *
      * @param leaderEpochs The leader epoch map to be refined.
+     * @return A map containing only the epochs and their start offsets that have associated messages/records.
      */
     // Visible for testing
     static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
-        List<Integer> epochsWithNoMessages = new ArrayList<>();
+        TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>();
         Map.Entry<Integer, Long> previousEpochAndOffset = null;
+
         for (Map.Entry<Integer, Long> currentEpochAndOffset : leaderEpochs.entrySet()) {
-            if (previousEpochAndOffset != null && previousEpochAndOffset.getValue().equals(currentEpochAndOffset.getValue())) {
-                epochsWithNoMessages.add(previousEpochAndOffset.getKey());
+            if (previousEpochAndOffset != null && !previousEpochAndOffset.getValue().equals(currentEpochAndOffset.getValue())) {
+                filteredLeaderEpochs.put(previousEpochAndOffset.getKey(), previousEpochAndOffset.getValue());
             }
             previousEpochAndOffset = currentEpochAndOffset;
         }
-        if (epochsWithNoMessages.isEmpty()) {
-            return leaderEpochs;
-        }
-        TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>(leaderEpochs);
-        for (Integer epochWithNoMessage : epochsWithNoMessages) {
-            filteredLeaderEpochs.remove(epochWithNoMessage);
+
+        if (previousEpochAndOffset != null) {
+            filteredLeaderEpochs.put(previousEpochAndOffset.getKey(), previousEpochAndOffset.getValue());
         }
         return filteredLeaderEpochs;
     }
