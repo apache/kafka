@@ -140,14 +140,6 @@ public class FollowerState implements EpochState {
     }
 
     /**
-     * Reset the fetch timeout after node discovers leader. This allows observers to resume fetching from leader
-     * instead of from bootstrap servers
-     */
-    public void resetFetchTimeoutAfterDiscoveringLeader(long currentTimeMs) {
-        overrideFetchTimeout(currentTimeMs, fetchTimeoutMs);
-    }
-
-    /**
      * Override the fetch timeout to a specific value. This is useful for short-circuiting followers' timeouts after
      * they receive end quorum requests
      */

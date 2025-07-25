@@ -846,10 +846,6 @@ public class QuorumState {
         return state instanceof FollowerState;
     }
 
-    public boolean isFollowerObserver() {
-        return isFollower() && isObserver();
-    }
-
     public boolean isUnattached() {
         return state instanceof UnattachedState;
     }

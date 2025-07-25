@@ -2569,15 +2569,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 transitionToUnattached(epoch, OptionalInt.empty());
             }
-        } else if (leaderId.isPresent()) {
-            if (quorum.isFollowerObserver()) {
-                // This allows observers to resume fetching from leader after discovering the leader
-                quorum.followerStateOrThrow().resetFetchTimeoutAfterDiscoveringLeader(currentTimeMs);
-            } else if (!quorum.hasLeader() || leaderEndpoints.size() > quorum.leaderEndpoints().size()) {
-                // The request or response indicates the leader of the current epoch
-                // which are currently unknown or the replica has discovered more endpoints
-                transitionToFollower(epoch, leaderId.getAsInt(), leaderEndpoints, currentTimeMs);
-            }
+        } else if (
+            leaderId.isPresent() &&
+                (!quorum.hasLeader() || leaderEndpoints.size() > quorum.leaderEndpoints().size())
+        ) {
+            // The request or response indicates the leader of the current epoch
+            // which are currently unknown or the replica has discovered more endpoints
+            transitionToFollower(epoch, leaderId.getAsInt(), leaderEndpoints, currentTimeMs);
         }
     }
 
