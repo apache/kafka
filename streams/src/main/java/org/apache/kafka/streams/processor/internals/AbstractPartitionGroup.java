@@ -55,6 +55,8 @@ abstract class AbstractPartitionGroup {
      */
     abstract long streamTime();
 
+    abstract long totalBytesBuffered();
+
     abstract Long headRecordOffset(final TopicPartition partition);
 
     abstract Optional<Integer> headRecordLeaderEpoch(final TopicPartition partition);
@@ -70,6 +72,8 @@ abstract class AbstractPartitionGroup {
     abstract void close();
 
     abstract Set<TopicPartition> partitions();
+
+    abstract Set<TopicPartition> getNonEmptyTopicPartitions();
 
     static class RecordInfo {
         RecordQueue queue;

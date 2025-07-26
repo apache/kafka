@@ -105,4 +105,14 @@ class SynchronizedPartitionGroup extends AbstractPartitionGroup {
     synchronized Set<TopicPartition> partitions() {
         return wrapped.partitions();
     }
+
+    @Override
+    synchronized Set<TopicPartition> getNonEmptyTopicPartitions() {
+        return wrapped.getNonEmptyTopicPartitions();
+    }
+
+    @Override
+    synchronized long totalBytesBuffered() {
+        return wrapped.totalBytesBuffered();
+    }
 }
