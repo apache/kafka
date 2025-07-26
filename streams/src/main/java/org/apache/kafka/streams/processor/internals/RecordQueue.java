@@ -199,6 +199,16 @@ public class RecordQueue {
     }
 
     /**
+     * Returns true if the head record is a CorruptedRecord, meaning all remaining
+     * records in the queue are invalid/corrupted and cannot be processed.
+     *
+     * @return true if head record is corrupted, false otherwise
+     */
+    public boolean headRecordIsCorrupted() {
+        return headRecord instanceof CorruptedRecord;
+    }
+
+    /**
      * Clear the fifo queue of its elements
      */
     public void clear() {

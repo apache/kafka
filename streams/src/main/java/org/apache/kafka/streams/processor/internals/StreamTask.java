@@ -794,7 +794,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // decreased to the threshold, we can then resume the consumption on this partition
             // TODO the second part of OR condition would be removed once
             //  deprecated config buffered.records.per.partition is removed
-            if (recordInfo.queue().isEmpty() || (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize)) {
+            // Also we need to resume if the queue only contains corrupted records
+            // because they represent a processable queue which is actually empty
+            if (recordInfo.queue().isEmpty() ||
+                (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize) ||
+                recordInfo.queue().headRecordIsCorrupted()) {
                 partitionsToResume.add(partition);
             }
 
