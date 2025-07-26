@@ -956,7 +956,7 @@ public class PartitionGroupTest {
         record = group.nextRecord(info, time.milliseconds());
         assertEquals(record.timestamp, 5L);
 
-        partition1TotalBytes -= getBytesBufferedForRawRecords(Arrays.asList(list1.get(0), list1.get(0)));
+        partition1TotalBytes -= getBytesBufferedForRawRecords(Arrays.asList(list1.get(0), list1.get(1)));
         assertEquals(group.totalBytesBuffered(), partition1TotalBytes);
         assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition1TotalBytes));
 
@@ -986,7 +986,7 @@ public class PartitionGroupTest {
         record = group.nextRecord(info, time.milliseconds());
         // 1:[]
         // 2:[4, 6]
-        partition1TotalBytes -= getBytesBufferedForRawRecords(Collections.singletonList(list2.get(2)));
+        partition1TotalBytes -= getBytesBufferedForRawRecords(Collections.singletonList(list1.get(2)));
         assertEquals(group.totalBytesBuffered(), partition2TotalBytes + partition1TotalBytes);
         assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition2TotalBytes + partition1TotalBytes));
         assertEquals(record.timestamp, 3L);
