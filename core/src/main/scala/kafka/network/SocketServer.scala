@@ -79,7 +79,9 @@ class SocketServer(
   val connectionDisconnectListeners: Seq[ConnectionDisconnectListener] = Seq.empty
 ) extends Logging with BrokerReconfigurable {
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.network"
+  private val metricsClassName = "SocketServer"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
@@ -486,7 +488,9 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
                                        apiVersionManager: ApiVersionManager)
   extends Runnable with Logging {
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.network"
+  private val metricsClassName = "Acceptor"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   val shouldRun = new AtomicBoolean(true)
 
@@ -834,7 +838,9 @@ private[kafka] class Processor(
   threadName: String,
   connectionDisconnectListeners: Seq[ConnectionDisconnectListener]
 ) extends Runnable with Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "Processor"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   val shouldRun: AtomicBoolean = new AtomicBoolean(true)
   private val started: AtomicBoolean = new AtomicBoolean()

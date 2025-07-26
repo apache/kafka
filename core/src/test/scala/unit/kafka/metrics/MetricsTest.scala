@@ -153,7 +153,10 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val path = "C:\\windows-path\\kafka-logs"
     val tags = util.Map.of("dir", path)
     val expectedMBeanName = Set(tags.keySet().iterator().next(), ObjectName.quote(path)).mkString("=")
-    val metric = new KafkaMetricsGroup(this.getClass).metricName("test-metric", tags)
+
+    val metricsPackage = "kafka.metrics"
+    val metricsClassName = "MetricsTest"
+    val metric = new KafkaMetricsGroup(metricsPackage, metricsClassName).metricName("test-metric", tags)
     assert(metric.getMBeanName.endsWith(expectedMBeanName))
   }
 

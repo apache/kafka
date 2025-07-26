@@ -187,7 +187,9 @@ class DelayedFetch(
 }
 
 object DelayedFetchMetrics {
-  private val metricsGroup = new KafkaMetricsGroup(DelayedFetchMetrics.getClass)
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "DelayedFetchMetrics"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   private val FetcherTypeKey = "fetcherType"
   val followerExpiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "follower").asJava)
   val consumerExpiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, Map(FetcherTypeKey -> "consumer").asJava)

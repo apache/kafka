@@ -71,7 +71,9 @@ class ControllerServer(
 
   import kafka.server.Server._
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "ControllerServer"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   val config = sharedServer.controllerConfig
   val logContext = new LogContext(s"[ControllerServer id=${config.nodeId}] ")

@@ -888,7 +888,9 @@ object FetcherMetrics {
 }
 
 class FetcherLagMetrics(metricId: ClientIdTopicPartition) {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "FetcherLagMetrics"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private[this] val lagVal = new AtomicLong(-1L)
   private[this] val tags = Map(
@@ -927,7 +929,9 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
 }
 
 class FetcherStats(metricId: ClientIdAndBroker) {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "FetcherStats"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   val tags: util.Map[String, String] = Map("clientId" -> metricId.clientId,
     "brokerHost" -> metricId.brokerHost,

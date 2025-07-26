@@ -82,7 +82,9 @@ class LogManager(logDirs: Seq[File],
                   (cleanerConfig, files, map, logDirFailureChannel, time) => new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time)
                 ) extends Logging {
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.log"
+  private val metricsClassName = "LogManager"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private val logCreationOrDeletionLock = new Object
   private val currentLogs = new util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()

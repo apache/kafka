@@ -231,7 +231,9 @@ class ReplicaManager(val config: KafkaConfig,
                      val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
                      val defaultActionQueue: ActionQueue = new DelayedActionQueue
                      ) extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "ReplicaManager"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   private val addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(config)
   private val shareFetchPurgatoryName = "ShareFetch"
   private val delayedShareFetchTimer = new SystemTimer(shareFetchPurgatoryName)
