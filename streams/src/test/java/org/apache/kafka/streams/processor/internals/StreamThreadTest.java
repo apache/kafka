@@ -4047,7 +4047,7 @@ public class StreamThreadTest {
                         .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
                         .setStatusDetail("Missing source topics")
         ));
-        final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class, () -> thread.runOnceWithoutProcessingThreads());
+        final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class, () -> thread.runOnceWithProcessingThreads());
         assertTrue(exception.getMessage().startsWith("Missing source topics"));
     }
 

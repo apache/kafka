@@ -42,7 +42,6 @@ import org.apache.kafka.tools.filter.TopicPartitionFilter.TopicFilterAndPartitio
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -312,7 +311,7 @@ public class GetOffsetShell {
      * PartitionPattern: NUMBER | NUMBER-(NUMBER)? | -NUMBER
      */
     public TopicPartitionFilter createTopicPartitionFilterWithPatternList(String topicPartitions) {
-        List<String> ruleSpecs = Arrays.asList(topicPartitions.split(","));
+        List<String> ruleSpecs = List.of(topicPartitions.split(","));
         List<TopicPartitionFilter> rules = ruleSpecs.stream().map(ruleSpec -> {
             try {
                 return parseRuleSpec(ruleSpec);
@@ -338,7 +337,7 @@ public class GetOffsetShell {
         Set<Integer> partitions;
 
         if (partitionsString == null || partitionsString.isEmpty()) {
-            partitions = Collections.emptySet();
+            partitions = Set.of();
         } else {
             try {
                 partitions = Arrays.stream(partitionsString.split(",")).map(Integer::parseInt).collect(Collectors.toSet());

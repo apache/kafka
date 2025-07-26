@@ -796,7 +796,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             }
             return performShareGroupStateMetadataInitialize(groupId, topicPartitionMap, defaultResponse);
         }
-        log.error("Received error while calling initialize state for {} on persister {}.", groupId, persisterError.code());
+        log.error("Received error while calling initialize state for {} on persister, errorCode: {}.", groupId, persisterError.code());
         return uninitializeShareGroupState(persisterError, groupId, topicPartitionMap);
     }
 

@@ -387,7 +387,7 @@ public class ShareGroupCommand {
         TreeMap<String, ShareGroupDescription> collectGroupsDescription(Collection<String> groupIds) throws ExecutionException, InterruptedException {
             Map<String, ShareGroupDescription> shareGroups = describeShareGroups(groupIds);
             TreeMap<String, ShareGroupDescription> res = new TreeMap<>();
-            shareGroups.forEach(res::put);
+            res.putAll(shareGroups);
             return res;
         }
 

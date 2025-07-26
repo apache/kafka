@@ -14,20 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.share.fetch;
 
-package org.apache.kafka.server.common;
-
-import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-public class MetadataVersionValidatorTest {
-
-    @Test
-    public void testMetadataVersionValidator() {
-        String str = new MetadataVersionValidator().toString();
-        String[] apiVersions = str.substring(1).split(",");
-        assertEquals(MetadataVersion.VERSIONS.length, apiVersions.length);
-    }
-
+/**
+ * The DeliveryCountOps is used to specify the behavior on the delivery count: increase, decrease,
+ * or do nothing.
+ */
+public enum DeliveryCountOps {
+    INCREASE, DECREASE, NO_OP
 }

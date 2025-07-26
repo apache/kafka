@@ -58,7 +58,6 @@ import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -121,7 +120,7 @@ public class ConsumerGroupCommand {
             return;
         }
 
-        try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Collections.emptyMap())) {
+        try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt))
                 consumerGroupService.listGroups();
             else if (opts.options.has(opts.describeOpt))
@@ -242,14 +241,14 @@ public class ConsumerGroupCommand {
         private Set<GroupState> stateValues() {
             String stateValue = opts.options.valueOf(opts.stateOpt);
             return (stateValue == null || stateValue.isEmpty())
-                ? Collections.emptySet()
+                ? Set.of()
                 : groupStatesFromString(stateValue);
         }
 
         private Set<GroupType> typeValues() {
             String typeValue = opts.options.valueOf(opts.typeOpt);
             return (typeValue == null || typeValue.isEmpty())
-                ? Collections.emptySet()
+                ? Set.of()
                 : consumerGroupTypesFromString(typeValue);
         }
 
@@ -585,7 +584,7 @@ public class ConsumerGroupCommand {
             Optional<String> clientIdOpt
         ) {
             if (topicPartitions.isEmpty()) {
-                return Collections.singleton(
+                return Set.of(
                     new PartitionAssignmentState(group, coordinator, Optional.empty(), Optional.empty(), Optional.empty(),
                         getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty(), Optional.empty())
                 );
@@ -684,7 +683,7 @@ public class ConsumerGroupCommand {
                             break;
                         default:
                             printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
-                            result.put(groupId, Collections.emptyMap());
+                            result.put(groupId, Map.of());
                     }
                 } catch (InterruptedException ie) {
                     throw new RuntimeException(ie);
@@ -855,7 +854,7 @@ public class ConsumerGroupCommand {
          * Returns the state of the specified consumer group and partition assignment states
          */
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) throws Exception {
-            return collectGroupsOffsets(Collections.singletonList(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
+            return collectGroupsOffsets(List.of(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
         }
 
         /**
@@ -899,7 +898,7 @@ public class ConsumerGroupCommand {
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE))
-                    : Collections.emptyList();
+                    : List.of();
 
                 rowsWithConsumer.addAll(rowsWithoutConsumer);
 
@@ -910,7 +909,7 @@ public class ConsumerGroupCommand {
         }
 
         Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId) throws Exception {
-            return collectGroupsMembers(Collections.singleton(groupId)).get(groupId);
+            return collectGroupsMembers(Set.of(groupId)).get(groupId);
         }
 
         TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds) throws Exception {
@@ -928,7 +927,7 @@ public class ConsumerGroupCommand {
                         consumer.groupInstanceId().orElse(""),
                         consumer.assignment().topicPartitions().size(),
                         consumer.assignment().topicPartitions().stream().toList(),
-                        consumer.targetAssignment().map(a -> a.topicPartitions().stream().toList()).orElse(Collections.emptyList()),
+                        consumer.targetAssignment().map(a -> a.topicPartitions().stream().toList()).orElse(List.of()),
                         consumer.memberEpoch(),
                         consumerGroup.targetAssignmentEpoch(),
                         consumer.upgraded()
@@ -939,7 +938,7 @@ public class ConsumerGroupCommand {
         }
 
         GroupInformation collectGroupState(String groupId) throws Exception {
-            return collectGroupsState(Collections.singleton(groupId)).get(groupId);
+            return collectGroupsState(Set.of(groupId)).get(groupId);
         }
 
         TreeMap<String, GroupInformation> collectGroupsState(Collection<String> groupIds) throws Exception {
@@ -986,14 +985,14 @@ public class ConsumerGroupCommand {
                 if (!opts.options.has(opts.resetFromFileOpt))
                     CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
 
-                return Collections.emptyList();
+                return List.of();
             }
         }
 
         private Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
             try {
                 return adminClient.listConsumerGroupOffsets(
-                    Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec()),
+                    Map.of(groupId, new ListConsumerGroupOffsetsSpec()),
                     withTimeoutMs(new ListConsumerGroupOffsetsOptions())
                 ).partitionsToOffsetAndMetadata(groupId).get();
             } catch (InterruptedException | ExecutionException e) {

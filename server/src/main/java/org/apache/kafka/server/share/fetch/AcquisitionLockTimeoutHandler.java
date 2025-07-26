@@ -14,28 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.common;
+package org.apache.kafka.server.share.fetch;
 
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigException;
+/**
+ * AcquisitionLockTimeoutHandler is an interface that defines a handler for acquisition lock timeouts.
+ * It is used to handle cases where the acquisition lock for a share partition times out.
+ */
+public interface AcquisitionLockTimeoutHandler {
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
+    /**
+     * Handles the acquisition lock timeout for a share partition.
+     *
+     * @param memberId the id of the member that requested the lock
+     * @param firstOffset the first offset
+     * @param lastOffset the last offset
+     */
+    void handle(String memberId, long firstOffset, long lastOffset);
 
-public class MetadataVersionValidator implements Validator {
-
-    @Override
-    public void ensureValid(String name, Object value) {
-        try {
-            MetadataVersion.fromVersionString(value.toString());
-        } catch (IllegalArgumentException e) {
-            throw new ConfigException(name, value.toString(), e.getMessage());
-        }
-    }
-
-    @Override
-    public String toString() {
-        return "[" + Arrays.stream(MetadataVersion.VERSIONS).map(MetadataVersion::version).collect(
-             Collectors.joining(", ")) + "]";
-    }
 }
