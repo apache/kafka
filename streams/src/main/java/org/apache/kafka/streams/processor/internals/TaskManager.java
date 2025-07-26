@@ -1975,7 +1975,9 @@ public class TaskManager {
     Set<TopicPartition> nonEmptyPartitions() {
         final Set<TopicPartition> nonEmptyPartitions = new HashSet<>();
         for (final Task task : activeTaskIterable()) {
-            nonEmptyPartitions.addAll(((StreamTask) task).getNonEmptyTopicPartitions());
+            if (task instanceof StreamTask) {
+                nonEmptyPartitions.addAll(((StreamTask) task).getNonEmptyTopicPartitions());
+            }
         }
         return nonEmptyPartitions;
     }
@@ -2093,7 +2095,9 @@ public class TaskManager {
     long getInputBufferSizeInBytes() {
         long bytesBuffered = 0L;
         for (final Task task : activeTaskIterable()) {
-            bytesBuffered += ((StreamTask) task).totalBytesBuffered();
+            if (task instanceof StreamTask) {
+                bytesBuffered += ((StreamTask) task).totalBytesBuffered();
+            }
         }
         return bytesBuffered;
     }
