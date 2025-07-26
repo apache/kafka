@@ -135,7 +135,9 @@ class DelayedProduce(delayMs: Long,
 }
 
 object DelayedProduceMetrics {
-  private val metricsGroup = new KafkaMetricsGroup(DelayedProduceMetrics.getClass)
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "DelayedProduceMetrics"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private val aggregateExpirationMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 

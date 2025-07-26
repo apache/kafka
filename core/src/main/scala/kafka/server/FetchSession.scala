@@ -803,7 +803,9 @@ class FetchSessionCacheShard(private val maxEntries: Int,
   }
 }
 object FetchSessionCache {
-  private[server] val metricsGroup = new KafkaMetricsGroup(classOf[FetchSessionCache])
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "FetchSessionCache"
+  private[server] val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   private[server] val counter = new AtomicInteger(0)
 }
 

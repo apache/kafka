@@ -138,6 +138,8 @@ class DelayedRemoteFetch(remoteFetchTasks: util.Map[TopicIdPartition, Future[Voi
 }
 
 object DelayedRemoteFetchMetrics {
-  private val metricsGroup = new KafkaMetricsGroup(DelayedRemoteFetchMetrics.getClass)
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "DelayedRemoteFetchMetrics"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   val expiredRequestMeter: Meter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 }

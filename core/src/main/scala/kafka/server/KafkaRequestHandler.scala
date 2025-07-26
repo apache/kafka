@@ -201,7 +201,9 @@ class KafkaRequestHandlerPool(
   requestHandlerAvgIdleMetricName: String,
   nodeName: String = "broker"
 ) extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "KafkaRequestHandlerPool"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
