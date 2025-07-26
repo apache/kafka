@@ -1231,7 +1231,15 @@ public class KafkaStreams implements AutoCloseable {
                                 + "for it to complete shutdown as this will result in deadlock.", streamThread.getName());
                         }
 
-                        resizeThreadCacheAndBufferMemory(threads.size());
+                        // For cache resizing, check if thread removal succeeded or timed out
+                        final boolean threadWasRemoved = !threads.contains(streamThread);
+                        if (threadWasRemoved) {
+                            // Thread was successfully removed so we can use current thread count
+                            resizeThreadCacheAndBufferMemory(threads.size());
+                        } else {
+                            // Thread removal timed out so we need to resize as if the thread was removed
+                            resizeThreadCacheAndBufferMemory(threads.size() - 1);
+                        }
                         log.info("Resizing thread cache/max buffer size due to removal of thread {}, " +
                             "new cache size/max buffer size per thread is {}", streamThread.getName(), getThreadCacheAndBufferMemoryString());
                         if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
