@@ -190,105 +190,134 @@ public final class TopologyConfig extends AbstractConfig {
         this.topologyOverrides = topologyOverrides;
         this.processingExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
 
+        this.maxBufferedSize = configureMaxBufferedSize();
+        this.cacheSize = configureCacheSize();
+        this.maxTaskIdleMs = configureMaxTaskIdleMs();
+        this.taskTimeoutMs = configureTaskTimeoutMs();
+        this.timestampExtractorSupplier = configureTimestampExtractor();
+        this.deserializationExceptionHandlerSupplier = configureDeserializationExceptionHandler();
+        this.storeType = configureStoreType();
+        this.dslStoreSuppliers = configureDslStoreSuppliers();
+        this.ensureExplicitInternalResourceNaming = globalAppConfigs.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG);
+    }
+
+
+    private int configureMaxBufferedSize() {
         final boolean bufferedRecordsPerPartitionOverridden = isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides);
         final boolean inputBufferMaxBytesOverridden = isTopologyOverride(INPUT_BUFFER_MAX_BYTES_CONFIG, topologyOverrides);
 
         if (!bufferedRecordsPerPartitionOverridden && !inputBufferMaxBytesOverridden) {
-            maxBufferedSize = getBufferedRecordsPerPartition(globalAppConfigs);
+            return getBufferedRecordsPerPartition(globalAppConfigs);
         } else {
-            maxBufferedSize = setMaxBufferedRecordsPerPartition(bufferedRecordsPerPartitionOverridden, inputBufferMaxBytesOverridden);
+            return setMaxBufferedRecordsPerPartition(bufferedRecordsPerPartitionOverridden, inputBufferMaxBytesOverridden);
         }
+    }
 
+    private long configureCacheSize() {
         final boolean stateStoreCacheMaxBytesOverridden = isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides);
         final boolean cacheMaxBytesBufferingOverridden = isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides);
 
         if (!stateStoreCacheMaxBytesOverridden && !cacheMaxBytesBufferingOverridden) {
-            cacheSize = totalCacheSize(globalAppConfigs);
+            return totalCacheSize(globalAppConfigs);
         } else {
+            final long configuredCacheSize;
             if (stateStoreCacheMaxBytesOverridden && cacheMaxBytesBufferingOverridden) {
-                cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+                configuredCacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
                 log.info("Topology {} is using both deprecated config {} and new config {}, hence {} is ignored and the new config {} (value {}) is used",
                         topologyName,
                         CACHE_MAX_BYTES_BUFFERING_CONFIG,
                         STATESTORE_CACHE_MAX_BYTES_CONFIG,
                         CACHE_MAX_BYTES_BUFFERING_CONFIG,
                         STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                        cacheSize);
+                        configuredCacheSize);
             } else if (cacheMaxBytesBufferingOverridden) {
-                cacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
+                configuredCacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
                 log.info("Topology {} is using only deprecated config {}, and will be used to set cache size to {}; " +
                                 "we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
                         topologyName,
                         CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                        cacheSize,
+                        configuredCacheSize,
                         STATESTORE_CACHE_MAX_BYTES_CONFIG,
                         CACHE_MAX_BYTES_BUFFERING_CONFIG);
             } else {
-                cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+                configuredCacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
             }
 
-            if (cacheSize != 0) {
+            if (configuredCacheSize != 0) {
                 log.warn("Topology {} is overriding cache size to {} but this will not have any effect as the "
                                 + "topology-level cache size config only controls whether record buffering is enabled "
                                 + "or disabled, thus the only valid override value is 0",
-                        topologyName, cacheSize);
+                        topologyName, configuredCacheSize);
             } else {
                 log.info("Topology {} is overriding cache size to {}, record buffering will be disabled",
-                        topologyName, cacheSize);
+                        topologyName, configuredCacheSize);
             }
+            return configuredCacheSize;
         }
+    }
 
+    private long configureMaxTaskIdleMs() {
         if (isTopologyOverride(MAX_TASK_IDLE_MS_CONFIG, topologyOverrides)) {
-            maxTaskIdleMs = getLong(MAX_TASK_IDLE_MS_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, MAX_TASK_IDLE_MS_CONFIG, maxTaskIdleMs);
+            final long configuredMaxTaskIdleMs = getLong(MAX_TASK_IDLE_MS_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, MAX_TASK_IDLE_MS_CONFIG, configuredMaxTaskIdleMs);
+            return configuredMaxTaskIdleMs;
         } else {
-            maxTaskIdleMs = globalAppConfigs.getLong(MAX_TASK_IDLE_MS_CONFIG);
+            return globalAppConfigs.getLong(MAX_TASK_IDLE_MS_CONFIG);
         }
+    }
 
+    private long configureTaskTimeoutMs() {
         if (isTopologyOverride(TASK_TIMEOUT_MS_CONFIG, topologyOverrides)) {
-            taskTimeoutMs = getLong(TASK_TIMEOUT_MS_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, TASK_TIMEOUT_MS_CONFIG, taskTimeoutMs);
+            final long configuredTaskTimeoutMs = getLong(TASK_TIMEOUT_MS_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, TASK_TIMEOUT_MS_CONFIG, configuredTaskTimeoutMs);
+            return configuredTaskTimeoutMs;
         } else {
-            taskTimeoutMs = globalAppConfigs.getLong(TASK_TIMEOUT_MS_CONFIG);
+            return globalAppConfigs.getLong(TASK_TIMEOUT_MS_CONFIG);
         }
+    }
 
+    private Supplier<TimestampExtractor> configureTimestampExtractor() {
         if (isTopologyOverride(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, topologyOverrides)) {
-            timestampExtractorSupplier = () -> getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
             log.info("Topology {} is overriding {} to {}", topologyName, DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, getClass(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG));
+            return () -> getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         } else {
-            timestampExtractorSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+            return () -> globalAppConfigs.getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         }
+    }
 
-
+    private Supplier<DeserializationExceptionHandler> configureDeserializationExceptionHandler() {
         final String deserializationExceptionHandlerKey = (globalAppConfigs.originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)
             || originals().containsKey(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG)) ?
             DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG :
             DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
         if (isTopologyOverride(deserializationExceptionHandlerKey, topologyOverrides)) {
-            deserializationExceptionHandlerSupplier = () -> getConfiguredInstance(deserializationExceptionHandlerKey, DeserializationExceptionHandler.class);
             log.info("Topology {} is overriding {} to {}", topologyName, deserializationExceptionHandlerKey, getClass(deserializationExceptionHandlerKey));
+            return () -> getConfiguredInstance(deserializationExceptionHandlerKey, DeserializationExceptionHandler.class);
         } else {
-            deserializationExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(deserializationExceptionHandlerKey, DeserializationExceptionHandler.class);
+            return () -> globalAppConfigs.getConfiguredInstance(deserializationExceptionHandlerKey, DeserializationExceptionHandler.class);
         }
-
-        if (isTopologyOverride(DEFAULT_DSL_STORE_CONFIG, topologyOverrides)) {
-            storeType = getString(DEFAULT_DSL_STORE_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, DEFAULT_DSL_STORE_CONFIG, storeType);
-        } else {
-            storeType = globalAppConfigs.getString(DEFAULT_DSL_STORE_CONFIG);
-        }
-
-        if (isTopologyOverride(DSL_STORE_SUPPLIERS_CLASS_CONFIG, topologyOverrides)) {
-            dslStoreSuppliers = getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, DSL_STORE_SUPPLIERS_CLASS_CONFIG, dslStoreSuppliers);
-        } else {
-            dslStoreSuppliers = globalAppConfigs.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
-        }
-
-        ensureExplicitInternalResourceNaming = globalAppConfigs.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG);
     }
 
+    private String configureStoreType() {
+        if (isTopologyOverride(DEFAULT_DSL_STORE_CONFIG, topologyOverrides)) {
+            final String configuredStoreType = getString(DEFAULT_DSL_STORE_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, DEFAULT_DSL_STORE_CONFIG, configuredStoreType);
+            return configuredStoreType;
+        } else {
+            return globalAppConfigs.getString(DEFAULT_DSL_STORE_CONFIG);
+        }
+    }
+
+    private Class<?> configureDslStoreSuppliers() {
+        if (isTopologyOverride(DSL_STORE_SUPPLIERS_CLASS_CONFIG, topologyOverrides)) {
+            final Class<?> configuredDslStoreSuppliers = getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, DSL_STORE_SUPPLIERS_CLASS_CONFIG, configuredDslStoreSuppliers);
+            return configuredDslStoreSuppliers;
+        } else {
+            return globalAppConfigs.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+        }
+    }
 
     private int setMaxBufferedRecordsPerPartition(final boolean bufferedRecordsPerPartitionOverridden, final boolean inputBufferMaxBytesOverridden) {
         int maxBufferedSize = -1;
