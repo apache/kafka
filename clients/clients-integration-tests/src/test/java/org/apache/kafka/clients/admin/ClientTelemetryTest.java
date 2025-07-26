@@ -79,7 +79,7 @@ public class ClientTelemetryTest {
         try (Admin admin = Admin.create(configs)) {
             String testTopicName = "test_topic";
             admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1)));
-            clusterInstance.waitForTopic(testTopicName, 1);
+            clusterInstance.waitTopicCreation(testTopicName, 1);
 
             Map<String, Object> producerConfigs = new HashMap<>();
             producerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());

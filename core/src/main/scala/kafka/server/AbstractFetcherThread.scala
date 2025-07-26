@@ -36,6 +36,7 @@ import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.ResultWithPartitions
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.log.remote.storage.RetriableRemoteStorageException
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.LogAppendInfo
@@ -796,7 +797,8 @@ abstract class AbstractFetcherThread(name: String,
         onPartitionFenced(topicPartition, leaderEpochInRequest)
       case e@(_: UnknownTopicOrPartitionException |
               _: UnknownLeaderEpochException |
-              _: NotLeaderOrFollowerException) =>
+              _: NotLeaderOrFollowerException |
+              _: RetriableRemoteStorageException) =>
         info(s"Could not build remote log auxiliary state for $topicPartition due to error: ${e.getMessage}")
         false
       case e: Throwable =>
