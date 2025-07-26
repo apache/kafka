@@ -1486,8 +1486,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
-     // Visible for testing
-     long pollPhase() {
+    // Visible for testing
+    long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
@@ -1534,19 +1534,19 @@ public class StreamThread extends Thread implements ProcessingThread {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
         }
-         // Check buffer size after adding records to tasks
-         final long bufferSize = taskManager.getInputBufferSizeInBytes();
-         // Pausing partitions as the buffer size now exceeds max buffer size
-         if (maxBufferSizeBytes.get() != -1 && bufferSize > maxBufferSizeBytes.get()) {
-             final Set<TopicPartition> nonEmptyPartitions = taskManager.nonEmptyPartitions();
-             log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
-                 bufferSize, maxBufferSizeBytes.get(), nonEmptyPartitions);
-             // Only non-empty partitions are paused here. Reason is that, if a task has multiple partitions with
-             // some of them empty, then in that case pausing even empty partitions would sacrifice ordered processing
-             // and even lead to temporal deadlock. More explanation can be found here:
-             // https://issues.apache.org/jira/browse/KAFKA-13152
-             mainConsumer.pause(nonEmptyPartitions);
-         }
+        // Check buffer size after adding records to tasks
+        final long bufferSize = taskManager.getInputBufferSizeInBytes();
+        // Pausing partitions as the buffer size now exceeds max buffer size
+        if (maxBufferSizeBytes.get() != -1 && bufferSize > maxBufferSizeBytes.get()) {
+            final Set<TopicPartition> nonEmptyPartitions = taskManager.nonEmptyPartitions();
+            log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
+                bufferSize, maxBufferSizeBytes.get(), nonEmptyPartitions);
+            // Only non-empty partitions are paused here. Reason is that, if a task has multiple partitions with
+            // some of them empty, then in that case pausing even empty partitions would sacrifice ordered processing
+            // and even lead to temporal deadlock. More explanation can be found here:
+            // https://issues.apache.org/jira/browse/KAFKA-13152
+            mainConsumer.pause(nonEmptyPartitions);
+        }
         if (!records.nextOffsets().isEmpty()) {
             taskManager.updateNextOffsets(records.nextOffsets());
         }
