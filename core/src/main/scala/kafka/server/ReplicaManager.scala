@@ -232,7 +232,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val defaultActionQueue: ActionQueue = new DelayedActionQueue
                      ) extends Logging {
   private val metricsPackage = "kafka.server"
-  private val metricsClassName = ""
+  private val metricsClassName = this.getClass.getSimpleName.replaceAll("\\$$", "")
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   private val addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(config)
   private val shareFetchPurgatoryName = "ShareFetch"
