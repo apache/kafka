@@ -87,6 +87,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -1489,6 +1490,31 @@ public class CommitRequestManagerTest {
         assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.isEmpty());
         assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
         assertTrue(commitRequestManager.pendingRequests.unsentOffsetCommits.isEmpty());
+    }
+
+    @Test
+    public void testPollWithFatalErrorDuringCoordinatorIsEmptyAndClosing() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+                new OffsetAndMetadata(0));
+
+        var commitFuture = commitRequestManager.commitAsync(offsets);
+
+        commitRequestManager.signalClose();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(coordinatorRequestManager.fatalError())
+                .thenReturn(Optional.of(new GroupAuthorizationException("Fatal error")));
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(200));
+
+        assertTrue(commitFuture.isCompletedExceptionally());
+
+        ExecutionException exception = assertThrows(ExecutionException.class, commitFuture::get);
+
+        assertInstanceOf(GroupAuthorizationException.class, exception.getCause());
+        assertEquals("Fatal error", exception.getCause().getMessage());
     }
 
     // Supplies (error, isRetriable)
