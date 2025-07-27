@@ -179,6 +179,20 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         if (closing) {
+            if (coordinatorRequestManager.coordinator().isEmpty()) {
+                if (coordinatorRequestManager.fatalError().isPresent()) {
+                    pendingRequests.maybeFailOnCoordinatorFatalError();
+                } else {
+                    CommitFailedException exception = new CommitFailedException(
+                            "Failed to commit offsets: Coordinator unknown and consumer is closing");
+
+                    pendingRequests.drainPendingCommits().forEach(request -> {
+                        request.future().completeExceptionally(exception);
+                    });
+                }
+
+                return EMPTY;
+            }
             return drainPendingOffsetCommitRequests();
         }
 
@@ -627,16 +641,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     public NetworkClientDelegate.PollResult drainPendingOffsetCommitRequests() {
         if (pendingRequests.unsentOffsetCommits.isEmpty())
             return EMPTY;
-
         List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drainPendingCommits();
-
-        if (coordinatorRequestManager.coordinator().isEmpty()) {
-            CommitFailedException exception = new CommitFailedException(
-                    "Failed to commit offsets: Coordinator unknown and consumer is closing");
-            requests.forEach(request -> request.future().completeExceptionally(exception));
-            return EMPTY;
-        }
-
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
     }
 
