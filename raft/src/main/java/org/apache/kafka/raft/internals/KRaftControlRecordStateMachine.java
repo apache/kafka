@@ -40,10 +40,10 @@ import java.util.OptionalLong;
 
 /**
  * The KRaft state machine for tracking control records in the topic partition.
- *
+ * <p>
  * This type keeps track of changes to the finalized kraft.version and the sets of voters between
  * the latest snapshot and the log end offset.
- *
+ * <p>
  * There are two type of actors/threads accessing this type. One is the KRaft driver which indirectly call a lot of
  * the public methods. The other actors/threads are the callers of {@code RaftClient.createSnapshot} which
  * indirectly call {@code voterSetAtOffset} and {@code kraftVersionAtOffset} when freezing a snapshot.
@@ -79,22 +79,22 @@ public final class KRaftControlRecordStateMachine {
     /**
      * Constructs an internal log listener
      *
-     * @param staticVoterSet the set of voter statically configured
-     * @param log the on disk topic partition
-     * @param serde the record decoder for data records
-     * @param bufferSupplier the supplier of byte buffers
+     * @param staticVoterSet    the set of voter statically configured
+     * @param log               the on disk topic partition
+     * @param serde             the record decoder for data records
+     * @param bufferSupplier    the supplier of byte buffers
      * @param maxBatchSizeBytes the maximum size of record batch
-     * @param logContext the log context
+     * @param logContext        the log context
      */
     public KRaftControlRecordStateMachine(
-        VoterSet staticVoterSet,
-        ReplicatedLog log,
-        RecordSerde<?> serde,
-        BufferSupplier bufferSupplier,
-        int maxBatchSizeBytes,
-        LogContext logContext,
-        KafkaRaftMetrics kafkaRaftMetrics,
-        ExternalKRaftMetrics externalKRaftMetrics
+            VoterSet staticVoterSet,
+            ReplicatedLog log,
+            RecordSerde<?> serde,
+            BufferSupplier bufferSupplier,
+            int maxBatchSizeBytes,
+            LogContext logContext,
+            KafkaRaftMetrics kafkaRaftMetrics,
+            ExternalKRaftMetrics externalKRaftMetrics
     ) {
         this.logContext = logContext;
         this.log = log;
@@ -184,7 +184,7 @@ public final class KRaftControlRecordStateMachine {
     public KRaftVersion lastKraftVersion() {
         synchronized (kraftVersionHistory) {
             return kraftVersionHistory.lastEntry().map(LogHistory.Entry::value).
-                orElse(KRaftVersion.KRAFT_VERSION_0);
+                    orElse(KRaftVersion.KRAFT_VERSION_0);
         }
     }
 
@@ -213,7 +213,7 @@ public final class KRaftControlRecordStateMachine {
 
         synchronized (kraftVersionHistory) {
             return kraftVersionHistory.valueAtOrBefore(offset).
-                orElse(KRaftVersion.KRAFT_VERSION_0);
+                    orElse(KRaftVersion.KRAFT_VERSION_0);
         }
     }
 
@@ -221,12 +221,12 @@ public final class KRaftControlRecordStateMachine {
         long fixedNextOffset = nextOffset;
         if (offset >= fixedNextOffset) {
             throw new IllegalArgumentException(
-                String.format(
-                    "Attempting the read a value at an offset (%d) which is greater than or " +
-                    "equal to the largest known offset (%d)",
-                    offset,
-                    fixedNextOffset - 1
-                )
+                    String.format(
+                            "Attempting the read a value at an offset (%d) which is greater than or " +
+                                    "equal to the largest known offset (%d)",
+                            offset,
+                            fixedNextOffset - 1
+                    )
             );
         }
     }
@@ -241,7 +241,7 @@ public final class KRaftControlRecordStateMachine {
                     maxBatchSizeBytes,
                     true, // Validate batch CRC
                     logContext
-                )
+            )
             ) {
                 while (iterator.hasNext()) {
                     Batch<?> batch = iterator.next();
@@ -271,13 +271,13 @@ public final class KRaftControlRecordStateMachine {
                     maxBatchSizeBytes,
                     true, // Validate batch CRC
                     logContext
-                )
+            )
             ) {
                 logger.info(
-                    "Loading snapshot ({}) since log start offset ({}) is greater than the internal listener's next offset ({})",
-                    reader.snapshotId(),
-                    log.startOffset(),
-                    nextOffset
+                        "Loading snapshot ({}) since log start offset ({}) is greater than the internal listener's next offset ({})",
+                        reader.snapshotId(),
+                        log.startOffset(),
+                        nextOffset
                 );
                 OptionalLong currentOffset = OptionalLong.of(reader.lastContainedLogOffset());
                 while (reader.hasNext()) {
@@ -295,42 +295,65 @@ public final class KRaftControlRecordStateMachine {
     }
 
     private void handleBatch(Batch<?> batch, OptionalLong overrideOffset) {
+        // Determine the base offset for records in this batch.
+        // If overrideOffset is present, it takes precedence; otherwise, use the batch's base offset.
+        final long baseOffset = overrideOffset.orElse(batch.baseOffset());
         int offsetDelta = 0;
         for (ControlRecord record : batch.controlRecords()) {
-            long currentOffset = overrideOffset.orElse(batch.baseOffset() + offsetDelta);
+            final long currentOffset = baseOffset + offsetDelta;
+
             switch (record.type()) {
                 case KRAFT_VOTERS:
-                    VoterSet voters = VoterSet.fromVotersRecord((VotersRecord) record.message());
-                    kafkaRaftMetrics.updateNumVoters(voters.size());
-                    if (!staticVoterSet.isEmpty()) {
-                        externalKRaftMetrics.setIgnoredStaticVoters(true);
-                    }
-                    logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
-                    synchronized (voterSetHistory) {
-                        voterSetHistory.addAt(currentOffset, voters);
-                    }
+                    handleKraftVotersRecord((VotersRecord) record.message(), currentOffset);
                     break;
 
                 case KRAFT_VERSION:
-                    KRaftVersion kraftVersion = KRaftVersion.fromFeatureLevel(
-                        ((KRaftVersionRecord) record.message()).kRaftVersion()
-                    );
-                    logger.info(
-                        "Latest {} is {} at offset {}",
-                        KRaftVersion.FEATURE_NAME,
-                        kraftVersion,
-                        currentOffset
-                    );
-                    synchronized (kraftVersionHistory) {
-                        kraftVersionHistory.addAt(currentOffset, kraftVersion);
-                    }
+                    handleKraftVersionRecord((KRaftVersionRecord) record.message(), currentOffset);
                     break;
 
                 default:
-                    // Skip the rest of the control records
+                    // Log and skip any unhandled control record types.
+                    // This makes it clear that other types are intentionally ignored.
+                    logger.debug("Skipping unhandled control record type: {} at offset {}", record.type(), currentOffset);
                     break;
             }
-            ++offsetDelta;
+            offsetDelta++; // Use post-increment for conciseness
+        }
+    }
+
+    // Extracted method for handling KRAFT_VOTERS records to improve readability
+    private void handleKraftVotersRecord(VotersRecord votersRecord, long currentOffset) {
+        VoterSet voters = VoterSet.fromVotersRecord(votersRecord);
+        kafkaRaftMetrics.updateNumVoters(voters.size());
+
+        // Check if staticVoterSet is not empty and update metric if necessary.
+        // This condition should ideally be placed directly within the if statement.
+        if (!staticVoterSet.isEmpty()) {
+            externalKRaftMetrics.setIgnoredStaticVoters(true);
+        }
+
+        logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
+
+        // Synchronize access to voterSetHistory when adding a new entry.
+        synchronized (voterSetHistory) {
+            voterSetHistory.addAt(currentOffset, voters);
+        }
+    }
+
+    // Extracted method for handling KRAFT_VERSION records to improve readability
+    private void handleKraftVersionRecord(KRaftVersionRecord kraftVersionRecord, long currentOffset) {
+        KRaftVersion kraftVersion = KRaftVersion.fromFeatureLevel(kraftVersionRecord.kRaftVersion());
+
+        logger.info(
+                "Latest {} is {} at offset {}",
+                KRaftVersion.FEATURE_NAME,
+                kraftVersion,
+                currentOffset
+        );
+
+        // Synchronize access to kraftVersionHistory when adding a new entry.
+        synchronized (kraftVersionHistory) {
+            kraftVersionHistory.addAt(currentOffset, kraftVersion);
         }
     }
 }

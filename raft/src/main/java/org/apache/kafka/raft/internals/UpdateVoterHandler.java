@@ -39,19 +39,19 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * This type implements the protocol for updating a voter from a KRaft partition.
- *
+ * <p>
  * 1. Check that the leader has fenced the previous leader(s) by checking that the HWM is known,
- *    otherwise return the REQUEST_TIMED_OUT error.
+ * otherwise return the REQUEST_TIMED_OUT error.
  * 2. Check that the cluster supports kraft.version 1, otherwise return the UNSUPPORTED_VERSION error.
  * 3. Check that there are no uncommitted voter changes, otherwise return the REQUEST_TIMED_OUT error.
  * 4. Check that the updated voter still supports the currently finalized kraft.version, otherwise
- *    return the INVALID_REQUEST error.
+ * return the INVALID_REQUEST error.
  * 5. Check that the updated voter is still listening on the default listener.
  * 6. Update voter set with new voter configuration.
- *    a. If reconfiguration is supported, append the updated VotersRecord to the log. The KRaft internal listener will read this
- *       uncommitted record from the log and update the voter in the set of voters.
- *    b. If reconfiguration is not supported, update the in-memory information for the voter. This will get
- *       appended to the log when the cluster is upgraded to a kraft version that supports reconfiguration.
+ * a. If reconfiguration is supported, append the updated VotersRecord to the log. The KRaft internal listener will read this
+ * uncommitted record from the log and update the voter in the set of voters.
+ * b. If reconfiguration is not supported, update the in-memory information for the voter. This will get
+ * appended to the log when the cluster is upgraded to a kraft version that supports reconfiguration.
  * 7. Send the UpdateVoter successful response to the voter.
  */
 public final class UpdateVoterHandler {
@@ -61,10 +61,10 @@ public final class UpdateVoterHandler {
     private final Logger log;
 
     public UpdateVoterHandler(
-        OptionalInt localId,
-        KRaftControlRecordStateMachine partitionState,
-        ListenerName defaultListenerName,
-        LogContext logContext
+            OptionalInt localId,
+            KRaftControlRecordStateMachine partitionState,
+            ListenerName defaultListenerName,
+            LogContext logContext
     ) {
         this.localId = localId;
         this.partitionState = partitionState;
@@ -73,25 +73,25 @@ public final class UpdateVoterHandler {
     }
 
     public CompletableFuture<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
-        LeaderState<?> leaderState,
-        ListenerName requestListenerName,
-        ReplicaKey voterKey,
-        Endpoints voterEndpoints,
-        UpdateRaftVoterRequestData.KRaftVersionFeature supportedKraftVersions,
-        long currentTimeMs
+            LeaderState<?> leaderState,
+            ListenerName requestListenerName,
+            ReplicaKey voterKey,
+            Endpoints voterEndpoints,
+            UpdateRaftVoterRequestData.KRaftVersionFeature supportedKraftVersions,
+            long currentTimeMs
     ) {
         // Check if there are any pending voter change requests
         if (leaderState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
-                RaftUtil.updateVoterResponse(
-                    Errors.REQUEST_TIMED_OUT,
-                    requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
-                    leaderState.leaderEndpoints()
-                )
+                    RaftUtil.updateVoterResponse(
+                            Errors.REQUEST_TIMED_OUT,
+                            requestListenerName,
+                            new LeaderAndEpoch(
+                                    localId,
+                                    leaderState.epoch()
+                            ),
+                            leaderState.leaderEndpoints()
+                    )
             );
         }
 
@@ -99,15 +99,15 @@ public final class UpdateVoterHandler {
         Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
         if (highWatermark.isEmpty()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.updateVoterResponse(
-                    Errors.REQUEST_TIMED_OUT,
-                    requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
-                    leaderState.leaderEndpoints()
-                )
+                    RaftUtil.updateVoterResponse(
+                            Errors.REQUEST_TIMED_OUT,
+                            requestListenerName,
+                            new LeaderAndEpoch(
+                                    localId,
+                                    leaderState.epoch()
+                            ),
+                            leaderState.leaderEndpoints()
+                    )
             );
         }
 
@@ -132,15 +132,15 @@ public final class UpdateVoterHandler {
                  * updated kraft version has been written to the log
                  */
                 return CompletableFuture.completedFuture(
-                    RaftUtil.updateVoterResponse(
-                        Errors.REQUEST_TIMED_OUT,
-                        requestListenerName,
-                        new LeaderAndEpoch(
-                            localId,
-                            leaderState.epoch()
-                        ),
-                        leaderState.leaderEndpoints()
-                    )
+                        RaftUtil.updateVoterResponse(
+                                Errors.REQUEST_TIMED_OUT,
+                                requestListenerName,
+                                new LeaderAndEpoch(
+                                        localId,
+                                        leaderState.epoch()
+                                ),
+                                leaderState.leaderEndpoints()
+                        )
                 );
             }
             voters = inMemoryVoters.map(KRaftVersionUpgrade.Voters::voters);
@@ -148,109 +148,106 @@ public final class UpdateVoterHandler {
         if (voters.isEmpty()) {
             log.info("Unable to read the current voter set with kraft version {}", kraftVersion);
             return CompletableFuture.completedFuture(
-                RaftUtil.updateVoterResponse(
-                    Errors.REQUEST_TIMED_OUT,
-                    requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
-                    leaderState.leaderEndpoints()
-                )
+                    RaftUtil.updateVoterResponse(
+                            Errors.REQUEST_TIMED_OUT,
+                            requestListenerName,
+                            new LeaderAndEpoch(
+                                    localId,
+                                    leaderState.epoch()
+                            ),
+                            leaderState.leaderEndpoints()
+                    )
             );
         }
         // Check that the supported version range is valid
         if (!validVersionRange(kraftVersion, supportedKraftVersions)) {
             return CompletableFuture.completedFuture(
-                RaftUtil.updateVoterResponse(
-                    Errors.INVALID_REQUEST,
-                    requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
-                    leaderState.leaderEndpoints()
-                )
+                    RaftUtil.updateVoterResponse(
+                            Errors.INVALID_REQUEST,
+                            requestListenerName,
+                            new LeaderAndEpoch(
+                                    localId,
+                                    leaderState.epoch()
+                            ),
+                            leaderState.leaderEndpoints()
+                    )
             );
         }
 
         // Check that endpoints includes the default listener
         if (voterEndpoints.address(defaultListenerName).isEmpty()) {
             return CompletableFuture.completedFuture(
-                RaftUtil.updateVoterResponse(
-                    Errors.INVALID_REQUEST,
-                    requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
-                    leaderState.leaderEndpoints()
-                )
+                    RaftUtil.updateVoterResponse(
+                            Errors.INVALID_REQUEST,
+                            requestListenerName,
+                            new LeaderAndEpoch(
+                                    localId,
+                                    leaderState.epoch()
+                            ),
+                            leaderState.leaderEndpoints()
+                    )
             );
         }
 
         // Update the voter
         Optional<VoterSet> updatedVoters = updateVoters(
-            voters.get(),
-            kraftVersion,
-            VoterSet.VoterNode.of(
+                voters.get(),
+                kraftVersion,
+                VoterSet.VoterNode.of(
+                        voterKey,
+                        voterEndpoints,
+                        new SupportedVersionRange(
+                                supportedKraftVersions.minSupportedVersion(),
+                                supportedKraftVersions.maxSupportedVersion()
+                        )
+                )
+        );
+        return updatedVoters.map(voterSet -> storeUpdatedVoters(
+                leaderState,
                 voterKey,
-                voterEndpoints,
-                new SupportedVersionRange(
-                    supportedKraftVersions.minSupportedVersion(),
-                    supportedKraftVersions.maxSupportedVersion()
-                )
-            )
-        );
-        if (updatedVoters.isEmpty()) {
-            return CompletableFuture.completedFuture(
+                inMemoryVoters,
+                voterSet,
+                requestListenerName,
+                currentTimeMs
+        )).orElseGet(() -> CompletableFuture.completedFuture(
                 RaftUtil.updateVoterResponse(
-                    Errors.VOTER_NOT_FOUND,
-                    requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
-                    leaderState.leaderEndpoints()
+                        Errors.VOTER_NOT_FOUND,
+                        requestListenerName,
+                        new LeaderAndEpoch(
+                                localId,
+                                leaderState.epoch()
+                        ),
+                        leaderState.leaderEndpoints()
                 )
-            );
-        }
+        ));
 
-        return storeUpdatedVoters(
-            leaderState,
-            voterKey,
-            inMemoryVoters,
-            updatedVoters.get(),
-            requestListenerName,
-            currentTimeMs
-        );
     }
 
     private boolean validVersionRange(
-        KRaftVersion finalizedVersion,
-        UpdateRaftVoterRequestData.KRaftVersionFeature supportedKraftVersions
+            KRaftVersion finalizedVersion,
+            UpdateRaftVoterRequestData.KRaftVersionFeature supportedKraftVersions
     ) {
         return supportedKraftVersions.minSupportedVersion() <= finalizedVersion.featureLevel() &&
-            supportedKraftVersions.maxSupportedVersion() >= finalizedVersion.featureLevel();
+                supportedKraftVersions.maxSupportedVersion() >= finalizedVersion.featureLevel();
     }
 
     private Optional<VoterSet> updateVoters(
-        VoterSet voters,
-        KRaftVersion kraftVersion,
-        VoterSet.VoterNode updatedVoter
+            VoterSet voters,
+            KRaftVersion kraftVersion,
+            VoterSet.VoterNode updatedVoter
     ) {
         return kraftVersion.isReconfigSupported() ?
-            voters.updateVoter(updatedVoter) :
-            voters.updateVoterIgnoringDirectoryId(updatedVoter);
+                voters.updateVoter(updatedVoter) :
+                voters.updateVoterIgnoringDirectoryId(updatedVoter);
     }
 
     private CompletableFuture<UpdateRaftVoterResponseData> storeUpdatedVoters(
-        LeaderState<?> leaderState,
-        ReplicaKey voterKey,
-        Optional<KRaftVersionUpgrade.Voters> inMemoryVoters,
-        VoterSet newVoters,
-        ListenerName requestListenerName,
-        long currentTimeMs
+            LeaderState<?> leaderState,
+            ReplicaKey voterKey,
+            Optional<KRaftVersionUpgrade.Voters> inMemoryVoters,
+            VoterSet newVoters,
+            ListenerName requestListenerName,
+            long currentTimeMs
     ) {
         if (inMemoryVoters.isEmpty()) {
             // Since the partition support reconfig then just write the update voter set directly to the log
@@ -258,31 +255,31 @@ public final class UpdateVoterHandler {
         } else {
             // Store the new voters set in the leader state since it cannot be written to the log
             var successful = leaderState.compareAndSetVolatileVoters(
-                inMemoryVoters.get(),
-                new KRaftVersionUpgrade.Voters(newVoters)
+                    inMemoryVoters.get(),
+                    new KRaftVersionUpgrade.Voters(newVoters)
             );
             if (successful) {
                 log.info(
-                    "Updated in-memory voters from {} to {}",
-                    inMemoryVoters.get().voters(),
-                    newVoters
+                        "Updated in-memory voters from {} to {}",
+                        inMemoryVoters.get().voters(),
+                        newVoters
                 );
             } else {
                 log.info(
-                    "Unable to update in-memory voters from {} to {}",
-                    inMemoryVoters.get().voters(),
-                    newVoters
+                        "Unable to update in-memory voters from {} to {}",
+                        inMemoryVoters.get().voters(),
+                        newVoters
                 );
                 return CompletableFuture.completedFuture(
-                    RaftUtil.updateVoterResponse(
-                        Errors.REQUEST_TIMED_OUT,
-                        requestListenerName,
-                        new LeaderAndEpoch(
-                            localId,
-                            leaderState.epoch()
-                        ),
-                        leaderState.leaderEndpoints()
-                    )
+                        RaftUtil.updateVoterResponse(
+                                Errors.REQUEST_TIMED_OUT,
+                                requestListenerName,
+                                new LeaderAndEpoch(
+                                        localId,
+                                        leaderState.epoch()
+                                ),
+                                leaderState.leaderEndpoints()
+                        )
                 );
             }
         }
@@ -291,15 +288,15 @@ public final class UpdateVoterHandler {
         leaderState.updateCheckQuorumForFollowingVoter(voterKey, currentTimeMs);
 
         return CompletableFuture.completedFuture(
-            RaftUtil.updateVoterResponse(
-                Errors.NONE,
-                requestListenerName,
-                new LeaderAndEpoch(
-                    localId,
-                    leaderState.epoch()
-                ),
-                leaderState.leaderEndpoints()
-            )
+                RaftUtil.updateVoterResponse(
+                        Errors.NONE,
+                        requestListenerName,
+                        new LeaderAndEpoch(
+                                localId,
+                                leaderState.epoch()
+                        ),
+                        leaderState.leaderEndpoints()
+                )
         );
     }
 }
