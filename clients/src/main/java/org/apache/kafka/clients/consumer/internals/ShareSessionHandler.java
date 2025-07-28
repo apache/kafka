@@ -223,6 +223,8 @@ public class ShareSessionHandler {
                 (response.error() == Errors.SHARE_SESSION_LIMIT_REACHED)) {
             log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
                     node, nextMetadata, response.error());
+            // Clear any existing partitions as we are resetting the share session.
+            sessionPartitions.clear();
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             return false;
         }
