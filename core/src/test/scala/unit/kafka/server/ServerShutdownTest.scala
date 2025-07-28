@@ -141,7 +141,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     shutdownKRaftController()
     verifyCleanShutdownAfterFailedStartup[CancellationException]
   }
-  
+
   @Test
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
     createTopic(topic)
