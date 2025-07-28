@@ -52,7 +52,6 @@ import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
-
 /**
  * Utility class for constructing test plugins for Connect.
  *
@@ -477,10 +476,6 @@ public class TestPlugins {
             ).call();
             if (!success) {
                 throw new RuntimeException("Failed to compile test plugin:\n" + writer);
-            }
-        } finally {
-            if (!replacements.isEmpty()) {
-                sourceFiles.forEach(File::delete);
             }
         }
     }
