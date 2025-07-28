@@ -18,8 +18,10 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +34,7 @@ public class StreamsGroupBuilder {
     private StreamsTopology topology;
     private final Map<String, StreamsGroupMember> members = new HashMap<>();
     private final Map<String, TasksTuple> targetAssignments = new HashMap<>();
-    private Map<String, TopicMetadata> partitionMetadata = new HashMap<>();
+    private long metadataHash = 0L;
 
     public StreamsGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
@@ -46,8 +48,8 @@ public class StreamsGroupBuilder {
         return this;
     }
 
-    public StreamsGroupBuilder withPartitionMetadata(Map<String, TopicMetadata> partitionMetadata) {
-        this.partitionMetadata = partitionMetadata;
+    public StreamsGroupBuilder withMetadataHash(long metadataHash) {
+        this.metadataHash = metadataHash;
         return this;
     }
 
@@ -75,15 +77,9 @@ public class StreamsGroupBuilder {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member))
         );
 
-        if (!partitionMetadata.isEmpty()) {
-            records.add(
-                StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId,
-                    partitionMetadata));
-        }
-
         // Add group epoch record.
         records.add(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash));
 
         // Add target assignment records.
         targetAssignments.forEach((memberId, assignment) ->
@@ -97,7 +93,7 @@ public class StreamsGroupBuilder {
                 groupId,
                     new StreamsGroupTopologyValue()
                         .setEpoch(topology.topologyEpoch())
-                        .setSubtopologies(topology.subtopologies().values().stream().sorted().toList()))
+                        .setSubtopologies(topology.subtopologies().values().stream().sorted(Comparator.comparing(Subtopology::subtopologyId)).toList()))
             );
         }
 
@@ -112,5 +108,9 @@ public class StreamsGroupBuilder {
         );
 
         return records;
+    }
+
+    public String groupId() {
+        return groupId;
     }
 }

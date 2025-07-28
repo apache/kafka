@@ -91,7 +91,7 @@ public class ConnectorStateInfo {
         }
 
         @JsonProperty
-        @JsonInclude(JsonInclude.Include.NON_EMPTY)
+        @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = PluginInfo.NoVersionFilter.class)
         public String version() {
             return version;
         }

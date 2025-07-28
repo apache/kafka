@@ -250,9 +250,8 @@ public interface Admin extends AutoCloseable {
      * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
      * may continue to return information about the deleted topics.
      * <p>
-     * If delete.topic.enable is false on the brokers, deleteTopics will mark
-     * the topics for deletion, but not actually delete them. The futures will
-     * return successfully in this case.
+     * If delete.topic.enable is set to false on the brokers, an exception will be returned to the client indicating
+     * that topic deletion is disabled.
      * <p>
      * When using topic IDs, this operation is supported by brokers with inter-broker protocol 2.8 or higher.
      * When using topic names, this operation is supported by brokers with version 0.10.1.0 or higher.
@@ -345,6 +344,9 @@ public interface Admin extends AutoCloseable {
 
     /**
      * Get information about the nodes in the cluster.
+     * <p>
+     * To obtain broker cluster information, you must configure {@link AdminClientConfig#BOOTSTRAP_SERVERS_CONFIG}.
+     * To obtain controller cluster information, you must configure {@link AdminClientConfig#BOOTSTRAP_CONTROLLERS_CONFIG}.
      *
      * @param options The options to use when getting information about the cluster.
      * @return The DescribeClusterResult.
@@ -472,6 +474,9 @@ public interface Admin extends AutoCloseable {
      *     will throw a {@link org.apache.kafka.common.errors.TimeoutException} exception</li>
      *     <li>{@link ConfigResource.Type#CLIENT_METRICS}: will return empty configs</li>
      * </ul>
+     * <p>
+     * Note that you cannot describe broker configs or broker logger using {@link AdminClientConfig#BOOTSTRAP_CONTROLLERS_CONFIG},
+     * and you cannot describe controller configs or controller logger using {@link AdminClientConfig#BOOTSTRAP_SERVERS_CONFIG}.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
@@ -873,10 +878,12 @@ public interface Admin extends AutoCloseable {
 
     /**
      * List the consumer groups available in the cluster.
+     * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
      *
      * @param options The options to use when listing the consumer groups.
      * @return The ListConsumerGroupsResult.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
 
     /**
@@ -884,9 +891,11 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This is a convenience method for {@link #listConsumerGroups(ListConsumerGroupsOptions)} with default options.
      * See the overload for more details.
+     * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
      *
      * @return The ListConsumerGroupsResult.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     default ListConsumerGroupsResult listConsumerGroups() {
         return listConsumerGroups(new ListConsumerGroupsOptions());
     }
@@ -941,24 +950,24 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List the Streams group offsets available in the cluster for the specified Streams groups.
+     * List the streams group offsets available in the cluster for the specified streams groups.
      *
      * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#listConsumerGroupOffsets} does.
      *
-     * @param groupSpecs Map of Streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @param groupSpecs Map of streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
      *
-     * @param options The options to use when listing the Streams group offsets.
+     * @param options The options to use when listing the streams group offsets.
      * @return The ListStreamsGroupOffsetsResult
      */
     ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs, ListStreamsGroupOffsetsOptions options);
 
     /**
-     * List the Streams group offsets available in the cluster for the specified groups with the default options.
+     * List the streams group offsets available in the cluster for the specified groups with the default options.
      * <p>
      * This is a convenience method for
      * {@link #listStreamsGroupOffsets(Map, ListStreamsGroupOffsetsOptions)} with default options.
      *
-     * @param groupSpecs Map of Streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @param groupSpecs Map of streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
      * @return The ListStreamsGroupOffsetsResult.
      */
     default ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs) {
@@ -983,17 +992,17 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Delete Streams groups from the cluster.
+     * Delete streams groups from the cluster.
      *
      * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroups} does.
      *
-     * @param options The options to use when deleting a Streams group.
+     * @param options The options to use when deleting a streams group.
      * @return The DeleteStreamsGroupsResult.
      */
     DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options);
 
     /**
-     * Delete Streams groups from the cluster with the default options.
+     * Delete streams groups from the cluster with the default options.
      *
      * @return The DeleteStreamsGroupResult.
      */
@@ -1025,13 +1034,13 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Delete committed offsets for a set of partitions in a Streams group. This will
+     * Delete committed offsets for a set of partitions in a streams group. This will
      * succeed at the partition level only if the group is not actively subscribed
      * to the corresponding topic.
      *
      * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroupOffsets} does.
      *
-     * @param options The options to use when deleting offsets in a Streams group.
+     * @param options The options to use when deleting offsets in a streams group.
      * @return The DeleteStreamsGroupOffsetsResult.
      */
     DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId,
@@ -1039,7 +1048,7 @@ public interface Admin extends AutoCloseable {
                                                                 DeleteStreamsGroupOffsetsOptions options);
 
     /**
-     * Delete committed offsets for a set of partitions in a Streams group with the default
+     * Delete committed offsets for a set of partitions in a streams group with the default
      * options. This will succeed at the partition level only if the group is not actively
      * subscribed to the corresponding topic.
      *
@@ -1767,11 +1776,35 @@ public interface Admin extends AutoCloseable {
                                         FenceProducersOptions options);
 
     /**
+     * List the configuration resources available in the cluster which matches config resource type.
+     * If no config resource types are specified, all configuration resources will be listed.
+     *
+     * @param configResourceTypes The set of configuration resource types to list.
+     * @param options The options to use when listing the configuration resources.
+     * @return The ListConfigurationResourcesResult.
+     */
+    ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options);
+
+    /**
+     * List all configuration resources available in the cluster with the default options.
+     * <p>
+     * This is a convenience method for {@link #listConfigResources(Set, ListConfigResourcesOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @return The ListConfigurationResourcesResult.
+     */
+    default ListConfigResourcesResult listConfigResources() {
+        return listConfigResources(Set.of(), new ListConfigResourcesOptions());
+    }
+
+    /**
      * List the client metrics configuration resources available in the cluster.
      *
      * @param options The options to use when listing the client metrics resources.
      * @return The ListClientMetricsResourcesResult.
+     * @deprecated Since 4.1. Use {@link #listConfigResources(Set, ListConfigResourcesOptions)} instead.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options);
 
     /**
@@ -1781,7 +1814,9 @@ public interface Admin extends AutoCloseable {
      * with default options. See the overload for more details.
      *
      * @return The ListClientMetricsResourcesResult.
+     * @deprecated Since 4.1. Use {@link #listConfigResources()} instead.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     default ListClientMetricsResourcesResult listClientMetricsResources() {
         return listClientMetricsResources(new ListClientMetricsResourcesOptions());
     }
@@ -1941,13 +1976,28 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Delete share groups from the cluster with the default options.
+     * Delete offsets for a set of topics in a share group.
      *
-     * @param groupIds Collection of share group ids which are to be deleted.
-     * @return The DeleteShareGroupsResult.
+     * @param groupId The group for which to delete offsets.
+     * @param topics The topics for which to delete offsets.
+     * @param options The options to use when deleting offsets in a share group.
+     * @return The DeleteShareGroupOffsetsResult.
      */
-    default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
-        return deleteShareGroups(groupIds, new DeleteShareGroupsOptions());
+    DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options);
+
+    /**
+     * Delete offsets for a set of topics in a share group with the default options.
+     *
+     * <p>
+     * This is a convenience method for {@link #deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param groupId The group for which to delete offsets.
+     * @param topics The topics for which to delete offsets.
+     * @return The DeleteShareGroupOffsetsResult.
+     */
+    default DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics) {
+        return deleteShareGroupOffsets(groupId, topics, new DeleteShareGroupOffsetsOptions());
     }
 
     /**
@@ -1958,6 +2008,16 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteShareGroupsResult.
      */
     DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options);
+
+    /**
+     * Delete share groups from the cluster with the default options.
+     *
+     * @param groupIds Collection of share group ids which are to be deleted.
+     * @return The DeleteShareGroupsResult.
+     */
+    default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
+        return deleteShareGroups(groupIds, new DeleteShareGroupsOptions());
+    }
 
     /**
      * Describe streams groups in the cluster.
@@ -2043,4 +2103,30 @@ public interface Admin extends AutoCloseable {
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();
+
+    /**
+     * Force terminate a transaction for the given transactional ID with the default options.
+     * <p>
+     * This is a convenience method for {@link #forceTerminateTransaction(String, TerminateTransactionOptions)}
+     * with default options.
+     *
+     * @param transactionalId           The ID of the transaction to terminate.
+     * @return The TerminateTransactionResult.
+     */
+    default TerminateTransactionResult forceTerminateTransaction(String transactionalId) {
+        return forceTerminateTransaction(transactionalId, new TerminateTransactionOptions());
+    }
+
+    /**
+     * Force terminate a transaction for the given transactional ID.
+     * This operation aborts any ongoing transaction associated with the transactional ID.
+     * It's similar to fenceProducers but only targets a single transactional ID to handle
+     * long-running transactions when 2PC is enabled.
+     *
+     * @param transactionalId       The ID of the transaction to terminate.
+     * @param options               The options to use when terminating the transaction.
+     * @return The TerminateTransactionResult.
+     */
+    TerminateTransactionResult forceTerminateTransaction(String transactionalId, 
+                                                        TerminateTransactionOptions options);
 }

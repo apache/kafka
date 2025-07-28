@@ -18,7 +18,9 @@
   "type": "response",
   "name": "ListTransactionsResponse",
   // Version 1 is the same as version 0 (KIP-994).
-  "validVersions": "0-1",
+
+  // This API can return InvalidRegularExpression (KIP-1152).
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
       { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

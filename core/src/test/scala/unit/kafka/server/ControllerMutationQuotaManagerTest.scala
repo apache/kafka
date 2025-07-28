@@ -25,11 +25,13 @@ import org.apache.kafka.common.metrics.QuotaViolationException
 import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
-import org.apache.kafka.server.quota.QuotaType
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, PermissiveControllerMutationQuota, QuotaType, StrictControllerMutationQuota}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
+
+import java.util.Optional
 
 class StrictControllerMutationQuotaTest {
   @Test
@@ -118,7 +120,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = new ClientQuotaManagerConfig(10, 1)
 
   private def withQuotaManager(f: ControllerMutationQuotaManager => Unit): Unit = {
-    val quotaManager = new ControllerMutationQuotaManager(config, metrics, time,"", None)
+    val quotaManager = new ControllerMutationQuotaManager(config, metrics, time,"", Optional.empty())
     try {
       f(quotaManager)
     } finally {
@@ -137,18 +139,18 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
     sensor.add(metricName, new TokenBucket)
     val metric = metrics.metric(metricName)
 
-    assertEquals(0, throttleTimeMs(new QuotaViolationException(metric, 0, 10), time.milliseconds()))
-    assertEquals(500, throttleTimeMs(new QuotaViolationException(metric, -5, 10), time.milliseconds()))
-    assertEquals(1000, throttleTimeMs(new QuotaViolationException(metric, -10, 10), time.milliseconds()))
+    assertEquals(0, throttleTimeMs(new QuotaViolationException(metric, 0, 10)))
+    assertEquals(500, throttleTimeMs(new QuotaViolationException(metric, -5, 10)))
+    assertEquals(1000, throttleTimeMs(new QuotaViolationException(metric, -10, 10)))
   }
 
   @Test
   def testControllerMutationQuotaViolation(): Unit = {
     withQuotaManager { quotaManager =>
       quotaManager.updateQuota(
-        Some(User).map(s => ClientQuotaManager.UserEntity(s)),
-        Some(ClientQuotaManager.ClientIdEntity(ClientId)),
-        Some(Quota.upperBound(10))
+        Optional.of(new ClientQuotaManager.UserEntity(User)),
+        Optional.of(new ClientQuotaManager.ClientIdEntity(ClientId)),
+        Optional.of(Quota.upperBound(10))
       )
       val queueSizeMetric = metrics.metrics().get(
         metrics.metricName("queue-size", QuotaType.CONTROLLER_MUTATION.toString, ""))
@@ -180,12 +182,12 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
 
       // After a request is delayed, the callback cannot be triggered immediately
-      quotaManager.throttledChannelReaper.doWork()
+      quotaManager.processThrottledChannelReaperDoWork()
       assertEquals(0, numCallbacks)
 
       // Callback can only be triggered after the delay time passes
       time.sleep(throttleTime)
-      quotaManager.throttledChannelReaper.doWork()
+      quotaManager.processThrottledChannelReaperDoWork()
       assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       assertEquals(1, numCallbacks)
 
@@ -199,7 +201,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testNewStrictQuotaForReturnsUnboundedQuotaWhenQuotaIsDisabled(): Unit = {
     withQuotaManager { quotaManager =>
-      assertEquals(UnboundedControllerMutationQuota,
+      assertEquals(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA,
         quotaManager.newStrictQuotaFor(buildSession(User), ClientId))
     }
   }
@@ -208,9 +210,9 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testNewStrictQuotaForReturnsStrictQuotaWhenQuotaIsEnabled(): Unit = {
     withQuotaManager { quotaManager =>
       quotaManager.updateQuota(
-        Some(User).map(s => ClientQuotaManager.UserEntity(s)),
-        Some(ClientQuotaManager.ClientIdEntity(ClientId)),
-        Some(Quota.upperBound(10))
+        Optional.of(new ClientQuotaManager.UserEntity(User)),
+        Optional.of(new ClientQuotaManager.ClientIdEntity(ClientId)),
+        Optional.of(Quota.upperBound(10))
       )
       val quota = quotaManager.newStrictQuotaFor(buildSession(User), ClientId)
       assertTrue(quota.isInstanceOf[StrictControllerMutationQuota])
@@ -221,7 +223,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testNewPermissiveQuotaForReturnsUnboundedQuotaWhenQuotaIsDisabled(): Unit = {
     withQuotaManager { quotaManager =>
-      assertEquals(UnboundedControllerMutationQuota,
+      assertEquals(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA,
         quotaManager.newPermissiveQuotaFor(buildSession(User), ClientId))
     }
   }
@@ -230,9 +232,9 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testNewPermissiveQuotaForReturnsStrictQuotaWhenQuotaIsEnabled(): Unit = {
     withQuotaManager { quotaManager =>
       quotaManager.updateQuota(
-        Some(User).map(s => ClientQuotaManager.UserEntity(s)),
-        Some(ClientQuotaManager.ClientIdEntity(ClientId)),
-        Some(Quota.upperBound(10))
+        Optional.of(new ClientQuotaManager.UserEntity(User)),
+        Optional.of(new ClientQuotaManager.ClientIdEntity(ClientId)),
+        Optional.of(Quota.upperBound(10))
       )
       val quota = quotaManager.newPermissiveQuotaFor(buildSession(User), ClientId)
       assertTrue(quota.isInstanceOf[PermissiveControllerMutationQuota])

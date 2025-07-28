@@ -300,6 +300,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     currentDeadline = NO_DEADLINE;
                 }
 
+                long batchRestoreCount = 0;
                 for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
                     final ProcessorRecordContext recordContext =
                         new ProcessorRecordContext(
@@ -318,6 +319,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 record.timestamp(),
                                 record.headers()));
                             restoreCount++;
+                            batchRestoreCount++;
                         }
                     } catch (final Exception deserializationException) {
                         // while Java distinguishes checked vs unchecked exceptions, other languages
@@ -341,7 +343,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
                 offset = getGlobalConsumerOffset(topicPartition);
 
-                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreCount);
+                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, batchRestoreCount);
             }
             stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
             checkpointFileCache.put(topicPartition, offset);

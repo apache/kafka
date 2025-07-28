@@ -29,11 +29,9 @@ import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchSpec;
 
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_OFFSET_INDEX;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
@@ -128,7 +126,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
         assertThat(storedRecords, correspondTo(readRecords, topicPartition, serde, serde));
 
         // (B) Assessment of the interactions between the source broker and the second-tier storage.
-        for (LocalTieredStorageEvent.EventType eventType : Arrays.asList(FETCH_SEGMENT, FETCH_OFFSET_INDEX, FETCH_TIME_INDEX, FETCH_TRANSACTION_INDEX)) {
+        for (LocalTieredStorageEvent.EventType eventType : List.of(FETCH_SEGMENT, FETCH_OFFSET_INDEX, FETCH_TIME_INDEX, FETCH_TRANSACTION_INDEX)) {
             Optional<LocalTieredStorageEvent> latestEvent;
             switch (eventType) {
                 case FETCH_SEGMENT:
@@ -149,7 +147,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
 
             List<LocalTieredStorageEvent> events = history.getEvents(eventType, topicPartition);
             List<LocalTieredStorageEvent> eventsInScope = latestEvent
-                    .map(e -> events.stream().filter(event -> event.isAfter(e)).collect(Collectors.toList()))
+                    .map(e -> events.stream().filter(event -> event.isAfter(e)).toList())
                     .orElse(events);
 
             RemoteFetchCount remoteFetchCount = remoteFetchSpec.getRemoteFetchCount();

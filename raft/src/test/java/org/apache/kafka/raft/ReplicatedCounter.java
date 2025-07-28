@@ -19,15 +19,15 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-
-import static java.util.Collections.singletonList;
 
 public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private static final int SNAPSHOT_DELAY_IN_RECORDS = 10;
@@ -65,7 +65,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
         int epoch = claimedEpoch.getAsInt();
         uncommitted += 1;
         try {
-            long offset = client.prepareAppend(epoch, singletonList(uncommitted));
+            long offset = client.prepareAppend(epoch, List.of(uncommitted));
             client.schedulePreparedAppend();
             log.debug("Scheduled append of record {} with epoch {} at offset {}",
                 uncommitted, epoch, offset);
@@ -122,7 +122,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     lastCommittedTimestamp);
                 if (snapshot.isPresent()) {
                     try {
-                        snapshot.get().append(singletonList(committed));
+                        snapshot.get().append(List.of(committed));
                         snapshot.get().freeze();
                         lastOffsetSnapshotted = lastCommittedOffset;
                     } finally {

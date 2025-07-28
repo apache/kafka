@@ -26,8 +26,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,14 +34,14 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 @Timeout(value = 40)
 public class DelegationTokenDataTest {
 
-    private static final List<String> UUID = Arrays.asList(
+    private static final List<String> UUID = List.of(
         Uuid.randomUuid().toString(),
         Uuid.randomUuid().toString(),
         Uuid.randomUuid().toString());
 
-    private static final List<KafkaPrincipal> EMPTYRENEWERS = Collections.emptyList();
+    private static final List<KafkaPrincipal> EMPTYRENEWERS = List.of();
 
-    private static final List<TokenInformation> TOKENINFORMATION = Arrays.asList(
+    private static final List<TokenInformation> TOKENINFORMATION = List.of(
         new TokenInformation(
             UUID.get(0),
             new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"),
@@ -69,7 +67,7 @@ public class DelegationTokenDataTest {
             100,
             100));
 
-    private static final List<DelegationTokenData> DELEGATIONTOKENDATA = Arrays.asList(
+    private static final List<DelegationTokenData> DELEGATIONTOKENDATA = List.of(
         new DelegationTokenData(TOKENINFORMATION.get(0)),
         new DelegationTokenData(TOKENINFORMATION.get(1)),
         new DelegationTokenData(TOKENINFORMATION.get(2)));

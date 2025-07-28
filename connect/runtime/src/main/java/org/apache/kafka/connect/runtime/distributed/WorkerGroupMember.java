@@ -23,6 +23,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -198,7 +199,7 @@ public class WorkerGroupMember {
     }
 
     public void maybeLeaveGroup(String leaveReason) {
-        coordinator.maybeLeaveGroup(leaveReason);
+        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.LEAVE_GROUP, leaveReason);
     }
 
     public String ownerUrl(String connector) {

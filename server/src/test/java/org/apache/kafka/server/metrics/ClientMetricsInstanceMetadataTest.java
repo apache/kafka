@@ -64,13 +64,14 @@ public class ClientMetricsInstanceMetadataTest {
         ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
             ClientMetricsTestUtils.requestContext());
 
-        Map<String, Pattern> patternMap = new HashMap<>();
-        patternMap.put(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"));
-        patternMap.put(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-.*"));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)));
+        Map<String, Pattern> patternMap = Map.of(
+                ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"),
+                ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()),
+                ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-.*"),
+                ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"),
+                ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()),
+                ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(String.valueOf(ClientMetricsTestUtils.CLIENT_PORT))
+        );
 
         assertTrue(instanceMetadata.isMatch(patternMap));
     }

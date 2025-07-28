@@ -31,10 +31,9 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
@@ -63,15 +62,15 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
         // Create topics.
         String leaderTopic = "leader";
         // Set broker id 0 as the first entry which is taken as the leader.
-        createTopic(leaderTopic, Collections.singletonMap(0, Arrays.asList(0, 1, 2)));
+        createTopic(leaderTopic, Map.of(0, List.of(0, 1, 2)));
 
         String followerTopic = "follower";
         // Set broker id 1 as the first entry which is taken as the leader.
-        createTopic(followerTopic, Collections.singletonMap(0, Arrays.asList(1, 2, 0)));
+        createTopic(followerTopic, Map.of(0, List.of(1, 2, 0)));
 
         String topicWithNoMessages = "no-messages-topic";
         // Set broker id 1 as the first entry which is taken as the leader.
-        createTopic(topicWithNoMessages, Collections.singletonMap(0, Arrays.asList(1, 2, 0)));
+        createTopic(topicWithNoMessages, Map.of(0, List.of(1, 2, 0)));
 
         final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
@@ -99,7 +98,6 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
 
         try (TopicBasedRemoteLogMetadataManager remoteLogMetadataManager = RemoteLogMetadataManagerTestUtils.builder()
                 .bootstrapServers(clusterInstance.bootstrapServers())
-                .startConsumerThread(true)
                 .remoteLogMetadataTopicPartitioner(numMetadataTopicPartitions -> new RemoteLogMetadataTopicPartitioner(numMetadataTopicPartitions) {
                     @Override
                     public int metadataPartition(TopicIdPartition topicIdPartition) {
@@ -122,7 +120,7 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
             int segSize = 1048576;
             RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                time.milliseconds(), segSize, Map.of(0, 0L));
             ExecutionException exception = assertThrows(ExecutionException.class,
                     () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
             assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
@@ -130,7 +128,7 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
 
             RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(followerTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                time.milliseconds(), segSize, Map.of(0, 0L));
             exception = assertThrows(ExecutionException.class, () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
             assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
                 exception.getMessage());
@@ -139,8 +137,8 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
             assertThrows(RemoteStorageException.class, () -> remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition));
             assertThrows(RemoteStorageException.class, () -> remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition));
 
-            remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(leaderTopicIdPartition),
-                    Collections.emptySet());
+            remoteLogMetadataManager.onPartitionLeadershipChanges(Set.of(leaderTopicIdPartition),
+                    Set.of());
             // RemoteLogSegmentMetadata events are already published, and topicBasedRlmm's consumer manager will start
             // fetching those events and build the cache.
             initializationPhaser.awaitAdvanceInterruptibly(initializationPhaser.arrive(), 30_000, TimeUnit.MILLISECONDS); // similar to CountdownLatch::await
@@ -158,8 +156,8 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
             // Phaser::bulkRegister and Phaser::register provide the "countUp" feature
             initializationPhaser.bulkRegister(2); // 1 for emptyTopicIdPartition and 1 for followerTopicIdPartition
             handleRemoteLogSegmentMetadataPhaser.register(); // 1 for followerTopicIdPartition, emptyTopicIdPartition doesn't have a RemoteLogSegmentMetadata event
-            remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(emptyTopicIdPartition),
-                    Collections.singleton(followerTopicIdPartition));
+            remoteLogMetadataManager.onPartitionLeadershipChanges(Set.of(emptyTopicIdPartition),
+                    Set.of(followerTopicIdPartition));
 
             initializationPhaser.awaitAdvanceInterruptibly(initializationPhaser.arrive(), 30_000, TimeUnit.MILLISECONDS);
             handleRemoteLogSegmentMetadataPhaser.awaitAdvanceInterruptibly(handleRemoteLogSegmentMetadataPhaser.arrive(), 30_000, TimeUnit.MILLISECONDS);
@@ -173,9 +171,9 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
     }
 
     private void createTopic(String topic, Map<Integer, List<Integer>> replicasAssignments) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            admin.createTopics(Collections.singletonList(new NewTopic(topic, replicasAssignments)));
-            assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic, replicasAssignments.size()));
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            admin.createTopics(List.of(new NewTopic(topic, replicasAssignments)));
+            assertDoesNotThrow(() -> clusterInstance.waitTopicCreation(topic, replicasAssignments.size()));
         }
     }
 }

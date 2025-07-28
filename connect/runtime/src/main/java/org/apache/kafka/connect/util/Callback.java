@@ -19,6 +19,7 @@ package org.apache.kafka.connect.util;
 /**
  * Generic interface for callbacks
  */
+@FunctionalInterface
 public interface Callback<V> {
     /**
      * Invoked upon completion of the operation.

@@ -43,6 +43,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.attribute.FileTime;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.Callable;
@@ -50,7 +51,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static java.util.Arrays.asList;
 
 /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileRecords containing
@@ -92,6 +92,9 @@ public class LogSegment implements Closeable {
     // The maximum timestamp and offset we see so far
     // NOTED: the offset is the last offset of batch having the max timestamp.
     private volatile TimestampOffset maxTimestampAndOffsetSoFar = TimestampOffset.UNKNOWN;
+
+    // Lock for maxTimestampAndOffsetSoFar to ensure that it will be initialized only once
+    private final Object maxTimestampAndOffsetLock = new Object();
 
     private long created;
 
@@ -177,7 +180,7 @@ public class LogSegment implements Closeable {
     public void sanityCheck(boolean timeIndexFileNewlyCreated) throws IOException {
         if (offsetIndexFile().exists()) {
             // Resize the time index file to 0 if it is newly created.
-            if (timeIndexFileNewlyCreated) 
+            if (timeIndexFileNewlyCreated)
                 timeIndex().resize(0);
             // Sanity checks for time index and offset index are skipped because
             // we will recover the segments above the recovery point in recoverLog()
@@ -192,8 +195,17 @@ public class LogSegment implements Closeable {
      * the time index).
      */
     public TimestampOffset readMaxTimestampAndOffsetSoFar() throws IOException {
-        if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN)
-            maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
+        if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
+            // As stated in LogSegment class javadoc, this class is not thread-safe so basically we assume that
+            // methods are called within UnifiedLog#lock.
+            // However, there's exceptional paths where this method can be called outside of the lock,
+            // so we need lock here to prevent multiple threads trying to modify maxTimestampAndOffsetSoFar
+            synchronized (maxTimestampAndOffsetLock) {
+                if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
+                    maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
+                }
+            }
+        }
         return maxTimestampAndOffsetSoFar;
     }
 
@@ -381,7 +393,7 @@ public class LogSegment implements Closeable {
      */
     LogOffsetPosition translateOffset(long offset, int startingFilePosition) throws IOException {
         OffsetPosition mapping = offsetIndex().lookup(offset);
-        return log.searchForOffsetWithSize(offset, Math.max(mapping.position, startingFilePosition));
+        return log.searchForOffsetFromPosition(offset, Math.max(mapping.position, startingFilePosition));
     }
 
     /**
@@ -751,10 +763,7 @@ public class LogSegment implements Closeable {
     public void close() throws IOException {
         if (maxTimestampAndOffsetSoFar != TimestampOffset.UNKNOWN)
             Utils.swallow(LOGGER, Level.WARN, "maybeAppend", () -> timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true));
-        Utils.closeQuietly(lazyOffsetIndex, "offsetIndex", LOGGER);
-        Utils.closeQuietly(lazyTimeIndex, "timeIndex", LOGGER);
-        Utils.closeQuietly(log, "log", LOGGER);
-        Utils.closeQuietly(txnIndex, "txnIndex", LOGGER);
+        Utils.closeAll(lazyOffsetIndex, lazyTimeIndex, log, txnIndex);
     }
 
     /**
@@ -772,7 +781,7 @@ public class LogSegment implements Closeable {
      */
     public void deleteIfExists() throws IOException {
         try {
-            Utils.tryAll(asList(
+            Utils.tryAll(List.of(
                 () -> deleteTypeIfExists(() -> log.deleteIfExists(), "log", log.file(), true),
                 () -> deleteTypeIfExists(() -> lazyOffsetIndex.deleteIfExists(), "offset index", offsetIndexFile(), true),
                 () -> deleteTypeIfExists(() -> lazyTimeIndex.deleteIfExists(), "time index", timeIndexFile(), true),

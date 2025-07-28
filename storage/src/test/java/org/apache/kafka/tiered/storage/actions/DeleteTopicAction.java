@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_PARTITION;
@@ -61,7 +60,7 @@ public final class DeleteTopicAction implements TieredStorageTestAction {
                         spec.getTopicPartition(),
                         false,
                         spec.getEventCount()))
-                .collect(Collectors.toList());
+                .toList();
         if (shouldDelete) {
             context.deleteTopic(topic);
         }

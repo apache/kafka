@@ -301,6 +301,31 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
+    public MemoryRecords slice(int position, int size) {
+        if (position < 0)
+            throw new IllegalArgumentException("Invalid position: " + position + " in read from " + this);
+        if (position > buffer.limit())
+            throw new IllegalArgumentException("Slice from position " + position + " exceeds end position of " + this);
+        if (size < 0)
+            throw new IllegalArgumentException("Invalid size: " + size + " in read from " + this);
+
+        int availableBytes = Math.min(size, buffer.limit() - position);
+        // As of now, clients module support Java11 hence can't use ByteBuffer::slice(position, size) method.
+        // So we need to create a duplicate buffer and set the position and limit. Duplicate buffer
+        // is backed by original bytes hence not the content but only the relative position and limit
+        // are changed in the duplicate buffer. Once the position and limit are set, we can call the
+        // slice method to get the sliced buffer, which is a backed by the original buffer with the
+        // position reset to 0 and limit set to the size of the slice.
+        ByteBuffer slicedBuffer = buffer.duplicate();
+        slicedBuffer.position(position);
+        slicedBuffer.limit(position + availableBytes);
+        // Reset the position to 0 so that the sliced view has a relative position.
+        slicedBuffer = slicedBuffer.slice();
+
+        return readableRecords(slicedBuffer);
+    }
+
+    @Override
     public Iterable<MutableRecordBatch> batches() {
         return batches;
     }

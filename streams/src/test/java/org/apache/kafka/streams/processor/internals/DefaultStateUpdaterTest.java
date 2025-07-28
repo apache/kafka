@@ -203,7 +203,7 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks(restoredTask);
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> stateUpdater.start());
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, stateUpdater::start);
 
         assertEquals("State updater started with non-empty output queues."
             + " This indicates a bug. Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the"
@@ -220,7 +220,7 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, failedTask));
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> stateUpdater.start());
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, stateUpdater::start);
 
         assertEquals("State updater started with non-empty output queues."
             + " This indicates a bug. Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the"
@@ -1785,7 +1785,7 @@ class DefaultStateUpdaterTest {
 
     private void verifyIdle() throws Exception {
         waitForCondition(
-            () -> stateUpdater.isIdle(),
+            stateUpdater::isIdle,
             VERIFICATION_TIMEOUT,
             "State updater did not enter an idling state!"
         );
@@ -1863,27 +1863,5 @@ class DefaultStateUpdaterTest {
         );
         assertFalse(stateUpdater.hasExceptionsAndFailedTasks());
         assertTrue(stateUpdater.drainExceptionsAndFailedTasks().isEmpty());
-    }
-    
-    private void verifyRemovedTasks(final Task... tasks) throws Exception {
-        if (tasks.length == 0) {
-            waitForCondition(
-                () -> stateUpdater.removedTasks().isEmpty(),
-                VERIFICATION_TIMEOUT,
-                "Did not get empty removed task within the given timeout!"
-            );
-        } else {
-            final Set<Task> expectedRemovedTasks = Set.of(tasks);
-            final Set<Task> removedTasks = new HashSet<>();
-            waitForCondition(
-                () -> {
-                    removedTasks.addAll(stateUpdater.removedTasks());
-                    return removedTasks.containsAll(expectedRemovedTasks)
-                        && removedTasks.size() == expectedRemovedTasks.size();
-                },
-                VERIFICATION_TIMEOUT,
-                "Did not get all removed task within the given timeout!"
-            );
-        }
     }
 }

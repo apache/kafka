@@ -998,7 +998,7 @@ public final class Worker {
         );
         List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
         List<ConfigValue> errorConfigs = configValues.stream().
-            filter(configValue -> configValue.errorMessages().size() > 0).collect(Collectors.toList());
+            filter(configValue -> configValue.errorMessages().size() > 0).toList();
         // These should be caught when the herder validates the connector configuration, but just in case
         if (errorConfigs.size() > 0) {
             throw new ConnectException("Client Config Overrides not allowed " + errorConfigs);
@@ -1157,10 +1157,6 @@ public final class Worker {
      */
     public Set<ConnectorTaskId> taskIds() {
         return tasks.keySet();
-    }
-
-    public Converter getInternalKeyConverter() {
-        return internalKeyConverter;
     }
 
     public Converter getInternalValueConverter() {

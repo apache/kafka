@@ -915,8 +915,8 @@ public class AbstractWorkerSourceTaskTest {
         when(valueConverter.fromConnectData(eq(topic), any(Headers.class), eq(RECORD_SCHEMA),
                 eq(RECORD)))
                 .thenReturn(SERIALIZED_RECORD);
-        assertEquals(keyConverter.fromConnectData(topic, headers, KEY_SCHEMA, KEY), SERIALIZED_KEY);
-        assertEquals(valueConverter.fromConnectData(topic, headers, RECORD_SCHEMA, RECORD), SERIALIZED_RECORD);
+        assertEquals(SERIALIZED_KEY, keyConverter.fromConnectData(topic, headers, KEY_SCHEMA, KEY));
+        assertEquals(SERIALIZED_RECORD, valueConverter.fromConnectData(topic, headers, RECORD_SCHEMA, RECORD));
     }
 
     private void throwExceptionWhenConvertKey(Headers headers, String topic) {

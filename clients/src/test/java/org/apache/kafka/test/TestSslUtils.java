@@ -372,7 +372,7 @@ public class TestSslUtils {
         try (PemWriter pemWriter = new PemWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))) {
             pemWriter.writeObject(new JcaMiscPEMGenerator(cert));
         }
-        return new String(out.toByteArray(), StandardCharsets.UTF_8);
+        return out.toString(StandardCharsets.UTF_8);
     }
 
     static String pem(PrivateKey privateKey, Password password) throws IOException {
@@ -390,7 +390,7 @@ public class TestSslUtils {
                 }
             }
         }
-        return new String(out.toByteArray(), StandardCharsets.UTF_8);
+        return out.toString(StandardCharsets.UTF_8);
     }
 
     public static class CertificateBuilder {

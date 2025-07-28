@@ -22,6 +22,7 @@ import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
+
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.Assertions;
@@ -68,11 +69,6 @@ public class MultiVersionTest {
         }
     }
 
-    private static final PluginType[] ALL_PLUGIN_TYPES = new PluginType[]{
-        PluginType.SINK, PluginType.SOURCE, PluginType.CONVERTER,
-        PluginType.HEADER_CONVERTER, PluginType.TRANSFORMATION, PluginType.PREDICATE
-    };
-
     private void assertCorrectLatestPluginVersion(
             Map<Path, List<VersionedPluginBuilder.BuildInfo>> artifacts,
             PluginDiscoveryMode mode,
@@ -86,7 +82,7 @@ public class MultiVersionTest {
                 .distinct()
                 .toList();
         for (String className : classes) {
-            String version = plugins.latestVersion(className, ALL_PLUGIN_TYPES);
+            String version = plugins.latestVersion(className, PluginType.values());
             Assertions.assertEquals(latestVersion, version);
         }
     }
@@ -116,12 +112,12 @@ public class MultiVersionTest {
     static {
 
         String[] defaultIsolatedArtifactsVersions = new String[]{"1.1.0", "2.3.0", "4.3.0"};
-        DEFAULT_ISOLATED_ARTIFACTS_VERSIONS = new HashSet<>(Arrays.asList(defaultIsolatedArtifactsVersions));
         try {
             DEFAULT_ISOLATED_ARTIFACTS = buildIsolatedArtifacts(
                 defaultIsolatedArtifactsVersions, VersionedPluginBuilder.VersionedTestPlugin.values()
             );
             DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION = "4.3.0";
+            DEFAULT_ISOLATED_ARTIFACTS_VERSIONS = new HashSet<>(Arrays.asList(defaultIsolatedArtifactsVersions));
             DEFAULT_COMBINED_ARTIFACT_VERSIONS = new HashMap<>();
 
             VersionedPluginBuilder builder = new VersionedPluginBuilder();
@@ -150,25 +146,25 @@ public class MultiVersionTest {
     }
 
     @Test
-    public void TestVersionedPluginLoaded() throws InvalidVersionSpecificationException, ClassNotFoundException {
+    public void testVersionedPluginLoaded() throws InvalidVersionSpecificationException, ClassNotFoundException {
         assertPluginLoad(DEFAULT_COMBINED_ARTIFACT, PluginDiscoveryMode.SERVICE_LOAD);
         assertPluginLoad(DEFAULT_COMBINED_ARTIFACT, PluginDiscoveryMode.ONLY_SCAN);
     }
 
     @Test
-    public void TestMultipleIsolatedVersionedPluginLoading() throws InvalidVersionSpecificationException, ClassNotFoundException {
+    public void testMultipleIsolatedVersionedPluginLoading() throws InvalidVersionSpecificationException, ClassNotFoundException {
         assertPluginLoad(DEFAULT_ISOLATED_ARTIFACTS, PluginDiscoveryMode.SERVICE_LOAD);
         assertPluginLoad(DEFAULT_ISOLATED_ARTIFACTS, PluginDiscoveryMode.ONLY_SCAN);
     }
 
     @Test
-    public void TestLatestVersion() {
+    public void testLatestVersion() {
         assertCorrectLatestPluginVersion(DEFAULT_ISOLATED_ARTIFACTS, PluginDiscoveryMode.SERVICE_LOAD, DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
         assertCorrectLatestPluginVersion(DEFAULT_ISOLATED_ARTIFACTS, PluginDiscoveryMode.ONLY_SCAN, DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
     }
 
     @Test
-    public void TestBundledPluginLoading() throws InvalidVersionSpecificationException, ClassNotFoundException {
+    public void testBundledPluginLoading() throws InvalidVersionSpecificationException, ClassNotFoundException {
 
         Plugins plugins = MULTI_VERSION_PLUGINS;
         // get the connector loader of the combined artifact which includes all plugin types
@@ -185,23 +181,23 @@ public class MultiVersionTest {
             VersionedPluginBuilder.VersionedTestPlugin.PREDICATE
         );
         // should match the version used in setUp for creating the combined artifact
-        List<String> versions = Arrays.asList("0.2.0", "0.3.0", "0.4.0", "0.5.0");
+        List<String> versions = pluginTypes.stream().map(DEFAULT_COMBINED_ARTIFACT_VERSIONS::get).toList();
         for (int i = 0; i < 4; i++) {
             String className = pluginTypes.get(i).className();
             // when using the connector loader, the version and plugin returned should be from the ones in the combined artifact
-            String version = plugins.pluginVersion(className, connectorLoader, ALL_PLUGIN_TYPES);
+            String version = plugins.pluginVersion(className, connectorLoader, PluginType.values());
             Assertions.assertEquals(versions.get(i), version);
             Object p = plugins.newPlugin(className, null, connectorLoader);
             Assertions.assertInstanceOf(Versioned.class, p);
             Assertions.assertEquals(versions.get(i), ((Versioned) p).version());
 
-            String latestVersion = plugins.latestVersion(className, ALL_PLUGIN_TYPES);
+            String latestVersion = plugins.latestVersion(className, PluginType.values());
             Assertions.assertEquals(DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION, latestVersion);
         }
     }
 
     @Test
-    public void TestCorrectVersionRange() throws IOException, InvalidVersionSpecificationException, ClassNotFoundException {
+    public void testCorrectVersionRange() throws IOException, InvalidVersionSpecificationException, ClassNotFoundException {
         Map<Path, List<VersionedPluginBuilder.BuildInfo>> artifacts = buildIsolatedArtifacts(
             new String[]{"1.0.0", "1.1.0", "1.1.2", "2.0.0", "2.0.2", "3.0.0", "4.0.0"},
             VersionedPluginBuilder.VersionedTestPlugin.values()
@@ -236,7 +232,7 @@ public class MultiVersionTest {
     }
 
     @Test
-    public void TestInvalidVersionRange() throws IOException, InvalidVersionSpecificationException {
+    public void testInvalidVersionRange() throws IOException, InvalidVersionSpecificationException {
         String[] validVersions = new String[]{"1.0.0", "1.1.0", "1.1.2", "2.0.0", "2.0.2", "3.0.0", "4.0.0"};
         Map<Path, List<VersionedPluginBuilder.BuildInfo>> artifacts = buildIsolatedArtifacts(
             validVersions,
@@ -265,7 +261,7 @@ public class MultiVersionTest {
     }
 
     @Test
-    public void TestVersionedConverter() {
+    public void testVersionedConverter() {
         Plugins plugins = setUpPlugins(DEFAULT_ISOLATED_ARTIFACTS, PluginDiscoveryMode.SERVICE_LOAD);
         Map<String, String> converterConfig = new HashMap<>();
         converterConfig.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
