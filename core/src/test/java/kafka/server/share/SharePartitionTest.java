@@ -1518,7 +1518,7 @@ public class SharePartitionTest {
             .withMaxInflightMessages(20)
             .build();
 
-        // Acquire records, should be acquired till maxInFlightMessages i.e. 20 records till 29 offset.
+        // Acquire records, all 10 records should be acquired as within maxInflightMessages limit.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
                 BATCH_SIZE,
@@ -1580,7 +1580,7 @@ public class SharePartitionTest {
             .withMaxInflightMessages(20)
             .build();
 
-        // Create 3 batches of records.
+        // Create 4 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
         memoryRecordsBuilder(buffer, 5, 10).close();
         memoryRecordsBuilder(buffer, 10, 15).close();
@@ -1600,8 +1600,8 @@ public class SharePartitionTest {
                 FETCH_ISOLATION_HWM),
             20);
 
-        // Validate 2 batches are fetched one with 5 records and other till end of batch, third batch
-        // should be skipped.
+        // Validate 3 batches are fetched and fourth batch should be skipped. Max in-flight messages
+        // limit is reached.
         assertArrayEquals(expectedAcquiredRecord(10, 29, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(30, sharePartition.nextFetchOffset());
 
