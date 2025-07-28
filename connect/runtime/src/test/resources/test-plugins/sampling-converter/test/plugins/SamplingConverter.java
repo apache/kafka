@@ -23,8 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.Converter;
@@ -35,12 +33,12 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  * See {@link org.apache.kafka.connect.runtime.isolation.TestPlugins}.
  * <p>Samples data about its initialization environment for later analysis.
  */
-public class SamplingConverter implements SamplingTestPlugin, Converter {
+public final class SamplingConverter implements SamplingTestPlugin, Converter {
 
-  protected static final ClassLoader STATIC_CLASS_LOADER;
-  protected static List<SamplingTestPlugin> instances;
-  protected final ClassLoader classloader;
-  protected Map<String, SamplingTestPlugin> samples;
+  private static final ClassLoader STATIC_CLASS_LOADER;
+  private static List<SamplingTestPlugin> instances;
+  private final ClassLoader classloader;
+  private Map<String, SamplingTestPlugin> samples;
 
   static {
     STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();

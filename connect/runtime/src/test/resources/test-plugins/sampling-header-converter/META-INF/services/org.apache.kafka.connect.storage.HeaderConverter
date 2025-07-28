@@ -14,4 +14,3 @@
  # limitations under the License.
 
 test.plugins.SamplingHeaderConverter
-test.plugins.VersionedSamplingHeaderConverter
