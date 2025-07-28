@@ -3400,7 +3400,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val interestedTopicPartitions = new util.ArrayList[TopicIdPartition]
 
-    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { case topicIdPartition =>
+    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { topicIdPartition =>
       if (!authorizedTopics.contains(topicIdPartition.topicPartition.topic))
         erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicIdPartition.topicPartition))

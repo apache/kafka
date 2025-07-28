@@ -41,11 +41,13 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * {@link ShareCompletedFetch} represents a {@link RecordBatch batch} of {@link Record records}
@@ -162,15 +164,15 @@ public class ShareCompletedFetch {
 
         if (cachedBatchException != null) {
             // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
-            rejectRecordBatch(inFlightBatch, currentBatch);
-            inFlightBatch.setException(cachedBatchException);
+            Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
+            inFlightBatch.setException(new ShareInFlightBatchException(cachedBatchException, offsets));
             cachedBatchException = null;
             return inFlightBatch;
         }
 
         if (cachedRecordException != null) {
             inFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
-            inFlightBatch.setException(cachedRecordException);
+            inFlightBatch.setException(new ShareInFlightBatchException(cachedRecordException, Set.of(lastRecord.offset())));
             cachedRecordException = null;
             return inFlightBatch;
         }
@@ -224,7 +226,7 @@ public class ShareCompletedFetch {
             nextAcquired = nextAcquiredRecord();
             if (inFlightBatch.isEmpty()) {
                 inFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
-                inFlightBatch.setException(se);
+                inFlightBatch.setException(new ShareInFlightBatchException(se, Set.of(lastRecord.offset())));
             } else {
                 cachedRecordException = se;
                 inFlightBatch.setHasCachedException(true);
@@ -232,8 +234,8 @@ public class ShareCompletedFetch {
         } catch (CorruptRecordException e) {
             if (inFlightBatch.isEmpty()) {
                 // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
-                rejectRecordBatch(inFlightBatch, currentBatch);
-                inFlightBatch.setException(e);
+                Set<Long> offsets = rejectRecordBatch(inFlightBatch, currentBatch);
+                inFlightBatch.setException(new ShareInFlightBatchException(e, offsets));
             } else {
                 cachedBatchException = e;
                 inFlightBatch.setHasCachedException(true);
@@ -261,12 +263,13 @@ public class ShareCompletedFetch {
         return null;
     }
 
-    private <K, V> void rejectRecordBatch(final ShareInFlightBatch<K, V> inFlightBatch,
+    private <K, V> Set<Long> rejectRecordBatch(final ShareInFlightBatch<K, V> inFlightBatch,
                                           final RecordBatch currentBatch) {
         // Rewind the acquiredRecordIterator to the start, so we are in a known state
         acquiredRecordIterator = acquiredRecordList.listIterator();
 
         OffsetAndDeliveryCount nextAcquired = nextAcquiredRecord();
+        Set<Long> offsets = new HashSet<>();
         for (long offset = currentBatch.baseOffset(); offset <= currentBatch.lastOffset(); offset++) {
             if (nextAcquired == null) {
                 // No more acquired records, so we are done
@@ -274,6 +277,7 @@ public class ShareCompletedFetch {
             } else if (offset == nextAcquired.offset) {
                 // It's acquired, so we reject it
                 inFlightBatch.addAcknowledgement(offset, AcknowledgeType.REJECT);
+                offsets.add(offset);
             } else if (offset < nextAcquired.offset) {
                 // It's not acquired, so we skip it
                 continue;
@@ -281,6 +285,7 @@ public class ShareCompletedFetch {
 
             nextAcquired = nextAcquiredRecord();
         }
+        return offsets;
     }
 
     /**
