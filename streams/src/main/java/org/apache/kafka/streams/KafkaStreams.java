@@ -1137,7 +1137,7 @@ public class KafkaStreams implements AutoCloseable {
                 // Also, we create the new thread with initial values of cache size and max buffer size as 0
                 // and then resize them later
                 streamThread = createAndAddStreamThread(0L, 0L, threadIdx);
-                final int numLiveThreads = threads.size();
+                final int numLiveThreads = numLiveStreamThreads();
                 resizeThreadCacheAndBufferMemory(numLiveThreads);
                 log.info("Adding StreamThread-{}, there are now {} threads with cache size/max buffer size values as {} per thread.",
                     threadIdx, numLiveThreads, getThreadCacheAndBufferMemoryString());
