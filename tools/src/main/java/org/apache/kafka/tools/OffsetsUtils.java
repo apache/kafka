@@ -25,6 +25,8 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -46,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
@@ -434,6 +437,55 @@ public class OffsetsUtils {
         preparedOffsetsForPartitionsWithCommittedOffset.putAll(preparedOffsetsForPartitionsWithoutCommittedOffset);
 
         return preparedOffsetsForPartitionsWithCommittedOffset;
+    }
+
+    public void checkAllTopicPartitionsValid(Collection<TopicPartition> partitionsToReset) {
+        // check the partitions exist
+        List<TopicPartition> partitionsNotExistList = filterNonExistentPartitions(partitionsToReset);
+        if (!partitionsNotExistList.isEmpty()) {
+            String partitionStr = partitionsNotExistList.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+            throw new UnknownTopicOrPartitionException("The partitions \"" + partitionStr + "\" do not exist");
+        }
+
+        // check the partitions have leader
+        List<TopicPartition> partitionsWithoutLeader = filterNoneLeaderPartitions(partitionsToReset);
+        if (!partitionsWithoutLeader.isEmpty()) {
+            String partitionStr = partitionsWithoutLeader.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+            throw new LeaderNotAvailableException("The partitions \"" + partitionStr + "\" have no leader");
+        }
+    }
+
+    public List<TopicPartition> filterNoneLeaderPartitions(Collection<TopicPartition> topicPartitions) {
+        // collect all topics
+        Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+
+        try {
+            return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                .stream()
+                .flatMap(entry -> entry.getValue().partitions().stream()
+                    .filter(partitionInfo -> partitionInfo.leader() == null)
+                    .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                    .filter(topicPartitions::contains)
+                .toList();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public List<TopicPartition> filterNonExistentPartitions(Collection<TopicPartition> topicPartitions) {
+        // collect all topics
+        Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+        try {
+            List<TopicPartition> existPartitions = adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                .stream()
+                .flatMap(entry -> entry.getValue().partitions().stream()
+                    .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                .toList();
+
+            return topicPartitions.stream().filter(tp -> !existPartitions.contains(tp)).toList();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {

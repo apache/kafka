@@ -433,7 +433,8 @@ public class ShareGroupCommand {
             } else {
                 partitionsToReset = offsetsByTopicPartitions.keySet();
             }
-            
+
+            offsetsUtils.checkAllTopicPartitionsValid(partitionsToReset);
             if (opts.options.has(opts.resetToEarliestOpt)) {
                 return offsetsUtils.resetToEarliest(partitionsToReset);
             } else if (opts.options.has(opts.resetToLatestOpt)) {
