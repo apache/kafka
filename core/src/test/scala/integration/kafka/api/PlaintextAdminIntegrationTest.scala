@@ -4384,7 +4384,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
-
     val streams = createStreamsGroup(configOverrides = streamsConfig, inputTopic = testTopicName, outputTopic = testOutputTopicName)
 
     try {
@@ -4435,7 +4434,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
   def testDeleteStreamsGroups(groupProtocol: String): Unit = {
@@ -4463,7 +4461,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
-
         val streams = createStreamsGroup(configOverrides = streamsConfig, inputTopic = testTopicName, outputTopic = testOutputTopicName)
         streams.cleanUp()
         streams.start()
