@@ -87,7 +87,7 @@ object StorageTool extends Logging {
         0
 
       case "version-mapping" =>
-        runVersionMappingCommand(namespace, printStream, Feature.PRODUCTION_FEATURES)
+        runVersionMappingCommand(namespace, printStream, Feature.PRODUCTION_FEATURES, config.get)
         0
 
       case "feature-dependencies" =>
@@ -129,17 +129,12 @@ object StorageTool extends Logging {
       setControllerListenerName(config.controllerListenerNames.get(0)).
       setMetadataLogDirectory(config.metadataLogDir)
 
-    def metadataVersionsToString(first: MetadataVersion, last: MetadataVersion): String = {
-      val versions = MetadataVersion.VERSIONS.slice(first.ordinal, last.ordinal + 1)
-      versions.map(_.toString).mkString(", ")
-    }
     Option(namespace.getString("release_version")).foreach(releaseVersion => {
       try {
-        formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
+        formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion, config.unstableFeatureVersionsEnabled))
       } catch {
-        case _: Throwable =>
-          throw new TerseFailure(s"Unknown metadata.version $releaseVersion. Supported metadata.version are " +
-            s"${metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction())}")
+        case e: Throwable =>
+          throw new TerseFailure(e.getMessage)
       }
     })
 
@@ -180,11 +175,12 @@ object StorageTool extends Logging {
   def runVersionMappingCommand(
     namespace: Namespace,
     printStream: PrintStream,
-    validFeatures: java.util.List[Feature]
+    validFeatures: java.util.List[Feature],
+    config: KafkaConfig
   ): Unit = {
     val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.LATEST_PRODUCTION.toString)
     try {
-      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion)
+      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion, config.unstableFeatureVersionsEnabled)
 
       val metadataVersionLevel = metadataVersion.featureLevel()
       printStream.print(f"metadata.version=$metadataVersionLevel%d ($releaseVersion%s)%n")
@@ -195,8 +191,7 @@ object StorageTool extends Logging {
       }
     } catch {
       case e: IllegalArgumentException =>
-        throw new TerseFailure(s"Unknown release version '$releaseVersion'. Supported versions are: " +
-          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.latestTesting().version()}")
+        throw new TerseFailure(e.getMessage)
     }
   }
 
@@ -352,6 +347,7 @@ object StorageTool extends Logging {
         "Using the command with no --release-version  argument will return the mapping for " +
         "the latest stable metadata version"
       )
+    addConfigArguments(versionMappingParser)
 
     versionMappingParser.addArgument("--release-version", "-r")
       .action(store())
