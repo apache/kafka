@@ -5338,6 +5338,8 @@ class ReplicaManagerTest {
   @Test
   def testTopicsDeltaCreateThenDelete(): Unit ={
     val delta = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = topic, topicId = FOO_UUID)
+    assertEquals(delta.createdTopicIds().contains(FOO_UUID),true)
+    assertEquals(delta.deletedTopicIds().contains(FOO_UUID),false)
     delta.replay(new RemoveTopicRecord().setTopicId(FOO_UUID))
     assertEquals(delta.deletedTopicIds().contains(FOO_UUID),false)
     assertEquals(delta.createdTopicIds().contains(FOO_UUID),false)
