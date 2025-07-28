@@ -19,8 +19,8 @@ package org.apache.kafka.image.node;
 
 import org.apache.kafka.image.TopicsImage;
 
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 
 
 public class TopicsImageNode implements MetadataNode {
@@ -40,7 +40,7 @@ public class TopicsImageNode implements MetadataNode {
 
     @Override
     public Collection<String> childNames() {
-        return Arrays.asList(TopicsImageByNameNode.NAME, TopicsImageByIdNode.NAME);
+        return List.of(TopicsImageByNameNode.NAME, TopicsImageByIdNode.NAME);
     }
 
     @Override

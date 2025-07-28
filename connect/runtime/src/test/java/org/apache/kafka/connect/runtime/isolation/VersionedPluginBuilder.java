@@ -30,10 +30,10 @@ public class VersionedPluginBuilder {
 
     public enum VersionedTestPlugin {
 
-        SINK_CONNECTOR("sampling-connector", "test.plugins.VersionedSamplingSinkConnector"),
-        SOURCE_CONNECTOR("versioned-source-connector", "test.plugins.VersionedSamplingSourceConnector"),
-        CONVERTER("sampling-converter", "test.plugins.VersionedSamplingConverter"),
-        HEADER_CONVERTER("sampling-header-converter", "test.plugins.VersionedSamplingHeaderConverter"),
+        SINK_CONNECTOR("versioned-sink-connector", "test.plugins.VersionedSinkConnector"),
+        SOURCE_CONNECTOR("versioned-source-connector", "test.plugins.VersionedSourceConnector"),
+        CONVERTER("versioned-converter", "test.plugins.VersionedConverter"),
+        HEADER_CONVERTER("versioned-header-converter", "test.plugins.VersionedHeaderConverter"),
         TRANSFORMATION("versioned-transformation", "test.plugins.VersionedTransformation"),
         PREDICATE("versioned-predicate", "test.plugins.VersionedPredicate");
 
@@ -98,11 +98,14 @@ public class VersionedPluginBuilder {
 
     public synchronized Path build(String pluginDir) throws IOException {
         Path pluginDirPath = Files.createTempDirectory(pluginDir);
+        pluginDirPath.toFile().deleteOnExit();
         Path subDir = Files.createDirectory(pluginDirPath.resolve("lib"));
+        subDir.toFile().deleteOnExit();
         for (BuildInfo buildInfo : pluginBuilds) {
             Path jarFile = TestPlugins.createPluginJar(buildInfo.plugin.resourceDir(), ignored -> false, Collections.singletonMap(VERSION_PLACEHOLDER, buildInfo.version));
             Path targetJar = subDir.resolve(jarFile.getFileName()).toAbsolutePath();
             buildInfo.setLocation(targetJar.toString());
+            targetJar.toFile().deleteOnExit();
             Files.move(jarFile, targetJar);
         }
         return pluginDirPath.toAbsolutePath();

@@ -46,7 +46,8 @@
   // transaction V2 (KIP_890 part 2) is enabled, the produce request will also include the function for a
   // AddPartitionsToTxn call. If V2 is disabled, the client can't use produce request version higher than 11 within
   // a transaction.
-  "validVersions": "3-12",
+  // Version 13 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
+  "validVersions": "3-13",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "3+", "default": "null", "entityType": "transactionalId",
@@ -57,8 +58,9 @@
       "about": "The timeout to await a response in milliseconds." },
     { "name": "TopicData", "type": "[]TopicProduceData", "versions": "0+",
       "about": "Each topic to produce to.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
+      { "name": "Name", "type": "string", "versions": "0-12", "entityType": "topicName", "mapKey": true, "ignorable": true,
         "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "13+", "mapKey": true, "ignorable": true, "about": "The unique topic ID" },
       { "name": "PartitionData", "type": "[]PartitionProduceData", "versions": "0+",
         "about": "Each partition to produce to.", "fields": [
         { "name": "Index", "type": "int32", "versions": "0+",

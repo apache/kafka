@@ -22,15 +22,12 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
 import org.junit.jupiter.api.Test
 
-import java.util.Collections
-import scala.jdk.CollectionConverters._
-
 class KafkaMetricsGroupTest {
 
   @Test
   def testUntaggedMetricName(): Unit = {
     val metricsGroup = new KafkaMetricsGroup("kafka.metrics", "TestMetrics")
-    val metricName = metricsGroup.metricName("TaggedMetric", Collections.emptyMap())
+    val metricName = metricsGroup.metricName("TaggedMetric", java.util.Map.of)
 
     assertEquals("kafka.metrics", metricName.getGroup)
     assertEquals("TestMetrics", metricName.getType)
@@ -42,7 +39,13 @@ class KafkaMetricsGroupTest {
 
   @Test
   def testTaggedMetricName(): Unit = {
-    val tags = Map("foo" -> "bar", "bar" -> "baz", "baz" -> "raz.taz").asJava
+    val tags = {
+      val map = new java.util.LinkedHashMap[String, String]()
+      map.put("foo", "bar")
+      map.put("bar", "baz")
+      map.put("baz", "raz.taz")
+      map
+    }
     val metricsGroup = new KafkaMetricsGroup("kafka.metrics", "TestMetrics")
     val metricName = metricsGroup.metricName("TaggedMetric", tags)
 
@@ -56,7 +59,13 @@ class KafkaMetricsGroupTest {
 
   @Test
   def testTaggedMetricNameWithEmptyValue(): Unit = {
-    val tags = Map("foo" -> "bar", "bar" -> "", "baz" -> "raz.taz").asJava
+    val tags = {
+      val map = new java.util.LinkedHashMap[String, String]()
+      map.put("foo", "bar")
+      map.put("bar", "")
+      map.put("baz", "raz.taz")
+      map
+    }
     val metricsGroup = new KafkaMetricsGroup("kafka.metrics", "TestMetrics")
     val metricName = metricsGroup.metricName("TaggedMetric", tags)
 
@@ -67,6 +76,4 @@ class KafkaMetricsGroupTest {
       metricName.getMBeanName)
     assertEquals("baz.raz_taz.foo.bar", metricName.getScope)
   }
-
-
 }

@@ -21,7 +21,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordValidationStats;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -74,7 +73,7 @@ public class LogAppendInfo {
                          int validBytes,
                          long lastOffsetOfFirstBatch) {
         this(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, logAppendTime, logStartOffset,
-            recordValidationStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, Collections.emptyList(),
+            recordValidationStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, List.of(),
                 LeaderHwChange.NONE);
     }
 

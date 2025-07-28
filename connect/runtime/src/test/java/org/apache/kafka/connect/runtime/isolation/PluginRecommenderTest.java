@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +37,7 @@ import static org.apache.kafka.connect.runtime.isolation.MultiVersionTest.MULTI_
 
 public class PluginRecommenderTest {
 
-    private Set<String> allVersionsOff(String classOrAlias) {
+    private Set<String> allVersionsOf(String classOrAlias) {
         Set<String> versions = DEFAULT_ISOLATED_ARTIFACTS.values().stream()
             .flatMap(List::stream)
             .filter(b -> b.plugin().className().equals(classOrAlias))
@@ -48,7 +49,7 @@ public class PluginRecommenderTest {
     }
 
     @Test
-    public void TestConnectorVersionRecommenders() {
+    public void testConnectorVersionRecommenders() {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         for (String connectorClass : Arrays.asList(
             VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className(),
@@ -57,7 +58,7 @@ public class PluginRecommenderTest {
             Set<String> versions = recommender.connectorPluginVersionRecommender().validValues(
                 ConnectorConfig.CONNECTOR_CLASS_CONFIG, Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass)
             ).stream().map(Object::toString).collect(Collectors.toSet());
-            Set<String> allVersions = allVersionsOff(connectorClass);
+            Set<String> allVersions = allVersionsOf(connectorClass);
             Assertions.assertEquals(allVersions.size(), versions.size());
             allVersions.forEach(v -> Assertions.assertTrue(versions.contains(v), "Missing version " + v + " for connector " + connectorClass));
         }
@@ -65,13 +66,13 @@ public class PluginRecommenderTest {
 
     @Test
     @SuppressWarnings("rawtypes")
-    public void TestConverterVersionRecommenders() throws ClassNotFoundException {
+    public void testConverterVersionRecommenders() throws ClassNotFoundException {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Map<String, Object> config = new HashMap<>();
         Class converterClass = MULTI_VERSION_PLUGINS.pluginClass(VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
         config.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, converterClass);
         config.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, converterClass);
-        Set<String> allVersions = allVersionsOff(VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        Set<String> allVersions = allVersionsOf(VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
         for (ConfigDef.Recommender r : Arrays.asList(recommender.keyConverterPluginVersionRecommender(), recommender.valueConverterPluginVersionRecommender())) {
             Set<String> versions = r.validValues(null, config).stream().map(Object::toString).collect(Collectors.toSet());
             Assertions.assertEquals(allVersions.size(), versions.size());
@@ -81,46 +82,46 @@ public class PluginRecommenderTest {
 
     @Test
     @SuppressWarnings("rawtypes")
-    public void TestHeaderConverterVersionRecommenders() throws ClassNotFoundException {
+    public void testHeaderConverterVersionRecommenders() throws ClassNotFoundException {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Map<String, Object> config = new HashMap<>();
         Class headerConverterClass = MULTI_VERSION_PLUGINS.pluginClass(VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
         config.put(ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, headerConverterClass);
         Set<String> versions = recommender.headerConverterPluginVersionRecommender().validValues(null, config).stream().map(Object::toString).collect(Collectors.toSet());
-        Set<String> allVersions = allVersionsOff(VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
+        Set<String> allVersions = allVersionsOf(VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
         Assertions.assertEquals(allVersions.size(), versions.size());
         allVersions.forEach(v -> Assertions.assertTrue(versions.contains(v), "Missing version " + v + " for header converter"));
     }
 
     @Test
     @SuppressWarnings("rawtypes")
-    public void TestTransformationVersionRecommenders() throws ClassNotFoundException {
+    public void testTransformationVersionRecommenders() throws ClassNotFoundException {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Class transformationClass = MULTI_VERSION_PLUGINS.pluginClass(VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
         Set<String> versions = recommender.transformationPluginRecommender("transforms.t1.type")
             .validValues("transforms.t1.type", Collections.singletonMap("transforms.t1.type", transformationClass))
             .stream().map(Object::toString).collect(Collectors.toSet());
-        Set<String> allVersions = allVersionsOff(VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
+        Set<String> allVersions = allVersionsOf(VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
         Assertions.assertEquals(allVersions.size(), versions.size());
         allVersions.forEach(v -> Assertions.assertTrue(versions.contains(v), "Missing version " + v + " for transformation"));
     }
 
     @Test
     @SuppressWarnings("rawtypes")
-    public void TestPredicateVersionRecommenders() throws ClassNotFoundException {
+    public void testPredicateVersionRecommenders() throws ClassNotFoundException {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Class predicateClass = MULTI_VERSION_PLUGINS.pluginClass(VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
         Set<String> versions = recommender.predicatePluginRecommender("predicates.p1.type")
             .validValues("predicates.p1.type", Collections.singletonMap("predicates.p1.type", predicateClass))
             .stream().map(Object::toString).collect(Collectors.toSet());
-        Set<String> allVersions = allVersionsOff(VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
+        Set<String> allVersions = allVersionsOf(VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
         Assertions.assertEquals(allVersions.size(), versions.size());
         allVersions.forEach(v -> Assertions.assertTrue(versions.contains(v), "Missing version " + v + " for predicate"));
     }
 
     @Test
     @SuppressWarnings("rawtypes")
-    public void TestConverterPluginRecommender() {
+    public void testConverterPluginRecommender() {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Set<String> converters = recommender.converterPluginRecommender().validValues(null, null)
             .stream().map(c -> ((Class) c).getName()).collect(Collectors.toSet());
@@ -135,7 +136,7 @@ public class PluginRecommenderTest {
 
     @Test
     @SuppressWarnings("rawtypes")
-    public void TestHeaderConverterPluginRecommender() {
+    public void testHeaderConverterPluginRecommender() {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Set<String> headerConverters = recommender.headerConverterPluginRecommender().validValues(null, null)
             .stream().map(c -> ((Class) c).getName()).collect(Collectors.toSet());

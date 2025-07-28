@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 
 /**
  * Possible error codes:
@@ -51,8 +53,19 @@ public class ListGroupsRequest extends AbstractRequest {
                         "v" + version + ", but we need v4 or newer to request groups by states.");
             }
             if (!data.typesFilter().isEmpty() && version < 5) {
-                throw new UnsupportedVersionException("The broker only supports ListGroups " +
-                    "v" + version + ", but we need v5 or newer to request groups by type.");
+                // Types filter is supported by brokers with version 3.8.0 or later. Older brokers only support
+                // classic groups, so listing consumer groups on an older broker does not need to use a types filter.
+                // If the types filter is only for consumer and classic, or just classic groups, it can be safely omitted.
+                // This allows a modern admin client to list consumer groups on older brokers in a straightforward way.
+                HashSet<String> typesCopy = new HashSet<>(data.typesFilter());
+                boolean containedClassic = typesCopy.remove(GroupType.CLASSIC.toString());
+                boolean containedConsumer = typesCopy.remove(GroupType.CONSUMER.toString());
+                if (!typesCopy.isEmpty() || (!containedClassic && containedConsumer)) {
+                    throw new UnsupportedVersionException("The broker only supports ListGroups " +
+                        "v" + version + ", but we need v5 or newer to request groups by type. " +
+                        "Requested group types: [" + String.join(", ", data.typesFilter()) + "].");
+                }
+                return new ListGroupsRequest(data.duplicate().setTypesFilter(List.of()), version);
             }
             return new ListGroupsRequest(data, version);
         }
@@ -81,8 +94,8 @@ public class ListGroupsRequest extends AbstractRequest {
         return new ListGroupsResponse(listGroupsResponseData);
     }
 
-    public static ListGroupsRequest parse(ByteBuffer buffer, short version) {
-        return new ListGroupsRequest(new ListGroupsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ListGroupsRequest parse(Readable readable, short version) {
+        return new ListGroupsRequest(new ListGroupsRequestData(readable, version), version);
     }
 
     @Override

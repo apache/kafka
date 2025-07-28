@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -105,7 +104,7 @@ public class FeatureTest {
         assertThrows(IllegalArgumentException.class,
             () -> Feature.validateVersion(
                 TestFeatureVersion.TEST_1,
-                Collections.emptyMap()
+                Map.of()
             )
         );
 
@@ -113,7 +112,7 @@ public class FeatureTest {
         assertThrows(IllegalArgumentException.class,
             () -> Feature.validateVersion(
                 TestFeatureVersion.TEST_1,
-                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersionTestUtils.IBP_3_0_IV1_FEATURE_LEVEL)
+                Map.of(MetadataVersion.FEATURE_NAME, MetadataVersionTestUtils.IBP_3_0_IV1_FEATURE_LEVEL)
             )
         );
 
@@ -121,7 +120,7 @@ public class FeatureTest {
         assertThrows(IllegalArgumentException.class,
              () -> Feature.validateVersion(
                  TestFeatureVersion.TEST_2,
-                 Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_7_IV0.featureLevel())
+                 Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_7_IV0.featureLevel())
              )
         );
     }

@@ -84,6 +84,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -594,7 +595,7 @@ public class AbstractHerderTest {
         config.put("required", "value"); // connector required config
         ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
 
-        assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
+        assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -719,7 +720,7 @@ public class AbstractHerderTest {
         config.put(saslConfigKey, "jaas_config");
 
         ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
-        assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
+        assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
         // We expect there to be errors due to now allowed override policy for ACKS.... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -778,7 +779,7 @@ public class AbstractHerderTest {
         overriddenClientConfigs.add(loginCallbackHandlerConfigKey);
 
         ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
-        assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
+        assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
         Map<String, String> validatedOverriddenClientConfigs = new HashMap<>();
         for (ConfigInfo configInfo : result.values()) {
@@ -809,7 +810,7 @@ public class AbstractHerderTest {
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
-            metricName = metrics.metricName("name", "description", Map.of());
+            metricName = metrics.metricName("name", "description", new LinkedHashMap<>());
             metrics.addMetric(metricName, (Measurable) (config, now) -> count);
         }
     }
@@ -870,7 +871,7 @@ public class AbstractHerderTest {
                 .filter(configValue -> configValue.name().equals(testKey))
                 .map(ConfigValueInfo::errors)
                 .flatMap(Collection::stream)
-                .collect(Collectors.toList());
+                .toList();
 
         assertEquals(1, errorsForKey.size());
     }

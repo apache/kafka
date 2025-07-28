@@ -17,7 +17,6 @@
 package org.apache.kafka.tiered.storage;
 
 import kafka.api.IntegrationTestHarness;
-import kafka.log.remote.RemoteLogManager;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.common.replica.ReplicaSelector;
@@ -26,6 +25,7 @@ import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
@@ -38,11 +38,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.collection.Seq;
@@ -71,7 +71,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     @Override
     public Seq<Properties> kraftControllerConfigs(TestInfo testInfo) {
-        return CollectionConverters.asScala(Collections.singletonList(overridingProps())).toSeq();
+        return CollectionConverters.asScala(List.of(overridingProps())).toSeq();
     }
 
     protected int numRemoteLogMetadataPartitions() {
@@ -105,10 +105,10 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         context = new TieredStorageTestContext(this);
     }
 
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
-    public void executeTieredStorageTest(String quorum, String groupProtocol) {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void executeTieredStorageTest(String groupProtocol) {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         writeTestSpecifications(builder);
         try {
@@ -155,7 +155,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     public static List<BrokerLocalStorage> localStorages(Seq<KafkaBroker> brokers) {
         return CollectionConverters.asJava(brokers).stream()
-                .map(b -> new BrokerLocalStorage(b.config().brokerId(), CollectionConverters.asJava(b.config().logDirs().toSet()),
+                .map(b -> new BrokerLocalStorage(b.config().brokerId(), Set.copyOf(b.config().logDirs()),
                         STORAGE_WAIT_TIMEOUT_SEC))
                 .collect(Collectors.toList());
     }

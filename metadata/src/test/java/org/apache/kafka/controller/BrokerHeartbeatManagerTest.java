@@ -27,7 +27,6 @@ import org.apache.kafka.metadata.placement.UsableBroker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Optional;
@@ -121,7 +120,7 @@ public class BrokerHeartbeatManagerTest {
     @Test
     public void testUsableBrokerIterator() {
         BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
-        assertEquals(Collections.emptySet(), usableBrokersToSet(manager));
+        assertEquals(Set.of(), usableBrokersToSet(manager));
         for (int brokerId = 0; brokerId < 5; brokerId++) {
             manager.register(brokerId, true);
         }
@@ -152,7 +151,7 @@ public class BrokerHeartbeatManagerTest {
     @Test
     public void testControlledShutdownOffsetIsOnlyUpdatedOnce() {
         BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
-        assertEquals(Collections.emptySet(), usableBrokersToSet(manager));
+        assertEquals(Set.of(), usableBrokersToSet(manager));
         for (int brokerId = 0; brokerId < 5; brokerId++) {
             manager.register(brokerId, true);
         }

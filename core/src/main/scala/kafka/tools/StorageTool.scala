@@ -126,11 +126,23 @@ object StorageTool extends Logging {
       setClusterId(namespace.getString("cluster_id")).
       setUnstableFeatureVersionsEnabled(config.unstableFeatureVersionsEnabled).
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
-      setControllerListenerName(config.controllerListenerNames.head).
+      setControllerListenerName(config.controllerListenerNames.get(0)).
       setMetadataLogDirectory(config.metadataLogDir)
-    Option(namespace.getString("release_version")).foreach(
-      releaseVersion => formatter.
-        setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion)))
+
+    def metadataVersionsToString(first: MetadataVersion, last: MetadataVersion): String = {
+      val versions = MetadataVersion.VERSIONS.slice(first.ordinal, last.ordinal + 1)
+      versions.map(_.toString).mkString(", ")
+    }
+    Option(namespace.getString("release_version")).foreach(releaseVersion => {
+      try {
+        formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
+      } catch {
+        case _: Throwable =>
+          throw new TerseFailure(s"Unknown metadata.version $releaseVersion. Supported metadata.version are " +
+            s"${metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction())}")
+      }
+    })
+
     Option(namespace.getList[String]("feature")).foreach(
       featureNamesAndLevels(_).foreachEntry {
         (k, v) => formatter.setFeatureLevel(k, v)
@@ -184,7 +196,7 @@ object StorageTool extends Logging {
     } catch {
       case e: IllegalArgumentException =>
         throw new TerseFailure(s"Unknown release version '$releaseVersion'. Supported versions are: " +
-          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}")
+          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.latestTesting().version()}")
     }
   }
 
@@ -376,7 +388,7 @@ object StorageTool extends Logging {
 
   def configToLogDirectories(config: KafkaConfig): Seq[String] = {
     val directories = new mutable.TreeSet[String]
-    directories ++= config.logDirs
+    directories ++= config.logDirs.asScala
     Option(config.metadataLogDir).foreach(directories.add)
     directories.toSeq
   }

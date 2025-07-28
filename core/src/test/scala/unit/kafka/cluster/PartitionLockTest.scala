@@ -18,6 +18,7 @@
 package kafka.cluster
 
 import java.lang.{Long => JLong}
+import java.util
 import java.util.{Optional, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
@@ -26,11 +27,12 @@ import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.{FetchRequest, LeaderAndIsrRequest}
+import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.PartitionState
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.metadata.{LeaderAndIsr, MockConfigRepository}
+import org.apache.kafka.metadata.{LeaderAndIsr, MetadataCache, MockConfigRepository}
 import org.apache.kafka.server.common.{RequestLocal, TopicIdPartition}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
@@ -139,10 +141,9 @@ class PartitionLockTest extends Logging {
   def testGetReplicaWithUpdateAssignmentAndIsr(): Unit = {
     val active = new AtomicBoolean(true)
     val replicaToCheck = 3
-    val firstReplicaSet = Seq[Integer](3, 4, 5).asJava
-    val secondReplicaSet = Seq[Integer](1, 2, 3).asJava
-    def partitionState(replicas: java.util.List[Integer]) = new LeaderAndIsrRequest.PartitionState()
-      .setControllerEpoch(1)
+    val firstReplicaSet = util.List.of[Integer](3, 4, 5)
+    val secondReplicaSet = util.List.of[Integer](1, 2, 3)
+    def partitionState(replicas: util.List[Integer]) = new PartitionState()
       .setLeader(replicas.get(0))
       .setLeaderEpoch(1)
       .setIsr(replicas)
@@ -343,13 +344,11 @@ class PartitionLockTest extends Logging {
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
 
-    val controllerEpoch = 0
     val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
     val isr = replicas
-    replicas.forEach(replicaId => when(metadataCache.getAliveBrokerEpoch(replicaId)).thenReturn(Some(1L)))
+    replicas.forEach(replicaId => when(metadataCache.getAliveBrokerEpoch(replicaId)).thenReturn(Optional.of(1L)))
 
-    assertTrue(partition.makeLeader(new LeaderAndIsrRequest.PartitionState()
-      .setControllerEpoch(controllerEpoch)
+    assertTrue(partition.makeLeader(new PartitionState()
       .setLeader(brokerId)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(isr)
@@ -362,7 +361,7 @@ class PartitionLockTest extends Logging {
 
   private def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000: java.lang.Integer)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, 999: java.lang.Integer)
     overrides.foreach { case (k, v) => logProps.put(k, v) }

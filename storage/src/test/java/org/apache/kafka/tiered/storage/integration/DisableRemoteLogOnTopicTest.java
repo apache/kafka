@@ -24,8 +24,6 @@ import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,11 +39,11 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
         return 2;
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
     @Override
-    public void executeTieredStorageTest(String quorum, String groupProtocol) {
-        super.executeTieredStorageTest(quorum, groupProtocol);
+    public void executeTieredStorageTest(String groupProtocol) {
+        super.executeTieredStorageTest(groupProtocol);
     }
 
     @Override
@@ -59,7 +57,7 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
         final Integer maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
         final Map<Integer, List<Integer>> assignment = mkMap(
-                mkEntry(p0, Arrays.asList(broker0, broker1))
+                mkEntry(p0, List.of(broker0, broker1))
         );
         // local.retention.ms/bytes need to set to the same value as retention.ms/bytes when disabling remote log copy
         final Map<String, String> disableRemoteCopy = new HashMap<>();
@@ -87,8 +85,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                         new KeyValueSpec("k2", "v2"))
                 // disable remote log copy
                 .updateTopicConfig(topicA,
-                        disableRemoteCopy,
-                        Collections.emptyList())
+                    disableRemoteCopy,
+                    List.of())
 
                 // make sure we can still consume from the beginning of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 2)
@@ -96,8 +94,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
 
                 // re-enable remote log copy
                 .updateTopicConfig(topicA,
-                        enableRemoteCopy,
-                        Collections.emptyList())
+                    enableRemoteCopy,
+                    List.of())
 
                 // make sure the logs can be offloaded
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 3L)
@@ -105,8 +103,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
 
                 // disable remote log copy again
                 .updateTopicConfig(topicA,
-                        disableRemoteCopy,
-                        Collections.emptyList())
+                    disableRemoteCopy,
+                    List.of())
                 // make sure we can still consume from the beginning of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 3)
                 .consume(topicA, p0, 0L, 4, 3)
@@ -119,8 +117,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
 
                 // disabling remote log on topicA and enabling deleteOnDisable
                 .updateTopicConfig(topicA,
-                        deleteOnDisable,
-                        Collections.emptyList())
+                    deleteOnDisable,
+                    List.of())
                 // make sure all remote data is deleted
                 .expectEmptyRemoteStorage(topicA, p0)
                 // verify the local log is still consumable

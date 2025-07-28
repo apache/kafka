@@ -28,17 +28,15 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.requests.MetadataResponse
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testTopicDeletionClusterHasOfflinePartitions(quorum: String): Unit = {
+  @Test
+  def testTopicDeletionClusterHasOfflinePartitions(): Unit = {
     // Create two topics with one partition/replica. Make one of them offline.
     val offlineTopic = "topic-1"
     val onlineTopic = "topic-2"
@@ -49,9 +47,9 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
     // Ensure one topic partition is offline.
     TestUtils.waitUntilTrue(() => {
-      aliveBrokers.head.metadataCache.getLeaderAndIsr(onlineTopic, 0).exists(_.leader() == 1) &&
-        aliveBrokers.head.metadataCache.getLeaderAndIsr(offlineTopic, 0).exists(_.leader() ==
-          MetadataResponse.NO_LEADER_ID)
+      aliveBrokers.head.metadataCache.getLeaderAndIsr(onlineTopic, 0).filter(_.leader() == 1).isPresent() &&
+        aliveBrokers.head.metadataCache.getLeaderAndIsr(offlineTopic, 0).filter(_.leader() ==
+          MetadataResponse.NO_LEADER_ID).isPresent()
     }, "Topic partition is not offline")
 
     // Delete the newly created topic and topic with offline partition. See the deletion is
@@ -70,9 +68,8 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
       "The topics are found in the Broker's cache")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testValidDeleteTopicRequests(quorum: String): Unit = {
+  @Test
+  def testValidDeleteTopicRequests(): Unit = {
     val timeout = 10000
     // Single topic
     createTopic("topic-1")
@@ -138,9 +135,8 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
     connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testDeleteTopicsVersions(quorum: String): Unit = {
+  @Test
+  def testDeleteTopicsVersions(): Unit = {
     val timeout = 10000
     for (version <- ApiKeys.DELETE_TOPICS.oldestVersion to ApiKeys.DELETE_TOPICS.latestVersion) {
       info(s"Creating and deleting tests for version $version")

@@ -22,7 +22,22 @@ package org.apache.kafka.common.errors;
  * different recovery strategies (e.g., re-balancing task, restoring from checkpoints) may be employed.
  */
 public abstract class ApplicationRecoverableException extends ApiException {
+    private static final long serialVersionUID = 1L;
+
+    public ApplicationRecoverableException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
     public ApplicationRecoverableException(String message) {
         super(message);
     }
+
+    public ApplicationRecoverableException(Throwable cause) {
+        super(cause);
+    }
+
+    public ApplicationRecoverableException() {
+        super();
+    }
+
 }

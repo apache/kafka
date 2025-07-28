@@ -23,7 +23,6 @@ import org.apache.kafka.metadata.KafkaConfigSchema;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,7 +46,7 @@ public class MetadataNodeRedactionCriteriaTest {
                 define("secret.config", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "baz"));
         configs.put(TOPIC, new ConfigDef().
                 define("topic.secret.config", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "abc"));
-        KafkaConfigSchema schema = new KafkaConfigSchema(configs, Collections.emptyMap());
+        KafkaConfigSchema schema = new KafkaConfigSchema(configs, Map.of());
         STRICT = MetadataNodeRedactionCriteria.Strict.INSTANCE;
         NORMAL = new MetadataNodeRedactionCriteria.Normal(schema);
         DISABLED = MetadataNodeRedactionCriteria.Disabled.INSTANCE;

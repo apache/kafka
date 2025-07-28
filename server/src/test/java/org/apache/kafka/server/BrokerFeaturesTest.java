@@ -29,6 +29,8 @@ import java.util.Map;
 
 import static org.apache.kafka.server.common.Feature.ELIGIBLE_LEADER_REPLICAS_VERSION;
 import static org.apache.kafka.server.common.Feature.GROUP_VERSION;
+import static org.apache.kafka.server.common.Feature.SHARE_VERSION;
+import static org.apache.kafka.server.common.Feature.STREAMS_VERSION;
 import static org.apache.kafka.server.common.Feature.TRANSACTION_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -36,6 +38,12 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BrokerFeaturesTest {
+    private static final Features<SupportedVersionRange> SUPPORTED_FEATURES = Features.supportedFeatures(Map.of(
+            "test_feature_1", new SupportedVersionRange((short) 1, (short) 4),
+            "test_feature_2", new SupportedVersionRange((short) 1, (short) 3)
+    ));
+
+    private static final BrokerFeatures BROKER_FEATURES = BrokerFeatures.createDefault(true, SUPPORTED_FEATURES);
 
     @Test
     public void testEmpty() {
@@ -44,79 +52,60 @@ public class BrokerFeaturesTest {
 
     @Test
     public void testIncompatibilitiesDueToAbsentFeature() {
-        Map<String, SupportedVersionRange> newFeatures = new HashMap<>();
-        newFeatures.put("test_feature_1", new SupportedVersionRange((short) 1, (short) 4));
-        newFeatures.put("test_feature_2", new SupportedVersionRange((short) 1, (short) 3));
-        Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
-        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
-
-        Map<String, Short> compatibleFeatures = new HashMap<>();
-        compatibleFeatures.put("test_feature_1", (short) 4);
-        Map<String, Short> inCompatibleFeatures = new HashMap<>();
-        inCompatibleFeatures.put("test_feature_2", (short) 4);
+        Map<String, Short> compatibleFeatures = Map.of("test_feature_1", (short) 4);
+        Map<String, Short> inCompatibleFeatures = Map.of("test_feature_2", (short) 4);
 
         Map<String, Short> finalizedFeatures = new HashMap<>(compatibleFeatures);
         finalizedFeatures.putAll(inCompatibleFeatures);
 
-        assertEquals(inCompatibleFeatures,
-                brokerFeatures.incompatibleFeatures(finalizedFeatures));
-        assertTrue(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures));
+        assertEquals(inCompatibleFeatures, BROKER_FEATURES.incompatibleFeatures(finalizedFeatures));
+        assertTrue(BrokerFeatures.hasIncompatibleFeatures(SUPPORTED_FEATURES, finalizedFeatures));
     }
 
     @Test
     public void testIncompatibilitiesDueToIncompatibleFeature() {
-        Map<String, SupportedVersionRange> newFeatures = new HashMap<>();
-        newFeatures.put("test_feature_1", new SupportedVersionRange((short) 1, (short) 4));
-        newFeatures.put("test_feature_2", new SupportedVersionRange((short) 1, (short) 3));
-        Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
-        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
-
-        Map<String, Short> compatibleFeatures = new HashMap<>();
-        compatibleFeatures.put("test_feature_1", (short) 3);
-        Map<String, Short> inCompatibleFeatures = new HashMap<>();
-        inCompatibleFeatures.put("test_feature_2", (short) 4);
+        Map<String, Short> compatibleFeatures = Map.of("test_feature_1", (short) 3);
+        Map<String, Short> inCompatibleFeatures = Map.of("test_feature_2", (short) 4);
         Map<String, Short> finalizedFeatures = new HashMap<>(compatibleFeatures);
         finalizedFeatures.putAll(inCompatibleFeatures);
 
-        assertEquals(inCompatibleFeatures, brokerFeatures.incompatibleFeatures(finalizedFeatures));
-        assertTrue(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures));
+        assertEquals(inCompatibleFeatures, BROKER_FEATURES.incompatibleFeatures(finalizedFeatures));
+        assertTrue(BrokerFeatures.hasIncompatibleFeatures(SUPPORTED_FEATURES, finalizedFeatures));
     }
 
     @Test
     public void testCompatibleFeatures() {
-        Map<String, SupportedVersionRange> newFeatures = new HashMap<>();
-        newFeatures.put("test_feature_1", new SupportedVersionRange((short) 1, (short) 4));
-        newFeatures.put("test_feature_2", new SupportedVersionRange((short) 1, (short) 3));
-        Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
-        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
+        Map<String, Short> compatibleFeatures = Map.of(
+                "test_feature_1", (short) 3,
+                "test_feature_2", (short) 3
+        );
 
-        Map<String, Short> compatibleFeatures = new HashMap<>();
-        compatibleFeatures.put("test_feature_1", (short) 3);
-        compatibleFeatures.put("test_feature_2", (short) 3);
-        Map<String, Short> finalizedFeatures = new HashMap<>(compatibleFeatures);
-
-        assertTrue(brokerFeatures.incompatibleFeatures(finalizedFeatures).isEmpty());
-        assertFalse(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures));
+        assertTrue(BROKER_FEATURES.incompatibleFeatures(compatibleFeatures).isEmpty());
+        assertFalse(BrokerFeatures.hasIncompatibleFeatures(SUPPORTED_FEATURES, compatibleFeatures));
     }
 
     @Test
     public void testDefaultFinalizedFeatures() {
-        Map<String, SupportedVersionRange> newFeatures = new HashMap<>();
-        newFeatures.put("test_feature_1", new SupportedVersionRange((short) 1, (short) 4));
-        newFeatures.put("test_feature_2", new SupportedVersionRange((short) 1, (short) 3));
-        newFeatures.put("test_feature_3", new SupportedVersionRange((short) 3, (short) 7));
+        Map<String, SupportedVersionRange> newFeatures = Map.of(
+                "test_feature_1", new SupportedVersionRange((short) 1, (short) 4),
+                "test_feature_2", new SupportedVersionRange((short) 1, (short) 3),
+                "test_feature_3", new SupportedVersionRange((short) 3, (short) 7)
+        );
         Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
 
-        Map<String, Short> expectedFeatures = new HashMap<>();
-        expectedFeatures.put(MetadataVersion.FEATURE_NAME, MetadataVersion.latestTesting().featureLevel());
-        expectedFeatures.put(TRANSACTION_VERSION.featureName(), TRANSACTION_VERSION.latestTesting());
-        expectedFeatures.put(GROUP_VERSION.featureName(), GROUP_VERSION.latestTesting());
-        expectedFeatures.put(ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), ELIGIBLE_LEADER_REPLICAS_VERSION.latestTesting());
-        expectedFeatures.put("kraft.version", (short) 0);
-        expectedFeatures.put("test_feature_1", (short) 4);
-        expectedFeatures.put("test_feature_2", (short) 3);
-        expectedFeatures.put("test_feature_3", (short) 7);
+        Map<String, Short> expectedFeatures = Map.of(
+                MetadataVersion.FEATURE_NAME, MetadataVersion.latestTesting().featureLevel(),
+                TRANSACTION_VERSION.featureName(), TRANSACTION_VERSION.latestTesting(),
+                GROUP_VERSION.featureName(), GROUP_VERSION.latestTesting(),
+                ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), ELIGIBLE_LEADER_REPLICAS_VERSION.latestTesting(),
+                SHARE_VERSION.featureName(), SHARE_VERSION.latestTesting(),
+                STREAMS_VERSION.featureName(), STREAMS_VERSION.latestTesting(),
+                "kraft.version", (short) 0,
+                "test_feature_1", (short) 4,
+                "test_feature_2", (short) 3,
+                "test_feature_3", (short) 7
+        );
 
         assertEquals(expectedFeatures, brokerFeatures.defaultFinalizedFeatures());
     }

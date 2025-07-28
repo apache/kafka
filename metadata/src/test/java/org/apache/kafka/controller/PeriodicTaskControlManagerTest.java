@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
@@ -57,7 +56,7 @@ public class PeriodicTaskControlManagerTest {
                     if (shouldFail.getAndSet(false)) {
                         throw new NullPointerException("uh oh");
                     }
-                    return ControllerResult.of(Collections.emptyList(),
+                    return ControllerResult.of(List.of(),
                         continuation.getAndSet(false));
                 },
                 periodNs,
