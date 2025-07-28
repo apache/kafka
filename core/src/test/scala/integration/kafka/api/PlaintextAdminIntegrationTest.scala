@@ -4434,6 +4434,98 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Utils.closeQuietly(client, "adminClient")
     }
   }
+
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
+  def testDeleteStreamsGroups(groupProtocol: String): Unit = {
+    val testTopicName = "test_topic"
+    val testOutputTopicName = "test_output_topic"
+    val testNumPartitions = 3
+    val testNumStreamsGroup = 3
+
+    val targetDeletedGroups = util.List.of("stream_group_id_2", "stream_group_id_3")
+    val targetRemainingGroups = util.List.of("stream_group_id_1")
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streamsList = scala.collection.mutable.ListBuffer[(String, KafkaStreams)]()
+
+
+    try {
+      for (i <- 1 to testNumStreamsGroup) {
+        val streamsGroupId = s"stream_group_id_$i"
+        val streamsConfig = new Properties(streamsGroupConfig)
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, streamsGroupId)
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
+        streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
+
+        val builder = new StreamsBuilder()
+        builder.stream[String, String](testTopicName).to(testOutputTopicName)
+        val streams = new KafkaStreams(builder.build(), streamsConfig)
+        streams.cleanUp()
+        streams.start()
+        streamsList += ((streamsGroupId, streams))
+      }
+
+      TestUtils.waitUntilTrue(() => {
+        client.listGroups().all().get().stream()
+          .anyMatch(g => g.groupId().startsWith("stream_group_id_"))
+      }, "Streams groups not ready to delete yet")
+
+      // Verify that there are 3 groups created
+      val groups = client.listGroups().all().get()
+      assertEquals(testNumStreamsGroup, groups.size())
+
+      // Test deletion of non-empty existing groups
+      var deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
+      assertFutureThrows(classOf[GroupNotEmptyException], deleteStreamsGroupResult.all())
+      assertEquals(deleteStreamsGroupResult.deletedGroups().size(),2)
+
+      // Stop and clean up the streams for the groups that are going to be deleted
+      streamsList
+        .filter { case (groupId, _) => targetDeletedGroups.contains(groupId) }
+        .foreach { case (_, streams) =>
+          streams.close(java.time.Duration.ofSeconds(10))
+          streams.cleanUp()
+        }
+
+      // Test deletion of emptied existing streams groups
+      deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
+      assertEquals(deleteStreamsGroupResult.deletedGroups().size(),2)
+
+      // Wait for the deleted groups to be removed
+      TestUtils.waitUntilTrue(() => {
+        val groupIds = client.listGroups().all().get().asScala.map(_.groupId()).toSet
+        targetDeletedGroups.asScala.forall(id => !groupIds.contains(id))
+      }, "Deleted groups not yet deleted")
+
+      // Verify that the deleted groups are no longer present
+      val remainingGroups = client.listGroups().all().get()
+      assertEquals(targetRemainingGroups.size(), remainingGroups.size())
+      remainingGroups.stream().forEach(g => {
+        assertTrue(targetRemainingGroups.contains(g.groupId()))
+      })
+
+      // Test deletion of a non-existing group
+      val nonExistingGroup = "non_existing_stream_group"
+      val deleteNonExistingGroupResult = client.deleteStreamsGroups(util.List.of(nonExistingGroup))
+      assertFutureThrows(classOf[GroupIdNotFoundException], deleteNonExistingGroupResult.all())
+      assertEquals(deleteNonExistingGroupResult.deletedGroups().size(), 1)
+
+    } finally{
+      streamsList.foreach { case (_, streams) =>
+        streams.close(java.time.Duration.ofSeconds(10))
+        streams.cleanUp()
+      }
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
 }
 
 object PlaintextAdminIntegrationTest {
