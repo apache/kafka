@@ -4523,13 +4523,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Utils.closeQuietly(client, "adminClient")
     }
   }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
-  def testListStreamsGroupOffsets(groupProtocol: String): Unit = {
-
-  }
-
 }
 
 object PlaintextAdminIntegrationTest {
