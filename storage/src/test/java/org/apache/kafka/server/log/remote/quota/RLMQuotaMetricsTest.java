@@ -45,7 +45,6 @@ public class RLMQuotaMetricsTest {
         // The ExpireSensorTask calls removeSensor to remove expired sensors.
         metrics.removeSensor(sensor.name());
 
-
         // If the sensor has been removed, we should get a new one.
         Sensor newSensor = rlmQuotaMetrics.sensor();
         assertNotEquals(sensor, newSensor);

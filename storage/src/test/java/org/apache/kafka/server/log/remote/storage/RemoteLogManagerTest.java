@@ -3412,8 +3412,14 @@ public class RemoteLogManagerTest {
             Map<org.apache.kafka.common.MetricName, KafkaMetric> allMetrics = metrics.metrics();
             KafkaMetric avgMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-avg", "RemoteLogManager"));
             KafkaMetric maxMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-max", "RemoteLogManager"));
-            assertEquals(Double.NaN, avgMetric.metricValue());
-            assertEquals(Double.NaN, maxMetric.metricValue());
+            if (quotaExceeded) {
+                assertEquals(Double.NaN, avgMetric.metricValue());
+                assertEquals(Double.NaN, maxMetric.metricValue());
+            } else {
+                // Metrics are not created until they actually get recorded (e.g. if the quota is exceeded).
+                assertNull(avgMetric);
+                assertNull(maxMetric);
+            }
 
             // Verify the highest offset in remote storage is updated
             ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);
