@@ -5335,6 +5335,14 @@ class ReplicaManagerTest {
     delta
   }
 
+  @Test
+  def testTopicsDeltaCreateThenDelete(): Unit ={
+    val delta = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = topic, topicId = FOO_UUID)
+    delta.replay(new RemoveTopicRecord().setTopicId(FOO_UUID))
+    assertEquals(delta.deletedTopicIds().contains(FOO_UUID),false)
+    assertEquals(delta.createdTopicIds().contains(FOO_UUID),false)
+  }
+
   private def imageFromTopics(topicsImage: TopicsImage): MetadataImage = {
     val featuresImageLatest = new FeaturesImage(
       Collections.emptyMap(),
