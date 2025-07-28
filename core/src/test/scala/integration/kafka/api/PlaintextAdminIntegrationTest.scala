@@ -56,7 +56,7 @@ import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVe
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
-import org.apache.kafka.streams.{KafkaStreams, StreamsBuilder, StreamsConfig}
+import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 import org.apache.kafka.test.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
 import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
@@ -4385,9 +4385,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
 
-    val builder = new StreamsBuilder()
-    builder.stream[String, String](testTopicName).to(testOutputTopicName)
-    val streams = new KafkaStreams(builder.build(), streamsConfig)
+    val streams = createStreamsGroup(configOverrides = streamsConfig, inputTopic = testTopicName, outputTopic = testOutputTopicName)
 
     try {
       streams.cleanUp()
@@ -4399,6 +4397,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         client.listGroups().all().get().stream()
           .anyMatch(g => g.groupId() == streamsGroupId)
       }, "Streams group not ready to describe yet")
+
+      Thread.sleep(10000)
 
       TestUtils.waitUntilTrue(() => {
         try {
@@ -4455,7 +4455,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val streamsList = scala.collection.mutable.ListBuffer[(String, KafkaStreams)]()
 
-
     try {
       for (i <- 1 to testNumStreamsGroup) {
         val streamsGroupId = s"stream_group_id_$i"
@@ -4465,9 +4464,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
 
-        val builder = new StreamsBuilder()
-        builder.stream[String, String](testTopicName).to(testOutputTopicName)
-        val streams = new KafkaStreams(builder.build(), streamsConfig)
+        val streams = createStreamsGroup(configOverrides = streamsConfig, inputTopic = testTopicName, outputTopic = testOutputTopicName)
         streams.cleanUp()
         streams.start()
         streamsList += ((streamsGroupId, streams))
@@ -4526,6 +4523,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Utils.closeQuietly(client, "adminClient")
     }
   }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
+  def testListStreamsGroupOffsets(groupProtocol: String): Unit = {
+
+  }
+
 }
 
 object PlaintextAdminIntegrationTest {

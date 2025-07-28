@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.MetadataLogConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
-import org.apache.kafka.streams.StreamsConfig
+import org.apache.kafka.streams.{KafkaStreams, StreamsBuilder, StreamsConfig}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -239,6 +239,19 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     )
     streamsConsumers += streamsConsumer
     streamsConsumer
+  }
+
+  def createStreamsGroup[K, V](configOverrides: Properties = new Properties,
+                               configsToRemove: List[String] = List(),
+                               inputTopic: String,
+                               outputTopic: String): KafkaStreams = {
+    val streamsConfig = new Properties(streamsGroupConfig)
+    streamsConfig ++= configOverrides
+    configsToRemove.foreach(streamsConfig.remove(_))
+    val builder = new StreamsBuilder()
+    builder.stream[K, V](inputTopic).to(outputTopic)
+    val streams = new KafkaStreams(builder.build(), streamsConfig)
+    streams
   }
 
   def createAdminClient(
