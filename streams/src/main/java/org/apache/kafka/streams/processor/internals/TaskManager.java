@@ -2095,9 +2095,7 @@ public class TaskManager {
     long getInputBufferSizeInBytes() {
         long bytesBuffered = 0L;
         for (final Task task : activeTaskIterable()) {
-            if (task instanceof StreamTask) {
-                bytesBuffered += ((StreamTask) task).totalBytesBuffered();
-            }
+            bytesBuffered += task.totalBytesBuffered();
         }
         return bytesBuffered;
     }

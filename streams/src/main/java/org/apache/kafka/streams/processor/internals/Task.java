@@ -269,6 +269,13 @@ public interface Task {
     Map<TopicPartition, Long> highWaterMark();
 
     /**
+     * @return the total bytes buffered by this task for input records
+     */
+    default long totalBytesBuffered() {
+        return 0L;
+    }
+
+    /**
      * @return This returns the time the task started idling. If it is not idling it returns empty.
      */
     Optional<Long> timeCurrentIdlingStarted();

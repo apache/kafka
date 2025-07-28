@@ -238,6 +238,11 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public long totalBytesBuffered() {
+        return task.totalBytesBuffered();
+    }
+
+    @Override
     public Optional<Long> timeCurrentIdlingStarted() {
         throw new UnsupportedOperationException("This task is read-only");
     }

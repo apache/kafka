@@ -1409,7 +1409,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return this.partitionGroup.getNonEmptyTopicPartitions();
     }
 
-    long totalBytesBuffered() {
+    public long totalBytesBuffered() {
         return partitionGroup.totalBytesBuffered();
     }
 
