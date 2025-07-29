@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -60,5 +62,13 @@ public class LogManagerTest {
         assertFalse(LogManager.waitForAllToComplete(List.of(failure, failure), t -> failureCount.incrementAndGet()));
         assertEquals(8, invokedCount.get());
         assertEquals(4, failureCount.get());
+    }
+
+    @Test
+    public void testIsStrayReplica() {
+        UnifiedLog log = mock(UnifiedLog.class);
+        assertTrue(LogManager.isStrayReplica(List.of(), 0, Uuid.ONE_UUID, log));
+        assertTrue(LogManager.isStrayReplica(List.of(1, 2, 3), 0, Uuid.ONE_UUID, log));
+        assertFalse(LogManager.isStrayReplica(List.of(0, 1, 2), 0, Uuid.ONE_UUID, log));
     }
 }

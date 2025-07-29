@@ -25,14 +25,9 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Represents the topics in the metadata image.
@@ -41,7 +36,6 @@ import java.util.stream.Collectors;
  */
 public record TopicsImage(ImmutableMap<Uuid, TopicImage> topicsById, ImmutableMap<String, TopicImage> topicsByName) {
     public static final TopicsImage EMPTY = new TopicsImage(ImmutableMap.empty(), ImmutableMap.empty());
-    private static final Logger LOG = LoggerFactory.getLogger(TopicsImage.class);
 
     public TopicsImage including(TopicImage topic) {
         return new TopicsImage(
@@ -97,38 +91,17 @@ public record TopicsImage(ImmutableMap<Uuid, TopicImage> topicsById, ImmutableMa
     }
 
     /**
-     * Returns true if the given topic partition should not be on the current broker according to the metadata image.
-     *
-     * @param newTopicsImage The new topics image after broker has been reloaded
-     * @param brokerId       The ID of the current broker.
+     * The list of replicas hosting the specified partition
      * @param topicId        The topic ID
      * @param partitionId    The partition ID
-     * @param log            The log
-     * @return true if the topic partition should not exist on the broker, false otherwise.
+     * @return               The list of replicas
      */
-    public static boolean isStrayReplica(TopicsImage newTopicsImage, int brokerId, Optional<Uuid> topicId, int partitionId, String log) {
-        if (topicId.isEmpty()) {
-            // Missing topic ID could result from storage failure or unclean shutdown after topic creation but before flushing
-            // data to the `partition.metadata` file. And before appending data to the log, the `partition.metadata` is always
-            // flushed to disk. So if the topic ID is missing, it mostly means no data was appended, and we can treat this as
-            // a stray log.
-            LOG.info("The topicId does not exist in {}, treat it as a stray log.", log);
-            return true;
-        }
-
-        PartitionRegistration partition = newTopicsImage.getPartition(topicId.get(), partitionId);
+    public List<Integer> partitionReplicas(Uuid topicId, int partitionId) {
+        PartitionRegistration partition = getPartition(topicId, partitionId);
         if (partition == null) {
-            LOG.info("Found stray log dir {}: the topicId {} does not exist in the metadata image.", log, topicId);
-            return true;
+            return List.of();
         } else {
-            List<Integer> replicas = Arrays.stream(partition.replicas).boxed().toList();
-            if (!replicas.contains(brokerId)) {
-                LOG.info("Found stray log dir {}: the current replica assignment {} does not contain the local brokerId {}.",
-                        log, replicas.stream().map(String::valueOf).collect(Collectors.joining(", ", "[", "]")), brokerId);
-                return true;
-            } else {
-                return false;
-            }
+            return Arrays.stream(partition.replicas).boxed().toList();
         }
     }
 }

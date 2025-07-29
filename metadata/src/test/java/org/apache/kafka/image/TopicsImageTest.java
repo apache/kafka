@@ -46,8 +46,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.CLEAR_ELR_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
@@ -103,10 +101,6 @@ public class TopicsImageTest {
     private static final Uuid BAM_UUID2 = Uuid.fromString("yd6Sq3a9aK1G8snlKv7ag5");
 
     private static final TopicIdPartition FOO_0 = new TopicIdPartition(FOO_UUID, new TopicPartition("foo", 0));
-    private static final TopicIdPartition FOO_1 = new TopicIdPartition(FOO_UUID, new TopicPartition("foo", 1));
-    private static final TopicIdPartition BAR_0 = new TopicIdPartition(BAR_UUID, new TopicPartition("bam", 0));
-    private static final TopicIdPartition BAR_1 = new TopicIdPartition(BAR_UUID, new TopicPartition("bam", 1));
-    private static final TopicIdPartition BAZ_0 = new TopicIdPartition(BAZ_UUID, new TopicPartition("baz", 0));
 
     static {
         TOPIC_IMAGES1 = List.of(
@@ -901,53 +895,25 @@ public class TopicsImageTest {
     public void testTopicsDeltaCreateThenDelete() {
         TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
         delta.replay(new TopicRecord().setName("test").setTopicId(FOO_UUID));
-        assertEquals(delta.createdTopicIds().contains(FOO_UUID), true);
-        assertEquals(delta.deletedTopicIds().contains(FOO_UUID), false);
+        assertTrue(delta.createdTopicIds().contains(FOO_UUID));
+        assertFalse(delta.deletedTopicIds().contains(FOO_UUID));
         delta.replay(new RemoveTopicRecord().setTopicId(FOO_UUID));
-        assertEquals(delta.deletedTopicIds().contains(FOO_UUID), false);
-        assertEquals(delta.createdTopicIds().contains(FOO_UUID), false);
+        assertFalse(delta.deletedTopicIds().contains(FOO_UUID));
+        assertFalse(delta.createdTopicIds().contains(FOO_UUID));
     }
 
     @Test
-    public void testIsStrayReplicaWithEmptyImage() {
+    public void testPartitionReplicasWithEmptyImage() {
         TopicsImage image = topicsImage(List.of());
-        List<TopicIdPartition> onDisk = List.of(FOO_0, FOO_1, BAR_0, BAR_1, BAZ_0);
-        assertTrue(onDisk.stream().allMatch(tp ->
-                TopicsImage.isStrayReplica(image, 0, Optional.of(tp.topicId()), tp.partition(), ""))
-        );
+        assertTrue(image.partitionReplicas(FOO_UUID, 0).isEmpty());
     }
 
     @Test
-    public void testIsStrayReplicaInImage() {
+    public void testPartitionReplicas() {
         TopicsImage image = topicsImage(List.of(
-                newTopicImage(FOO_0.topic(), FOO_0.topicId(), newPartition(new int[]{0, 1, 2})),
-                newTopicImage(BAR_0.topic(), BAR_0.topicId(), newPartition(new int[]{0, 1, 2}), newPartition(new int[]{0, 1, 2}))
+                newTopicImage(FOO_0.topic(), FOO_0.topicId(), newPartition(new int[]{0, 1, 2}))
         ));
-        List<TopicIdPartition> onDisk = List.of(FOO_0, FOO_1, BAR_0, BAR_1, BAZ_0);
-        Set<TopicPartition> expectedStrays = Stream.of(FOO_1, BAZ_0).map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
-
-        onDisk.forEach(tp -> assertEquals(
-                expectedStrays.contains(tp.topicPartition()),
-                TopicsImage.isStrayReplica(image, 0, Optional.of(tp.topicId()), tp.partition(), "")));
-    }
-
-    @Test
-    public void testIsStrayReplicaInImageWithRemoteReplicas() {
-        TopicsImage image = topicsImage(List.of(
-                newTopicImage(FOO_0.topic(), FOO_0.topicId(), newPartition(new int[]{0, 1, 2})),
-                newTopicImage(BAR_0.topic(), BAR_0.topicId(), newPartition(new int[]{1, 2, 3}), newPartition(new int[]{2, 3, 0}))
-        ));
-        List<TopicIdPartition> onDisk = List.of(FOO_0, BAR_0, BAR_1);
-        Set<TopicPartition> expectedStrays = Stream.of(BAR_0).map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
-        onDisk.forEach(tp -> assertEquals(
-                expectedStrays.contains(tp.topicPartition()),
-                TopicsImage.isStrayReplica(image, 0, Optional.of(tp.topicId()), tp.partition(), ""))
-        );
-    }
-
-    @Test
-    public void testIsStrayMissingTopicId() {
-        assertTrue(TopicsImage.isStrayReplica(topicsImage(List.of()), 0, Optional.empty(), 0, ""));
+        assertEquals(List.of(0, 1, 2), image.partitionReplicas(FOO_UUID, 0));
     }
 
     private static TopicsImage topicsImage(List<TopicImage> topics) {
