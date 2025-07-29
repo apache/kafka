@@ -47,7 +47,7 @@ ext {
   gradleVersion = versions.gradle
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
-  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams-scala", ":test-common:test-common-util"]
+  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams:examples", ":streams-scala", ":test-common:test-common-util"]
 
   buildVersionFileName = "kafka-version.properties"
 
@@ -2917,10 +2917,10 @@ project(':streams:examples') {
   }
 
   dependencies {
-    // this dependency should be removed after we unify data API
-    implementation(project(':connect:json'))
     implementation project(':streams')
     implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonAnnotations
 
     testImplementation project(':streams:test-utils')
     testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
