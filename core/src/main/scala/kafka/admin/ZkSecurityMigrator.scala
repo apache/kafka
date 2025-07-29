@@ -21,7 +21,7 @@ import joptsimple.{OptionSet, OptionSpec, OptionSpecBuilder}
 import kafka.server.KafkaConfig
 import kafka.utils.{Exit, Logging, ToolsUtils}
 import kafka.utils.Implicits._
-import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
+import kafka.zk.{ControllerZNode, KafkaZkClient, MigrationZNode, ZkData, ZkSecurityMigratorUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.config.ZkConfigs
@@ -260,12 +260,18 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
   }
 
   private def run(enablePathCheck: Boolean): Unit = {
+    def skipSetAcl(path: String): Boolean = {
+      val isControllerPath = path == ControllerZNode.path
+      val isMigrationPath = path == MigrationZNode.path
+      (isControllerPath || isMigrationPath) && !zkClient.pathExists(path)
+    }
+    
     try {
       setAclIndividually("/")
       checkPathExistenceAndMaybeExit(enablePathCheck)
       for (path <- ZkData.SecureRootPaths) {
         debug("Going to set ACL for %s".format(path))
-        if (path == ControllerZNode.path && !zkClient.pathExists(path)) {
+        if (skipSetAcl(path)) {
           debug("Ignoring to set ACL for %s, because it doesn't exist".format(path))
         } else {
           zkClient.makeSurePersistentPathExists(path)

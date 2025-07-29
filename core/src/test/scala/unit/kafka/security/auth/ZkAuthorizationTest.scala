@@ -38,6 +38,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.zookeeper.client.ZKClientConfig
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -147,11 +149,12 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
    * Tests the migration tool when making an unsecure
    * cluster secure.
    */
-  @Test
-  def testZkMigration(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testZkMigration(includeAllZnodes: Boolean): Unit = {
     val unsecureZkClient = newKafkaZkClient(zkConnect, isSecure = false)
     try {
-      testMigration(zkConnect, unsecureZkClient, zkClient)
+      testMigration(zkConnect, unsecureZkClient, zkClient, includeAllZnodes)
     } finally {
       unsecureZkClient.close()
     }
@@ -161,11 +164,12 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
    * Tests the migration tool when making a secure
    * cluster unsecure.
    */
-  @Test
-  def testZkAntiMigration(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testZkAntiMigration(includeAllZnodes: Boolean): Unit = {
     val unsecureZkClient = newKafkaZkClient(zkConnect, isSecure = false)
     try {
-      testMigration(zkConnect, zkClient, unsecureZkClient)
+      testMigration(zkConnect, zkClient, unsecureZkClient, includeAllZnodes)
     } finally {
       unsecureZkClient.close()
     }
@@ -218,9 +222,17 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
    * Exercises the migration tool. It is used in these test cases:
    * testZkMigration, testZkAntiMigration, testChroot.
    */
-  private def testMigration(zkUrl: String, firstZk: KafkaZkClient, secondZk: KafkaZkClient): Unit = {
+  private def testMigration(
+                             zkUrl: String,
+                             firstZk: KafkaZkClient,
+                             secondZk: KafkaZkClient,
+                             includeAllZnodes: Boolean = true): Unit = {
     info(s"zkConnect string: $zkUrl")
-    for (path <- ZkData.SecureRootPaths ++ ZkData.SensitiveRootPaths) {
+    // Optionally do not create controller and migration znodes
+    val predicate: String => Boolean = if (includeAllZnodes) _ => true else skipCreateZnodes
+    val paths = (ZkData.SecureRootPaths ++ ZkData.SensitiveRootPaths).filter(predicate)
+    
+    for (path <- paths) {
       info(s"Creating $path")
       firstZk.makeSurePersistentPathExists(path)
       // Create a child for each znode to exercise the recurrent
@@ -241,7 +253,7 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
       }
     ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkUrl"))
     info("Done with migration")
-    for (path <- ZkData.SecureRootPaths ++ ZkData.SensitiveRootPaths) {
+    for (path <- paths) {
       val sensitive = ZkData.sensitivePath(path)
       val listParent = secondZk.getAcl(path)
       assertTrue(isAclCorrect(listParent, secondZk.secure, sensitive), path)
@@ -257,6 +269,18 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
       ZkData.sensitivePath(ExtendedAclZNode.path)), "/kafka-acl-extended")
     assertTrue(isAclCorrect(firstZk.getAcl("/feature"), secondZk.secure,
       ZkData.sensitivePath(FeatureZNode.path)), "ACL mismatch for /feature path")
+
+    if (!includeAllZnodes) {
+      // Check controller and migration znodes should not be created
+      assertFalse(firstZk.pathExists(ControllerZNode.path))
+      assertFalse(firstZk.pathExists(MigrationZNode.path))
+    }
+  }
+
+  private def skipCreateZnodes(path: String): Boolean = {
+    val isNotControllerPath = path != ControllerZNode.path
+    val isNotMigrationPath = path != MigrationZNode.path
+    isNotControllerPath && isNotMigrationPath
   }
 
   /**
