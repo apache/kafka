@@ -133,9 +133,9 @@ pipeline {
     }
 
     post {
-        agent { label "${env.AGENT_LABEL}" }
-        always {
+         always {
             script {
+                agent { label "${env.AGENT_LABEL}" }
                 if (params.RUN_TESTS) {
                     echo 'Archiving test results...'
                     junit '**/build/test-results/**/*.xml'
