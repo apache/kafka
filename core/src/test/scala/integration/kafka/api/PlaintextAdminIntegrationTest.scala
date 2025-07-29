@@ -4571,14 +4571,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         }, "Fail to produce record to topic")
       }
 
-      Thread.sleep(3000) // Wait for the records to be processed by the streams application
+      Thread.sleep(3000)
 
       // List streams group offsets
       TestUtils.waitUntilTrue(() => {
         val allTopicPartitions = client.listStreamsGroupOffsets(
           util.Map.of(streamsGroupId, new ListStreamsGroupOffsetsSpec())
-        ).all().get()
-        allTopicPartitions!=null
+        ).partitionsToOffsetAndMetadata(streamsGroupId).get()
+        allTopicPartitions!=null && allTopicPartitions.size() == testNumPartitions
       },"Streams group offsets not ready to list yet")
 
       val allTopicPartitions = client.listStreamsGroupOffsets(
@@ -4598,7 +4598,81 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Utils.closeQuietly(client, "adminClient")
       Utils.closeQuietly(producer, "producer")
     }
+  }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
+  def testDeleteStreamsGroupOffsets(groupProtocol: String): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testOutputTopicName = "test_output_topic"
+    val testNumPartitions = 3
+
+    val config = createConfig
+    client = Admin.create(config)
+    val producer = createProducer(configOverrides = new Properties())
+
+    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streamsConfig = new Properties()
+    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000)
+    val streams = createStreamsGroup(
+      configOverrides = streamsConfig,
+      inputTopic = testTopicName,
+      outputTopic = testOutputTopicName,
+      streamsGroupId = streamsGroupId,
+      groupProtocol = groupProtocol
+    )
+
+    try {
+      streams.cleanUp()
+      streams.start()
+
+      TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
+
+      // Producer sends messages
+      for (i <- 1 to 20) {
+        TestUtils.waitUntilTrue(() => {
+          val producerRecord = producer.send(
+              new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
+            .get()
+          producerRecord != null && producerRecord.topic() == testTopicName
+        }, "Fail to produce record to topic")
+      }
+      // List streams group offsets
+      TestUtils.waitUntilTrue(() => {
+         val allTopicPartitions = client.listStreamsGroupOffsets(
+          util.Map.of(streamsGroupId, new ListStreamsGroupOffsetsSpec())
+        ).partitionsToOffsetAndMetadata(streamsGroupId).get()
+        allTopicPartitions!=null && allTopicPartitions.size() == testNumPartitions
+      },"Streams group offsets not ready to list yet")
+
+      // Verify running Kstreams group cannot delete its own offsets
+      var deleteStreamsGroupOffsetsResult = client.deleteStreamsGroupOffsets(streamsGroupId, util.Set.of(new TopicPartition(testTopicName, 0)))
+      assertFutureThrows(classOf[GroupSubscribedToTopicException], deleteStreamsGroupOffsetsResult.all())
+
+      // Verity stopped Kstreams group can delete its own offsets
+      streams.close()
+      TestUtils.waitUntilTrue(() => {
+        val groupDescription = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
+        groupDescription.get(streamsGroupId).groupState() == GroupState.EMPTY
+      }, "Streams group not closed yet")
+      deleteStreamsGroupOffsetsResult = client.deleteStreamsGroupOffsets(streamsGroupId, util.Set.of(new TopicPartition(testTopicName, 0)))
+      val res = deleteStreamsGroupOffsetsResult.partitionResult(new TopicPartition(testTopicName, 0)).get()
+      assertNull(res)
+
+      // Verify the group offsets after deletion
+      val allTopicPartitions = client.listStreamsGroupOffsets(
+        util.Map.of(streamsGroupId, new ListStreamsGroupOffsetsSpec())
+      ).partitionsToOffsetAndMetadata(streamsGroupId).get()
+      assertEquals(allTopicPartitions.size(), testNumPartitions-1)
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
+      Utils.closeQuietly(producer, "producer")
+    }
   }
 }
 
