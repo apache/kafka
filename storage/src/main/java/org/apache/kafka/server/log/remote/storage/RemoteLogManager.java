@@ -165,8 +165,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final Condition copyQuotaManagerLockCondition = copyQuotaManagerLock.newCondition();
     private final RLMQuotaManager rlmCopyQuotaManager;
     private final RLMQuotaManager rlmFetchQuotaManager;
-    private final Sensor fetchThrottleTimeSensor;
-    private final Sensor copyThrottleTimeSensor;
+    private final RLMQuotaMetrics fetchQuotaMetrics;
+    private final RLMQuotaMetrics copyQuotaMetrics;
 
     private final RemoteIndexCache indexCache;
     private final RemoteStorageThreadPool remoteStorageReaderThreadPool;
@@ -235,10 +235,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
         rlmFetchQuotaManager = createRLMFetchQuotaManager();
 
-        fetchThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-fetch-throttle-time", RemoteLogManager.class.getSimpleName(),
-            "The %s time in millis remote fetches was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
-        copyThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
-            "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
+        fetchQuotaMetrics = new RLMQuotaMetrics(metrics, "remote-fetch-throttle-time", RemoteLogManager.class.getSimpleName(),
+            "The %s time in millis remote fetches was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS);
+        copyQuotaMetrics = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
+            "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS);
 
         indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteStorageManagerPlugin.get(), logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
@@ -347,7 +347,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     public Sensor fetchThrottleTimeSensor() {
-        return fetchThrottleTimeSensor;
+        return fetchQuotaMetrics.sensor();
     }
 
     static RLMQuotaManagerConfig copyQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
@@ -764,7 +764,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     /**
-     * Returns the leader epoch entries within the range of the given start[exclusive] and end[inclusive] offset.
+     * Returns the leader epoch entries within the range of the given start (inclusive) and end (exclusive) offset.
      * <p>
      * Visible for testing.
      *
@@ -786,6 +786,15 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             return task.rlmTask;
         }
         return null;
+    }
+
+    public boolean isPartitionReady(TopicPartition partition) {
+        Uuid uuid = topicIdByPartitionMap.get(partition);
+        if (uuid == null) {
+            return false;
+        }
+        TopicIdPartition topicIdPartition = new TopicIdPartition(uuid, partition);
+        return remoteLogMetadataManagerPlugin.get().isReady(topicIdPartition);
     }
 
     abstract class RLMTask extends CancellableRunnable {
@@ -952,7 +961,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                             try {
                                 long throttleTimeMs = rlmCopyQuotaManager.getThrottleTimeMs();
                                 while (throttleTimeMs > 0) {
-                                    copyThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
+                                    copyQuotaMetrics.sensor().record(throttleTimeMs, time.milliseconds());
                                     logger.debug("Quota exceeded for copying log segments, waiting for the quota to be available.");
                                     // If the thread gets interrupted while waiting, the InterruptedException is thrown
                                     // back to the caller. It's important to note that the task being executed is already
@@ -973,6 +982,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                             segmentIdsBeingCopied.add(segmentId);
                             try {
                                 copyLogSegment(log, candidateLogSegment.logSegment, segmentId, candidateLogSegment.nextSegmentOffset);
+                            } catch (Exception e) {
+                                recordLagStats(log);
+                                throw e;
                             } finally {
                                 segmentIdsBeingCopied.remove(segmentId);
                             }
@@ -1079,6 +1091,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             logger.info("Copied {} to remote storage with segment-id: {}",
                     logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
 
+            recordLagStats(log);
+        }
+
+        private void recordLagStats(UnifiedLog log) {
             long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
             long segmentsLag = log.onlyLocalLogSegmentsCount() - 1;
             recordLagStats(bytesLag, segmentsLag);
@@ -1608,58 +1624,31 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     /**
      * Returns a map containing the epoch vs start-offset for the given leader epoch map by filtering the epochs that
      * does not contain any messages/records associated with them.
-     * For ex:
-     * <pre>
-     * {@code
-     *  <epoch - start offset>
-     *  0 - 0
-     *  1 - 10
-     *  2 - 20
-     *  3 - 30
-     *  4 - 40
-     *  5 - 60  // epoch 5 does not have records or messages associated with it
-     *  6 - 60
-     *  7 - 70
-     * }
-     * </pre>
-     * When the above leaderEpochMap is passed to this method, it returns the following map:
-     * <pre>
-     * {@code
-     *  <epoch - start offset>
-     *  0 - 0
-     *  1 - 10
-     *  2 - 20
-     *  3 - 30
-     *  4 - 40
-     *  6 - 60
-     *  7 - 70
-     * }
-     * </pre>
+     *
      * @param leaderEpochs The leader epoch map to be refined.
+     * @return A map containing only the epochs and their start offsets that have associated messages/records.
      */
     // Visible for testing
     static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
-        List<Integer> epochsWithNoMessages = new ArrayList<>();
+        TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>();
         Map.Entry<Integer, Long> previousEpochAndOffset = null;
+
         for (Map.Entry<Integer, Long> currentEpochAndOffset : leaderEpochs.entrySet()) {
-            if (previousEpochAndOffset != null && previousEpochAndOffset.getValue().equals(currentEpochAndOffset.getValue())) {
-                epochsWithNoMessages.add(previousEpochAndOffset.getKey());
+            if (previousEpochAndOffset != null && !previousEpochAndOffset.getValue().equals(currentEpochAndOffset.getValue())) {
+                filteredLeaderEpochs.put(previousEpochAndOffset.getKey(), previousEpochAndOffset.getValue());
             }
             previousEpochAndOffset = currentEpochAndOffset;
         }
-        if (epochsWithNoMessages.isEmpty()) {
-            return leaderEpochs;
-        }
-        TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>(leaderEpochs);
-        for (Integer epochWithNoMessage : epochsWithNoMessages) {
-            filteredLeaderEpochs.remove(epochWithNoMessage);
+
+        if (previousEpochAndOffset != null) {
+            filteredLeaderEpochs.put(previousEpochAndOffset.getKey(), previousEpochAndOffset.getValue());
         }
         return filteredLeaderEpochs;
     }
 
     public FetchDataInfo read(RemoteStorageFetchInfo remoteStorageFetchInfo) throws RemoteStorageException, IOException {
         int fetchMaxBytes = remoteStorageFetchInfo.fetchMaxBytes;
-        TopicPartition tp = remoteStorageFetchInfo.topicPartition;
+        TopicPartition tp = remoteStorageFetchInfo.topicIdPartition.topicPartition();
         FetchRequest.PartitionData fetchInfo = remoteStorageFetchInfo.fetchInfo;
 
         boolean includeAbortedTxns = remoteStorageFetchInfo.fetchIsolation == FetchIsolation.TXN_COMMITTED;
@@ -1715,6 +1704,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             //  - there is no minimum-one-message constraint and
             //  - the first batch size is more than maximum bytes that can be sent and
             if (!remoteStorageFetchInfo.minOneMessage && firstBatchSize > maxBytes) {
+                LOGGER.debug("Returning empty record for offset {} in partition {} because the first batch size {} " +
+                        "is greater than max fetch bytes {}", offset, tp, firstBatchSize, maxBytes);
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY);
             }
 

@@ -435,7 +435,7 @@ public final class AssignmentsManager {
             return Optional.of("AuthenticationException");
         }
         if (response.get().wasTimedOut()) {
-            return Optional.of("Disonnected[Timeout]");
+            return Optional.of("Disconnected[Timeout]");
         }
         if (response.get().wasDisconnected()) {
             return Optional.of("Disconnected");

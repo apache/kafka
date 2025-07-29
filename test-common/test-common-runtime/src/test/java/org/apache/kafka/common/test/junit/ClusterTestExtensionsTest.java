@@ -18,6 +18,7 @@
 package org.apache.kafka.common.test.junit;
 
 import kafka.server.ControllerServer;
+import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -83,6 +84,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(types = {Type.KRAFT}, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
@@ -188,9 +190,9 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest(autoStart = AutoStart.NO)
     public void testNoAutoStart() {
-        Assertions.assertThrows(RuntimeException.class, clusterInstance::anyBrokerSocketServer);
+        Assertions.assertThrows(RuntimeException.class, () -> clusterInstance.brokers().values().stream().map(KafkaBroker::socketServer).findFirst());
         clusterInstance.start();
-        assertNotNull(clusterInstance.anyBrokerSocketServer());
+        assertTrue(clusterInstance.brokers().values().stream().map(KafkaBroker::socketServer).findFirst().isPresent());
     }
 
     @ClusterTest
@@ -240,7 +242,7 @@ public class ClusterTestExtensionsTest {
         short numReplicas = 3;
         clusterInstance.createTopic(topicName, numPartition, numReplicas);
         clusterInstance.shutdownBroker(0);
-        clusterInstance.waitForTopic(topicName, numPartition);
+        clusterInstance.waitTopicCreation(topicName, numPartition);
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
@@ -271,7 +273,7 @@ public class ClusterTestExtensionsTest {
         try (Admin admin = clusterInstance.admin()) {
             String testTopic = "testTopic";
             admin.createTopics(List.of(new NewTopic(testTopic, 1, (short) 1)));
-            clusterInstance.waitForTopic(testTopic, 1);
+            clusterInstance.waitTopicCreation(testTopic, 1);
             admin.deleteTopics(List.of(testTopic));
             clusterInstance.waitTopicDeletion(testTopic);
             Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
@@ -355,7 +357,7 @@ public class ClusterTestExtensionsTest {
                  ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()))) {
             admin.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
 
-            cluster.waitForTopic(topicName, 1);
+            cluster.waitTopicCreation(topicName, 1);
 
             cluster.brokers().values().forEach(broker -> {
                 broker.shutdown();

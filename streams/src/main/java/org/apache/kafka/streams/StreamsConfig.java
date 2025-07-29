@@ -619,6 +619,11 @@ public class StreamsConfig extends AbstractConfig {
         "support \"classic\" or \"streams\". If \"streams\" is specified, then the streams rebalance protocol will be " +
         "used. Otherwise, the classic group protocol will be used.";
 
+    public static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG = "errors.dead.letter.queue.topic.name";
+
+    private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record to the topic with the provided name if an error occurs.\n" +
+            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.";
+
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
     private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "The output interval in milliseconds for logging summary information.\n" +
@@ -647,9 +652,9 @@ public class StreamsConfig extends AbstractConfig {
                                                               " the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker " +
                                                               " traffic and cluster state can be used for high availability. Must be at least 1." +
                                                               "Note that one warmup replica corresponds to one Stream Task. Furthermore, note that each warmup replica can only be promoted to an active task " +
-                                                              "during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the `probing.rebalance.interval.ms` config). This means " +
+                                                              "during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the <code>probing.rebalance.interval.ms</code> config). This means " +
                                                               "that the maximum rate at which active tasks can be migrated from one Kafka Streams Instance to another instance can be determined by " +
-                                                              "(`max.warmup.replicas` / `probing.rebalance.interval.ms`).";
+                                                              "(<code>max.warmup.replicas</code> / <code>probing.rebalance.interval.ms</code>).";
 
     /** {@code metadata.max.age.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -821,7 +826,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
-    private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading in some cases -- see upgrade guide) in a backward compatible way. Default is `null`. " +
+    private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading in some cases -- see upgrade guide) in a backward compatible way. Default is <code>null</code>. " +
         "Please refer to the Kafka Streams upgrade guide for instructions on how and when to use this config. " +
         "Note that when upgrading from 3.5 to a newer version it is never required to specify this config, " +
         "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config. " +
@@ -991,6 +996,11 @@ public class StreamsConfig extends AbstractConfig {
                     LogAndFailExceptionHandler.class.getName(),
                     Importance.MEDIUM,
                     DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
+            .define(ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
+                    Type.STRING,
+                    null,
+                    Importance.MEDIUM,
+                    ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -1086,6 +1096,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
+            .define(CONFIG_PROVIDERS_CONFIG,
+                    Type.LIST,
+                    List.of(),
+                    Importance.LOW, 
+                    CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,
                     Type.BOOLEAN,
                     true,
@@ -1844,7 +1859,7 @@ public class StreamsConfig extends AbstractConfig {
 
             if (segmentSize < batchSize) {
                 throw new IllegalArgumentException(String.format(
-                    "Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
+                    "Specified topic segment size %d is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
                     segmentSize,
                     batchSize
                 ));

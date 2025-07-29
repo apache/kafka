@@ -311,9 +311,10 @@ public class PartitionChangeBuilder {
                     topicId, partitionId, Arrays.toString(partition.lastKnownElr));
             return false;
         }
-        if (isAcceptableLeader.test(partition.lastKnownElr[0])) {
+        if (!isAcceptableLeader.test(partition.lastKnownElr[0])) {
             log.trace("Try to elect last known leader for {}-{} but last known leader is not alive. last known leader={}",
                     topicId, partitionId, partition.lastKnownElr[0]);
+            return false;
         }
         return true;
     }

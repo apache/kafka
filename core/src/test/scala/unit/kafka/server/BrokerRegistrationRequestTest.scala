@@ -42,12 +42,13 @@ import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 class BrokerRegistrationRequestTest {
 
   def brokerToControllerChannelManager(clusterInstance: ClusterInstance): NodeToControllerChannelManager = {
+    val controllerSocketServer = clusterInstance.controllers().values().stream().map(_.socketServer).findFirst().get()
     new NodeToControllerChannelManagerImpl(
       new ControllerNodeProvider() {
         def node: Option[Node] = Some(new Node(
-          clusterInstance.anyControllerSocketServer().config.nodeId,
+          controllerSocketServer.config.nodeId,
           "127.0.0.1",
-          clusterInstance.anyControllerSocketServer().boundPort(clusterInstance.controllerListenerName()),
+          controllerSocketServer.boundPort(clusterInstance.controllerListenerName()),
         ))
 
         def listenerName: ListenerName = clusterInstance.controllerListenerName()
@@ -61,7 +62,7 @@ class BrokerRegistrationRequestTest {
       },
       Time.SYSTEM,
       new Metrics(),
-      clusterInstance.anyControllerSocketServer().config,
+      controllerSocketServer.config,
       "heartbeat",
       "test-heartbeat-",
       10000

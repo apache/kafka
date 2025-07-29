@@ -39,7 +39,6 @@ import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
 import net.sourceforge.argparse4j.internal.HelpScreenException;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -240,7 +239,7 @@ public class FeatureCommand {
     }
 
     static String metadataVersionsToString(MetadataVersion first, MetadataVersion last) {
-        List<MetadataVersion> versions = Arrays.asList(MetadataVersion.VERSIONS).subList(first.ordinal(), last.ordinal() + 1);
+        List<MetadataVersion> versions = List.of(MetadataVersion.VERSIONS).subList(first.ordinal(), last.ordinal() + 1);
         return versions.stream()
                 .map(String::valueOf)
                 .collect(Collectors.joining(", "));
@@ -374,7 +373,7 @@ public class FeatureCommand {
         } catch (IllegalArgumentException e) {
             throw new TerseException("Unknown release version '" + releaseVersion + "'." +
                 " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-                " to " + MetadataVersion.LATEST_PRODUCTION);
+                " to " + MetadataVersion.latestTesting().version());
         }
     }
 
