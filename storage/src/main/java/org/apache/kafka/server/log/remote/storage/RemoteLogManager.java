@@ -982,7 +982,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                             segmentIdsBeingCopied.add(segmentId);
                             try {
                                 copyLogSegment(log, candidateLogSegment.logSegment, segmentId, candidateLogSegment.nextSegmentOffset);
-                            } catch (RemoteStorageException e) {
+                            } catch (Exception e) {
                                 recordLagStats(log);
                                 throw e;
                             } finally {
