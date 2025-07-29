@@ -14,31 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.errors;
+package org.apache.kafka.server.log.remote.storage;
 
 /**
- * Indicates that none of the specified {@link org.apache.kafka.streams.StreamsConfig#BOOTSTRAP_SERVERS_CONFIG brokers}
- * could be found.
- *
- * @see org.apache.kafka.streams.StreamsConfig
- * @deprecated since 4.2 and should not be used any longer.
+ * This exception is thrown when a remote storage operation cannot proceed because the remote storage is not ready.
+ * This may occur in situations where the remote storage (or) metadata layer is initializing, unreachable,
+ * or temporarily unavailable.
+ * <p>
+ * Instances of this exception indicate that the error is retriable, and the operation might
+ * succeed if attempted again when the remote storage (or) metadata layer becomes operational.
  */
-@SuppressWarnings("unused")
-@Deprecated
-public class BrokerNotFoundException extends StreamsException {
+public class RemoteStorageNotReadyException extends RetriableRemoteStorageException {
 
-    private static final long serialVersionUID = 1L;
-
-    public BrokerNotFoundException(final String message) {
+    public RemoteStorageNotReadyException(String message) {
         super(message);
     }
 
-    public BrokerNotFoundException(final String message, final Throwable throwable) {
-        super(message, throwable);
+    public RemoteStorageNotReadyException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    public BrokerNotFoundException(final Throwable throwable) {
-        super(throwable);
+    public RemoteStorageNotReadyException(Throwable cause) {
+        super(cause);
     }
-
 }

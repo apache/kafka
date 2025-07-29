@@ -1852,6 +1852,18 @@ public class RemoteLogManagerTest {
 
         NavigableMap<Integer, Long> refinedLeaderEpochMap = RemoteLogManager.buildFilteredLeaderEpochMap(leaderEpochToStartOffset);
         assertEquals(expectedLeaderEpochs, refinedLeaderEpochMap);
+
+
+        TreeMap<Integer, Long> leaderEpochToStartOffset2 = new TreeMap<>();
+        leaderEpochToStartOffset2.put(0, 0L);
+        leaderEpochToStartOffset2.put(1, 0L);
+        leaderEpochToStartOffset2.put(2, 0L);
+
+        TreeMap<Integer, Long> expectedLeaderEpochs2 = new TreeMap<>();
+        expectedLeaderEpochs2.put(2, 0L);
+
+        NavigableMap<Integer, Long> refinedLeaderEpochMap2 = RemoteLogManager.buildFilteredLeaderEpochMap(leaderEpochToStartOffset2);
+        assertEquals(expectedLeaderEpochs2, refinedLeaderEpochMap2);
     }
 
     @Test
@@ -3729,6 +3741,18 @@ public class RemoteLogManagerTest {
         verifyNoMoreInteractions(remoteLogMetadataManager);
         verify(remoteStorageManager).configure(anyMap());
         verifyNoMoreInteractions(remoteStorageManager);
+    }
+
+    @Test
+    public void testIsPartitionReady() throws InterruptedException {
+        assertFalse(remoteLogManager.isPartitionReady(leaderTopicIdPartition.topicPartition()));
+        remoteLogManager.onLeadershipChange(
+                Set.of(mockPartition(leaderTopicIdPartition)),
+                Set.of(mockPartition(followerTopicIdPartition)),
+                topicIds
+        );
+        assertTrue(remoteLogManager.isPartitionReady(leaderTopicIdPartition.topicPartition()));
+        assertTrue(remoteLogManager.isPartitionReady(followerTopicIdPartition.topicPartition()));
     }
 
     @Test

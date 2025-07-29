@@ -14,31 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.errors;
+package org.apache.kafka.server.log.remote.storage;
 
 /**
- * Indicates that none of the specified {@link org.apache.kafka.streams.StreamsConfig#BOOTSTRAP_SERVERS_CONFIG brokers}
- * could be found.
- *
- * @see org.apache.kafka.streams.StreamsConfig
- * @deprecated since 4.2 and should not be used any longer.
+ * Represents an exception that indicates a retriable error occurred during remote storage operations.
+ * This exception is thrown when an operation against a remote storage system has failed due to transient
+ * or temporary issues, and the operation has a reasonable chance of succeeding if retried.
  */
-@SuppressWarnings("unused")
-@Deprecated
-public class BrokerNotFoundException extends StreamsException {
+public class RetriableRemoteStorageException extends RemoteStorageException {
 
     private static final long serialVersionUID = 1L;
 
-    public BrokerNotFoundException(final String message) {
+    public RetriableRemoteStorageException(String message) {
         super(message);
     }
 
-    public BrokerNotFoundException(final String message, final Throwable throwable) {
-        super(message, throwable);
+    public RetriableRemoteStorageException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    public BrokerNotFoundException(final Throwable throwable) {
-        super(throwable);
+    public RetriableRemoteStorageException(Throwable cause) {
+        super(cause);
     }
-
 }
