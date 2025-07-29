@@ -136,7 +136,7 @@ pipeline {
          always {
             script {
                 // Determine the correct agent label for post-build actions
-                def agentLabel = ''
+                def agentLabel 
                 if (params.JDK_TYPE == 'openj9-open') {
                     agentLabel = 'dual_xeon_ibm_openj9_jdk21'
                 } else if (params.JDK_TYPE == 'openj9-certified') {
