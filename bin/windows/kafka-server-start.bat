@@ -14,6 +14,8 @@ rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
+set KAFKA_OPTS=-Duser.language=en -Duser.country=US
+
 IF [%1] EQU [] (
 	echo USAGE: %0 server.properties
 	EXIT /B 1
@@ -24,9 +26,8 @@ IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
     set KAFKA_LOG4J_OPTS=-Dlog4j2.configurationFile=%~dp0../../config/log4j2.yaml
 )
 IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
-    rem detect OS architecture
-    wmic os get osarchitecture | find /i "32-bit" >nul 2>&1
-    IF NOT ERRORLEVEL 1 (
+    rem detect OS architecture using environment variable
+    IF /I "%PROCESSOR_ARCHITECTURE%"=="x86" (
         rem 32-bit OS
         set KAFKA_HEAP_OPTS=-Xmx512M -Xms512M
     ) ELSE (
