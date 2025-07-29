@@ -17,7 +17,7 @@ pipeline {
     environment {
         DOCKER_REGISTRY_URL     = 'jtsweet0891' // Docker Hub username or registry URL
         DOCKER_IMAGE_BASE_NAME  = 'apache_kafka_on_ibm_j9'
-        DOCKER_CREDENTIALS_ID   = 'dockerhub-credentials' // ID of Docker Hub credentials in Jenkins
+        DOCKER_CREDENTIALS_ID   = 'dockerhub-pat' // ID of Docker Hub credentials in Jenkins
         KAFKA_VERSION           = '4.0.0'
     }
 
