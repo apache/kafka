@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tiered.storage.specs;
 
-public record ConsumableSpec(Long fetchOffset, Integer expectedTotalCount, Integer expectedFromSecondTierCount) {
+public record ConsumableSpec(long fetchOffset, int expectedTotalCount, int expectedFromSecondTierCount) {
 
     @Override
     public String toString() {

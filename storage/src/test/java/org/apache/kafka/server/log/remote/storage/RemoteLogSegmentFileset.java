@@ -260,7 +260,7 @@ public final class RemoteLogSegmentFileset {
             }
             return file.delete();
         } catch (final Exception e) {
-            LOGGER.error("Encountered error while deleting {}", file.getAbsolutePath());
+            LOGGER.error("Encountered error while deleting {}", file.getAbsolutePath(), e);
         }
 
         return false;

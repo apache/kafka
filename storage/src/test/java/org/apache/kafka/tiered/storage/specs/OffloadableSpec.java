@@ -20,7 +20,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.util.List;
 
-public record OffloadableSpec(Integer sourceBrokerId, Integer baseOffset,
+public record OffloadableSpec(int sourceBrokerId, int baseOffset,
                               List<ProducerRecord<String, String>> records) {
 
     @Override

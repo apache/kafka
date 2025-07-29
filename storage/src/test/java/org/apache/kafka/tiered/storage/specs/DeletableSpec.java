@@ -18,7 +18,7 @@ package org.apache.kafka.tiered.storage.specs;
 
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
 
-public record DeletableSpec(Integer sourceBrokerId, LocalTieredStorageEvent.EventType eventType, Integer eventCount) {
+public record DeletableSpec(int sourceBrokerId, LocalTieredStorageEvent.EventType eventType, int eventCount) {
 
     @Override
     public String toString() {

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tiered.storage.specs;
 
-public record FetchableSpec(Integer sourceBrokerId, RemoteFetchCount fetchCount) {
+public record FetchableSpec(int sourceBrokerId, RemoteFetchCount fetchCount) {
 
     @Override
     public String toString() {
