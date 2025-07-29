@@ -49,13 +49,13 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
-import org.mockito.ArgumentMatchers
+import org.mockito.{ArgumentMatchers, Mockito}
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{doAnswer, doThrow, spy}
-
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.KRaftConfigs
 
 import java.io._
@@ -2237,7 +2237,8 @@ class UnifiedLogTest {
       (_, _) => {},
       brokerTopicStats,
       new Metrics(),
-      Optional.empty))
+      Optional.empty,
+      Mockito.mock(classOf[MetadataCache])))
     remoteLogManager.setDelayedOperationPurgatory(purgatory)
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,
@@ -2335,7 +2336,8 @@ class UnifiedLogTest {
       (_, _) => {},
       brokerTopicStats,
       new Metrics(),
-      Optional.empty))
+      Optional.empty,
+      Mockito.mock(classOf[MetadataCache])))
     remoteLogManager.setDelayedOperationPurgatory(purgatory)
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,

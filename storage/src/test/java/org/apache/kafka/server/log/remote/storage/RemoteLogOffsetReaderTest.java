@@ -17,9 +17,11 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
@@ -32,12 +34,15 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.RejectedExecutionException;
@@ -55,8 +60,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RemoteLogOffsetReaderTest {
 
     private final MockTime time = new MockTime();
+    private final Uuid topicId = Uuid.randomUuid();
     private final TopicPartition topicPartition = new TopicPartition("test", 0);
     private Path logDir;
+    private MetadataCache metadataCache;
     private LeaderEpochFileCache cache;
     private MockRemoteLogManager rlm;
 
@@ -65,7 +72,21 @@ class RemoteLogOffsetReaderTest {
         logDir = Files.createTempDirectory("kafka-test");
         LeaderEpochCheckpointFile checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
         cache = new LeaderEpochFileCache(topicPartition, checkpoint, time.scheduler);
-        rlm = new MockRemoteLogManager(2, 1, logDir.toString());
+        rlm = new MockRemoteLogManager(2, 1, logDir.toString(), metadataCache);
+        mockMetadataCache();
+    }
+
+    void mockMetadataCache() {
+        metadataCache = Mockito.mock(MetadataCache.class);
+        Map<String, Uuid> topicIdMap = new HashMap<>();
+
+
+        topicIdMap.put(topicPartition.topic(), topicId);
+        Mockito.when(metadataCache.contains(topicPartition))
+                .thenReturn(true);
+
+        Mockito.when(metadataCache.getTopicId(Mockito.anyString()))
+                .thenAnswer(invocation -> topicIdMap.get(invocation.getArgument(0)));
     }
 
     @AfterEach
@@ -119,7 +140,7 @@ class RemoteLogOffsetReaderTest {
     @Test
     public void testThrowErrorOnFindOffsetByTimestamp() throws Exception {
         RemoteStorageException exception = new RemoteStorageException("Error");
-        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
+        try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString(), metadataCache) {
             @Override
             public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
                                                                       long timestamp,
@@ -143,7 +164,8 @@ class RemoteLogOffsetReaderTest {
 
         public MockRemoteLogManager(int threads,
                                     int taskQueueSize,
-                                    String logDir) throws IOException {
+                                    String logDir,
+                                    MetadataCache metadataCache) throws IOException {
             super(rlmConfig(threads, taskQueueSize),
                     1,
                     logDir,
@@ -153,7 +175,8 @@ class RemoteLogOffsetReaderTest {
                     (tp, logStartOffset) -> { },
                     new BrokerTopicStats(true),
                     new Metrics(),
-                    Optional.empty()
+                    Optional.empty(),
+                    metadataCache
             );
         }
 

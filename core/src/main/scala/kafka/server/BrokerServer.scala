@@ -712,7 +712,7 @@ class BrokerServer(
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
         },
-        brokerTopicStats, metrics, endpoint.toJava)
+        brokerTopicStats, metrics, endpoint.toJava, metadataCache)
       Some(rlm)
     } else {
       None

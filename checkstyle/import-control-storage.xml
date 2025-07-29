@@ -70,6 +70,7 @@
             <allow pkg="org.apache.kafka.storage"/>
             <subpackage name="remote">
                 <allow pkg="scala.collection" />
+                <allow pkg="org.apache.kafka.metadata" />
                 <subpackage name="quota">
                     <allow pkg="org.apache.kafka.server.quota" />
                 </subpackage>

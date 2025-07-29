@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.server.config.QuotaConfig
@@ -73,9 +73,8 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
     // When remote log is enabled, or remote copy is enabled, we should create RLM tasks accordingly via `onLeadershipChange`.
     if (isRemoteLogEnabled && (!wasRemoteLogEnabled || (wasCopyDisabled && !isCopyDisabled))) {
-      val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
-        rlm.onLeadershipChange((leaderPartitions.toSet: Set[TopicPartitionLog]).asJava, (followerPartitions.toSet: Set[TopicPartitionLog]).asJava, topicIds))
+        rlm.onLeadershipChange((leaderPartitions.toSet: Set[TopicPartitionLog]).asJava, (followerPartitions.toSet: Set[TopicPartitionLog]).asJava))
     }
 
     // When copy disabled, we should stop leaderCopyRLMTask, but keep expirationTask

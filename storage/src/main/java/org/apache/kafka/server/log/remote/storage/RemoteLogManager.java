@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
@@ -113,7 +114,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -181,8 +181,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> followerRLMTasks = new ConcurrentHashMap<>();
     private final Set<RemoteLogSegmentId> segmentIdsBeingCopied = ConcurrentHashMap.newKeySet();
 
-    // topic ids that are received on leadership changes, this map is cleared on stop partitions
-    private final ConcurrentMap<TopicPartition, Uuid> topicIdByPartitionMap = new ConcurrentHashMap<>();
+    private final MetadataCache metadataCache;
     private final String clusterId;
     // For compatibility, metrics are defined to be under the `kafka.log.remote.RemoteLogManager` class
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteLogManager");
@@ -206,6 +205,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      * @param updateRemoteLogStartOffset function to update the log-start-offset for a given topic partition.
      * @param brokerTopicStats BrokerTopicStats instance to update the respective metrics.
      * @param metrics  Metrics instance
+     * @param metadataCache MetadataCache instance to fetch topic metadata
      */
     @SuppressWarnings({"this-escape"})
     public RemoteLogManager(RemoteLogManagerConfig rlmConfig,
@@ -217,7 +217,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                             BiConsumer<TopicPartition, Long> updateRemoteLogStartOffset,
                             BrokerTopicStats brokerTopicStats,
                             Metrics metrics,
-                            Optional<Endpoint> endpoint) throws IOException {
+                            Optional<Endpoint> endpoint,
+                            MetadataCache metadataCache) throws IOException {
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
@@ -228,6 +229,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         this.brokerTopicStats = brokerTopicStats;
         this.metrics = metrics;
         this.endpoint = endpoint;
+        this.metadataCache = metadataCache;
 
         remoteStorageManagerPlugin = configAndWrapRsmPlugin(createRemoteStorageManager());
         remoteLogMetadataManagerPlugin = configAndWrapRlmmPlugin(createRemoteLogMetadataManager());
@@ -436,14 +438,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return partitions.stream().filter(partition -> partition.unifiedLog().isPresent() && partition.unifiedLog().get().remoteLogEnabled());
     }
 
-    private void cacheTopicPartitionIds(TopicIdPartition topicIdPartition) {
-        Uuid previousTopicId = topicIdByPartitionMap.put(topicIdPartition.topicPartition(), topicIdPartition.topicId());
-        if (previousTopicId != null && !previousTopicId.equals(topicIdPartition.topicId())) {
-            LOGGER.info("Previous cached topic id {} for {} does not match updated topic id {}",
-                    previousTopicId, topicIdPartition.topicPartition(), topicIdPartition.topicId());
-        }
-    }
-
     /**
      * Callback to receive any leadership changes for the topic partitions assigned to this broker. If there are no
      * existing tasks for a given topic partition then it will assign new leader or follower task else it will convert the
@@ -451,27 +445,22 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      *
      * @param partitionsBecomeLeader   partitions that have become leaders on this broker.
      * @param partitionsBecomeFollower partitions that have become followers on this broker.
-     * @param topicIds                 topic name to topic id mappings.
      */
     public void onLeadershipChange(Set<TopicPartitionLog> partitionsBecomeLeader,
-                                   Set<TopicPartitionLog> partitionsBecomeFollower,
-                                   Map<String, Uuid> topicIds) {
+                                   Set<TopicPartitionLog> partitionsBecomeFollower) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
         Map<TopicIdPartition, Boolean> leaderPartitions = filterPartitions(partitionsBecomeLeader)
-                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
+                .collect(Collectors.toMap(p -> new TopicIdPartition(metadataCache.getTopicId(p.topicPartition().topic()), p.topicPartition()),
                         p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
 
         Map<TopicIdPartition, Boolean> followerPartitions = filterPartitions(partitionsBecomeFollower)
-                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
+                .collect(Collectors.toMap(p -> new TopicIdPartition(metadataCache.getTopicId(p.topicPartition().topic()), p.topicPartition()),
                         p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
 
         if (!leaderPartitions.isEmpty() || !followerPartitions.isEmpty()) {
             LOGGER.debug("Effective topic partitions after filtering compact and internal topics, leaders: {} and followers: {}",
                     leaderPartitions, followerPartitions);
-
-            leaderPartitions.forEach((tp, __) -> cacheTopicPartitionIds(tp));
-            followerPartitions.forEach((tp, __) -> cacheTopicPartitionIds(tp));
 
             remoteLogMetadataManagerPlugin.get().onPartitionLeadershipChanges(leaderPartitions.keySet(), followerPartitions.keySet());
             followerPartitions.forEach((tp, __) -> doHandleFollowerPartition(tp));
@@ -487,8 +476,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     public void stopLeaderCopyRLMTasks(Set<TopicPartitionLog> partitions) {
         for (TopicPartitionLog partition : partitions) {
             TopicPartition tp = partition.topicPartition();
-            if (topicIdByPartitionMap.containsKey(tp)) {
-                TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
+            if (metadataCache.contains(tp)) {
+                TopicIdPartition tpId = new TopicIdPartition(metadataCache.getTopicId(tp.topic()), tp);
                 leaderCopyRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
                     LOGGER.info("Cancelling the copy RLM task for partition: {}", tpId);
                     task.cancel();
@@ -514,8 +503,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         for (StopPartition stopPartition: stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition;
             try {
-                if (topicIdByPartitionMap.containsKey(tp)) {
-                    TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
+                if (metadataCache.contains(tp)) {
+                    TopicIdPartition tpId = new TopicIdPartition(metadataCache.getTopicId(tp.topic()), tp);
                     leaderCopyRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
                         LOGGER.info("Cancelling the copy RLM task for partition: {}", tpId);
                         task.cancel();
@@ -547,16 +536,14 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             }
         }
 
-        // We want to remote topicId map and stopPartition on RLMM for deleteLocalLog or stopRLMM partitions because
+        // We want to remove topicId map and stopPartition on RLMM for deleteLocalLog or stopRLMM partitions because
         // in both case, they all mean the topic will not be held in this broker anymore.
-        // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
         Set<TopicIdPartition> pendingActionsPartitions = stopPartitions.stream()
-                .filter(sp -> (sp.stopRemoteLogMetadataManager || sp.deleteLocalLog) && topicIdByPartitionMap.containsKey(sp.topicPartition))
-                .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition), sp.topicPartition))
+                .filter(sp -> (sp.stopRemoteLogMetadataManager || sp.deleteLocalLog) && metadataCache.contains(sp.topicPartition))
+                .map(sp -> new TopicIdPartition(metadataCache.getTopicId(sp.topicPartition.topic()), sp.topicPartition))
                 .collect(Collectors.toSet());
 
         if (!pendingActionsPartitions.isEmpty()) {
-            pendingActionsPartitions.forEach(tpId -> topicIdByPartitionMap.remove(tpId.topicPartition()));
             remoteLogMetadataManagerPlugin.get().onStopPartitions(pendingActionsPartitions);
         }
     }
@@ -599,7 +586,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
                                                                             int epochForOffset,
                                                                             long offset) throws RemoteStorageException {
-        Uuid topicId = topicIdByPartitionMap.get(topicPartition);
+        Uuid topicId = metadataCache.getTopicId(topicPartition.topic());
         if (topicId == null) {
             throw new KafkaException("No topic id registered for topic partition: " + topicPartition);
         }
@@ -618,7 +605,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     public Optional<RemoteLogSegmentMetadata> fetchNextSegmentWithTxnIndex(TopicPartition topicPartition,
                                                                            int epochForOffset,
                                                                            long offset) throws RemoteStorageException {
-        Uuid topicId = topicIdByPartitionMap.get(topicPartition);
+        Uuid topicId = metadataCache.getTopicId(topicPartition.topic());
         if (topicId == null) {
             throw new KafkaException("No topic id registered for topic partition: " + topicPartition);
         }
@@ -705,7 +692,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                                                           long timestamp,
                                                                           long startingOffset,
                                                                           LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException, IOException {
-        Uuid topicId = topicIdByPartitionMap.get(tp);
+        Uuid topicId = metadataCache.getTopicId(tp.topic());
         if (topicId == null) {
             throw new KafkaException("Topic id does not exist for topic partition: " + tp);
         }
@@ -789,7 +776,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     public boolean isPartitionReady(TopicPartition partition) {
-        Uuid uuid = topicIdByPartitionMap.get(partition);
+        Uuid uuid = metadataCache.getTopicId(partition.topic());
         if (uuid == null) {
             return false;
         }
