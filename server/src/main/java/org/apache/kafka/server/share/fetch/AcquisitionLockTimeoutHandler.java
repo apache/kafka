@@ -14,31 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.errors;
+package org.apache.kafka.server.share.fetch;
 
 /**
- * Indicates that none of the specified {@link org.apache.kafka.streams.StreamsConfig#BOOTSTRAP_SERVERS_CONFIG brokers}
- * could be found.
- *
- * @see org.apache.kafka.streams.StreamsConfig
- * @deprecated since 4.2 and should not be used any longer.
+ * AcquisitionLockTimeoutHandler is an interface that defines a handler for acquisition lock timeouts.
+ * It is used to handle cases where the acquisition lock for a share partition times out.
  */
-@SuppressWarnings("unused")
-@Deprecated
-public class BrokerNotFoundException extends StreamsException {
+public interface AcquisitionLockTimeoutHandler {
 
-    private static final long serialVersionUID = 1L;
-
-    public BrokerNotFoundException(final String message) {
-        super(message);
-    }
-
-    public BrokerNotFoundException(final String message, final Throwable throwable) {
-        super(message, throwable);
-    }
-
-    public BrokerNotFoundException(final Throwable throwable) {
-        super(throwable);
-    }
+    /**
+     * Handles the acquisition lock timeout for a share partition.
+     *
+     * @param memberId the id of the member that requested the lock
+     * @param firstOffset the first offset
+     * @param lastOffset the last offset
+     */
+    void handle(String memberId, long firstOffset, long lastOffset);
 
 }

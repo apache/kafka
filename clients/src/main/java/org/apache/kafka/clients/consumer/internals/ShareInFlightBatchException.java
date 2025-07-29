@@ -14,31 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.errors;
+package org.apache.kafka.clients.consumer.internals;
 
-/**
- * Indicates that none of the specified {@link org.apache.kafka.streams.StreamsConfig#BOOTSTRAP_SERVERS_CONFIG brokers}
- * could be found.
- *
- * @see org.apache.kafka.streams.StreamsConfig
- * @deprecated since 4.2 and should not be used any longer.
- */
-@SuppressWarnings("unused")
-@Deprecated
-public class BrokerNotFoundException extends StreamsException {
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.SerializationException;
 
-    private static final long serialVersionUID = 1L;
+import java.util.Set;
 
-    public BrokerNotFoundException(final String message) {
-        super(message);
+public class ShareInFlightBatchException extends SerializationException {
+
+    private final KafkaException cause;
+
+    private final Set<Long> offsets;
+
+    public ShareInFlightBatchException(KafkaException cause, Set<Long> offsets) {
+        this.cause = cause;
+        this.offsets = offsets;
     }
 
-    public BrokerNotFoundException(final String message, final Throwable throwable) {
-        super(message, throwable);
+    public KafkaException cause() {
+        return cause;
     }
 
-    public BrokerNotFoundException(final Throwable throwable) {
-        super(throwable);
+    public Set<Long> offsets() {
+        return offsets;
     }
-
 }

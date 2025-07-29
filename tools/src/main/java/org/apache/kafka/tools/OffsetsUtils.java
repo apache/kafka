@@ -25,6 +25,8 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -46,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
@@ -66,6 +69,28 @@ public class OffsetsUtils {
         this.adminClient = adminClient;
         this.opts = opts;
         this.parser = parser;
+    }
+
+    public static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
+        int maxGroupLen = Math.max(15, groupAssignmentsToReset.keySet().stream().mapToInt(String::length).max().orElse(0));
+        int maxTopicLen = Math.max(15, groupAssignmentsToReset.values().stream()
+            .flatMap(assignments -> assignments.keySet().stream())
+            .mapToInt(tp -> tp.topic().length())
+            .max()
+            .orElse(0));
+
+        String format = "%n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %s";
+        if (!groupAssignmentsToReset.isEmpty())
+            System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
+
+        groupAssignmentsToReset.forEach((groupId, assignment) ->
+            assignment.forEach((consumerAssignment, offsetAndMetadata) ->
+                System.out.printf(format,
+                    groupId,
+                    consumerAssignment.topic(),
+                    consumerAssignment.partition(),
+                    offsetAndMetadata.offset())));
+        System.out.println();
     }
 
     public Optional<Map<String, Map<TopicPartition, OffsetAndMetadata>>> resetPlanFromFile() {
@@ -414,6 +439,55 @@ public class OffsetsUtils {
         return preparedOffsetsForPartitionsWithCommittedOffset;
     }
 
+    public void checkAllTopicPartitionsValid(Collection<TopicPartition> partitionsToReset) {
+        // check the partitions exist
+        List<TopicPartition> partitionsNotExistList = filterNonExistentPartitions(partitionsToReset);
+        if (!partitionsNotExistList.isEmpty()) {
+            String partitionStr = partitionsNotExistList.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+            throw new UnknownTopicOrPartitionException("The partitions \"" + partitionStr + "\" do not exist");
+        }
+
+        // check the partitions have leader
+        List<TopicPartition> partitionsWithoutLeader = filterNoneLeaderPartitions(partitionsToReset);
+        if (!partitionsWithoutLeader.isEmpty()) {
+            String partitionStr = partitionsWithoutLeader.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
+            throw new LeaderNotAvailableException("The partitions \"" + partitionStr + "\" have no leader");
+        }
+    }
+
+    public List<TopicPartition> filterNoneLeaderPartitions(Collection<TopicPartition> topicPartitions) {
+        // collect all topics
+        Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+
+        try {
+            return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                .stream()
+                .flatMap(entry -> entry.getValue().partitions().stream()
+                    .filter(partitionInfo -> partitionInfo.leader() == null)
+                    .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                    .filter(topicPartitions::contains)
+                .toList();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public List<TopicPartition> filterNonExistentPartitions(Collection<TopicPartition> topicPartitions) {
+        // collect all topics
+        Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+        try {
+            List<TopicPartition> existPartitions = adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+                .stream()
+                .flatMap(entry -> entry.getValue().partitions().stream()
+                    .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
+                .toList();
+
+            return topicPartitions.stream().filter(tp -> !existPartitions.contains(tp)).toList();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
         int t = (int) opts.timeoutMsOpt;
         return options.timeoutMs(t);
@@ -467,6 +541,16 @@ public class OffsetsUtils {
             this.resetToDatetimeOpt = resetToDatetimeOpt;
             this.resetByDurationOpt = resetByDurationOpt;
             this.resetShiftByOpt = resetShiftByOpt;
+            this.timeoutMsOpt = timeoutMsOpt;
+        }
+
+        public OffsetsUtilsOptions(
+            List<String> groupOpt,
+            List<String> resetToDatetimeOpt,
+            long timeoutMsOpt) {
+
+            this.groupOpt = groupOpt;
+            this.resetToDatetimeOpt = resetToDatetimeOpt;
             this.timeoutMsOpt = timeoutMsOpt;
         }
     }
