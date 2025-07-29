@@ -1680,6 +1680,57 @@ class DefaultStateUpdaterTest {
         assertThat(metrics.metrics().size(), is(1));
     }
 
+    @Test
+    public void shouldRemoveMetricsWithoutInterference() {
+        final DefaultStateUpdater stateUpdater2 =
+            new DefaultStateUpdater("test-state-updater2", metrics, config, null, changelogReader, topologyMetadata, time);
+        final List<MetricName> threadMetrics = getMetricNames("test-state-updater");
+        final List<MetricName> threadMetrics2 = getMetricNames("test-state-updater2");
+
+        stateUpdater.start();
+        stateUpdater2.start();
+
+        for (final MetricName metricName : threadMetrics) {
+            assertTrue(metrics.metrics().containsKey(metricName));
+        }
+        for (final MetricName metricName : threadMetrics2) {
+            assertTrue(metrics.metrics().containsKey(metricName));
+        }
+
+        stateUpdater2.shutdown(Duration.ofMinutes(1));
+
+        for (final MetricName metricName : threadMetrics) {
+            assertTrue(metrics.metrics().containsKey(metricName));
+        }
+        for (final MetricName metricName : threadMetrics2) {
+            assertFalse(metrics.metrics().containsKey(metricName));
+        }
+
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        for (final MetricName metricName : threadMetrics) {
+            assertFalse(metrics.metrics().containsKey(metricName));
+        }
+        for (final MetricName metricName : threadMetrics2) {
+            assertFalse(metrics.metrics().containsKey(metricName));
+        }
+    }
+
+    private static List<MetricName> getMetricNames(final String threadId) {
+        final Map<String, String> tagMap = Map.of("thread-id", threadId);
+        return List.of(
+            new MetricName("active-restoring-tasks", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("standby-updating-tasks", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("active-paused-tasks", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("standby-paused-tasks", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("idle-ratio", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("standby-update-ratio", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("checkpoint-ratio", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("restore-records-rate", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("restore-call-rate", "stream-state-updater-metrics", "", tagMap)
+        );
+    }
+
     @SuppressWarnings("unchecked")
     private static <T> void verifyMetric(final Metrics metrics,
                                          final MetricName metricName,

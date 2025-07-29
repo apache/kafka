@@ -1101,26 +1101,31 @@ public class DefaultStateUpdater implements StateUpdater {
                 stateUpdaterThread.numPausedStandbyTasks() : 0);
             allMetricNames.push(metricName);
 
-            this.idleRatioSensor = metrics.sensor("idle-ratio", RecordingLevel.INFO);
+            final String idleRatioSensorName = threadId + "_idle-ratio";
+            this.idleRatioSensor = metrics.sensor(idleRatioSensorName, RecordingLevel.INFO);
             this.idleRatioSensor.add(new MetricName("idle-ratio", STATE_LEVEL_GROUP, IDLE_RATIO_DESCRIPTION, threadLevelTags), new Avg());
-            allSensorNames.add("idle-ratio");
+            allSensorNames.add(idleRatioSensorName);
 
-            this.activeRestoreRatioSensor = metrics.sensor("active-restore-ratio", RecordingLevel.INFO);
+            final String activeRatioSensorName = threadId + "_active-ratio";
+            this.activeRestoreRatioSensor = metrics.sensor(activeRatioSensorName, RecordingLevel.INFO);
             this.activeRestoreRatioSensor.add(new MetricName("active-restore-ratio", STATE_LEVEL_GROUP, RESTORE_RATIO_DESCRIPTION, threadLevelTags), new Avg());
-            allSensorNames.add("active-restore-ratio");
+            allSensorNames.add(activeRatioSensorName);
 
-            this.standbyRestoreRatioSensor = metrics.sensor("standby-update-ratio", RecordingLevel.INFO);
+            final String standbyUpdateRatioSensorName = threadId + "_standby-update-ratio";
+            this.standbyRestoreRatioSensor = metrics.sensor(standbyUpdateRatioSensorName, RecordingLevel.INFO);
             this.standbyRestoreRatioSensor.add(new MetricName("standby-update-ratio", STATE_LEVEL_GROUP, UPDATE_RATIO_DESCRIPTION, threadLevelTags), new Avg());
-            allSensorNames.add("standby-update-ratio");
+            allSensorNames.add(standbyUpdateRatioSensorName);
 
-            this.checkpointRatioSensor = metrics.sensor("checkpoint-ratio", RecordingLevel.INFO);
+            final String checkpointRatioSensorName = threadId + "_checkpoint-ratio";
+            this.checkpointRatioSensor = metrics.sensor(checkpointRatioSensorName, RecordingLevel.INFO);
             this.checkpointRatioSensor.add(new MetricName("checkpoint-ratio", STATE_LEVEL_GROUP, CHECKPOINT_RATIO_DESCRIPTION, threadLevelTags), new Avg());
-            allSensorNames.add("checkpoint-ratio");
+            allSensorNames.add(checkpointRatioSensorName);
 
-            this.restoreSensor = metrics.sensor("restore-records", RecordingLevel.INFO);
+            final String restoreRecordsSensorName = threadId + "_restore-records";
+            this.restoreSensor = metrics.sensor(restoreRecordsSensorName, RecordingLevel.INFO);
             this.restoreSensor.add(new MetricName("restore-records-rate", STATE_LEVEL_GROUP, RESTORE_RECORDS_RATE_DESCRIPTION, threadLevelTags), new Rate());
             this.restoreSensor.add(new MetricName("restore-call-rate", STATE_LEVEL_GROUP, RESTORE_RATE_DESCRIPTION, threadLevelTags), new Rate(new WindowedCount()));
-            allSensorNames.add("restore-records");
+            allSensorNames.add(restoreRecordsSensorName);
         }
 
         void clear() {
