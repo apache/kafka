@@ -244,8 +244,12 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   def createStreamsGroup[K, V](configOverrides: Properties = new Properties,
                                configsToRemove: List[String] = List(),
                                inputTopic: String,
-                               outputTopic: String): KafkaStreams = {
+                               outputTopic: String,
+                               streamsGroupId: String,
+                               groupProtocol: String): KafkaStreams = {
     val streamsConfig = new Properties(streamsGroupConfig)
+    streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, streamsGroupId)
+    streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     streamsConfig ++= configOverrides
     configsToRemove.foreach(streamsConfig.remove(_))
     val builder = new StreamsBuilder()

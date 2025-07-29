@@ -4379,12 +4379,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
     prepareRecords(testTopicName)
 
-    val streamsConfig = new Properties(streamsGroupConfig)
-    streamsConfig.put( StreamsConfig.APPLICATION_ID_CONFIG, streamsGroupId)
-    streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
+    val streamsConfig = new Properties()
     streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
-    val streams = createStreamsGroup(configOverrides = streamsConfig, inputTopic = testTopicName, outputTopic = testOutputTopicName)
+    val streams = createStreamsGroup(
+      configOverrides = streamsConfig,
+      inputTopic = testTopicName,
+      outputTopic = testOutputTopicName,
+      streamsGroupId = streamsGroupId,
+      groupProtocol = groupProtocol
+    )
 
     try {
       streams.cleanUp()
@@ -4456,12 +4460,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       for (i <- 1 to testNumStreamsGroup) {
         val streamsGroupId = s"stream_group_id_$i"
-        val streamsConfig = new Properties(streamsGroupConfig)
-        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, streamsGroupId)
-        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
+        val streamsConfig = new Properties()
+
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
-        val streams = createStreamsGroup(configOverrides = streamsConfig, inputTopic = testTopicName, outputTopic = testOutputTopicName)
+        val streams = createStreamsGroup(
+          configOverrides = streamsConfig,
+          inputTopic = testTopicName,
+          outputTopic = testOutputTopicName,
+          streamsGroupId = streamsGroupId,
+          groupProtocol = groupProtocol
+        )
         streams.cleanUp()
         streams.start()
         streamsList += ((streamsGroupId, streams))
