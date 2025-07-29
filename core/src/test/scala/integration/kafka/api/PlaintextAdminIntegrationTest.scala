@@ -4461,7 +4461,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       for (i <- 1 to testNumStreamsGroup) {
         val streamsGroupId = s"stream_group_id_$i"
         val streamsConfig = new Properties()
-
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
         val streams = createStreamsGroup(
