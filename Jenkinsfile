@@ -133,6 +133,7 @@ pipeline {
     }
 
     post {
+        agent { label "${env.AGENT_LABEL}" }
         always {
             script {
                 if (params.RUN_TESTS) {
