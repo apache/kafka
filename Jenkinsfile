@@ -23,19 +23,27 @@ pipeline {
 
     stages {
         stage('Initialize Build Environment') {
-            agent any
+            agent any // Use any available agent for this initial setup stage
             steps {
                 script {
-                    // Define agent labels based on JDK_TYPE
-                    def agentLabels = [
-                        'openj9-open': 'dual_xeon_ibm_openj9_jdk21',
-                        'openj9-certified': 'i7_2600k_ibm_openj9_jdk21_certified',
-                        'hotspot': 'linux-x64-hotspot-jdk21'
-                    ]
-                    env.AGENT_LABEL = agentLabels
+                    // Explicitly set the agent label for subsequent stages using if/else
+                    def agentLabel = ''
+                    if (params.JDK_TYPE == 'openj9-open') {
+                        agentLabel = 'dual_xeon_ibm_openj9_jdk21'
+                    } else if (params.JDK_TYPE == 'openj9-certified') {
+                        agentLabel = 'i7_2600k_ibm_openj9_jdk21_certified'
+                    } else if (params.JDK_TYPE == 'hotspot') {
+                        agentLabel = 'linux-x64-hotspot-jdk21'
+                    }
+                    env.AGENT_LABEL = agentLabel
 
-                    // Define Test Status for artifact naming
-                    def testStatus = params.RUN_TESTS? 'tested' : 'notest'
+                    // Explicitly set the test status for artifact naming using if/else
+                    def testStatus = ''
+                    if (params.RUN_TESTS) {
+                        testStatus = 'tested'
+                    } else {
+                        testStatus = 'notest'
+                    }
                     env.TEST_STATUS = testStatus
 
                     // Define artifact names
@@ -56,7 +64,7 @@ pipeline {
         stage('Checkout') {
             agent { label "${env.AGENT_LABEL}" }
             steps {
-                echo 'Checking out source code...'
+                echo "Checking out source code on agent: ${env.AGENT_LABEL}"
                 checkout scm
             }
         }
