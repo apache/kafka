@@ -314,11 +314,12 @@ subprojects {
         // Forking must be enabled on the task's main options to set JVM args and other fork options.
         options.fork = true
         options.forkOptions.jvmArgs = [
-                "-Xss1m",
+                "-Xss512k",
                 "-Xgcpolicy:gencon",
                 "-XcompilationThreads1",
                 "-Xgcthreads1",
                 "-XX:+DisableExplicitGC",
+                "-Xtune:virtualized",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
                 "-Xmx" + defaultMaxHeapSize
         ]
