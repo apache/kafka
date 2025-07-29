@@ -135,7 +135,17 @@ pipeline {
     post {
          always {
             script {
-                agent { label "${env.AGENT_LABEL}" }
+                // Determine the correct agent label for post-build actions
+                def agentLabel = ''
+                if (params.JDK_TYPE == 'openj9-open') {
+                    agentLabel = 'dual_xeon_ibm_openj9_jdk21'
+                } else if (params.JDK_TYPE == 'openj9-certified') {
+                    agentLabel = 'i7_2600k_ibm_openj9_jdk21_certified'
+                } else if (params.JDK_TYPE == 'hotspot') {
+                    agentLabel = 'linux-x64-hotspot-jdk21'
+                }
+                env.AGENT_LABEL = agentLabel
+                
                 if (params.RUN_TESTS) {
                     echo 'Archiving test results...'
                     junit '**/build/test-results/**/*.xml'
