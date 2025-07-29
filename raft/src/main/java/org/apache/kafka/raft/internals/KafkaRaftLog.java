@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -27,6 +27,15 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.Isolation;
+import org.apache.kafka.raft.LogAppendInfo;
+import org.apache.kafka.raft.LogFetchInfo;
+import org.apache.kafka.raft.LogOffsetMetadata;
+import org.apache.kafka.raft.MetadataLogConfig;
+import org.apache.kafka.raft.OffsetMetadata;
+import org.apache.kafka.raft.RaftLog;
+import org.apache.kafka.raft.SegmentPosition;
+import org.apache.kafka.raft.ValidOffsetAndEpoch;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.storage.log.FetchIsolation;

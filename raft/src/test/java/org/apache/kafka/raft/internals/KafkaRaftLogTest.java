@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -30,7 +30,15 @@ import org.apache.kafka.common.record.InvalidMemoryRecordsProvider;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.internals.BatchBuilder;
+import org.apache.kafka.raft.KRaftConfigs;
+import org.apache.kafka.raft.KafkaRaftClient;
+import org.apache.kafka.raft.LogAppendInfo;
+import org.apache.kafka.raft.LogOffsetMetadata;
+import org.apache.kafka.raft.MetadataLogConfig;
+import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.raft.RaftLog;
+import org.apache.kafka.raft.SegmentPosition;
+import org.apache.kafka.raft.ValidOffsetAndEpoch;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.server.config.ServerLogConfigs;
