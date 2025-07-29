@@ -56,6 +56,7 @@ import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVe
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
+import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
 import org.apache.kafka.test.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
 import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
@@ -4362,6 +4363,242 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         }
       }
     }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
+  def testDescribeStreamsGroups(groupProtocol: String): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testOutputTopicName = "test_output_topic"
+    val testNumPartitions = 1
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streamsConfig = new Properties()
+    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
+    val streams = createStreamsGroup(
+      configOverrides = streamsConfig,
+      inputTopic = testTopicName,
+      outputTopic = testOutputTopicName,
+      streamsGroupId = streamsGroupId,
+      groupProtocol = groupProtocol
+    )
+
+    try {
+      streams.cleanUp()
+      streams.start()
+
+      TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
+
+      TestUtils.waitUntilTrue(() => {
+        client.listGroups().all().get().stream()
+          .anyMatch(g => g.groupId() == streamsGroupId)
+      }, "Streams group not ready to describe yet")
+
+      Thread.sleep(10000)
+
+      TestUtils.waitUntilTrue(() => {
+        try {
+          val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
+          val group = describedGroups.get(streamsGroupId)
+          if (group != null) {
+            group.groupState() == GroupState.STABLE && !group.subtopologies().isEmpty
+          } else {
+            false
+          }
+        } catch {
+          case _: Exception => false
+        }
+      }, "Stream group not fully initialized with topology")
+
+      // Verify the describe call works correctly
+      val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
+      val group = describedGroups.get(streamsGroupId)
+
+      assertNotNull(group)
+      assertEquals(streamsGroupId, group.groupId())
+      assertFalse(group.members().isEmpty)
+      assertNotNull(group.subtopologies())
+      assertFalse(group.subtopologies().isEmpty)
+
+      // Verify the topology contains the expected source and sink topics
+      val subtopologies = group.subtopologies().asScala
+      assertTrue(subtopologies.exists(subtopology =>
+        subtopology.sourceTopics().contains(testTopicName)))
+
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
+  def testDeleteStreamsGroups(groupProtocol: String): Unit = {
+    val testTopicName = "test_topic"
+    val testOutputTopicName = "test_output_topic"
+    val testNumPartitions = 3
+    val testNumStreamsGroup = 3
+
+    val targetDeletedGroups = util.List.of("stream_group_id_2", "stream_group_id_3")
+    val targetRemainingGroups = util.List.of("stream_group_id_1")
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streamsList = scala.collection.mutable.ListBuffer[(String, KafkaStreams)]()
+
+    try {
+      for (i <- 1 to testNumStreamsGroup) {
+        val streamsGroupId = s"stream_group_id_$i"
+        val streamsConfig = new Properties()
+        streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
+        val streams = createStreamsGroup(
+          configOverrides = streamsConfig,
+          inputTopic = testTopicName,
+          outputTopic = testOutputTopicName,
+          streamsGroupId = streamsGroupId,
+          groupProtocol = groupProtocol
+        )
+        streams.cleanUp()
+        streams.start()
+        streamsList += ((streamsGroupId, streams))
+      }
+
+      TestUtils.waitUntilTrue(() => {
+        client.listGroups().all().get().stream()
+          .anyMatch(g => g.groupId().startsWith("stream_group_id_"))
+      }, "Streams groups not ready to delete yet")
+
+      // Verify that there are 3 groups created
+      val groups = client.listGroups().all().get()
+      assertEquals(testNumStreamsGroup, groups.size())
+
+      // Test deletion of non-empty existing groups
+      var deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
+      assertFutureThrows(classOf[GroupNotEmptyException], deleteStreamsGroupResult.all())
+      assertEquals(deleteStreamsGroupResult.deletedGroups().size(),2)
+
+      // Stop and clean up the streams for the groups that are going to be deleted
+      streamsList
+        .filter { case (groupId, _) => targetDeletedGroups.contains(groupId) }
+        .foreach { case (_, streams) =>
+          streams.close(java.time.Duration.ofSeconds(10))
+          streams.cleanUp()
+        }
+
+      // Test deletion of emptied existing streams groups
+      deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
+      assertEquals(deleteStreamsGroupResult.deletedGroups().size(),2)
+
+      // Wait for the deleted groups to be removed
+      TestUtils.waitUntilTrue(() => {
+        val groupIds = client.listGroups().all().get().asScala.map(_.groupId()).toSet
+        targetDeletedGroups.asScala.forall(id => !groupIds.contains(id))
+      }, "Deleted groups not yet deleted")
+
+      // Verify that the deleted groups are no longer present
+      val remainingGroups = client.listGroups().all().get()
+      assertEquals(targetRemainingGroups.size(), remainingGroups.size())
+      remainingGroups.stream().forEach(g => {
+        assertTrue(targetRemainingGroups.contains(g.groupId()))
+      })
+
+      // Test deletion of a non-existing group
+      val nonExistingGroup = "non_existing_stream_group"
+      val deleteNonExistingGroupResult = client.deleteStreamsGroups(util.List.of(nonExistingGroup))
+      assertFutureThrows(classOf[GroupIdNotFoundException], deleteNonExistingGroupResult.all())
+      assertEquals(deleteNonExistingGroupResult.deletedGroups().size(), 1)
+
+    } finally{
+      streamsList.foreach { case (_, streams) =>
+        streams.close(java.time.Duration.ofSeconds(10))
+        streams.cleanUp()
+      }
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
+  def testListStreamsGroupOffsets(groupProtocol: String): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testOutputTopicName = "test_output_topic"
+    val testNumPartitions = 3
+
+    val config = createConfig
+    client = Admin.create(config)
+    val producer = createProducer(configOverrides = new Properties())
+
+    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streamsConfig = new Properties()
+    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000)
+    val streams = createStreamsGroup(
+      configOverrides = streamsConfig,
+      inputTopic = testTopicName,
+      outputTopic = testOutputTopicName,
+      streamsGroupId = streamsGroupId,
+      groupProtocol = groupProtocol
+    )
+
+    try {
+      streams.cleanUp()
+      streams.start()
+
+      TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
+
+      // Producer sends messages
+      for (i <- 1 to 20) {
+        TestUtils.waitUntilTrue(() => {
+          val producerRecord = producer.send(
+            new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
+            .get()
+          producerRecord != null && producerRecord.topic() == testTopicName
+        }, "Fail to produce record to topic")
+      }
+
+      Thread.sleep(3000) // Wait for the records to be processed by the streams application
+
+      // List streams group offsets
+      TestUtils.waitUntilTrue(() => {
+        val allTopicPartitions = client.listStreamsGroupOffsets(
+          util.Map.of(streamsGroupId, new ListStreamsGroupOffsetsSpec())
+        ).all().get()
+        allTopicPartitions!=null
+      },"Streams group offsets not ready to list yet")
+
+      val allTopicPartitions = client.listStreamsGroupOffsets(
+        util.Map.of(streamsGroupId, new ListStreamsGroupOffsetsSpec())
+      ).partitionsToOffsetAndMetadata(streamsGroupId).get()
+      assertNotNull(allTopicPartitions)
+      assertEquals(allTopicPartitions.size(), 3)
+      allTopicPartitions.forEach((topicPartition, offsetAndMetadata) => {
+        assertNotNull(topicPartition)
+        assertNotNull(offsetAndMetadata)
+        assertTrue(topicPartition.topic().startsWith(testTopicName))
+        assertTrue(offsetAndMetadata.offset() >= 0)
+      })
+
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
+      Utils.closeQuietly(producer, "producer")
+    }
+
   }
 }
 
