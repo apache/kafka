@@ -19,6 +19,9 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
+import org.apache.kafka.common.message.AddRaftVoterRequestDataJsonConverter;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestDataJsonConverter;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
@@ -619,6 +622,22 @@ public class RaftUtilTest {
         );
         JsonNode json = DescribeQuorumResponseDataJsonConverter.write(describeQuorumResponseData, version);
         assertEquals(expectedJson, json.toString());
+    }
+
+    @Test
+    public void testAddRaftVoterRequestAckWhenCommittedNotIgnorable() {
+        AddRaftVoterRequestData request = new AddRaftVoterRequestData()
+            .setClusterId("test-cluster")
+            .setTimeoutMs(1000)
+            .setVoterId(1)
+            .setVoterDirectoryId(Uuid.randomUuid())
+            .setAckWhenCommitted(false); // field only exists in v1+
+
+        // Attempt to serialize to version 0, which does not support ackWhenCommitted
+        assertThrows(
+            UnsupportedVersionException.class,
+            () -> AddRaftVoterRequestDataJsonConverter.write(request, (short) 0)
+        );
     }
 
     private Records createRecords() {
