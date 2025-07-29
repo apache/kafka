@@ -7,20 +7,33 @@ pipeline {
         booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Check to run the full unit and integration test suite.')
         string(name: 'JVM_ARGS_OPENJ9', defaultValue: "-Xmx2G -Xgcpolicy:gencon -Xgcthreads1 -XcompilationThreads1 -XX:+DisableExplicitGC", description: 'Custom JVM arguments for OpenJ9 builds.')
         string(name: 'JVM_ARGS_HOTSPOT', defaultValue: "-Xmx2G -XX:+UseG1GC -XX:+DisableExplicitGC", description: 'Custom JVM arguments for HotSpot builds.')
+        string(name: 'SEMERU_OPEN_URL', defaultValue: "https://github.com/ibmruntimes/semeru21-binaries/releases/download/jdk-21.0.8%2B9_openj9-0.53.0/ibm-semeru-open-jdk_x64_linux_21.0.8_9_openj9-0.53.0.tar.gz", description: 'Download URL for Semeru Open Edition JDK.')
+        string(name: 'SEMERU_CERTIFIED_URL', defaultValue: "https://github.com/ibmruntimes/semeru21-certified-binaries/releases/download/jdk-21.0.8%2B9_openj9-0.53.0/ibm-semeru-certified-jdk_x64_linux_21.0.8.0.tar.gz", description: 'Download URL for Semeru Certified Edition JDK.')
+        string(name: 'GRADLE_MAX_WORKERS', defaultValue: '1', description: 'Value for the --max-workers Gradle flag.')
+        string(name: 'GRADLE_MAX_FORKS', defaultValue: '1', description: 'Value for the -PmaxParallelForks Gradle property.')
+        string(name: 'GRADLE_MAX_SCALAC_THREADS', defaultValue: '1', description: 'Value for the -PmaxScalacThreads Gradle property.')
     }
 
     environment {
         DOCKER_REGISTRY_URL     = 'jtsweet0891' // Docker Hub username or registry URL
         DOCKER_IMAGE_BASE_NAME  = 'apache_kafka_on_ibm_j9'
-        DOCKER_CREDENTIALS_ID   = 'dockerhub-pat' // ID of Docker Hub credentials in Jenkins
+        DOCKER_CREDENTIALS_ID   = 'dockerhub-credentials' // ID of Docker Hub credentials in Jenkins
         KAFKA_VERSION           = '4.0.0'
     }
 
     stages {
         stage('Initialize Build Environment') {
-            agent { label "agent-for-${params.JDK_TYPE}" } // Dynamically select agent based on parameter
+            agent any
             steps {
                 script {
+                    // Define agent labels based on JDK_TYPE
+                    def agentLabels = [
+                        'openj9-open': 'dual_xeon_ibm_openj9_jdk21',
+                        'openj9-certified': 'i7_2600k_ibm_openj9_jdk21_certified',
+                        'hotspot': 'linux-x64-hotspot-jdk21'
+                    ]
+                    env.AGENT_LABEL = agentLabels
+
                     // Define Test Status for artifact naming
                     def testStatus = params.RUN_TESTS? 'tested' : 'notest'
                     env.TEST_STATUS = testStatus
@@ -30,24 +43,18 @@ pipeline {
                     env.TGZ_ARTIFACT_NAME = "${artifactBaseName}.tgz"
                     env.DOCKER_IMAGE_TAG = "${env.KAFKA_VERSION}-${params.JDK_TYPE}-${testStatus}-b${env.BUILD_NUMBER}"
                     
-                    echo "Building with JDK Type: ${params.JDK_TYPE}"
-                    echo "Running tests: ${params.RUN_TESTS}"
-                    echo "TGZ Artifact Name: ${env.TGZ_ARTIFACT_NAME}"
-                    echo "Docker Image Tag: ${env.DOCKER_IMAGE_TAG}"
-
                     // Set JVM options conditionally using parameters
                     if (params.JDK_TYPE.startsWith('openj9')) {
                         env.JAVA_TOOL_OPTIONS = params.JVM_ARGS_OPENJ9
                     } else { // HotSpot
                         env.JAVA_TOOL_OPTIONS = params.JVM_ARGS_HOTSPOT
                     }
-                    echo "Using JAVA_TOOL_OPTIONS: ${env.JAVA_TOOL_OPTIONS}"
                 }
             }
         }
 
         stage('Checkout') {
-            agent { label "agent-for-${params.JDK_TYPE}" }
+            agent { label "${env.AGENT_LABEL}" }
             steps {
                 echo 'Checking out source code...'
                 checkout scm
@@ -55,41 +62,29 @@ pipeline {
         }
 
         stage('Build and Test') {
-            agent { label "agent-for-${params.JDK_TYPE}" }
+            agent { label "${env.AGENT_LABEL}" }
+            when { expression { params.RUN_TESTS == true } }
             steps {
                 script {
-                    if (params.RUN_TESTS) {
-                        echo 'Compiling source and running all unit and integration tests...'
-                        sh './gradlew clean build'
-                    } else {
-                        echo 'Skipping tests as per configuration.'
-                    }
+                    def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace"
+                    echo "Running Gradle build with tests:./gradlew clean build ${gradleArgs}"
+                    sh "./gradlew clean build ${gradleArgs}"
                 }
             }
         }
 
         stage('Package Artifacts') {
-            agent { label "agent-for-${params.JDK_TYPE}" }
-            when { expression { params.RUN_TESTS == true } } // Only run if tests passed
+            agent { label "${env.AGENT_LABEL}" }
             steps {
-                echo 'Packaging classic artifact...'
-                sh './gradlew releaseTarGz'
                 script {
-                    // Rename the artifact to our standard convention
-                    sh "mv core/build/distributions/kafka_*.tgz ${env.TGZ_ARTIFACT_NAME}"
-                    archiveArtifacts artifacts: env.TGZ_ARTIFACT_NAME, followSymlinks: false
-                }
-            }
-        }
-
-        stage('Package Artifacts (No Tests)') {
-            agent { label "agent-for-${params.JDK_TYPE}" }
-            when { expression { params.RUN_TESTS == false } } // Only run for no-test builds
-            steps {
-                echo 'Building Kafka distributable artifact without running tests...'
-                sh './gradlew clean releaseTarGz -x test'
-                script {
-                    // Rename the artifact to our standard convention
+                    def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace"
+                    if (params.RUN_TESTS) {
+                        echo "Running Gradle packaging:./gradlew releaseTarGz ${gradleArgs}"
+                        sh "./gradlew releaseTarGz ${gradleArgs}"
+                    } else {
+                        echo "Running Gradle packaging without tests:./gradlew clean releaseTarGz -x test ${gradleArgs}"
+                        sh "./gradlew clean releaseTarGz -x test ${gradleArgs}"
+                    }
                     sh "mv core/build/distributions/kafka_*.tgz ${env.TGZ_ARTIFACT_NAME}"
                     archiveArtifacts artifacts: env.TGZ_ARTIFACT_NAME, followSymlinks: false
                 }
@@ -97,19 +92,27 @@ pipeline {
         }
 
         stage('Build and Push Docker Image') {
-            agent { label "agent-for-${params.JDK_TYPE}" }
+            agent { label "${env.AGENT_LABEL}" }
             steps {
                 script {
+                    def jdkUrl = ''
+                    if (params.JDK_TYPE == 'openj9-open') {
+                        jdkUrl = params.SEMERU_OPEN_URL
+                    } else if (params.JDK_TYPE == 'openj9-certified') {
+                        jdkUrl = params.SEMERU_CERTIFIED_URL
+                    } else {
+                        error("HotSpot Docker build is not configured with a specific JDK URL.")
+                    }
+
                     def dockerImageName = "${env.DOCKER_REGISTRY_URL}/${env.DOCKER_IMAGE_BASE_NAME}"
                     def fullImageName = "${dockerImageName}:${env.DOCKER_IMAGE_TAG}"
                     
-                    def dockerImage = docker.build(fullImageName, ".")
+                    def dockerImage = docker.build(fullImageName, "--build-arg JDK_URL='${jdkUrl}'.")
                     
                     docker.withRegistry("https://index.docker.io/v1/", env.DOCKER_CREDENTIALS_ID) {
                         echo "Pushing image ${fullImageName}"
                         dockerImage.push()
 
-                        // Optionally, tag and push a 'latest' tag for the tested build
                         if (params.RUN_TESTS) {
                             def latestTag = "${env.KAFKA_VERSION}-${params.JDK_TYPE}-latest-tested"
                             echo "Tagging and pushing latest tested tag: ${latestTag}"
