@@ -2954,13 +2954,9 @@ project(':streams:upgrade-system-tests-0110') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_0110
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_0110
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -2970,13 +2966,9 @@ project(':streams:upgrade-system-tests-10') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_10
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_10
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -2986,13 +2978,9 @@ project(':streams:upgrade-system-tests-11') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_11
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_11
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3002,13 +2990,9 @@ project(':streams:upgrade-system-tests-20') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_20
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_20
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3018,13 +3002,9 @@ project(':streams:upgrade-system-tests-21') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_21
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_21
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3034,13 +3014,9 @@ project(':streams:upgrade-system-tests-22') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_22
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_22
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3050,13 +3026,9 @@ project(':streams:upgrade-system-tests-23') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_23
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_23
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3066,13 +3038,9 @@ project(':streams:upgrade-system-tests-24') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_24
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_24
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3082,13 +3050,9 @@ project(':streams:upgrade-system-tests-25') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_25
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_25
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3098,13 +3062,9 @@ project(':streams:upgrade-system-tests-26') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_26
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_26
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3114,13 +3074,9 @@ project(':streams:upgrade-system-tests-27') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_27
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_27
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3130,13 +3086,10 @@ project(':streams:upgrade-system-tests-28') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_28
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation project(":streams")
+    implementation libs.kafkaStreams_28
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3146,13 +3099,9 @@ project(':streams:upgrade-system-tests-30') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_30
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_30
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3162,13 +3111,10 @@ project(':streams:upgrade-system-tests-31') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_31
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation project(":streams")
+    implementation libs.kafkaStreams_31
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3178,13 +3124,9 @@ project(':streams:upgrade-system-tests-32') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_32
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_32
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3194,13 +3136,9 @@ project(':streams:upgrade-system-tests-33') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_33
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_33
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3210,13 +3148,9 @@ project(':streams:upgrade-system-tests-34') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_34
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_34
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3226,13 +3160,9 @@ project(':streams:upgrade-system-tests-35') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_35
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_35
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3242,13 +3172,9 @@ project(':streams:upgrade-system-tests-36') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_36
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_36
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3258,13 +3184,9 @@ project(':streams:upgrade-system-tests-37') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_37
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_37
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3274,13 +3196,9 @@ project(':streams:upgrade-system-tests-38') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_38
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_38
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3290,13 +3208,9 @@ project(':streams:upgrade-system-tests-39') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_39
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_39
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 
@@ -3306,13 +3220,9 @@ project(':streams:upgrade-system-tests-40') {
   }
 
   dependencies {
-    testImplementation libs.kafkaStreams_40
-    testRuntimeOnly libs.junitJupiter
-    testRuntimeOnly runtimeTestLibs
-  }
-
-  systemTestLibs {
-    dependsOn testJar
+    implementation libs.kafkaStreams_40
+    runtimeOnly libs.junitJupiter
+    runtimeOnly runtimeTestLibs
   }
 }
 

@@ -323,7 +323,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
     def __init__(self, test_context, kafka, command, processing_guarantee = 'at_least_once', group_protocol = 'classic', num_threads = 3, replication_factor = 3):
         super(StreamsSmokeTestBaseService, self).__init__(test_context,
                                                           kafka,
-                                                          "org.apache.kafka.streams.tests.StreamsSmokeTest",
+                                                          "org.apache.kafka.streams.StreamsSmokeTest",
                                                           command)
         self.NUM_THREADS = num_threads
         self.PROCESSING_GUARANTEE = processing_guarantee
@@ -598,7 +598,7 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsUpgradeTestJobRunnerService, self).__init__(test_context,
                                                                  kafka,
-                                                                 "org.apache.kafka.streams.tests.StreamsUpgradeTest",
+                                                                 "org.apache.kafka.streams.StreamsUpgradeTest",
                                                                  "")
         self.UPGRADE_FROM = None
         self.UPGRADE_TO = None
@@ -707,7 +707,7 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
     def __init__(self, test_context, kafka):
         super(CooperativeRebalanceUpgradeService, self).__init__(test_context,
                                                                  kafka,
-                                                                 "org.apache.kafka.streams.tests.StreamsUpgradeToCooperativeRebalanceTest",
+                                                                 "org.apache.kafka.streams.StreamsUpgradeToCooperativeRebalanceTest",
                                                                  "")
         self.UPGRADE_FROM = None
         # these properties will be overridden in test
