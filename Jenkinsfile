@@ -93,7 +93,7 @@ pipeline {
                         echo "Running Gradle packaging without tests:./gradlew clean releaseTarGz -x test ${gradleArgs}"
                         sh "./gradlew clean releaseTarGz -x test ${gradleArgs}"
                     }
-                    sh "mv core/build/distributions/kafka_*.tgz ${env.TGZ_ARTIFACT_NAME}"
+                    sh "mv core/build/distributions/kafka_2.13-${env.KAFKA_VERSION}.tgz ${env.TGZ_ARTIFACT_NAME}"
                     archiveArtifacts artifacts: env.TGZ_ARTIFACT_NAME, followSymlinks: false
                 }
             }
