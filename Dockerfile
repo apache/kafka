@@ -1,82 +1,63 @@
-# Stage 1: Create a verified base image with the official OpenJ9 JDK
-FROM ubuntu:22.04 as jdk-base
-ARG JDK_URL=https://github.com/ibmruntimes/semeru21-binaries/releases/download/jdk-21.0.7%2B6_openj9-0.51.0/ibm-semeru-open-jdk_x64_linux_21.0.7_6_openj9-0.51.0.tar.gz
-ENV JAVA_HOME=/opt/java/semeru-openj9-jdk-21
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
+# Stage 1: The Builder
+# Use an IBM Semeru OpenJ9 JDK image that has the necessary build tools.
+# For simplicity, we'll use a standard OpenJDK image and install Gradle.
+# A pre-built image with both could also be used.
+FROM ibm-semeru-runtimes:open-21-jdk as builder
 
-# Install dependencies and download the specified JDK
-RUN apt-get update && apt-get install -y wget && \
-    mkdir -p ${JAVA_HOME} && \
-    wget -O /tmp/semeru-jdk.tar.gz ${JDK_URL} && \
-    tar -xzf /tmp/semeru-jdk.tar.gz -C ${JAVA_HOME} --strip-components=1 && \
-    rm /tmp/semeru-jdk.tar.gz && \
-    apt-get purge -y wget && apt-get autoremove -y && apt-get clean
+# Install build dependencies
+USER root
+RUN apt-get update && apt-get install -y unzip
 
-# Verify the installation
-RUN java -version
-
-# ---
-# Stage 2: Build the Kafka artifact using the verified JDK base image
-FROM jdk-base as builder
+# Install Gradle
 ARG GRADLE_VERSION=8.5
-
-# Install build tools
-RUN apt-get update && apt-get install -y unzip wget && \
-    wget -O /tmp/gradle.zip https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip && \
-    unzip -d /opt/gradle /tmp/gradle.zip && \
-    rm /tmp/gradle.zip
+RUN apt-get install -y wget && \
+    wget https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -P /tmp && \
+    unzip -d /opt/gradle /tmp/gradle-${GRADLE_VERSION}-bin.zip
 ENV PATH="/opt/gradle/gradle-${GRADLE_VERSION}/bin:${PATH}"
 
-# Copy source code and build
+# Copy the application source code into the container
 WORKDIR /app
-COPY . .
-RUN chmod +x ./gradlew
-ENV GRADLE_OPTS="-Dorg.gradle.jvmargs='-Xmx4g'"
-RUN ./gradlew releaseTarGz --max-workers=1 -PmaxParallelForks=1 -PmaxScalacThreads=1 -x test -x integrationTest
+COPY..
 
-# ---
-# Stage 3: Create the minimal JRE-based final image
-FROM ubuntu:22.04 as jre-image
-# CORRECTED: Set the final JRE home path
-ENV JAVA_HOME=/opt/java/semeru-openj9-jre-21
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
+# Grant execution permissions to the Gradle wrapper
+RUN chmod +x./gradlew
+
+# Build the classic distributable artifact
+# The -x test flag skips running tests, as per the requirement for the first Jenkins job.
+# For the second job, this flag would be removed from the command in the Jenkinsfile.
+RUN./gradlew releaseTarGz -x test
+
+# Unpack the artifact for easy copying in the next stage
+RUN mkdir -p /app/dist && \
+    tar -xzf./core/build/distributions/kafka_*.tgz -C /app/dist --strip-components=1
+
+# Stage 2: The Final Production Image
+# Start from a full IBM Semeru OpenJ9 JDK image for diagnostics
+FROM ibm-semeru-runtimes:open-21-jdk
+
+# Define environment variables for Kafka configuration
 ENV KAFKA_HOME=/opt/kafka
+ENV PATH="${KAFKA_HOME}/bin:${PATH}"
 
-# CORRECTED: Copy ONLY the JRE sub-directory from the full JDK in the jdk-base stage
-COPY --from=jdk-base /opt/java/semeru-openj9-jdk-21/jre ${JAVA_HOME}
+# Create a non-root user and group for security
+RUN groupadd -r kafka && useradd -r -g kafka -d /opt/kafka kafka
 
-# Standard Kafka setup
-RUN groupadd -r kafka && useradd -r -g kafka -d ${KAFKA_HOME} kafka && \
-    mkdir -p ${KAFKA_HOME} /var/lib/kafka/data /var/log/kafka
-COPY --from=builder /app/core/build/distributions/kafka_*.tgz /tmp/kafka.tgz
-RUN tar -xzf /tmp/kafka.tgz -C ${KAFKA_HOME} --strip-components=1 && \
-    rm /tmp/kafka.tgz && \
-    chown -R kafka:kafka ${KAFKA_HOME} /var/lib/kafka /var/log/kafka
+# Create Kafka directories and set permissions
+RUN mkdir -p $KAFKA_HOME /var/lib/kafka/data /var/log/kafka && \
+    chown -R kafka:kafka $KAFKA_HOME /var/lib/kafka /var/log/kafka
 
-WORKDIR ${KAFKA_HOME}
+# Set the working directory
+WORKDIR $KAFKA_HOME
+
+# Copy the built Kafka distribution from the builder stage
+COPY --from=builder --chown=kafka:kafka /app/dist.
+
+# Switch to the non-root user
 USER kafka
+
+# Expose the default Kafka port
 EXPOSE 9092
-CMD ["kafka-server-start.sh", "config/kraft/server.properties"]
 
-# ---
-# Stage 4: Create the full JDK-based final image
-FROM ubuntu:22.04 as jdk-image
-ENV JAVA_HOME=/opt/java/semeru-openj9-jdk-21
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
-ENV KAFKA_HOME=/opt/kafka
-
-# Copy the FULL JDK from our verified JDK base image
-COPY --from=jdk-base ${JAVA_HOME} ${JAVA_HOME}
-
-# Standard Kafka setup
-RUN groupadd -r kafka && useradd -r -g kafka -d ${KAFKA_HOME} kafka && \
-    mkdir -p ${KAFKA_HOME} /var/lib/kafka/data /var/log/kafka
-COPY --from=builder /app/core/build/distributions/kafka_*.tgz /tmp/kafka.tgz
-RUN tar -xzf /tmp/kafka.tgz -C ${KAFKA_HOME} --strip-components=1 && \
-    rm /tmp/kafka.tgz && \
-    chown -R kafka:kafka ${KAFKA_HOME} /var/lib/kafka /var/log/kafka
-
-WORKDIR ${KAFKA_HOME}
-USER kafka
-EXPOSE 9092
+# Define the default command to run when the container starts
+# This will start the Kafka broker using our modified scripts
 CMD ["kafka-server-start.sh", "config/kraft/server.properties"]
