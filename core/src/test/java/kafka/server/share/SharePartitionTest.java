@@ -1511,6 +1511,150 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcquireWithMaxInFlightMessagesAndTryAcquireNewBatch() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .withMaxInflightMessages(20)
+            .build();
+
+        // Acquire records, all 10 records should be acquired as within maxInflightMessages limit.
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                500 /* Max fetch records */,
+                DEFAULT_FETCH_OFFSET,
+                fetchPartitionData(memoryRecords(10, 0), 0),
+                FETCH_ISOLATION_HWM),
+            10);
+        // Validate all 10 records will be acquired as the maxInFlightMessages is 20.
+        assertArrayEquals(expectedAcquiredRecord(0, 9, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(10, sharePartition.nextFetchOffset());
+
+        // Create 4 batches of records.
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 5, 10).close();
+        memoryRecordsBuilder(buffer, 10, 15).close();
+        memoryRecordsBuilder(buffer, 5, 25).close();
+        memoryRecordsBuilder(buffer, 2, 30).close();
+
+        buffer.flip();
+
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+
+        // Acquire records, should be acquired till maxInFlightMessages i.e. 20 records. As second batch
+        // is ending at 24 offset, hence additional 15 records will be acquired.
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                500 /* Max fetch records */,
+                DEFAULT_FETCH_OFFSET,
+                fetchPartitionData(records, 0),
+                FETCH_ISOLATION_HWM),
+            15);
+
+        // Validate 2 batches are fetched one with 5 records and other till end of batch, third batch
+        // should be skipped.
+        assertArrayEquals(expectedAcquiredRecord(10, 24, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(25, sharePartition.nextFetchOffset());
+
+        // Should not acquire any records as the share partition is at capacity and fetch offset is beyond
+        // the end offset.
+        fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                500 /* Max fetch records */,
+                25 /* Fetch Offset */,
+                fetchPartitionData(memoryRecords(10, 25), 10),
+                FETCH_ISOLATION_HWM),
+            0);
+
+        assertEquals(25, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testAcquireWithMaxInFlightMessagesAndReleaseLastOffset() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .withMaxInflightMessages(20)
+            .build();
+
+        // Create 4 batches of records.
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 5, 10).close();
+        memoryRecordsBuilder(buffer, 10, 15).close();
+        memoryRecordsBuilder(buffer, 5, 25).close();
+        memoryRecordsBuilder(buffer, 3, 30).close();
+
+        buffer.flip();
+
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        // Acquire records, should be acquired till maxInFlightMessages i.e. 20 records till 29 offset.
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                500 /* Max fetch records */,
+                DEFAULT_FETCH_OFFSET,
+                fetchPartitionData(records, 10),
+                FETCH_ISOLATION_HWM),
+            20);
+
+        // Validate 3 batches are fetched and fourth batch should be skipped. Max in-flight messages
+        // limit is reached.
+        assertArrayEquals(expectedAcquiredRecord(10, 29, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(30, sharePartition.nextFetchOffset());
+
+        // Release middle batch.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(15, 19, List.of((byte) 2))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+        // Validate the nextFetchOffset is updated to 15.
+        assertEquals(15, sharePartition.nextFetchOffset());
+
+        // The complete released batch should be acquired but not the last batch, starting at offset 30,
+        // as the lastOffset is adjusted according to the endOffset.
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                500 /* Max fetch records */,
+                15 /* Fetch Offset */,
+                fetchPartitionData(records, 10),
+                FETCH_ISOLATION_HWM),
+            5);
+
+        // Validate 1 batch is fetched, with 5 records till end of batch, last available batch should
+        // not be acquired
+        assertArrayEquals(expectedAcquiredRecords(15, 19, 2).toArray(), acquiredRecordsList.toArray());
+        assertEquals(30, sharePartition.nextFetchOffset());
+
+        // Release last offset of the acquired batch. Only 1 record should be released and later acquired.
+        ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(29, 29, List.of((byte) 2))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+        // Validate the nextFetchOffset is updated to 29.
+        assertEquals(29, sharePartition.nextFetchOffset());
+
+        // Only the last record of the acquired batch should be acquired again.
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                500 /* Max fetch records */,
+                29 /* Fetch Offset */,
+                fetchPartitionData(records, 10),
+                FETCH_ISOLATION_HWM),
+            1);
+
+        // Validate 1 record is acquired.
+        assertArrayEquals(expectedAcquiredRecord(29, 29, 2).toArray(), acquiredRecordsList.toArray());
+        assertEquals(30, sharePartition.nextFetchOffset());
+    }
+
+    @Test
     public void testNextFetchOffsetInitialState() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         assertEquals(0, sharePartition.nextFetchOffset());

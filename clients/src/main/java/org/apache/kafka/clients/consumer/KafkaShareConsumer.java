@@ -508,6 +508,28 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
+     * Acknowledge delivery of a record returned on the last {@link #poll(Duration)} call indicating whether
+     * it was processed successfully. The acknowledgement is committed on the next {@link #commitSync()},
+     * {@link #commitAsync()} or {@link #poll(Duration)} call.
+     * <p>This method can only be used if the consumer is using <b>explicit acknowledgement</b>.
+     * <p>It provides an alternative to {@link #acknowledge(ConsumerRecord, AcknowledgeType)} for
+     * situations where the {@link ConsumerRecord} is not available, such as when the record could not be deserialized.
+     *
+     * @param topic The topic of the record to acknowledge
+     * @param partition The partition of the record to acknowledge
+     * @param offset The offset of the record to acknowledge
+     * @param type The acknowledge type which indicates whether it was processed successfully
+     *
+     * @throws IllegalStateException if the record is not waiting to be acknowledged, or the consumer is not using
+     *                               explicit acknowledgement
+     */
+
+    @Override
+    public void acknowledge(String topic, int partition, long offset, AcknowledgeType type) {
+        delegate.acknowledge(topic, partition, offset, type);
+    }
+
+    /**
      * Commit the acknowledgements for the records returned. If the consumer is using explicit acknowledgement,
      * the acknowledgements to commit have been indicated using {@link #acknowledge(ConsumerRecord)} or
      * {@link #acknowledge(ConsumerRecord, AcknowledgeType)}. If the consumer is using implicit acknowledgement,
