@@ -321,6 +321,7 @@ subprojects {
                 "-XX:+DisableExplicitGC",
                 "-Xtune:virtualized",
                 "-Xjit:optlevel=noOpt",
+                "-Xjit:count=5",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
                 "-Xmx" + defaultMaxHeapSize
         ]
