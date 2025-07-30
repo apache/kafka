@@ -1,6 +1,6 @@
 // Unified, Parameterized Jenkinsfile for Multi-JVM Kafka Builds
 pipeline {
-    agent dual_xeon_ibm_openj9_jdk21 // Agent will be selected dynamically in stages
+    agent { label 'dual_xeon_ibm_openj9_jdk21' }// Hardcoding Agent as there will be a job for each openj9 open edition and certified
 
     parameters {
         choice(name: 'JDK_TYPE', choices: ['openj9-open', 'openj9-certified', 'hotspot'], description: 'Select the target JDK for the build.')
