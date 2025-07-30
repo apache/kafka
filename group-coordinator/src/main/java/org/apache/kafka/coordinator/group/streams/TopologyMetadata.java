@@ -37,7 +37,7 @@ public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap
 
     public TopologyMetadata {
         Objects.requireNonNull(metadataImage);
-        subtopologyMap = Objects.requireNonNull(Collections.unmodifiableSortedMap(subtopologyMap));
+        subtopologyMap = Collections.unmodifiableSortedMap(Objects.requireNonNull(subtopologyMap));
     }
 
     /**

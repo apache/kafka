@@ -6341,7 +6341,7 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.UNKNOWN_SERVER_ERROR, appendGroupMetadataErrorToResponseError(Errors.RECORD_LIST_TOO_LARGE));
         assertEquals(Errors.UNKNOWN_SERVER_ERROR, appendGroupMetadataErrorToResponseError(Errors.INVALID_FETCH_SIZE));
 
-        assertEquals(Errors.LEADER_NOT_AVAILABLE, Errors.LEADER_NOT_AVAILABLE);
+        assertEquals(Errors.LEADER_NOT_AVAILABLE, appendGroupMetadataErrorToResponseError(Errors.LEADER_NOT_AVAILABLE));
     }
 
     @Test
@@ -6643,7 +6643,7 @@ public class GroupMetadataManagerTest {
         // Both heartbeats will expire but only the leader is kicked out.
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(10000);
         assertEquals(2, timeouts.size());
-        timeouts.forEach(timeout -> assertEquals(timeout.result(), EMPTY_RESULT));
+        timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result()));
 
         assertTrue(duplicateFollowerJoinResult.joinFuture.isDone());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
@@ -15632,7 +15632,7 @@ public class GroupMetadataManagerTest {
             topicId,
             Map.entry(topicName, new LinkedHashSet<>(partitions))
         );
-    };
+    }
 
     @Test
     public void testShareGroupLeavingMemberBumpsGroupEpoch() {
@@ -16062,7 +16062,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())));
-        assertEquals(e1.getMessage(), "Subtopology subtopologyMissing does not exist in the topology.");
+        assertEquals("Subtopology subtopologyMissing does not exist in the topology.", e1.getMessage());
 
         InvalidRequestException e2 = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
@@ -16076,7 +16076,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())));
-        assertEquals(e2.getMessage(), "Task 3 for subtopology subtopology1 is invalid. Number of tasks for this subtopology: 3");
+        assertEquals("Task 3 for subtopology subtopology1 is invalid. Number of tasks for this subtopology: 3", e2.getMessage());
     }
 
     @Test
