@@ -172,7 +172,7 @@ public class DeadLetterQueueIntegrationTest {
             final List<ConsumerRecord<String, String>> outputRecords = readResult(OUTPUT_TOPIC, 2, StringDeserializer.class, StringDeserializer.class, 30000L);
 
             // Only the first and third records are available
-            assertEquals(2, outputRecords.size(), "Only two records should be available in the output topic");
+            assertEquals(2, outputRecords.size(), "Two records should be available in the output topic");
             assertEquals("value-1", outputRecords.get(0).value(), "Output record should be the first one");
             assertEquals("value-2", outputRecords.get(1).value(), "Output record should be the third one");
 
@@ -254,7 +254,7 @@ public class DeadLetterQueueIntegrationTest {
             final List<ConsumerRecord<String, String>> outputRecords = readResult(OUTPUT_TOPIC, 2, StringDeserializer.class, StringDeserializer.class, 30000L);
 
             // Only the first and third records are available
-            assertEquals(2, outputRecords.size(), "Only two records should be available in the output topic");
+            assertEquals(2, outputRecords.size(), "Two records should be available in the output topic");
             assertEquals("value-1", outputRecords.get(0).value(), "Output record should be the first one");
             assertEquals("value-2", outputRecords.get(1).value(), "Output record should be the third one");
 
