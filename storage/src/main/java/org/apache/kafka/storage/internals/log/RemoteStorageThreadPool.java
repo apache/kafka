@@ -17,6 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
 import org.slf4j.Logger;
@@ -26,16 +27,16 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.BRIDGE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC;
-import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.BRIDGE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
 
 public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
-    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
+    private final KafkaMetricsGroup internalsLogMetricsGroup = new KafkaMetricsGroup(this.getClass());
+    private final KafkaMetricsGroup logRemoteMetricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteStorageThreadPool");
 
+    @SuppressWarnings("deprecation")
     public RemoteStorageThreadPool(String threadNamePattern,
                                    int numThreads,
                                    int maxPendingTasks) {
@@ -47,13 +48,13 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
                 ThreadUtils.createThreadFactory(threadNamePattern, false,
                         (t, e) -> LOGGER.error("Uncaught exception in thread '{}':", t.getName(), e))
         );
-        metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
+        internalsLogMetricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
-        metricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
+        internalsLogMetricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
                 () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
-        metricsGroup.newGauge(BRIDGE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
+        logRemoteMetricsGroup.newGauge(RemoteStorageMetrics.BRIDGE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
-        metricsGroup.newGauge(BRIDGE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
+        logRemoteMetricsGroup.newGauge(RemoteStorageMetrics.BRIDGE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
                 () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
     }
 
@@ -65,6 +66,7 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
     }
 
     public void removeMetrics() {
-        REMOTE_STORAGE_THREAD_POOL_METRICS.forEach(metricsGroup::removeMetric);
+        REMOTE_STORAGE_THREAD_POOL_METRICS.forEach(internalsLogMetricsGroup::removeMetric);
+        REMOTE_STORAGE_THREAD_POOL_METRICS.forEach(logRemoteMetricsGroup::removeMetric);
     }
 }
