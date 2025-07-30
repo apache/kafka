@@ -1076,6 +1076,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
     protected void closeInternal() {
         Utils.closeQuietly(shareFetchBuffer, "shareFetchBuffer");
+        Utils.closeQuietly(metricsManager, "shareFetchMetricsManager");
     }
 
     public void close() {
