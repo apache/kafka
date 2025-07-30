@@ -4491,6 +4491,12 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
     <li>Select the last known leader if it is unfenced. This is a similar behavior prior to the 4.0 when all the replicas are offline.</li>
   </ul>
 
+  <p> Another noticeable change is for the config <code>min.insync.replicas</code>. Since ELR is closely bound to this config, when ELR is enabled:</p>
+  <ul>
+    <li>The Broker level update on <code>min.insync.replicas</code> is disabled.</li>
+    <li>The Cluster level <code>min.insync.replicas</code> removal is disabled.</li>
+  </ul>
+
   <h4 class="anchor-heading"><a id="eligible_leader_replicas_upgrade" class="anchor-link"></a><a href="#eligible_leader_replicas_upgrade">Upgrade & Downgrade</a></h4>
 
   <p>The ELR is not enabled by default for 4.0. To enable the new protocol on the server, set <code>eligible.leader.replicas.version=1</code>. After that the upgrade, the KRaft
