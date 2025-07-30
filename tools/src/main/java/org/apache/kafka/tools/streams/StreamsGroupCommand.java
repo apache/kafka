@@ -105,8 +105,9 @@ public class StreamsGroupCommand {
         }
     }
 
-    public static int run(StreamsGroupCommandOptions opts) {
-        try (StreamsGroupService streamsGroupService = new StreamsGroupService(opts, Map.of())) {
+    // Visibility for testing
+    static int run(StreamsGroupCommandOptions opts, StreamsGroupService streamsGroupService) {
+        try {
             if (opts.options.has(opts.listOpt)) {
                 streamsGroupService.listGroups();
             } else if (opts.options.has(opts.describeOpt)) {
@@ -127,8 +128,17 @@ public class StreamsGroupCommand {
             }
             return EXIT_CODE_SUCCESS;
         } catch (IllegalArgumentException e) {
-            printError(e.getMessage(),Optional.of(e));
+            printError(e.getMessage(), Optional.of(e));
             return EXIT_CODE_ERROR;
+        } catch (Throwable e) {
+            printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
+            return EXIT_CODE_ERROR;
+        }
+    }
+
+    public static int run(StreamsGroupCommandOptions opts) {
+        try (StreamsGroupService streamsGroupService = new StreamsGroupService(opts, Map.of())) {
+            return run(opts, streamsGroupService);
         } catch (Throwable e) {
             printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
             return EXIT_CODE_ERROR;
