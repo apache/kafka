@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
@@ -105,7 +106,7 @@ class DefaultStateUpdaterTest {
 
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);
-    private final Metrics metrics = new Metrics(time);
+    private final StreamsMetricsImpl metrics = new StreamsMetricsImpl(new Metrics(time), "", "", time);
     private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
@@ -1732,7 +1733,7 @@ class DefaultStateUpdaterTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> void verifyMetric(final Metrics metrics,
+    private static <T> void verifyMetric(final StreamsMetricsImpl metrics,
                                          final MetricName metricName,
                                          final Matcher<T> matcher) {
         assertThat(metrics.metrics().get(metricName).metricName().description(), is(metricName.description()));
