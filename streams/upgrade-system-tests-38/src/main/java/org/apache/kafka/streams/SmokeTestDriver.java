@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.streams.kafka;
+package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -436,7 +436,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             events.get("echo")
                   .entrySet()
                   .stream()
-                  .map(entry -> Utils.mkEntry(
+                  .map(entry -> mkEntry(
                       entry.getKey(),
                       entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
                   )

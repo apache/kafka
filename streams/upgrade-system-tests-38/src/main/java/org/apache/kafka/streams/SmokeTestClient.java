@@ -14,17 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.streams.kafka;
+package org.apache.kafka.streams;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -191,7 +186,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         streamify(minAggregation, "min-raw");
 
-        streamify(minAggregation.suppress(Suppressed.untilWindowCloses(BufferConfig.unbounded())), "min-suppressed");
+        streamify(minAggregation.suppress(untilWindowCloses(BufferConfig.unbounded())), "min-suppressed");
 
         minAggregation
             .toStream(new Unwindow<>())
@@ -203,7 +198,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             .reduce(Integer::sum);
 
         streamify(smallWindowSum, "sws-raw");
-        streamify(smallWindowSum.suppress(Suppressed.untilWindowCloses(BufferConfig.unbounded())), "sws-suppressed");
+        streamify(smallWindowSum.suppress(untilWindowCloses(BufferConfig.unbounded())), "sws-suppressed");
 
         final KTable<String, Integer> minTable = builder.table(
             "min",

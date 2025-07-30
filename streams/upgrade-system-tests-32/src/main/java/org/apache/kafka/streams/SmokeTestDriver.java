@@ -436,7 +436,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             events.get("echo")
                   .entrySet()
                   .stream()
-                  .map(entry -> Utils.mkEntry(
+                  .map(entry -> mkEntry(
                       entry.getKey(),
                       entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
                   )

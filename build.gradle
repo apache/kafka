@@ -3086,7 +3086,6 @@ project(':streams:upgrade-system-tests-28') {
   }
 
   dependencies {
-    implementation project(":streams")
     implementation libs.kafkaStreams_28
     runtimeOnly libs.junitJupiter
     runtimeOnly runtimeTestLibs
@@ -3111,7 +3110,6 @@ project(':streams:upgrade-system-tests-31') {
   }
 
   dependencies {
-    implementation project(":streams")
     implementation libs.kafkaStreams_31
     runtimeOnly libs.junitJupiter
     runtimeOnly runtimeTestLibs

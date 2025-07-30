@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.streams.kafka;
+package org.apache.kafka.streams;
 
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamsConfig;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -27,8 +26,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.streams.kafka.SmokeTestDriver.generate;
-import static org.apache.streams.kafka.SmokeTestDriver.generatePerpetually;
+import static org.apache.kafka.streams.SmokeTestDriver.generate;
+import static org.apache.kafka.streams.SmokeTestDriver.generatePerpetually;
 
 public class StreamsSmokeTest {
 

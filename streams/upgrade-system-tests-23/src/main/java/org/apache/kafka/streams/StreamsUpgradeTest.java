@@ -17,9 +17,6 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -42,7 +39,7 @@ public class StreamsUpgradeTest {
         System.out.println("props=" + streamsProperties);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream dataStream = builder.stream("data");
+        final KStream<String, String> dataStream = builder.stream("data");
         dataStream.process(printProcessorSupplier());
         dataStream.to("echo");
 

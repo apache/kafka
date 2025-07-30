@@ -18,7 +18,6 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamsConfig;
 
 import java.io.IOException;
 import java.time.Duration;

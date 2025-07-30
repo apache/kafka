@@ -14,12 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.streams.kafka;
+package org.apache.kafka.streams;
 
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -31,8 +28,8 @@ import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.Properties;
 
-import static org.apache.streams.kafka.SmokeTestUtil.intSerde;
-import static org.apache.streams.kafka.SmokeTestUtil.stringSerde;
+import static org.apache.kafka.streams.SmokeTestUtil.intSerde;
+import static org.apache.kafka.streams.SmokeTestUtil.stringSerde;
 
 
 public class StreamsUpgradeTest {
