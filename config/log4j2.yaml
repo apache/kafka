@@ -44,7 +44,7 @@ Configuration:
       # State Change appender
       - name: StateChangeAppender
         fileName: "${sys:kafka.logs.dir}/state-change.log"
-        filePattern: "${sys:kafka.logs.dir}/stage-change.log.%d{yyyy-MM-dd-HH}"
+        filePattern: "${sys:kafka.logs.dir}/state-change.log.%d{yyyy-MM-dd-HH}"
         PatternLayout:
           pattern: "${logPattern}"
         TimeBasedTriggeringPolicy:
