@@ -709,14 +709,49 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         handlePersisterInitializeResponse(request.groupTopicPartitionData().groupId(), result, new ShareGroupHeartbeatResponseData());
                         return response;
                     } else {
-                        //TODO build new AlterShareGroupOffsetsResponseData for error response
-                        return response;
+                        return buildErrorResponse(response, result);
                     }
                 } else {
                     return buildErrorResponse(request, response, exp);
                 }
 
             });
+    }
+    
+    private AlterShareGroupOffsetsResponseData buildErrorResponse(AlterShareGroupOffsetsResponseData response, InitializeShareGroupStateResult result) {
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+        Map<Uuid, Map<Integer, PartitionErrorData>> topicPartitionErrorsMap = result.getErrors();
+        data.setResponses(
+            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
+                .map(topic -> {
+                    AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName())
+                        .setTopicId(topic.topicId());
+                    topic.partitions().forEach(partition -> {
+                        if (partition.errorCode() != Errors.NONE.code()) {
+                            topicData.partitions().add(partition);
+                            return;
+                        }
+                        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData;
+                        Map<Integer, PartitionErrorData> partitionErrors =
+                            Optional.ofNullable(topicPartitionErrorsMap)
+                                .map(map -> map.get(topic.topicId()))
+                                .orElse(Collections.emptyMap());
+                        PartitionErrorData error = partitionErrors.get(partition.partitionIndex());
+                        if (error == null) {
+                            partitionData = partition.duplicate();
+                        } else {
+                            partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(error.errorCode())
+                                .setErrorMessage(error.errorMessage());
+                        }
+                        topicData.partitions().add(partitionData);
+                    });
+                    return topicData;
+                })
+                .iterator()));
+        return data;
     }
 
     private AlterShareGroupOffsetsResponseData buildErrorResponse(InitializeShareGroupStateParameters request, AlterShareGroupOffsetsResponseData response, Throwable exp) {
@@ -726,13 +761,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
         log.error("Unable to initialize share group state for {}, {} while altering share group offsets", gtp.groupId(), gtp.topicsData(), exp);
         Errors error = Errors.forException(exp);
         data.setErrorCode(error.code())
-            .setErrorMessage(error.message())
+            .setErrorMessage(exp.getMessage())
             .setResponses(response.responses());
         data.setResponses(
             new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
                 .map(topic -> {
                     AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                        .setTopicName(topic.topicName());
+                        .setTopicName(topic.topicName())
+                        .setTopicId(topic.topicId());
                     topic.partitions().forEach(partition -> {
                         AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                             .setPartitionIndex(partition.partitionIndex())

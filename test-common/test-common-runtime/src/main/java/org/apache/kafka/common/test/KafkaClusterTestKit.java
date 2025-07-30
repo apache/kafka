@@ -496,7 +496,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     } else {
                         formatter.setNoInitialControllersFlag(true);
                     }
-                } else if (initialVoterSet.isPresent()){
+                } else if (initialVoterSet.isPresent()) {
                     for (final var controllerNode : initialVoterSet.get().entrySet()) {
                         final var voterId = controllerNode.getKey();
                         final var voterDirectoryid = controllerNode.getValue();

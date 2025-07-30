@@ -14,17 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tiered.storage.specs;
+package org.apache.kafka.clients.consumer.internals;
 
-import java.util.List;
-import java.util.Map;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.SerializationException;
 
-public record ExpandPartitionCountSpec(String topicName, int partitionCount, Map<Integer, List<Integer>> assignment) {
+import java.util.Set;
 
-    @Override
-    public String toString() {
-        return String.format("ExpandPartitionCountSpec[topicName=%s, partitionCount=%d, assignment=%s]",
-                topicName, partitionCount, assignment);
+public class ShareInFlightBatchException extends SerializationException {
+
+    private final KafkaException cause;
+
+    private final Set<Long> offsets;
+
+    public ShareInFlightBatchException(KafkaException cause, Set<Long> offsets) {
+        this.cause = cause;
+        this.offsets = offsets;
     }
 
+    public KafkaException cause() {
+        return cause;
+    }
+
+    public Set<Long> offsets() {
+        return offsets;
+    }
 }

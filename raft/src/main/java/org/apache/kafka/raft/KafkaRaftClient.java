@@ -2608,7 +2608,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 transitionToUnattached(epoch, OptionalInt.empty());
             }
         } else if (
-                leaderId.isPresent() &&
+            leaderId.isPresent() &&
                 (!quorum.hasLeader() || leaderEndpoints.size() > quorum.leaderEndpoints().size())
         ) {
             // The request or response indicates the leader of the current epoch
@@ -3323,9 +3323,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
-        if (state.hasFetchTimeoutExpired(currentTimeMs)) {
-            return maybeSendFetchToAnyBootstrap(currentTimeMs);
-        } else if (partitionState.lastKraftVersion().isReconfigSupported() && canBecomeVoter &&
+        if (partitionState.lastKraftVersion().isReconfigSupported() && canBecomeVoter &&
             quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs)) {
             /* Only replicas that can become a voter and are configured to auto join should
              * attempt to automatically join the voter set for the configured topic partition.

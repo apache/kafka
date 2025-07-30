@@ -203,6 +203,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
             return new ApiVersionsRequest.Builder((ApiVersionsRequestData) requestData,
                 ApiKeys.API_VERSIONS.oldestVersion(),
                 ApiKeys.API_VERSIONS.latestVersion());
-        throw new IllegalArgumentException("Unexpected type for requestData: " + requestData);
+        else
+            throw new IllegalArgumentException("Unexpected type for requestData: " + requestData);
     }
 }

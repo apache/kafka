@@ -41,8 +41,6 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
-import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -133,7 +131,7 @@ public class ConsumerGroupCommand {
                     String exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset);
                     System.out.println(exported);
                 } else
-                    printOffsetsToReset(offsetsToReset);
+                    OffsetsUtils.printOffsetsToReset(offsetsToReset);
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 consumerGroupService.deleteOffsets();
             }
@@ -177,21 +175,6 @@ public class ConsumerGroupCommand {
     static void printError(String msg, Optional<Throwable> e) {
         System.out.println("\nError: " + msg);
         e.ifPresent(Throwable::printStackTrace);
-    }
-
-    static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
-        String format = "%n%-30s %-30s %-10s %-15s";
-        if (!groupAssignmentsToReset.isEmpty())
-            System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
-
-        groupAssignmentsToReset.forEach((groupId, assignment) ->
-            assignment.forEach((consumerAssignment, offsetAndMetadata) ->
-                System.out.printf(format,
-                    groupId,
-                    consumerAssignment.topic(),
-                    consumerAssignment.partition(),
-                    offsetAndMetadata.offset())));
-        System.out.println();
     }
 
     @SuppressWarnings("ClassFanOutComplexity")
@@ -615,7 +598,7 @@ public class ConsumerGroupCommand {
                     consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
-            List<TopicPartition> topicPartitionsWithoutLeader = filterNoneLeaderPartitions(topicPartitions);
+            List<TopicPartition> topicPartitionsWithoutLeader = offsetsUtils.filterNoneLeaderPartitions(topicPartitions);
             List<TopicPartition> topicPartitionsWithLeader = topicPartitions.stream().filter(tp -> !topicPartitionsWithoutLeader.contains(tp)).toList();
 
             // prepare data for partitions with leaders
@@ -643,22 +626,6 @@ public class ConsumerGroupCommand {
                             state -> state.topic.orElse(""), String::compareTo)
                             .thenComparingInt(state -> state.partition.orElse(-1)))
                     .collect(Collectors.toList());
-        }
-
-        private List<TopicPartition> filterNoneLeaderPartitions(Collection<TopicPartition> topicPartitions) {
-            // collect all topics
-            Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
-
-            try {
-                return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
-                        .stream()
-                        .flatMap(entry -> entry.getValue().partitions().stream()
-                                .filter(partitionInfo -> partitionInfo.leader() == null)
-                                .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
-                        .toList();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
@@ -1002,7 +969,7 @@ public class ConsumerGroupCommand {
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
             // ensure all partitions are valid, otherwise throw a runtime exception
-            checkAllTopicPartitionsValid(partitionsToReset);
+            offsetsUtils.checkAllTopicPartitionsValid(partitionsToReset);
 
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return offsetsUtils.resetToOffset(partitionsToReset);
@@ -1026,38 +993,6 @@ public class ConsumerGroupCommand {
 
             CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
-        }
-
-        private void checkAllTopicPartitionsValid(Collection<TopicPartition> partitionsToReset) {
-            // check the partitions exist
-            List<TopicPartition> partitionsNotExistList = filterNonExistentPartitions(partitionsToReset);
-            if (!partitionsNotExistList.isEmpty()) {
-                String partitionStr = partitionsNotExistList.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
-                throw new UnknownTopicOrPartitionException("The partitions \"" + partitionStr + "\" do not exist");
-            }
-
-            // check the partitions have leader
-            List<TopicPartition> partitionsWithoutLeader = filterNoneLeaderPartitions(partitionsToReset);
-            if (!partitionsWithoutLeader.isEmpty()) {
-                String partitionStr = partitionsWithoutLeader.stream().map(TopicPartition::toString).collect(Collectors.joining(","));
-                throw new LeaderNotAvailableException("The partitions \"" + partitionStr + "\" have no leader");
-            }
-        }
-
-        private List<TopicPartition> filterNonExistentPartitions(Collection<TopicPartition> topicPartitions) {
-            // collect all topics
-            Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
-            try {
-                List<TopicPartition> existPartitions = adminClient.describeTopics(topics).allTopicNames().get().entrySet()
-                        .stream()
-                        .flatMap(entry -> entry.getValue().partitions().stream()
-                                .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
-                        .toList();
-
-                return topicPartitions.stream().filter(element -> !existPartitions.contains(element)).toList();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
         }
 
         String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> assignments) {
