@@ -74,6 +74,10 @@ public final class AssignmentsManager {
     /**
      * The metric reflecting the number of pending assignments.
      */
+    @Deprecated(since = "4.2")
+    static final MetricName DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC =
+            deprecatedMetricName("QueuedReplicaToDirAssignments");
+
     static final MetricName QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC =
             metricName("QueuedReplicaToDirAssignments");
 
@@ -142,8 +146,13 @@ public final class AssignmentsManager {
      */
     private final KafkaEventQueue eventQueue;
 
-    static MetricName metricName(String name) {
+    @Deprecated(since = "4.2")
+    static MetricName deprecatedMetricName(String name) {
         return KafkaYammerMetrics.getMetricName("org.apache.kafka.server", "AssignmentsManager", name);
+    }
+
+    static MetricName metricName(String name) {
+        return KafkaYammerMetrics.getMetricName("kafka.server", "AssignmentsManager", name);
     }
 
     public AssignmentsManager(
@@ -182,12 +191,18 @@ public final class AssignmentsManager {
         this.ready = new ConcurrentHashMap<>();
         this.inflight = Map.of();
         this.metricsRegistry = metricsRegistry;
-        this.metricsRegistry.newGauge(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
+        this.metricsRegistry.newGauge(DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
                 @Override
                 public Integer value() {
                     return numPending();
                 }
             });
+        this.metricsRegistry.newGauge(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return numPending();
+            }
+        });
         this.previousGlobalFailures = 0;
         this.eventQueue = new KafkaEventQueue(time,
             new LogContext("[AssignmentsManager id=" + nodeId + "]"),
@@ -248,6 +263,7 @@ public final class AssignmentsManager {
                 log.error("Unexpected exception shutting down NodeToControllerChannelManager", e);
             }
             try {
+                metricsRegistry.removeMetric(DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
                 metricsRegistry.removeMetric(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
             } catch (Exception e) {
                 log.error("Unexpected exception removing metrics.", e);

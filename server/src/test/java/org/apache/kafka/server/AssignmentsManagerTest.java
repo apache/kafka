@@ -250,6 +250,13 @@ public class AssignmentsManagerTest {
             return queuedReplicaToDirAssignments.value();
         }
 
+        @SuppressWarnings("unchecked") // do not warn about Gauge typecast.
+        int deprecatedQueuedReplicaToDirAssignments() {
+            Gauge<Integer> queuedReplicaToDirAssignments =
+                    (Gauge<Integer>) findMetric(AssignmentsManager.DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
+            return queuedReplicaToDirAssignments.value();
+        }
+
         @Override
         public void close() throws Exception {
             try {
@@ -279,10 +286,12 @@ public class AssignmentsManagerTest {
     public void testSuccessfulAssignment() throws Exception {
         try (TestEnv testEnv = new TestEnv()) {
             assertEquals(0, testEnv.queuedReplicaToDirAssignments());
+            assertEquals(0, testEnv.deprecatedQueuedReplicaToDirAssignments());
             testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
                 assertEquals(1, testEnv.assignmentsManager.numPending());
                 assertEquals(1, testEnv.queuedReplicaToDirAssignments());
+                assertEquals(1, testEnv.deprecatedQueuedReplicaToDirAssignments());
             });
             assertEquals(0, testEnv.assignmentsManager.previousGlobalFailures());
             assertEquals(1, testEnv.assignmentsManager.numInFlight());
@@ -290,6 +299,7 @@ public class AssignmentsManagerTest {
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
                 assertEquals(0, testEnv.assignmentsManager.numPending());
                 assertEquals(0, testEnv.queuedReplicaToDirAssignments());
+                assertEquals(0, testEnv.deprecatedQueuedReplicaToDirAssignments());
                 assertEquals(1, testEnv.success(new TopicIdPartition(TOPIC_1, 0)));
             });
             assertEquals(0, testEnv.assignmentsManager.previousGlobalFailures());

@@ -26,6 +26,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.BRIDGE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC;
+import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.BRIDGE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
@@ -48,6 +50,10 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
         metricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
         metricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
+                () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
+        metricsGroup.newGauge(BRIDGE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
+                () -> getQueue().size());
+        metricsGroup.newGauge(BRIDGE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
                 () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
     }
 
