@@ -472,8 +472,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
           .setMemberEpoch(1)
       ).build()
 
-      cluster.waitForTopic("foo", 2)
-      cluster.waitForTopic("bar", 3)
+      cluster.waitTopicCreation("foo", 2)
+      cluster.waitTopicCreation("bar", 3)
 
       TestUtils.waitUntilTrue(() => {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
