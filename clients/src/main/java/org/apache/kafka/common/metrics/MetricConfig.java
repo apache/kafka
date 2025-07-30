@@ -43,12 +43,16 @@ public class MetricConfig {
         this.recordingLevel = Sensor.RecordingLevel.INFO;
     }
 
+    /**
+     * Copy constructor.
+     * @param config the {@link MetricConfig} instance to copy.
+     */
     public MetricConfig(MetricConfig config) {
-        this.quota = config.quota;
+        this.quota = new Quota(config.quota.bound(), config.quota.isUpperBound());
         this.samples = config.samples;
         this.eventWindow = config.eventWindow;
         this.timeWindowMs = config.timeWindowMs;
-        this.tags = config.tags;
+        this.tags = Map.copyOf(config.tags);
         this.recordingLevel = config.recordingLevel;
     }
 
