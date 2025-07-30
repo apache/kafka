@@ -159,7 +159,6 @@ public class ResetConsumerGroupOffsetTest {
         brokers = 2,
         serverProperties = {
             @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2"),
-            @ClusterConfigProperty(key = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, value = "1")
         }
     )
     public void testResetOffsetsWithOfflinePartitionNotInResetTarget(ClusterInstance cluster) throws Exception {
