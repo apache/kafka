@@ -114,7 +114,7 @@ public class DeadLetterQueueIntegrationTest {
     }
 
     @Test
-    public void shouldSendToDlqAnfFailFromDsl() throws Exception {
+    public void shouldSendToDlqAndFailFromDsl() throws Exception {
 
         try (final KafkaStreams streams = getDslStreams(LogAndFailProcessingExceptionHandler.class.getName())) {
 
@@ -154,7 +154,7 @@ public class DeadLetterQueueIntegrationTest {
     }
 
     @Test
-    public void shouldSendToDlqAnfContinueFromDsl() throws Exception {
+    public void shouldSendToDlqAndContinueFromDsl() throws Exception {
 
         try (final KafkaStreams streams = getDslStreams(LogAndContinueProcessingExceptionHandler.class.getName())) {
 
@@ -172,7 +172,7 @@ public class DeadLetterQueueIntegrationTest {
             final List<ConsumerRecord<String, String>> outputRecords = readResult(OUTPUT_TOPIC, 2, StringDeserializer.class, StringDeserializer.class, 30000L);
 
             // Only the first and third records are available
-            assertEquals(2, outputRecords.size(), "Only one record should be available in the output topic");
+            assertEquals(2, outputRecords.size(), "Only two records should be available in the output topic");
             assertEquals("value-1", outputRecords.get(0).value(), "Output record should be the first one");
             assertEquals("value-2", outputRecords.get(1).value(), "Output record should be the third one");
 
@@ -196,7 +196,7 @@ public class DeadLetterQueueIntegrationTest {
     }
 
     @Test
-    public void shouldSendToDlqAnfFailFromProcessorAPI() throws Exception {
+    public void shouldSendToDlqAndFailFromProcessorAPI() throws Exception {
 
         try (final KafkaStreams streams = getProcessorAPIStreams(LogAndFailProcessingExceptionHandler.class.getName())) {
 
@@ -236,7 +236,7 @@ public class DeadLetterQueueIntegrationTest {
     }
 
     @Test
-    public void shouldSendToDlqAnfContinueFromProcessorAPI() throws Exception {
+    public void shouldSendToDlqAndContinueFromProcessorAPI() throws Exception {
 
         try (final KafkaStreams streams = getProcessorAPIStreams(LogAndContinueProcessingExceptionHandler.class.getName())) {
 
@@ -254,7 +254,7 @@ public class DeadLetterQueueIntegrationTest {
             final List<ConsumerRecord<String, String>> outputRecords = readResult(OUTPUT_TOPIC, 2, StringDeserializer.class, StringDeserializer.class, 30000L);
 
             // Only the first and third records are available
-            assertEquals(2, outputRecords.size(), "Only one record should be available in the output topic");
+            assertEquals(2, outputRecords.size(), "Only two records should be available in the output topic");
             assertEquals("value-1", outputRecords.get(0).value(), "Output record should be the first one");
             assertEquals("value-2", outputRecords.get(1).value(), "Output record should be the third one");
 
