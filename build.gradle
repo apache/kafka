@@ -312,7 +312,7 @@ subprojects {
         String numThreadsAsString = numThreads.toString()
 
         // Forking must be enabled on the task's main options to set JVM args and other fork options.
-        options.fork = true
+        options.fork = false
         options.forkOptions.jvmArgs = [
                 "-Xss512k",
                 "-Xgcpolicy:gencon",
@@ -325,6 +325,10 @@ subprojects {
                 "-Xmx" + defaultMaxHeapSize
         ]
 
+    }
+
+    project.tasks.withType(JavaCompile).configureEach {
+        options.fork = false
     }
 
         // enable running :dependencies task recursively on all subprojects

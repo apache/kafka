@@ -119,7 +119,7 @@ pipeline {
                     def dockerImageName = "${env.DOCKER_REGISTRY_URL}/${env.DOCKER_IMAGE_BASE_NAME}"
                     def fullImageName = "${dockerImageName}:${env.DOCKER_IMAGE_TAG}"
                     
-                    def dockerImage = docker.build(fullImageName, "--build-arg JDK_URL='${jdkUrl}'.")
+                    def dockerImage = docker.build(fullImageName, "--build-arg JDK_URL='${jdkUrl}' .")
                     
                     docker.withRegistry("https://index.docker.io/v1/", env.DOCKER_CREDENTIALS_ID) {
                         echo "Pushing image ${fullImageName}"
