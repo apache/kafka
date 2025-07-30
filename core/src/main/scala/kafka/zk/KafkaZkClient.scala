@@ -1738,6 +1738,7 @@ class KafkaZkClient private[zk] (
           case Some(data) =>
             MigrationZNode.decode(data, getDataResponse.stat.getVersion, getDataResponse.stat.getMtime)
           case None =>
+            info("Migration znode exists with null data, recreating initial migration state")           
             createInitialMigrationState(initialState, removeFirst = true)
         }
       case Code.NONODE =>
@@ -1753,7 +1754,11 @@ class KafkaZkClient private[zk] (
       defaultAcls(MigrationZNode.path),
       CreateMode.PERSISTENT)
     val deleteOp = DeleteOp(MigrationZNode.path, ZkVersion.MatchAnyVersion)
-    val multi = MultiRequest((if (removeFirst) Some(deleteOp) else None).toSeq ++ Seq(createOp))
+    val multi = if (removeFirst) {
+      MultiRequest(Seq(deleteOp, createOp))
+    } else {
+      MultiRequest(Seq(createOp))
+    }
     val response = retryRequestUntilConnected(multi)
     response.maybeThrow()
     initialState.withMigrationZkVersion(0)
