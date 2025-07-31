@@ -593,7 +593,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             long timeSinceLastSnapshot = time.milliseconds() - shareGroupOffset.writeTimestamp();
             if (timeSinceLastSnapshot >= config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
                 // We need to force create a snapshot here
-                log.info("Last snapshot for {} is older than allowed interval.", sharePartitionKey);
+                log.debug("Last snapshot for {} is older than allowed interval (last snapshot delta {}).", sharePartitionKey, timeSinceLastSnapshot);
                 records.add(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
                     sharePartitionKey.groupId(),
                     sharePartitionKey.topicId(),

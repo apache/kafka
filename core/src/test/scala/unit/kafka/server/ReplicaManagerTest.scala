@@ -3717,6 +3717,7 @@ class ReplicaManagerTest {
     val storageManager = mock(classOf[RemoteStorageManager])
     when(storageManager.fetchIndex(any(), any())).thenReturn(new ByteArrayInputStream("0".getBytes()))
     when(remoteLogManager.storageManager()).thenReturn(storageManager)
+    when(remoteLogManager.isPartitionReady(any())).thenReturn(true)
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(remoteLogManager), buildRemoteLogAuxState = true)
     try {
@@ -3775,7 +3776,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(delta, leaderMetadataImage)
 
       // Replicas fetch from the leader periodically, therefore we check that the metric value is increasing
-      // We expect failedBuildRemoteLogAuxStateRate to increase because there is no remoteLogSegmentMetadata
+      // We expect failedBuildRemoteLogAuxStateRate to increase because the RemoteLogManager is not ready for the tp0
       // when attempting to build log aux state
       TestUtils.waitUntilTrue(() => brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count > 0,
         "Should have buildRemoteLogAuxStateRequestRate count > 0, but got:" + brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count)

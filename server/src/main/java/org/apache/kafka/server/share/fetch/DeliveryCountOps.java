@@ -14,28 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.common;
+package org.apache.kafka.server.share.fetch;
 
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigException;
-
-import java.util.Arrays;
-import java.util.stream.Collectors;
-
-public class MetadataVersionValidator implements Validator {
-
-    @Override
-    public void ensureValid(String name, Object value) {
-        try {
-            MetadataVersion.fromVersionString(value.toString());
-        } catch (IllegalArgumentException e) {
-            throw new ConfigException(name, value.toString(), e.getMessage());
-        }
-    }
-
-    @Override
-    public String toString() {
-        return "[" + Arrays.stream(MetadataVersion.VERSIONS).map(MetadataVersion::version).collect(
-             Collectors.joining(", ")) + "]";
-    }
+/**
+ * The DeliveryCountOps is used to specify the behavior on the delivery count: increase, decrease,
+ * or do nothing.
+ */
+public enum DeliveryCountOps {
+    INCREASE, DECREASE, NO_OP
 }

@@ -1175,9 +1175,8 @@ public class ClassicGroup implements Group {
                 });
                 return Optional.of(allSubscribedTopics);
             } catch (SchemaException e) {
-                log.warn("Failed to parse Consumer Protocol " + ConsumerProtocol.PROTOCOL_TYPE + ":" +
-                    protocolName.get() + " of group " + groupId + ". " +
-                    "Consumer group coordinator is not aware of the subscribed topics.", e);
+                log.warn("Failed to parse Consumer Protocol {}:{} of group {}. Consumer group coordinator is not aware of the subscribed topics.",
+                        ConsumerProtocol.PROTOCOL_TYPE, protocolName.get(), groupId, e);
             }
         }
 

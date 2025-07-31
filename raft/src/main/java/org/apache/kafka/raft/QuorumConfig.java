@@ -57,6 +57,9 @@ public class QuorumConfig {
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of <code>{id}@{host}:{port}</code> entries. " +
+        "This is the old way of defining membership for controller quorums and should NOT be " +
+        "set if using dynamic quorums. Instead, controller.quorum.bootstrap.servers should be set," +
+        "and the voter set is determined by the --standalone or --initial-controllers flags when formatting." +
         "For example: <code>1@localhost:9092,2@localhost:9093,3@localhost:9094</code>";
     public static final List<String> DEFAULT_QUORUM_VOTERS = List.of();
 

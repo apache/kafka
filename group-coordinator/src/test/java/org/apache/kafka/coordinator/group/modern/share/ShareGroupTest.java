@@ -136,10 +136,10 @@ public class ShareGroupTest {
 
     @Test
     public void testGroupTypeFromString() {
-        assertEquals(Group.GroupType.parse("share"), Group.GroupType.SHARE);
+        assertEquals(Group.GroupType.SHARE, Group.GroupType.parse("share"));
         // Test case insensitivity.
-        assertEquals(Group.GroupType.parse("Share"), Group.GroupType.SHARE);
-        assertEquals(Group.GroupType.parse("SHare"), Group.GroupType.SHARE);
+        assertEquals(Group.GroupType.SHARE, Group.GroupType.parse("Share"));
+        assertEquals(Group.GroupType.SHARE, Group.GroupType.parse("SHare"));
     }
 
     @Test
