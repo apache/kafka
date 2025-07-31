@@ -764,8 +764,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     nodeAcknowledgementsInFlight.forEach((tip, acks) -> {
                         acks.complete(Errors.forCode(response.error().code()).exception());
                         metricsManager.recordFailedAcknowledgements(acks.size());
-                        maybeSendShareAcknowledgeCommitCallbackEvent(Map.of(tip, acks));
                     });
+                    maybeSendShareAcknowledgeCommitCallbackEvent(nodeAcknowledgementsInFlight);
                     nodeAcknowledgementsInFlight.clear();
                 }
                 return;
