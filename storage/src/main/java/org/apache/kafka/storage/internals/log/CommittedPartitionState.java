@@ -30,7 +30,7 @@ public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState lead
 
     @Override
     public Set<Integer> maximalIsr() {
-        return Collections.unmodifiableSet(isr);
+        return isr;
     }
 
     @Override
