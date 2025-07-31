@@ -25,9 +25,8 @@ import org.apache.kafka.common.metrics.stats.Value;
 import java.util.Arrays;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 
-public class AsyncConsumerMetrics extends KafkaConsumerMetrics implements AutoCloseable {
+public class AsyncConsumerMetrics implements AutoCloseable {
     private final Metrics metrics;
 
     public static final String TIME_BETWEEN_NETWORK_THREAD_POLL_SENSOR_NAME = "time-between-network-thread-poll";
@@ -52,8 +51,6 @@ public class AsyncConsumerMetrics extends KafkaConsumerMetrics implements AutoCl
     private final Sensor unsentRequestsQueueTimeSensor;
 
     public AsyncConsumerMetrics(Metrics metrics) {
-        super(metrics, CONSUMER_METRIC_GROUP_PREFIX);
-
         this.metrics = metrics;
         this.timeBetweenNetworkThreadPollSensor = metrics.sensor(TIME_BETWEEN_NETWORK_THREAD_POLL_SENSOR_NAME);
         this.timeBetweenNetworkThreadPollSensor.add(
@@ -257,6 +254,5 @@ public class AsyncConsumerMetrics extends KafkaConsumerMetrics implements AutoCl
             unsentRequestsQueueSizeSensor.name(),
             unsentRequestsQueueTimeSensor.name()
         ).forEach(metrics::removeSensor);
-        super.close();
     }
 }

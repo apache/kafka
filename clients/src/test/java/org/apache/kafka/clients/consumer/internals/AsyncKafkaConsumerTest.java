@@ -2039,7 +2039,7 @@ public class AsyncKafkaConsumerTest {
                 "client-id",
                 false);
         Metrics metrics = consumer.metricsRegistry();
-        AsyncConsumerMetrics kafkaConsumerMetrics = consumer.kafkaConsumerMetrics();
+        AsyncConsumerMetrics kafkaConsumerMetrics = consumer.asyncConsumerMetrics();
 
         ConsumerRebalanceListenerCallbackNeededEvent event = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, Collections.emptySortedSet());
         event.setEnqueuedMs(time.milliseconds());
