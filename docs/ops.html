@@ -4498,16 +4498,17 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <p>Downgrades are safe to perform by setting <code>eligible.leader.replicas.version=0</code>.</p>
 
   <h4 class="anchor-heading"><a id="eligible_leader_replicas_tool" class="anchor-link"></a><a href="#eligible_leader_replicas_tool">Tool</a></h4>
-  <p>The ELR fields can be checked through the API DescribeTopicPartitions. The admin client can fetch the ELR info by describing the topics.
-    Note that when the ELR feature is enabled:
-    <ul>
-      <li>The override of <code>min.insync.replicas</code> in broker-level will be removed.</li>
-      <li>The alter of <code>min.insync.replicas</code> config in broker-level is not allowed.</li>
-      <li>The removal of <code>min.insync.replicas</code> config in cluster-level is not allowed.</li>
-      <li>If <code>min.insync.replicas</code> is updated for a topic, the ELR field will be cleaned.</li>
-      <li>If the cluster default <code>min.insync.replicas</code> is updated, all the ELR fields will be cleaned.</li>
-    </ul>
-  </p>
+  <p>The ELR fields can be checked through the API DescribeTopicPartitions. The admin client can fetch the ELR info by describing the topics.</p>
+  <p>Note that when the ELR feature is enabled:</p>
+  <ul>
+    <li>The cluster-level <code>min.insync.replicas</code> config will be added if there is not any. The value is the same as the static config in the active controller.</li>
+    <li>The previously set <code>min.insync.replicas</code> value at the broker-level config will be removed.</li>
+    <li>The override of <code>min.insync.replicas</code> in broker-level will be removed.</li>
+    <li>The alteration of <code>min.insync.replicas</code> config in broker-level is not allowed.</li>
+    <li>The removal of <code>min.insync.replicas</code> config in cluster-level is not allowed.</li>
+    <li>If <code>min.insync.replicas</code> is updated for a topic, the ELR field will be cleaned.</li>
+    <li>If the cluster default <code>min.insync.replicas</code> is updated, all the ELR fields will be cleaned.</li>
+  </ul>
 
 </script>
 
