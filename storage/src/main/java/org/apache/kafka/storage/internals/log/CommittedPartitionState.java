@@ -18,7 +18,6 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.metadata.LeaderRecoveryState;
 
-import java.util.Collections;
 import java.util.Set;
 
 public record CommittedPartitionState(Set<Integer> isr, LeaderRecoveryState leaderRecoveryState) implements PartitionState {
