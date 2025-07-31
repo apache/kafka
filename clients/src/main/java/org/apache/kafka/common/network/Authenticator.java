@@ -163,4 +163,10 @@ public interface Authenticator extends Closeable {
     default boolean connectedClientSupportsReauthentication() {
         return false;
     }
+
+    /**
+     * This is to track if we need to restore WriteInterest after reauthentication
+     */
+    default void restoreWriteInterest() {
+    }
 }

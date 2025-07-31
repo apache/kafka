@@ -147,6 +147,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private Send authenticationFailureSend = null;
     // flag indicating if sasl tokens are sent as Kafka SaslAuthenticate request/responses
     private boolean enableKafkaSaslAuthenticateHeaders;
+    private boolean shouldRestoreWriteInterest;
 
     public SaslServerAuthenticator(Map<String, ?> configs,
                                    Map<String, AuthenticateCallbackHandler> callbackHandlers,
@@ -371,6 +372,13 @@ public class SaslServerAuthenticator implements Authenticator {
         return reauthInfo.connectedClientSupportsReauthentication;
     }
 
+    @Override
+    public void restoreWriteInterest() {
+        if (reauthInfo.reauthenticating() && !complete()) {
+            shouldRestoreWriteInterest = true;
+        }
+    }
+
     private void setSaslState(SaslState saslState) {
         setSaslState(saslState, null);
     }
@@ -384,8 +392,9 @@ public class SaslServerAuthenticator implements Authenticator {
             LOG.debug("Set SASL server state to {} during {}", saslState, reauthInfo.authenticationOrReauthenticationText());
             if (saslState == SaslState.COMPLETE) {
                 // make sure that any pending write is actually sent.
-                if (reauthInfo.reauthenticating()) {
+                if (shouldRestoreWriteInterest) {
                     transportLayer.addInterestOps(SelectionKey.OP_WRITE);
+                    shouldRestoreWriteInterest = false;
                 }
             }
             this.pendingSaslState = null;
