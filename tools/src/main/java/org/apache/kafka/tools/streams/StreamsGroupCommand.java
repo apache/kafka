@@ -893,6 +893,8 @@ public class StreamsGroupCommand {
         }
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+            offsetsUtils.checkAllTopicPartitionsValid(partitionsToReset);
+
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return offsetsUtils.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
