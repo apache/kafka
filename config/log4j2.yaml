@@ -160,3 +160,4 @@ Configuration:
         additivity: false
         AppenderRef:
           ref: AuthorizerAppender
+
