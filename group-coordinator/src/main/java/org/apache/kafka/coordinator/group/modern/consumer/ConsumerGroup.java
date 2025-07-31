@@ -386,7 +386,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // is not subscribed to it, we must remove it from the subscribed topic names.
             if (!oldSubscribedTopicRegex.equals(newSubscribedTopicRegex) && numSubscribedMembers(oldSubscribedTopicRegex) == 1) {
                 resolvedRegularExpression(oldSubscribedTopicRegex).ifPresent(resolvedRegularExpression ->
-                    resolvedRegularExpression.topics.forEach(topic -> subscribedTopicsNames.compute(topic, SubscriptionCount::decRegexCount))
+                    resolvedRegularExpression.topics().forEach(topic -> subscribedTopicsNames.compute(topic, SubscriptionCount::decRegexCount))
                 );
             }
         }
@@ -440,7 +440,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
         removedRegexes.forEach(regex ->
             resolvedRegularExpression(regex).ifPresent(resolvedRegularExpression ->
-                resolvedRegularExpression.topics.forEach(topic ->
+                resolvedRegularExpression.topics().forEach(topic ->
                     subscribedTopicsNames.compute(topic, SubscriptionCount::decRegexCount)
                 )
             )
@@ -462,7 +462,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         removeResolvedRegularExpression(regex);
         if (newResolvedRegularExpression != null) {
             resolvedRegularExpressions.put(regex, newResolvedRegularExpression);
-            newResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::incRegexCount));
+            newResolvedRegularExpression.topics().forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::incRegexCount));
         }
     }
 
@@ -474,7 +474,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public void removeResolvedRegularExpression(String regex) {
         ResolvedRegularExpression oldResolvedRegularExpression = resolvedRegularExpressions.remove(regex);
         if (oldResolvedRegularExpression != null) {
-            oldResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::decRegexCount));
+            oldResolvedRegularExpression.topics().forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::decRegexCount));
         }
     }
 
@@ -486,7 +486,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public long lastResolvedRegularExpressionRefreshTimeMs() {
         Iterator<ResolvedRegularExpression> iterator = resolvedRegularExpressions.values().iterator();
         if (iterator.hasNext()) {
-            return iterator.next().timestamp;
+            return iterator.next().timestamp();
         } else {
             return Long.MIN_VALUE;
         }
@@ -498,7 +498,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public long lastResolvedRegularExpressionVersion() {
         Iterator<ResolvedRegularExpression> iterator = resolvedRegularExpressions.values().iterator();
         if (iterator.hasNext()) {
-            return iterator.next().version;
+            return iterator.next().version();
         } else {
             return 0L;
         }
@@ -851,7 +851,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // considered as homogeneous if all the members are subscribed to the
             // same topics. Otherwise, it is considered as heterogeneous.
             for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
-                if (subscriberCount.byNameCount != numberOfMembers) {
+                if (subscriberCount.byNameCount() != numberOfMembers) {
                     return HETEROGENEOUS;
                 }
             }
@@ -864,7 +864,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 // is considered as homogeneous. If some members are subscribed to
                 // topic names too, the subscription is considered as heterogeneous.
                 for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
-                    if (subscriberCount.byRegexCount != 1 || subscriberCount.byNameCount > 0) {
+                    if (subscriberCount.byRegexCount() != 1 || subscriberCount.byNameCount() > 0) {
                         return HETEROGENEOUS;
                     }
                 }

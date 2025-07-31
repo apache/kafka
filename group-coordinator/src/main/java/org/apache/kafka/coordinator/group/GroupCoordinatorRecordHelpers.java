@@ -327,7 +327,7 @@ public class GroupCoordinatorRecordHelpers {
         String regex,
         ResolvedRegularExpression resolvedRegularExpression
     ) {
-        List<String> topics = new ArrayList<>(resolvedRegularExpression.topics);
+        List<String> topics = new ArrayList<>(resolvedRegularExpression.topics());
         Collections.sort(topics);
 
         return CoordinatorRecord.record(
@@ -337,8 +337,8 @@ public class GroupCoordinatorRecordHelpers {
             new ApiMessageAndVersion(
                 new ConsumerGroupRegularExpressionValue()
                     .setTopics(topics)
-                    .setVersion(resolvedRegularExpression.version)
-                    .setTimestamp(resolvedRegularExpression.timestamp),
+                    .setVersion(resolvedRegularExpression.version())
+                    .setTimestamp(resolvedRegularExpression.timestamp()),
                 (short) 0
             )
         );
