@@ -64,6 +64,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.EnumSet;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1469,7 +1470,24 @@ public final class Utils {
      * @return a map including all elements in properties
      */
     public static Map<String, Object> propsToMap(Properties properties) {
-        return castToStringObjectMap(properties);
+        // This try catch block is to handle the case when the Properties object has non-String keys
+        // when calling the propertyNames() method. This is a workaround for the lack of a method that
+        // returns all properties including defaults and does not attempt to convert all keys to Strings.
+        Enumeration<?> enumeration;
+        try {
+            enumeration = properties.propertyNames();
+        } catch (ClassCastException e) {
+            throw new ConfigException("One or more keys is not a string.");
+        }
+        Map<String, Object> map = new HashMap<>();
+        while (enumeration.hasMoreElements()) {
+            String key = (String) enumeration.nextElement();
+            // properties.get(key) returns null for defaults, but properties.getProperty(key) returns null for
+            // non-string values. A combination of the two methods is used to cover all cases
+            Object value = (properties.get(key) != null) ? properties.get(key) : properties.getProperty(key);
+            map.put(key, value);
+        }
+        return map;
     }
 
     /**
@@ -1479,6 +1497,9 @@ public final class Utils {
      * @throws ConfigException if any key is not a String
      */
     public static Map<String, Object> castToStringObjectMap(Map<?, ?> inputMap) {
+        if (inputMap instanceof Properties) {
+            return propsToMap((Properties) inputMap);
+        }
         Map<String, Object> map = new HashMap<>(inputMap.size());
         for (Map.Entry<?, ?> entry : inputMap.entrySet()) {
             if (entry.getKey() instanceof String) {

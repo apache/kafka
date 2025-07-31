@@ -116,13 +116,13 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
                 ));
         } else {
             response.data().responses().forEach(topic -> topic.partitions().forEach(partition -> {
-                if (partition.errorCode() != Errors.NONE.code()) {
-                    final Errors partitionError = Errors.forCode(partition.errorCode());
-                    final String partitionErrorMessage = partition.errorMessage();
-                    log.debug("AlterShareGroupOffsets request for group id {} and topic-partition {}-{} failed and returned error {}." + partitionErrorMessage,
-                        groupId.idValue, topic.topicName(), partition.partitionIndex(), partitionError);
+                final Errors partitionError = Errors.forCode(partition.errorCode());
+                if (partitionError != Errors.NONE) {
+                    String errorMessageToLog = partition.errorMessage() == null ? "" : partition.errorMessage();
+                    log.debug("AlterShareGroupOffsets request for group id {} and topic-partition {}-{} failed and returned error {}. {}",
+                        groupId.idValue, topic.topicName(), partition.partitionIndex(), partitionError.name(), errorMessageToLog);
                 }
-                partitionResults.put(new TopicPartition(topic.topicName(), partition.partitionIndex()), Errors.forCode(partition.errorCode()).exception(partition.errorMessage()));
+                partitionResults.put(new TopicPartition(topic.topicName(), partition.partitionIndex()), partitionError.exception(partition.errorMessage()));
             }));
         }
 
@@ -142,16 +142,18 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
         Set<CoordinatorKey> groupsToUnmap,
         Set<CoordinatorKey> groupsToRetry
     ) {
+        String errorMessageToLog = errorMessage == null ? "" : errorMessage;
         switch (error) {
             case COORDINATOR_LOAD_IN_PROGRESS:
             case REBALANCE_IN_PROGRESS:
-                log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will retry." + errorMessage, groupId.idValue, error);
+                log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will retry. {}",
+                        groupId.idValue, error, errorMessageToLog);
                 groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will rediscover the coordinator and retry." + errorMessage,
-                        groupId.idValue, error);
+                log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will rediscover the coordinator and retry. {}",
+                        groupId.idValue, error, errorMessageToLog);
                 groupsToUnmap.add(groupId);
                 break;
             case GROUP_ID_NOT_FOUND:
@@ -160,11 +162,13 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
             case UNKNOWN_SERVER_ERROR:
             case KAFKA_STORAGE_ERROR:
             case GROUP_AUTHORIZATION_FAILED:
-                log.debug("AlterShareGroupOffsets request for group id {} failed due to error {}." + errorMessage, groupId.idValue, error);
+                log.debug("AlterShareGroupOffsets request for group id {} failed due to error {}. {}",
+                        groupId.idValue, error, errorMessageToLog);
                 partitionResults.put(topicPartition, error.exception(errorMessage));
                 break;
             default:
-                log.error("AlterShareGroupOffsets request for group id {} failed due to unexpected error {}." + errorMessage, groupId.idValue, error);
+                log.error("AlterShareGroupOffsets request for group id {} failed due to unexpected error {}. {}",
+                        groupId.idValue, error, errorMessageToLog);
                 partitionResults.put(topicPartition, error.exception(errorMessage));
         }
     }

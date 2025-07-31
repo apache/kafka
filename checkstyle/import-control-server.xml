@@ -94,6 +94,7 @@
     <allow pkg="org.apache.logging.log4j.core.config" />
     <subpackage name="metrics">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+      <allow class="org.apache.kafka.controller.QuorumFeatures" />
       <allow pkg="org.apache.kafka.server.telemetry" />
     </subpackage>
     <subpackage name="config">
