@@ -325,12 +325,7 @@ public class WorkerConfig extends AbstractConfig {
         if (!removedProperties.isEmpty()) {
             log.warn(
                     "The worker has been configured with one or more internal converter properties ({}). "
-                            + "Support for these properties was deprecated in version 2.0 and removed in version 3.0, "
-                            + "and specifying them will have no effect. "
-                            + "Instead, an instance of the JsonConverter with schemas.enable "
-                            + "set to false will be used. For more information, please visit "
-                            + "https://kafka.apache.org/documentation/#upgrade and consult the upgrade notes"
-                            + "for the 3.0 release.",
+                     + "These properties have been removed since version 3.0 and an instance of the JsonConverter with schemas.enable set to false will be used instead.",
                     removedProperties);
         }
     }

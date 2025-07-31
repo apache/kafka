@@ -14,20 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.consumer.internals;
 
-package org.apache.kafka.server.common;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.SerializationException;
 
-import org.junit.jupiter.api.Test;
+public class ShareFetchException extends SerializationException {
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+    private final ShareFetch<?, ?> shareFetch;
 
-public class MetadataVersionValidatorTest {
+    private final KafkaException cause;
 
-    @Test
-    public void testMetadataVersionValidator() {
-        String str = new MetadataVersionValidator().toString();
-        String[] apiVersions = str.substring(1).split(",");
-        assertEquals(MetadataVersion.VERSIONS.length, apiVersions.length);
+    public ShareFetchException(ShareFetch<?, ?> shareFetch, KafkaException cause) {
+        this.shareFetch = shareFetch;
+        this.cause = cause;
     }
 
+    public ShareFetch<?, ?> shareFetch() {
+        return shareFetch;
+    }
+
+    public KafkaException cause() {
+        return cause;
+    }
 }

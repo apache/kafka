@@ -76,7 +76,7 @@ public class ShareConsumerRackAwareTest {
         ) {
             // Create a new topic with 1 partition on broker 0.
             admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0)))));
-            clusterInstance.waitForTopic(topic, 1);
+            clusterInstance.waitTopicCreation(topic, 1);
 
             producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes()));
             producer.flush();
@@ -105,7 +105,7 @@ public class ShareConsumerRackAwareTest {
                     NewPartitions.increaseTo(3, List.of(List.of(1), List.of(1)))
                 )
             );
-            clusterInstance.waitForTopic(topic, 3);
+            clusterInstance.waitTopicCreation(topic, 3);
 
             TestUtils.waitForCondition(() -> {
                 consumer0.poll(Duration.ofMillis(1000));

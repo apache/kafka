@@ -39,8 +39,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -2016,7 +2014,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * The latest known metadata image.
      */
-    private volatile MetadataImage metadataImage = MetadataImage.EMPTY;
+    private volatile CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
      * Constructor.
@@ -2481,18 +2479,18 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param delta     The metadata delta.
      */
     public void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+        CoordinatorMetadataImage newImage,
+        CoordinatorMetadataDelta delta
     ) {
         throwIfNotRunning();
-        log.debug("Scheduling applying of a new metadata image with offset {}.", newImage.offset());
+        log.debug("Scheduling applying of a new metadata image with version {}.", newImage.version());
 
         // Update global image.
         metadataImage = newImage;
 
         // Push an event for each coordinator.
         coordinators.keySet().forEach(tp -> {
-            scheduleInternalOperation("UpdateImage(tp=" + tp + ", offset=" + newImage.offset() + ")", tp, () -> {
+            scheduleInternalOperation("UpdateImage(tp=" + tp + ", version=" + newImage.version() + ")", tp, () -> {
                 CoordinatorContext context = coordinators.get(tp);
                 if (context != null) {
                     context.lock.lock();
@@ -2500,18 +2498,18 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         if (context.state == CoordinatorState.ACTIVE) {
                             // The new image can be applied to the coordinator only if the coordinator
                             // exists and is in the active state.
-                            log.debug("Applying new metadata image with offset {} to {}.", newImage.offset(), tp);
+                            log.debug("Applying new metadata image with version {} to {}.", newImage.version(), tp);
                             context.coordinator.onNewMetadataImage(newImage, delta);
                         } else {
-                            log.debug("Ignored new metadata image with offset {} for {} because the coordinator is not active.",
-                                newImage.offset(), tp);
+                            log.debug("Ignored new metadata image with version {} for {} because the coordinator is not active.",
+                                newImage.version(), tp);
                         }
                     } finally {
                         context.lock.unlock();
                     }
                 } else {
-                    log.debug("Ignored new metadata image with offset {} for {} because the coordinator does not exist.",
-                        newImage.offset(), tp);
+                    log.debug("Ignored new metadata image with version {} for {} because the coordinator does not exist.",
+                        newImage.version(), tp);
                 }
             });
         });

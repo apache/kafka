@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -118,16 +119,12 @@ public class PartitionChangeBuilderTest {
     private static final Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
     private static MetadataVersion metadataVersionForPartitionChangeRecordVersion(short version) {
-        switch (version) {
-            case (short) 0:
-                return MetadataVersion.IBP_3_7_IV0;
-            case (short) 1:
-                return MetadataVersion.IBP_3_7_IV2;
-            case (short) 2:
-                return MetadataVersion.IBP_4_0_IV1;
-            default:
-                throw new RuntimeException("Unknown PartitionChangeRecord version " + version);
-        }
+        return switch (version) {
+            case (short) 0 -> MetadataVersion.IBP_3_7_IV0;
+            case (short) 1 -> MetadataVersion.IBP_3_7_IV2;
+            case (short) 2 -> MetadataVersion.IBP_4_0_IV1;
+            default -> throw new RuntimeException("Unknown PartitionChangeRecord version " + version);
+        };
     }
 
     private static PartitionChangeBuilder createFooBuilder(MetadataVersion metadataVersion) {
@@ -1224,6 +1221,41 @@ public class PartitionChangeBuilderTest {
         PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> r != 3,
                 metadataVersionForPartitionChangeRecordVersion(version), 3)
             .setElection(Election.PREFERRED)
+            .setEligibleLeaderReplicasEnabled(true)
+            .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
+            .setUseLastKnownLeaderInBalancedRecovery(true);
+
+        builder.setTargetIsr(List.of());
+
+        // No change to the partition.
+        assertEquals(Optional.empty(), builder.build());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Election.class)
+    public void testEligibleLeaderReplicas_NotEligibleLastKnownLeader(Election type) {
+        short version = 2;
+        PartitionRegistration partition = new PartitionRegistration.Builder()
+                .setReplicas(new int[] {1, 2, 3, 4})
+                .setDirectories(new Uuid[]{
+                        Uuid.fromString("zANDdMukTEqefOvHpmniMg"),
+                        Uuid.fromString("Ui2Eq8rbRiuW7m7uiPTRyg"),
+                        Uuid.fromString("MhgJOZrrTsKNcGM0XKK4aA"),
+                        Uuid.fromString("Y25PaCAmRfyGIKxAThhBAw")
+                })
+                .setIsr(new int[] {})
+                .setElr(new int[] {})
+                .setLastKnownElr(new int[] {1})
+                .setLeader(-1)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+                .setLeaderEpoch(100)
+                .setPartitionEpoch(200)
+                .build();
+        Uuid topicId = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
+
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition, topicId, 0, r -> false,
+                metadataVersionForPartitionChangeRecordVersion(version), 3)
+            .setElection(type)
             .setEligibleLeaderReplicasEnabled(true)
             .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
             .setUseLastKnownLeaderInBalancedRecovery(true);

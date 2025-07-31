@@ -106,8 +106,6 @@ public class StandardAuthorizerData {
      */
     private AclCache aclCache;
 
-
-
     private static Logger createLogger(int nodeId) {
         return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(StandardAuthorizerData.class);
     }
@@ -172,7 +170,7 @@ public class StandardAuthorizerData {
     }
 
     StandardAuthorizerData copyWithNewAcls(AclCache aclCache) {
-        StandardAuthorizerData newData =  new StandardAuthorizerData(
+        StandardAuthorizerData newData = new StandardAuthorizerData(
             log,
             aclMutator,
             loadingComplete,
