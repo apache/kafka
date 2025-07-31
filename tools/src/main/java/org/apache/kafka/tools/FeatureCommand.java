@@ -284,7 +284,7 @@ public class FeatureCommand {
 
         if (releaseVersion != null) {
             try {
-                metadataVersion = MetadataVersion.fromVersionString(releaseVersion, false);
+                metadataVersion = MetadataVersion.fromVersionString(releaseVersion, true);
                 updates.put(metadataVersion.featureName(), new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             } catch (Throwable e) {
                 throw new TerseException(e.getMessage());
@@ -305,7 +305,7 @@ public class FeatureCommand {
             if (metadata != null) {
                 System.out.println(" `metadata` flag is deprecated and may be removed in a future release.");
                 try {
-                    metadataVersion = MetadataVersion.fromVersionString(metadata, false);
+                    metadataVersion = MetadataVersion.fromVersionString(metadata, true);
                 } catch (Throwable e) {
                     throw new TerseException(e.getMessage());
                 }
