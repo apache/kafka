@@ -116,6 +116,7 @@ public class DescribeStreamsGroupTest {
             getStreamsGroupService(args);
         } finally {
             assertTrue(exited.get());
+            Exit.resetExitProcedure();
         }
     }
 
