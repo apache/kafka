@@ -307,6 +307,20 @@ Found problem:
   }
 
   @Test
+  def testFormatWithUnsupportedReleaseVersion(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val failure = assertThrows(classOf[TerseFailure], () =>
+      runFormatCommand(stream, properties, Seq("--release-version", "3.3-IV1"))).getMessage
+    assertTrue(failure.contains("Unknown metadata.version 3.3-IV1"))
+    assertTrue(failure.contains(MetadataVersion.MINIMUM_VERSION.version))
+    assertTrue(failure.contains(MetadataVersion.latestProduction().version))
+  }
+
+  @Test
   def testFormatWithReleaseVersionAsFeature(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
@@ -375,13 +389,68 @@ Found problem:
   def testFormatWithStandaloneFlagOnBrokerFails(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("process.roles", "broker")
+    properties.setProperty("node.id", "0")
+    properties.setProperty("controller.listener.names", "CONTROLLER")
+    properties.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
     assertEquals("You can only use --standalone on a controller.",
       assertThrows(classOf[TerseFailure],
         () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
+  }
+
+  @Test
+  def testFormatWithStandaloneFailsWithStaticVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
+    assertEquals("You cannot specify controller.quorum.voters and " +
+      "format the node with --initial-controllers or --standalone. If you " +
+      "want to use dynamic quorum, please remove controller.quorum.voters and " +
+      "specify controller.quorum.bootstrap.servers instead.",
+      assertThrows(classOf[TerseFailure],
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
+    )
+  }
+
+  @Test
+  def testFormatWithInitialControllersFailsWithStaticVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String](
+      "--release-version", "3.9-IV0",
+      "--initial-controllers",
+      "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ,"
+    )
+    assertEquals("You cannot specify controller.quorum.voters and " +
+      "format the node with --initial-controllers or --standalone. If you " +
+      "want to use dynamic quorum, please remove controller.quorum.voters and " +
+      "specify controller.quorum.bootstrap.servers instead.",
+      assertThrows(classOf[TerseFailure],
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
+    )
+  }
+
+  @Test
+  def testFormatWithNoInitialControllersPassesWithVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--no-initial-controllers")
+    assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
   }
 
   @ParameterizedTest

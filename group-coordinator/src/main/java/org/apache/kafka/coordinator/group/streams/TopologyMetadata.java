@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
-import org.apache.kafka.image.MetadataImage;
 
 import java.util.Collections;
 import java.util.List;
@@ -33,11 +33,11 @@ import java.util.SortedMap;
  * @param metadataImage  The metadata image
  * @param subtopologyMap The configured subtopologies
  */
-public record TopologyMetadata(MetadataImage metadataImage, SortedMap<String, ConfiguredSubtopology> subtopologyMap) implements TopologyDescriber {
+public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap<String, ConfiguredSubtopology> subtopologyMap) implements TopologyDescriber {
 
     public TopologyMetadata {
-        metadataImage = Objects.requireNonNull(metadataImage);
-        subtopologyMap = Objects.requireNonNull(Collections.unmodifiableSortedMap(subtopologyMap));
+        Objects.requireNonNull(metadataImage);
+        subtopologyMap = Collections.unmodifiableSortedMap(Objects.requireNonNull(subtopologyMap));
     }
 
     /**

@@ -1683,6 +1683,11 @@ public class StreamsConfigTest {
             "Please set group.protocol=classic or remove group.instance.id from the configuration."));
     }
 
+    public void shouldSetDefaultDeadLetterQueue() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertNull(config.getString(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
+    }
+
     static class MisconfiguredSerde implements Serde<Object> {
         @Override
         public void configure(final Map<String, ?>  configs, final boolean isKey) {

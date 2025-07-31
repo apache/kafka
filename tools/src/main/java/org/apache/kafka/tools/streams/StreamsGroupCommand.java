@@ -61,7 +61,6 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -457,7 +456,7 @@ public class StreamsGroupCommand {
                 boolean allPresent = topicPartitions.stream().allMatch(allTopicPartitions::containsKey);
                 if (!allPresent) {
                     printError("One or more topics are not part of the group '" + groupId + "'.", Optional.empty());
-                    return Collections.emptyList();
+                    return List.of();
                 }
                 return topicPartitions;
             } catch (InterruptedException | ExecutionException e) {
@@ -508,7 +507,7 @@ public class StreamsGroupCommand {
                                 break;
                             default:
                                 printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
-                                result.put(groupId, Collections.emptyMap());
+                                result.put(groupId, Map.of());
                         }
                     } catch (InterruptedException ie) {
                         throw new RuntimeException(ie);
@@ -889,7 +888,7 @@ public class StreamsGroupCommand {
                 if (!opts.options.has(opts.resetFromFileOpt))
                     CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
 
-                return Collections.emptyList();
+                return List.of();
             }
         }
 

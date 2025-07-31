@@ -48,36 +48,25 @@ public class CoordinatorOperationExceptionHelper {
     ) {
         ApiError apiError = ApiError.fromThrowable(exception);
 
-        switch (apiError.error()) {
-            case UNKNOWN_SERVER_ERROR:
+        return switch (apiError.error()) {
+            case UNKNOWN_SERVER_ERROR -> {
                 log.error("Operation {} with {} hit an unexpected exception: {}.",
-                    operationName, operationInput, exception.getMessage(), exception);
-                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
-
-            case NETWORK_EXCEPTION:
+                        operationName, operationInput, exception.getMessage(), exception);
+                yield handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+            }
+            case NETWORK_EXCEPTION ->
                 // When committing offsets transactionally, we now verify the transaction with the
                 // transaction coordinator. Verification can fail with `NETWORK_EXCEPTION`, a
                 // retriable error which older clients may not expect and retry correctly. We
                 // translate the error to `COORDINATOR_LOAD_IN_PROGRESS` because it causes clients
                 // to retry the request without an unnecessary coordinator lookup.
-                return handler.apply(Errors.COORDINATOR_LOAD_IN_PROGRESS, null);
-
-            case UNKNOWN_TOPIC_OR_PARTITION:
-            case NOT_ENOUGH_REPLICAS:
-            case REQUEST_TIMED_OUT:
-                return handler.apply(Errors.COORDINATOR_NOT_AVAILABLE, null);
-
-            case NOT_LEADER_OR_FOLLOWER:
-            case KAFKA_STORAGE_ERROR:
-                return handler.apply(Errors.NOT_COORDINATOR, null);
-
-            case MESSAGE_TOO_LARGE:
-            case RECORD_LIST_TOO_LARGE:
-            case INVALID_FETCH_SIZE:
-                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
-
-            default:
-                return handler.apply(apiError.error(), apiError.message());
-        }
+                handler.apply(Errors.COORDINATOR_LOAD_IN_PROGRESS, null);
+            case UNKNOWN_TOPIC_OR_PARTITION, NOT_ENOUGH_REPLICAS, REQUEST_TIMED_OUT ->
+                handler.apply(Errors.COORDINATOR_NOT_AVAILABLE, null);
+            case NOT_LEADER_OR_FOLLOWER, KAFKA_STORAGE_ERROR -> handler.apply(Errors.NOT_COORDINATOR, null);
+            case MESSAGE_TOO_LARGE, RECORD_LIST_TOO_LARGE, INVALID_FETCH_SIZE ->
+                handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+            default -> handler.apply(apiError.error(), apiError.message());
+        };
     }
 }
