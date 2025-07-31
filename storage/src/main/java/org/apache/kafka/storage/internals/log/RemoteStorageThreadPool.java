@@ -17,7 +17,6 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.utils.ThreadUtils;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
 import org.slf4j.Logger;
