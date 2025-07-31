@@ -36,7 +36,6 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
     private final KafkaMetricsGroup internalsLogMetricsGroup = new KafkaMetricsGroup(this.getClass());
     private final KafkaMetricsGroup logRemoteMetricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteStorageThreadPool");
 
-    @SuppressWarnings("deprecation")
     public RemoteStorageThreadPool(String threadNamePattern,
                                    int numThreads,
                                    int maxPendingTasks) {
@@ -52,9 +51,9 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
                 () -> getQueue().size());
         internalsLogMetricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
                 () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
-        logRemoteMetricsGroup.newGauge(RemoteStorageMetrics.BRIDGE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
+        logRemoteMetricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
-        logRemoteMetricsGroup.newGauge(RemoteStorageMetrics.BRIDGE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
+        logRemoteMetricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
                 () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
     }
 

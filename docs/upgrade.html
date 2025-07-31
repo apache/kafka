@@ -47,16 +47,6 @@
         <code>kafka.server:type=AssignmentsManager.QueuedReplicaToDirAssignments</code>,
         <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderTaskQueueSize</code>, and
         <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderAvgIdlePercent</code>.
-
-        Additionally, two new deprecated fields have been added in
-        <code>org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics</code>:
-        <code>BRIDGE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC</code> and
-        <code>BRIDGE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC</code>. These use the metric group
-        <code>kafka.log.remote</code> and will also be removed in Kafka 5.0.
-
-        After Kafka 5.0, the <code>REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC</code> and
-        <code>REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC</code> metrics will use the
-        <code>kafka.log.remote</code> group instead of the legacy <code>org.apache.kafka.storage.internals.log</code> group.
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/6oqMEw">KIP-1100</a>.
     </li>
 </ul>
