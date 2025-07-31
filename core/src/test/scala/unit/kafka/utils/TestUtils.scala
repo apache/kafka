@@ -56,7 +56,7 @@ import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfi
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
@@ -973,7 +973,9 @@ object TestUtils extends Logging {
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
                    remoteStorageSystemEnable = remoteStorageSystemEnable,
-                   initialTaskDelayMs = initialTaskDelayMs)
+                   initialTaskDelayMs = initialTaskDelayMs,
+                   cleanerFactory = (cleanerConfig, files, map, logDirFailureChannel, time) => Mockito.spy(new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time))
+    )
 
     if (logFn.isDefined) {
       val spyLogManager = Mockito.spy(logManager)

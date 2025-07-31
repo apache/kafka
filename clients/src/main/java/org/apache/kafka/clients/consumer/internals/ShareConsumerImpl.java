@@ -561,6 +561,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * {@inheritDoc}
      */
     @Override
+    @SuppressWarnings("unchecked")
     public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
         Timer timer = time.timer(timeout);
 
@@ -601,6 +602,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             } while (timer.notExpired());
 
             return ConsumerRecords.empty();
+        } catch (ShareFetchException e) {
+            currentFetch = (ShareFetch<K, V>) e.shareFetch();
+            throw e.cause();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
@@ -687,6 +691,19 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         try {
             ensureExplicitAcknowledgement();
             currentFetch.acknowledge(record, type);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public void acknowledge(final String topic, final int partition, final long offset, final AcknowledgeType type) {
+        acquireAndEnsureOpen();
+        try {
+            ensureExplicitAcknowledgement();
+            currentFetch.acknowledge(topic, partition, offset, type);
         } finally {
             release();
         }

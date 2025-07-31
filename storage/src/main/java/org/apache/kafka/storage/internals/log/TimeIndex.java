@@ -68,14 +68,14 @@ public class TimeIndex extends AbstractIndex {
         this.lastEntry = lastEntryFromIndexFile();
 
         log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}",
-            file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastEntry.offset, mmap().position());
+            file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastEntry.offset(), mmap().position());
     }
 
     @Override
     public void sanityCheck() {
         TimestampOffset entry = lastEntry();
-        long lastTimestamp = entry.timestamp;
-        long lastOffset = entry.offset;
+        long lastTimestamp = entry.timestamp();
+        long lastOffset = entry.offset();
         inRemapReadLock(() -> {
             if (entries() != 0 && lastTimestamp < timestamp(mmap(), 0))
                 throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
@@ -190,17 +190,17 @@ public class TimeIndex extends AbstractIndex {
             // because that could happen in the following two scenarios:
             // 1. A log segment is closed.
             // 2. LogSegment.onBecomeInactiveSegment() is called when an active log segment is rolled.
-            if (entries() != 0 && offset < lastEntry.offset)
+            if (entries() != 0 && offset < lastEntry.offset())
                 throw new InvalidOffsetException("Attempt to append an offset (" + offset + ") to slot " + entries()
-                    + " no larger than the last offset appended (" + lastEntry.offset + ") to " + file().getAbsolutePath());
-            if (entries() != 0 && timestamp < lastEntry.timestamp)
+                    + " no larger than the last offset appended (" + lastEntry.offset() + ") to " + file().getAbsolutePath());
+            if (entries() != 0 && timestamp < lastEntry.timestamp())
                 throw new IllegalStateException("Attempt to append a timestamp (" + timestamp + ") to slot " + entries()
-                    + " no larger than the last timestamp appended (" + lastEntry.timestamp + ") to " + file().getAbsolutePath());
+                    + " no larger than the last timestamp appended (" + lastEntry.timestamp() + ") to " + file().getAbsolutePath());
 
             // We only append to the time index when the timestamp is greater than the last inserted timestamp.
             // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
             // index will be empty.
-            if (timestamp > lastEntry.timestamp) {
+            if (timestamp > lastEntry.timestamp()) {
                 log.trace("Adding index entry {} => {} to {}.", timestamp, offset, file().getAbsolutePath());
                 MappedByteBuffer mmap = mmap();
                 mmap.putLong(timestamp);
@@ -269,7 +269,7 @@ public class TimeIndex extends AbstractIndex {
             super.truncateToEntries0(entries);
             this.lastEntry = lastEntryFromIndexFile();
             log.debug("Truncated index {} to {} entries; position is now {} and last entry is now {}",
-                file().getAbsolutePath(), entries, mmap().position(), lastEntry.offset);
+                file().getAbsolutePath(), entries, mmap().position(), lastEntry.offset());
         });
     }
 }

@@ -20,7 +20,6 @@ package org.apache.kafka.tools.reassign;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
@@ -34,7 +33,7 @@ public final class VerifyAssignmentResult {
     public final boolean movesOngoing;
 
     public VerifyAssignmentResult(Map<TopicPartition, PartitionReassignmentState> partStates) {
-        this(partStates, false, Collections.emptyMap(), false);
+        this(partStates, false, Map.of(), false);
     }
 
     /**

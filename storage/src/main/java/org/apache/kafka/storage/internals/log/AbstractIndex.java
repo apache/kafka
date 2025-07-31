@@ -503,12 +503,10 @@ public abstract class AbstractIndex implements Closeable {
 
         // check if the target offset is smaller than the least offset
         if (compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0) {
-            switch (searchResultType) {
-                case LARGEST_LOWER_BOUND:
-                    return -1;
-                case SMALLEST_UPPER_BOUND:
-                    return 0;
-            }
+            return switch (searchResultType) {
+                case LARGEST_LOWER_BOUND -> -1;
+                case SMALLEST_UPPER_BOUND -> 0;
+            };
         }
 
         return binarySearch(idx, target, searchEntity, searchResultType, 0, firstHotEntry);
@@ -544,18 +542,10 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     private int compareIndexEntry(IndexEntry indexEntry, long target, IndexSearchType searchEntity) {
-        int result;
-        switch (searchEntity) {
-            case KEY:
-                result = Long.compare(indexEntry.indexKey(), target);
-                break;
-            case VALUE:
-                result = Long.compare(indexEntry.indexValue(), target);
-                break;
-            default:
-                throw new IllegalStateException("Unexpected IndexSearchType: " + searchEntity);
-        }
-        return result;
+        return switch (searchEntity) {
+            case KEY -> Long.compare(indexEntry.indexKey(), target);
+            case VALUE -> Long.compare(indexEntry.indexValue(), target);
+        };
     }
 
     private OptionalInt toRelative(long offset) {

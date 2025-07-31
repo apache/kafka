@@ -379,6 +379,9 @@ public class FormatterTest {
                 setFeatureLevel(MetadataVersion.latestProduction().featureLevel()),
                     (short) 0));
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(EligibleLeaderReplicasVersion.FEATURE_NAME).
+                setFeatureLevel(EligibleLeaderReplicasVersion.ELRV_1.featureLevel()), (short) 0));
+            expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(GroupVersion.FEATURE_NAME).
                 setFeatureLevel(GroupVersion.GV_1.featureLevel()), (short) 0));
             if (version > 0) {
