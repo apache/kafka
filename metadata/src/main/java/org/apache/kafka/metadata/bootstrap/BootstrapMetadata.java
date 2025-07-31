@@ -177,7 +177,7 @@ public class BootstrapMetadata {
 
     @Override
     public String toString() {
-        return "BootstrapMetadata(records=" + records.toString() +
+        return "BootstrapMetadata(records=" + records +
             ", metadataVersionLevel=" + metadataVersionLevel +
             ", source=" + source +
             ")";
