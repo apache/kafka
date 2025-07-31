@@ -18,4 +18,18 @@ package org.apache.kafka.storage.internals.log;
 
 import java.util.List;
 
-public record SimpleAssignmentState(List<Integer> replicas) implements AssignmentState { }
+public record SimpleAssignmentState(List<Integer> replicas) implements AssignmentState {
+    public SimpleAssignmentState(List<Integer> replicas) {
+        this.replicas = List.copyOf(replicas);
+    }
+
+    @Override
+    public int replicationFactor() {
+        return replicas().size();
+    }
+
+    @Override
+    public boolean isAddingReplica(int brokerId) {
+        return false;
+    }
+}
