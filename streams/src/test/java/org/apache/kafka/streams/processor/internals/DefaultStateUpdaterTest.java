@@ -1710,8 +1710,8 @@ class DefaultStateUpdaterTest {
     }
 
     private static List<MetricName> getMetricNames(final String threadId) {
-        final Map<String, String> tagMap = Map.of("thread-id", threadId);
-        return List.of(
+        final Map<String, String> tagMap = mkMap(mkEntry("thread-id", threadId));
+        return Arrays.asList(
             new MetricName("active-restoring-tasks", "stream-state-updater-metrics", "", tagMap),
             new MetricName("standby-updating-tasks", "stream-state-updater-metrics", "", tagMap),
             new MetricName("active-paused-tasks", "stream-state-updater-metrics", "", tagMap),
