@@ -74,7 +74,7 @@ runs:
       shell: bash
       id: run-tests
       env:
-        TIMEOUT_MINUTES: ${{ inputs.timeout-minutes}}
+        TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
         TEST_CATALOG: ${{ inputs.test-catalog-path }}
         TEST_TASK: ${{ inputs.test-task }}
         TEST_RETRIES: ${{ inputs.test-retries }}
@@ -86,7 +86,7 @@ runs:
       run: |
         set +e
         ./.github/scripts/thread-dump.sh &
-        timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
+        timeout ${TIMEOUT_MINUTES}m ./gradlew $TEST_TASK --build-cache --continue --no-scan \
         -PtestLoggingEvents=started,passed,skipped,failed \
         -PmaxParallelForks=4 \
         -PmaxTestRetries=$TEST_RETRIES -PmaxTestRetryFailures=10 \
@@ -97,7 +97,6 @@ runs:
         -Pkafka.cluster.test.repeat=$TEST_REPEAT \
         -Pkafka.test.verbose=$TEST_VERBOSE \
         -PcommitId=xxxxxxxxxxxxxxxx \
-        $TEST_TASK
         exitcode="$?"
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
     - name: Archive build scan (${{ inputs.test-task }})
