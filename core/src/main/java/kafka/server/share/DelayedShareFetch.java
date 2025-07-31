@@ -368,6 +368,13 @@ public class DelayedShareFetch extends DelayedOperation {
                         "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     sharePartitions.keySet());
             }
+            for (TopicIdPartition topicIdPartition : sharePartitions.keySet()) {
+                Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
+                if (!partition.isLeader()) {
+                    log.error("Broker is no longer the leader of topicIdPartition {}", topicIdPartition);
+                    throw new NotLeaderOrFollowerException("Broker is no longer the leader of topicIdPartition: " +  topicIdPartition);
+                }
+            }
             return false;
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
@@ -765,7 +772,10 @@ public class DelayedShareFetch extends DelayedOperation {
 
         for (TopicIdPartition topicIdPartition : pendingRemoteFetchesOpt.get().fetchOffsetMetadataMap().keySet()) {
             try {
-                replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
+                Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
+                if (!partition.isLeader()) {
+                    throw new NotLeaderOrFollowerException("Broker is no longer the leader of topicIdPartition: " + topicIdPartition);
+                }
             } catch (KafkaStorageException e) { // Case a
                 log.debug("TopicPartition {} is in an offline log directory, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
@@ -773,7 +783,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 log.debug("Broker no longer knows of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
             } catch (NotLeaderOrFollowerException e) { // Case c
-                log.debug("Broker is no longer the leader or follower of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
+                log.debug("Broker is no longer the leader or follower of topicIdPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
             }
             if (canComplete)
