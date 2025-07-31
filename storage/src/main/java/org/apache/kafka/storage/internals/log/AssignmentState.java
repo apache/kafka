@@ -22,11 +22,7 @@ public interface AssignmentState {
 
     List<Integer> replicas();
 
-    default int replicationFactor() {
-        return replicas().size();
-    }
+    int replicationFactor();
 
-    default boolean isAddingReplica(int brokerId) {
-        return false;
-    }
+    boolean isAddingReplica(int brokerId);
 }
