@@ -61,7 +61,6 @@ import java.io.PrintStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -421,7 +420,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                 printJson(new OffsetResetStrategySet(offsetResetStrategy.type().toString()));
             }
 
-            consumer.subscribe(Collections.singleton(this.topic));
+            consumer.subscribe(Set.of(this.topic));
             consumer.setAcknowledgementCommitCallback(this);
             while (!(maxMessages >= 0 && totalAcknowledged >= maxMessages)) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(5000));

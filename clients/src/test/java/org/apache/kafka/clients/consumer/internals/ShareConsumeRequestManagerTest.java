@@ -117,6 +117,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -2425,6 +2426,36 @@ public class ShareConsumeRequestManagerTest {
 
         fetchedRecords = partitionRecords.get(tp0);
         assertEquals(1, fetchedRecords.size());
+    }
+
+    @Test
+    public void testCloseInternalClosesShareFetchMetricsManager() throws Exception {
+        buildRequestManager();
+
+        // Define all sensor names that should be created and removed
+        String[] sensorNames = {
+            "fetch-throttle-time",
+            "bytes-fetched",
+            "records-fetched",
+            "fetch-latency",
+            "sent-acknowledgements",
+            "failed-acknowledgements"
+        };
+
+        // Verify that sensors exist before closing
+        for (String sensorName : sensorNames) {
+            assertNotNull(metrics.getSensor(sensorName), 
+                "Sensor " + sensorName + " should exist before closing");
+        }
+
+        // Close the request manager
+        shareConsumeRequestManager.close();
+
+        // Verify that all sensors are removed after closing
+        for (String sensorName : sensorNames) {
+            assertNull(metrics.getSensor(sensorName), 
+                "Sensor " + sensorName + " should be removed after closing");
+        }
     }
 
     private ShareFetchResponse fetchResponseWithTopLevelError(TopicIdPartition tp, Errors error) {
