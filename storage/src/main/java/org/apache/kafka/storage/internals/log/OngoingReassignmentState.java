@@ -23,7 +23,13 @@ public record OngoingReassignmentState(
         List<Integer> removingReplicas,
         List<Integer> replicas
 ) implements AssignmentState {
-    
+
+    public OngoingReassignmentState(List<Integer> addingReplicas, List<Integer> removingReplicas, List<Integer> replicas) {
+        this.addingReplicas = List.copyOf(addingReplicas);
+        this.removingReplicas = List.copyOf(removingReplicas);
+        this.replicas = List.copyOf(replicas);
+    }
+
     @Override
     public int replicationFactor() {
         return (int) replicas.stream().filter(r -> !addingReplicas.contains(r)).count();
