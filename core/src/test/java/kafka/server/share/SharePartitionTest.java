@@ -5733,7 +5733,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testMaybeUpdateCachedStateWhenAcknowledgementTypeAccept() {
+    public void testMaybeUpdateCachedStateWhenAcknowledgeTypeAccept() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         fetchAcquiredRecords(sharePartition, memoryRecords(250, 0), 250);
@@ -5753,7 +5753,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testMaybeUpdateCachedStateWhenAcknowledgementTypeReject() {
+    public void testMaybeUpdateCachedStateWhenAcknowledgeTypeReject() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         fetchAcquiredRecords(sharePartition, memoryRecords(250, 0), 250);
@@ -5773,7 +5773,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testMaybeUpdateCachedStateWhenAcknowledgementTypeRelease() {
+    public void testMaybeUpdateCachedStateWhenAcknowledgeTypeRelease() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         fetchAcquiredRecords(sharePartition, memoryRecords(250, 0), 250);

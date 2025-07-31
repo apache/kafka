@@ -195,7 +195,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * </pre>
  *
  * <h4>Per-record acknowledgement (explicit acknowledgement)</h4>
- * This example demonstrates using different acknowledgement types depending on the outcome of processing the records.
+ * This example demonstrates using different acknowledge types depending on the outcome of processing the records.
  * Here the {@code share.acknowledgement.mode} property is set to "explicit" so the consumer must explicitly acknowledge each record.
  * <pre>
  *     Properties props = new Properties();
