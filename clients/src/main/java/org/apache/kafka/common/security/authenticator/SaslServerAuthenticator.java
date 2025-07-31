@@ -382,12 +382,6 @@ public class SaslServerAuthenticator implements Authenticator {
         } else {
             this.saslState = saslState;
             LOG.debug("Set SASL server state to {} during {}", saslState, reauthInfo.authenticationOrReauthenticationText());
-            if (saslState == SaslState.COMPLETE) {
-                // make sure that any pending write is actually sent.
-                if (reauthInfo.reauthenticating()) {
-                    transportLayer.addInterestOps(SelectionKey.OP_WRITE);
-                }
-            }
             this.pendingSaslState = null;
             this.pendingException = null;
             if (exception != null)
