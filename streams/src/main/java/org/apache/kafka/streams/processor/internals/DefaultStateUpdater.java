@@ -1131,7 +1131,7 @@ public class DefaultStateUpdater implements StateUpdater {
             }
 
             while (!allMetricNames.isEmpty()) {
-                metrics.removeMetric(allMetricNames.pop());
+                metrics.metricsRegistry().removeMetric(allMetricNames.pop());
             }
         }
     }
