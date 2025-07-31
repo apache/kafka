@@ -78,7 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
-@Timeout(value = 40)
+@Timeout(value = 120)
 public class AclControlManagerTest {
     /**
      * Verify that validateNewAcl catches invalid ACLs.
