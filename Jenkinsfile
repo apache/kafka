@@ -5,7 +5,7 @@ pipeline {
     parameters {
         choice(name: 'JDK_TYPE', choices: ['openj9-open', 'openj9-certified', 'hotspot'], description: 'Select the target JDK for the build.')
         booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Check to run the full unit and integration test suite.')
-        string(name: 'JVM_ARGS_OPENJ9', defaultValue: "-Xmx2G -Xgcpolicy:gencon -Xgcthreads1 -XcompilationThreads1 -XX:+DisableExplicitGC -Xtune:virtualized -Xss512k -Dscala.concurrent.context.numThreads=1", description: 'Custom JVM arguments for OpenJ9 builds.')
+        string(name: 'JVM_ARGS_OPENJ9', defaultValue: "-Xmx2G -Xgcpolicy:gencon -Xgcthreads1 -XcompilationThreads2 -XX:+DisableExplicitGC -Xtune:virtualized -Xss512k -Dscala.concurrent.context.numThreads=1", description: 'Custom JVM arguments for OpenJ9 builds.')
         string(name: 'JVM_ARGS_HOTSPOT', defaultValue: "-Xmx2G -XX:+UseG1GC -XX:+DisableExplicitGC", description: 'Custom JVM arguments for HotSpot builds.')
         string(name: 'SEMERU_OPEN_URL', defaultValue: "https://github.com/ibmruntimes/semeru21-binaries/releases/download/jdk-21.0.8%2B9_openj9-0.53.0/ibm-semeru-open-jdk_x64_linux_21.0.8_9_openj9-0.53.0.tar.gz", description: 'Download URL for Semeru Open Edition JDK.')
         string(name: 'SEMERU_CERTIFIED_URL', defaultValue: "https://github.com/ibmruntimes/semeru21-certified-binaries/releases/download/jdk-21.0.8%2B9_openj9-0.53.0/ibm-semeru-certified-jdk_x64_linux_21.0.8.0.tar.gz", description: 'Download URL for Semeru Certified Edition JDK.')
@@ -58,9 +58,11 @@ pipeline {
                         env.JAVA_TOOL_OPTIONS = params.JVM_ARGS_HOTSPOT
                     }
 
-                    // Export and display the JAVA_TOOL_OPTIONS
+                    // Export and display the JAVA_TOOL_OPTIONS and ulimits
                     sh "export JAVA_TOOL_OPTIONS='${env.JAVA_TOOL_OPTIONS}'"
                     echo "JAVA_TOOL_OPTIONS is set to: ${env.JAVA_TOOL_OPTIONS}"
+                    echo "The ulimits for this Jenkins Agent are: "
+                    sh "ulimit -a"
                 }
             }
         }

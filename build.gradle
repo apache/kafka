@@ -316,7 +316,7 @@ subprojects {
         options.forkOptions.jvmArgs = [
                 "-Xss512k",
                 "-Xgcpolicy:gencon",
-                "-XcompilationThreads1",
+                "-XcompilationThreads2",
                 "-Xgcthreads1",
                 "-XX:+DisableExplicitGC",
                 "-Xtune:virtualized",
@@ -334,7 +334,7 @@ subprojects {
         options.forkOptions.jvmArgs = [
                 "-Xss512k",
                 "-Xgcpolicy:gencon",
-                "-XcompilationThreads1",
+                "-XcompilationThreads2",
                 "-Xgcthreads1",
                 "-XX:+DisableExplicitGC",
                 "-Xtune:virtualized",
