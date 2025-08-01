@@ -155,8 +155,8 @@ public class InFlightState {
                 // A misbehaving client can send multiple requests to update the same records hence
                 // do not proceed if the transition is already in progress. Do not log an error here
                 // as it might not be an error rather concurrent update of same state due to multiple
-                // requests. This ideally should not happen as the client should hence log in info level
-                // to check if the client is misbehaving, however there is already a check in acknowledge.
+                // requests. This ideally should not happen hence log in info level, if it happens
+                // frequently then it might be an issue which needs to be investigated.
                 log.info("{} has ongoing state transition, cannot update to: {}", this, newState);
                 return null;
             }
