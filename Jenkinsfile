@@ -82,7 +82,7 @@ pipeline {
                 script {
                     def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace"
                     echo "Running Gradle build with tests:./gradlew clean build ${gradleArgs}"
-                    sh "./gradlew clean build ${gradleArgs}"
+                    sh "taskset -c 0-9 ./gradlew clean build ${gradleArgs}"
                 }
             }
         }
@@ -94,7 +94,7 @@ pipeline {
                     def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace"
                     if (params.RUN_TESTS) {
                         echo "Running Gradle packaging:./gradlew releaseTarGz ${gradleArgs}"
-                        sh "./gradlew releaseTarGz ${gradleArgs}"
+                        sh "taskset -c 0-9 ./gradlew releaseTarGz ${gradleArgs}"
                     } else {
                         echo "Running Gradle packaging without tests:./gradlew clean releaseTarGz -x test ${gradleArgs}"
                         sh "./gradlew clean releaseTarGz -x test ${gradleArgs}"
