@@ -27,6 +27,8 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -50,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -81,6 +84,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_IN
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -147,6 +151,28 @@ public class ResetConsumerGroupOffsetTest {
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
             assertTrue(resetOffsets.isEmpty());
             assertTrue(committedOffsets(cluster, topic, group).isEmpty());
+        }
+    }
+
+    @ClusterTest(
+        brokers = 2,
+        serverProperties = {
+            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2"),
+        }
+    )
+    public void testResetOffsetsWithOfflinePartitionNotInResetTarget(ClusterInstance cluster) throws Exception {
+        String topic = generateRandomTopic();
+        String group = "new.group";
+        String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":0");
+
+        try (Admin admin = cluster.admin(); ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0), 1, List.of(1)))));
+            cluster.waitTopicCreation(topic, 2);
+
+            cluster.shutdownBroker(1);
+
+            Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
+            assertEquals(Set.of(new TopicPartition(topic, 0)), resetOffsets.keySet());
         }
     }
 
@@ -657,6 +683,41 @@ public class ResetConsumerGroupOffsetTest {
             "--reset-offsets", "--group", group, "--all-topics",
             "--to-offset", "2", "--export"};
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
+    }
+
+    @ClusterTest(brokers = 3, serverProperties = {@ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")})
+    public void testResetOffsetsWithPartitionNoneLeader(ClusterInstance cluster) throws Exception {
+        String group = generateRandomGroupId();
+        String topic = generateRandomTopic();
+        String[] args = buildArgsForGroup(cluster, group, "--topic", topic + ":0,1,2",
+                "--to-earliest", "--execute");
+
+        try (Admin admin = cluster.admin();
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+
+            admin.createTopics(singleton(new NewTopic(topic, 3, (short) 1))).all().get();
+            produceConsumeAndShutdown(cluster, topic, group, 2, GroupProtocol.CLASSIC);
+            assertDoesNotThrow(() -> resetOffsets(service));
+            // shutdown a broker to make some partitions missing leader
+            cluster.shutdownBroker(0);
+            assertThrows(LeaderNotAvailableException.class, () -> resetOffsets(service));
+        }
+    }
+
+    @ClusterTest
+    public void testResetOffsetsWithPartitionNotExist(ClusterInstance cluster) throws Exception {
+        String group = generateRandomGroupId();
+        String topic = generateRandomTopic();
+        String[] args = buildArgsForGroup(cluster, group, "--topic", topic + ":2,3",
+                "--to-earliest", "--execute");
+
+        try (Admin admin = cluster.admin();
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+
+            admin.createTopics(singleton(new NewTopic(topic, 1, (short) 1))).all().get();
+            produceConsumeAndShutdown(cluster, topic, group, 2, GroupProtocol.CLASSIC);
+            assertThrows(UnknownTopicOrPartitionException.class, () -> resetOffsets(service));
+        }
     }
 
     private String generateRandomTopic() {

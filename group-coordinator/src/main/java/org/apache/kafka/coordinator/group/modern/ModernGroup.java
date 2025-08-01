@@ -19,11 +19,10 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
@@ -36,6 +35,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
@@ -367,18 +367,13 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     public static long computeMetadataHash(
         Map<String, SubscriptionCount> subscribedTopicNames,
         Map<String, Long> topicHashCache,
-        MetadataImage metadataImage
+        CoordinatorMetadataImage metadataImage
     ) {
-        Map<String, Long> topicHash = new HashMap<>(subscribedTopicNames.size());
-        subscribedTopicNames.keySet().forEach(topicName -> {
-            TopicImage topicImage = metadataImage.topics().getTopic(topicName);
-            if (topicImage != null) {
-                topicHash.put(
-                    topicName,
-                    topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
-                );
-            }
-        });
+        Map<String, Long> topicHash = subscribedTopicNames.keySet().stream()
+            .filter(topicName -> metadataImage.topicMetadata(topicName).isPresent())
+            .collect(Collectors.toMap(
+                topicName -> topicName,
+                topicName -> topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(k, metadataImage))));
         return Utils.computeGroupHash(topicHash);
     }
 
@@ -530,7 +525,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         }
 
         for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
-            if (subscriberCount.byNameCount != numberOfMembers) {
+            if (subscriberCount.byNameCount() != numberOfMembers) {
                 return HETEROGENEOUS;
             }
         }

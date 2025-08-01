@@ -44,7 +44,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -178,7 +177,7 @@ public class StreamsResetter {
                                             final StreamsResetterOptions options)
         throws ExecutionException, InterruptedException {
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
-            Collections.singleton(groupId),
+            Set.of(groupId),
             new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
         try {
             final List<MemberDescription> members =
@@ -212,15 +211,15 @@ public class StreamsResetter {
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
 
-        if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
+        if (inputTopics.isEmpty() && intermediateTopics.isEmpty()) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
             return EXIT_CODE_SUCCESS;
         }
 
-        if (inputTopics.size() != 0) {
+        if (!inputTopics.isEmpty()) {
             System.out.println("Reset-offsets for input topics " + inputTopics);
         }
-        if (intermediateTopics.size() != 0) {
+        if (!intermediateTopics.isEmpty()) {
             System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
         }
 
@@ -313,7 +312,7 @@ public class StreamsResetter {
     public void maybeSeekToEnd(final String groupId,
                                final Consumer<byte[], byte[]> client,
                                final Set<TopicPartition> intermediateTopicPartitions) {
-        if (intermediateTopicPartitions.size() > 0) {
+        if (!intermediateTopicPartitions.isEmpty()) {
             System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
             for (final TopicPartition topicPartition : intermediateTopicPartitions) {
                 if (allTopics.contains(topicPartition.topic())) {
@@ -328,7 +327,7 @@ public class StreamsResetter {
                             final Set<TopicPartition> inputTopicPartitions,
                             final StreamsResetterOptions options)
         throws IOException, ParseException {
-        if (inputTopicPartitions.size() > 0) {
+        if (!inputTopicPartitions.isEmpty()) {
             System.out.println("Following input topics offsets will be reset to (for consumer group " + options.applicationId() + ")");
             if (options.hasToOffset()) {
                 resetOffsetsTo(client, inputTopicPartitions, options.toOffset());
@@ -405,7 +404,7 @@ public class StreamsResetter {
             if (partitionOffset.isPresent()) {
                 client.seek(topicPartition, partitionOffset.get());
             } else {
-                client.seekToEnd(Collections.singletonList(topicPartition));
+                client.seekToEnd(List.of(topicPartition));
                 System.out.println("Partition " + topicPartition.partition() + " from topic " + topicPartition.topic() +
                         " is empty, without a committed record. Falling back to latest known offset.");
             }
@@ -508,7 +507,7 @@ public class StreamsResetter {
         final List<String> topicsToDelete;
 
         if (!specifiedInternalTopics.isEmpty()) {
-            if (!inferredInternalTopics.containsAll(specifiedInternalTopics)) {
+            if (!new HashSet<>(inferredInternalTopics).containsAll(specifiedInternalTopics)) {
                 throw new IllegalArgumentException("Invalid topic specified in the "
                         + "--internal-topics option. "
                         + "Ensure that the topics specified are all internal topics. "
