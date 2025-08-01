@@ -4462,7 +4462,7 @@ public class SharePartitionTest {
         assertEquals(20, sharePartition.startOffset());
         assertEquals(36, sharePartition.endOffset());
 
-        // For cached state corresponding to entry 2, the batch state will be ACKNOWLEDGED, hence it will be cleared as part of acknowledgment.
+        // For cached state corresponding to entry 2, the batch state will be ACKNOWLEDGED, hence it will be cleared as part of acknowledgement.
         assertEquals(6, sharePartition.cachedState().size());
 
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(7L).batchMemberId());
@@ -4768,7 +4768,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testLsoMovementAheadOfEndOffsetPostAcknowledgment() {
+    public void testLsoMovementAheadOfEndOffsetPostAcknowledgement() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 2), 5);
@@ -4884,7 +4884,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testLsoMovementPostGapsInAcknowledgments() {
+    public void testLsoMovementPostGapsInAcknowledgements() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         MemoryRecords records1 = memoryRecords(2, 5);
@@ -5937,7 +5937,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(100, 80), 100);
         assertFalse(sharePartition.canAcquireRecords());
 
-        // Final Acknowledgment, all records are acknowledged here.
+        // Final Acknowledgement, all records are acknowledged here.
         sharePartition.acknowledge(MEMBER_ID, List.of(
                 new ShareAcknowledgementBatch(50, 179, List.of((byte) 3))));
 
@@ -5984,7 +5984,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 11), 10);
         assertTrue(sharePartition.canAcquireRecords());
 
-        // Sending acknowledgment for the first batch from 11 to 20
+        // Sending acknowledgement for the first batch from 11 to 20
         sharePartition.acknowledge(MEMBER_ID, List.of(
             new ShareAcknowledgementBatch(11, 20, List.of((byte) 1))));
 

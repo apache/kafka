@@ -48,7 +48,7 @@ public class InFlightBatch {
 
     // The offset state map is used to track the state of the records per offset. However, the
     // offset state map is only required when the state of the offsets within same batch are
-    // different. The states can be different when explicit offset acknowledgment is done which
+    // different. The states can be different when explicit offset acknowledgement is done which
     // is different from the batch state.
     private NavigableMap<Long, InFlightState> offsetState;
 
