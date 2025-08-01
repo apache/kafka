@@ -29,7 +29,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 /**
  * {@code CompletableEventReaper} is responsible for tracking {@link CompletableEvent time-bound events} and removing
@@ -144,29 +143,12 @@ public class CompletableEventReaper {
     public long reap(Collection<?> events) {
         Objects.requireNonNull(events, "Event queue to reap must be non-null");
 
-        Consumer<CompletableEvent<?>> expireEvent = event -> {
-            TimeoutException error = new TimeoutException(String.format("%s could not be completed before the consumer closed", event.getClass().getSimpleName()));
-
-            if (event.future().completeExceptionally(error)) {
-                log.debug("Event {} completed exceptionally since the consumer is closing", event);
-            } else {
-                log.trace("Event {} not completed exceptionally since it was completed prior to the consumer closing", event);
-            }
-        };
-
-        long trackedExpiredCount = tracked.stream()
-            .filter(e -> !e.future().isDone())
-            .peek(expireEvent)
-            .count();
+        long trackedExpiredCount = completeEventsExceptionallyOnClose(tracked);
         tracked.clear();
 
-        long eventExpiredCount = events.stream()
-            .filter(e -> e instanceof CompletableEvent<?>)
-            .map(e -> (CompletableEvent<?>) e)
-            .filter(e -> !e.future().isDone())
-            .peek(expireEvent)
-            .count();
+        long eventExpiredCount = completeEventsExceptionallyOnClose(events);
         events.clear();
+
         return trackedExpiredCount + eventExpiredCount;
     }
 
@@ -179,6 +161,8 @@ public class CompletableEventReaper {
     }
 
     public List<CompletableEvent<?>> uncompletedEvents() {
+        // The following code does not use the Java Collections Streams API to reduce overhead in the critical
+        // path of the ConsumerNetworkThread loop.
         List<CompletableEvent<?>> events = new ArrayList<>();
 
         for (CompletableEvent<?> event : tracked) {
@@ -187,5 +171,41 @@ public class CompletableEventReaper {
         }
 
         return events;
+    }
+
+    /**
+     * For all the {@link CompletableEvent}s in the collection, if they're not already complete, invoke
+     * {@link CompletableFuture#completeExceptionally(Throwable)}.
+     *
+     * @param events Collection of objects, assumed to be subclasses of {@link ApplicationEvent} or
+     *               {@link BackgroundEvent}, but will only perform completion for any
+     *               unfinished {@link CompletableEvent}s
+     *
+     * @return Number of events closed
+     */
+    private long completeEventsExceptionallyOnClose(Collection<?> events) {
+        long count = 0;
+
+        for (Object o : events) {
+            if (!(o instanceof CompletableEvent))
+                continue;
+
+            CompletableEvent<?> event = (CompletableEvent<?>) o;
+
+            if (event.future().isDone())
+                continue;
+
+            count++;
+
+            TimeoutException error = new TimeoutException(String.format("%s could not be completed before the consumer closed", event.getClass().getSimpleName()));
+
+            if (event.future().completeExceptionally(error)) {
+                log.debug("Event {} completed exceptionally since the consumer is closing", event);
+            } else {
+                log.trace("Event {} not completed exceptionally since it was completed prior to the consumer closing", event);
+            }
+        }
+
+        return count;
     }
 }

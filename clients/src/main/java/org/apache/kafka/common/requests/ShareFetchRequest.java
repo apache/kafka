@@ -62,15 +62,24 @@ public class ShareFetchRequest extends AbstractRequest {
             data.setBatchSize(batchSize);
 
             // Build a map of topics to fetch keyed by topic ID, and within each a map of partitions keyed by index
-            Map<Uuid, Map<Integer, ShareFetchRequestData.FetchPartition>> fetchMap = new HashMap<>();
+            ShareFetchRequestData.FetchTopicCollection fetchTopics = new ShareFetchRequestData.FetchTopicCollection();
 
             // First, start by adding the list of topic-partitions we are fetching
             if (!isClosingShareSession) {
                 for (TopicIdPartition tip : send) {
-                    Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
-                    ShareFetchRequestData.FetchPartition fetchPartition = new ShareFetchRequestData.FetchPartition()
+                    ShareFetchRequestData.FetchTopic fetchTopic = fetchTopics.find(tip.topicId());
+                    if (fetchTopic == null) {
+                        fetchTopic = new ShareFetchRequestData.FetchTopic()
+                                .setTopicId(tip.topicId())
+                                .setPartitions(new ShareFetchRequestData.FetchPartitionCollection());
+                        fetchTopics.add(fetchTopic);
+                    }
+                    ShareFetchRequestData.FetchPartition fetchPartition = fetchTopic.partitions().find(tip.partition());
+                    if (fetchPartition == null) {
+                        fetchPartition = new ShareFetchRequestData.FetchPartition()
                             .setPartitionIndex(tip.partition());
-                    partMap.put(tip.partition(), fetchPartition);
+                        fetchTopic.partitions().add(fetchPartition);
+                    }
                 }
             }
 
@@ -78,27 +87,24 @@ public class ShareFetchRequest extends AbstractRequest {
             // topic-partitions will be a subset, but if the assignment changes, there might be new entries to add
             for (Map.Entry<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgeEntry : acknowledgementsMap.entrySet()) {
                 TopicIdPartition tip = acknowledgeEntry.getKey();
-                Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
-                ShareFetchRequestData.FetchPartition fetchPartition = partMap.get(tip.partition());
+                ShareFetchRequestData.FetchTopic fetchTopic = fetchTopics.find(tip.topicId());
+                if (fetchTopic == null) {
+                    fetchTopic = new ShareFetchRequestData.FetchTopic()
+                            .setTopicId(tip.topicId())
+                            .setPartitions(new ShareFetchRequestData.FetchPartitionCollection());
+                    fetchTopics.add(fetchTopic);
+                }
+                ShareFetchRequestData.FetchPartition fetchPartition = fetchTopic.partitions().find(tip.partition());
                 if (fetchPartition == null) {
                     fetchPartition = new ShareFetchRequestData.FetchPartition()
                             .setPartitionIndex(tip.partition());
-                    partMap.put(tip.partition(), fetchPartition);
+                    fetchTopic.partitions().add(fetchPartition);
                 }
                 fetchPartition.setAcknowledgementBatches(acknowledgeEntry.getValue());
             }
 
             // Build up the data to fetch
-            if (!fetchMap.isEmpty()) {
-                data.setTopics(new ArrayList<>());
-                fetchMap.forEach((topicId, partMap) -> {
-                    ShareFetchRequestData.FetchTopic fetchTopic = new ShareFetchRequestData.FetchTopic()
-                            .setTopicId(topicId)
-                            .setPartitions(new ArrayList<>());
-                    partMap.forEach((index, fetchPartition) -> fetchTopic.partitions().add(fetchPartition));
-                    data.topics().add(fetchTopic);
-                });
-            }
+            data.setTopics(fetchTopics);
 
             Builder builder = new Builder(data);
             // And finally, forget the topic-partitions that are no longer in the session

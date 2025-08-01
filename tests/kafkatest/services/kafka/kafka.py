@@ -357,7 +357,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     listener_security_config=listener_security_config,
                     extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
                     isolated_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
-                    server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum
+                    server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum,
+                    use_streams_groups=self.use_streams_groups
                 )
                 self.controller_quorum = self.isolated_controller_quorum
 
@@ -1187,12 +1188,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
-    def all_nodes_acl_command_supports_bootstrap_server(self):
-        for node in self.nodes:
-            if not node.version.acl_command_supports_bootstrap_server():
-                return False
-        return True
-
     def all_nodes_reassign_partitions_command_supports_bootstrap_server(self):
         for node in self.nodes:
             if not node.version.reassign_partitions_command_supports_bootstrap_server():
@@ -1349,30 +1344,25 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-    def kafka_acls_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None, override_command_config = None):
+    def kafka_acls_cmd_with_optional_security_settings(self, node, kafka_security_protocol = None, override_command_config = None):
         if self.quorum_info.using_kraft and not self.quorum_info.has_brokers:
             raise Exception("Must invoke kafka-acls against a broker, not a KRaft controller")
-        force_use_zk_connection = force_use_zk_connection or not self.all_nodes_acl_command_supports_bootstrap_server
-        if force_use_zk_connection:
-            bootstrap_server_or_authorizer_zk_props = "--authorizer-properties zookeeper.connect=%s" % (self.zk_connect_setting())
-            skip_optional_security_settings = True
-        else:
-            if kafka_security_protocol is None:
-                # it wasn't specified, so use the inter-broker security protocol if it is PLAINTEXT,
-                # otherwise use the client security protocol
-                if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
-                    security_protocol_to_use = SecurityConfig.PLAINTEXT
-                else:
-                    security_protocol_to_use = self.security_protocol
+        if kafka_security_protocol is None:
+            # it wasn't specified, so use the inter-broker security protocol if it is PLAINTEXT,
+            # otherwise use the client security protocol
+            if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
+                security_protocol_to_use = SecurityConfig.PLAINTEXT
             else:
-                security_protocol_to_use = kafka_security_protocol
-            bootstrap_server_or_authorizer_zk_props = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
-            skip_optional_security_settings = security_protocol_to_use == SecurityConfig.PLAINTEXT
+                security_protocol_to_use = self.security_protocol
+        else:
+            security_protocol_to_use = kafka_security_protocol
+        bootstrap_server = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
+        skip_optional_security_settings = security_protocol_to_use == SecurityConfig.PLAINTEXT
         if skip_optional_security_settings:
             optional_jass_krb_system_props_prefix = ""
             optional_command_config_suffix = ""
         else:
-            # we need security configs because aren't going to ZooKeeper and we aren't using PLAINTEXT
+            # we need security configs because we aren't using PLAINTEXT
             if (security_protocol_to_use == self.interbroker_security_protocol):
                 # configure JAAS to provide the broker's credentials
                 # since this is an authenticating cluster and we are going to use the inter-broker security protocol
@@ -1392,7 +1382,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         kafka_acls_script = self.path.script("kafka-acls.sh", node)
         return "%s%s %s%s" % \
                (optional_jass_krb_system_props_prefix, kafka_acls_script,
-                bootstrap_server_or_authorizer_zk_props, optional_command_config_suffix)
+                bootstrap_server, optional_command_config_suffix)
 
     def run_cli_tool(self, node, cmd):
         output = ""
@@ -1727,6 +1717,29 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
+    def set_share_group_offset_reset_strategy(self, group, strategy=None, node=None, command_config=None):
+        """ Set the offset reset strategy config for the given group.
+        """
+        if strategy is None:
+            return
+        if node is None:
+            node = self.nodes[0]
+        config_script = self.path.script("kafka-configs.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s --group %s --alter --add-config \"share.auto.offset.reset=%s\" %s" % \
+               (config_script,
+                self.bootstrap_servers(self.security_protocol),
+                group,
+                strategy,
+                command_config)
+        return "Completed" in self.run_cli_tool(node, cmd)
+
     def list_consumer_groups(self, node=None, command_config=None, state=None, type=None):
         """ Get list of consumer groups.
         """
@@ -1749,7 +1762,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if type is not None:
             cmd += " --type %s" % type
         return self.run_cli_tool(node, cmd)
-    
+
     def list_share_groups(self, node=None, command_config=None, state=None):
         """ Get list of share groups.
         """
@@ -1764,9 +1777,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s --bootstrap-server %s %s --list" % \
-              (share_group_script,
-               self.bootstrap_servers(self.security_protocol),
-               command_config)
+               (share_group_script,
+                self.bootstrap_servers(self.security_protocol),
+                command_config)
         if state is not None:
             cmd += " --state %s" % state
         return self.run_cli_tool(node, cmd)

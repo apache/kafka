@@ -144,6 +144,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
+        // The following code avoids use of the Java Collections Streams API to reduce overhead in this loop.
         processApplicationEvents();
 
         final long currentTimeMs = time.milliseconds();
@@ -249,10 +250,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     static void runAtClose(final Collection<RequestManager> requestManagers,
                            final NetworkClientDelegate networkClientDelegate,
                            final long currentTimeMs) {
-        // These are the optional outgoing requests at the
-        requestManagers.stream()
-                .map(rm -> rm.pollOnClose(currentTimeMs))
-                .forEach(networkClientDelegate::addAll);
+        // These are the optional outgoing requests at the time of closing the consumer
+        for (RequestManager rm : requestManagers) {
+            NetworkClientDelegate.PollResult pollResult = rm.pollOnClose(currentTimeMs);
+            networkClientDelegate.addAll(pollResult);
+        }
     }
 
     public boolean isRunning() {
@@ -375,13 +377,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         List<CompletableApplicationEvent<?>> subscriptionMetadataEvent = new ArrayList<>();
 
         for (CompletableEvent<?> ce : events) {
-            if (!(ce instanceof CompletableApplicationEvent))
-                continue;
-
-            CompletableApplicationEvent<?> cae = (CompletableApplicationEvent<?>) ce;
-
-            if (cae.requireSubscriptionMetadata())
-                subscriptionMetadataEvent.add(cae);
+            if (ce instanceof CompletableApplicationEvent && ((CompletableApplicationEvent<?>) ce).requireSubscriptionMetadata())
+                subscriptionMetadataEvent.add((CompletableApplicationEvent<?>) ce);
         }
 
         if (subscriptionMetadataEvent.isEmpty())

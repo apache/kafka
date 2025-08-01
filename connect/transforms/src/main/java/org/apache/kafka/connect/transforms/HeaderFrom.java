@@ -87,14 +87,11 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         }
 
         static Operation fromName(String name) {
-            switch (name) {
-                case MOVE_OPERATION:
-                    return MOVE;
-                case COPY_OPERATION:
-                    return COPY;
-                default:
-                    throw new IllegalArgumentException();
-            }
+            return switch (name) {
+                case MOVE_OPERATION -> MOVE;
+                case COPY_OPERATION -> COPY;
+                default -> throw new IllegalArgumentException();
+            };
         }
 
         public String toString() {

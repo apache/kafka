@@ -40,7 +40,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.{ClientMetricsManager, ServerSocketFactory}
-import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVersion, TransactionVersion}
+import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.kafka.server.util.timer.SystemTimer
@@ -275,7 +275,7 @@ abstract class QuorumTestHarness extends Logging {
     formatter.addDirectory(metadataDir.getAbsolutePath)
     formatter.setReleaseVersion(metadataVersion)
     formatter.setUnstableFeatureVersionsEnabled(true)
-    formatter.setControllerListenerName(config.controllerListenerNames.head)
+    formatter.setControllerListenerName(config.controllerListenerNames.get(0))
     formatter.setMetadataLogDirectory(config.metadataLogDir)
 
     val transactionVersion =
@@ -283,12 +283,6 @@ abstract class QuorumTestHarness extends Logging {
         TransactionVersion.TV_2.featureLevel()
       } else TransactionVersion.TV_1.featureLevel()
     formatter.setFeatureLevel(TransactionVersion.FEATURE_NAME, transactionVersion)
-
-    val elrVersion =
-      if (TestInfoUtils.isEligibleLeaderReplicasV1Enabled(testInfo)) {
-        EligibleLeaderReplicasVersion.ELRV_1.featureLevel()
-      } else EligibleLeaderReplicasVersion.ELRV_0.featureLevel()
-    formatter.setFeatureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME, elrVersion)
 
     addFormatterSettings(formatter)
     formatter.run()

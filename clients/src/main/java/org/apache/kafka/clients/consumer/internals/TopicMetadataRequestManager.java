@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -84,14 +85,16 @@ public class TopicMetadataRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // Prune any requests which have timed out
-        List<TopicMetadataRequestState> expiredRequests = new ArrayList<>();
+        Iterator<TopicMetadataRequestState> requestStateIterator = inflightRequests.iterator();
 
-        for (TopicMetadataRequestState requestState : inflightRequests) {
-            if (requestState.isExpired())
-                expiredRequests.add(requestState);
+        while (requestStateIterator.hasNext()) {
+            TopicMetadataRequestState requestState = requestStateIterator.next();
+
+            if (requestState.isExpired()) {
+                requestState.expire();
+                requestStateIterator.remove();
+            }
         }
-
-        expiredRequests.forEach(TopicMetadataRequestState::expire);
 
         List<NetworkClientDelegate.UnsentRequest> requests = new ArrayList<>();
 
@@ -186,7 +189,9 @@ public class TopicMetadataRequestManager implements RequestManager {
         }
 
         private void expire() {
-            completeFutureAndRemoveRequest(
+            // The request state is removed from inflightRequests via an iterator by the caller of this method,
+            // so don't remove it from inflightRequests here.
+            future.completeExceptionally(
                     new TimeoutException("Timeout expired while fetching topic metadata"));
         }
 

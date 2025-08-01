@@ -79,7 +79,7 @@ class StorageToolTest {
     val tempDir = TestUtils.tempDir()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -97,7 +97,7 @@ Found problem:
     tempDir.delete()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempDir.toString)))
       assertEquals(s"""Found problem:
   ${tempDir.toString} does not exist
 
@@ -111,7 +111,7 @@ Found problem:
     val tempFile = TestUtils.tempFile()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempFile.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempFile.toString)))
       assertEquals(s"""Found problem:
   ${tempFile.toString} is not a directory
 
@@ -125,13 +125,13 @@ Found problem:
     val tempDir = TestUtils.tempDir()
     try {
       Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
-        String.join("\n", util.Arrays.asList(
+        String.join("\n", util.List.of(
           "version=1",
           "node.id=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
             getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), false, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = false, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -150,13 +150,13 @@ Found problem:
     val tempDir = TestUtils.tempDir()
     try {
       Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
-        String.join("\n", util.Arrays.asList(
+        String.join("\n", util.List.of(
           "version=0",
           "broker.id=1",
           "cluster.id=26c36907-4158-4a35-919d-6534229f5241")).
           getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), kraftMode = true, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -193,7 +193,7 @@ Found problem:
    ): Int = {
     val tempDir = TestUtils.tempDir()
     try {
-      val configPathString = new File(tempDir.getAbsolutePath(), "format.props").toString
+      val configPathString = new File(tempDir.getAbsolutePath, "format.props").toString
       PropertiesUtils.writePropertiesFile(properties, configPathString, true)
       val arguments = ListBuffer[String]("format",
         "--cluster-id", "XcZZOzUqS4yHOjhMQB6JLQ")
@@ -234,7 +234,7 @@ Found problem:
     val unavailableDir1 = TestUtils.tempFile()
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", s"${availableDir1},${unavailableDir1}")
+    properties.setProperty("log.dirs", s"$availableDir1,$unavailableDir1")
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties))
 
@@ -273,7 +273,7 @@ Found problem:
     assertEquals(0, runFormatCommand(stream, properties))
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream2 = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream2, properties, Seq(), true))
+    assertEquals(0, runFormatCommand(stream2, properties, Seq(), ignoreFormatted = true))
   }
 
   @Test
@@ -282,7 +282,7 @@ Found problem:
     val unavailableDir2 = TestUtils.tempFile()
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", s"${unavailableDir1},${unavailableDir2}")
+    properties.setProperty("log.dirs", s"$unavailableDir1,$unavailableDir2")
     val stream = new ByteArrayOutputStream()
     assertEquals("No available log directories to format.", assertThrows(classOf[FormatterException],
       () => runFormatCommand(stream, properties)).getMessage)
@@ -304,6 +304,20 @@ Found problem:
     assertEquals(0, runFormatCommand(stream, properties, Seq("--release-version", "3.8-IV0")))
     assertTrue(stream.toString().contains("3.8-IV0"),
       "Failed to find content in output: " + stream.toString())
+  }
+
+  @Test
+  def testFormatWithUnsupportedReleaseVersion(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val failure = assertThrows(classOf[TerseFailure], () =>
+      runFormatCommand(stream, properties, Seq("--release-version", "3.3-IV1"))).getMessage
+    assertTrue(failure.contains("Unknown metadata.version 3.3-IV1"))
+    assertTrue(failure.contains(MetadataVersion.MINIMUM_VERSION.version))
+    assertTrue(failure.contains(MetadataVersion.latestProduction().version))
   }
 
   @Test
@@ -375,13 +389,68 @@ Found problem:
   def testFormatWithStandaloneFlagOnBrokerFails(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("process.roles", "broker")
+    properties.setProperty("node.id", "0")
+    properties.setProperty("controller.listener.names", "CONTROLLER")
+    properties.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
     assertEquals("You can only use --standalone on a controller.",
       assertThrows(classOf[TerseFailure],
         () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
+  }
+
+  @Test
+  def testFormatWithStandaloneFailsWithStaticVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
+    assertEquals("You cannot specify controller.quorum.voters and " +
+      "format the node with --initial-controllers or --standalone. If you " +
+      "want to use dynamic quorum, please remove controller.quorum.voters and " +
+      "specify controller.quorum.bootstrap.servers instead.",
+      assertThrows(classOf[TerseFailure],
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
+    )
+  }
+
+  @Test
+  def testFormatWithInitialControllersFailsWithStaticVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String](
+      "--release-version", "3.9-IV0",
+      "--initial-controllers",
+      "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ,"
+    )
+    assertEquals("You cannot specify controller.quorum.voters and " +
+      "format the node with --initial-controllers or --standalone. If you " +
+      "want to use dynamic quorum, please remove controller.quorum.voters and " +
+      "specify controller.quorum.bootstrap.servers instead.",
+      assertThrows(classOf[TerseFailure],
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
+    )
+  }
+
+  @Test
+  def testFormatWithNoInitialControllersPassesWithVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--no-initial-controllers")
+    assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
   }
 
   @ParameterizedTest
@@ -590,7 +659,7 @@ Found problem:
 
     assertEquals("Unknown release version '2.9-IV2'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
+      " to " + MetadataVersion.latestTesting().version, exception.getMessage
     )
 
     val exception2 = assertThrows(classOf[TerseFailure], () => {
@@ -599,7 +668,7 @@ Found problem:
 
     assertEquals("Unknown release version 'invalid'." +
       " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
+      " to " + MetadataVersion.latestTesting().version, exception2.getMessage
     )
   }
 
