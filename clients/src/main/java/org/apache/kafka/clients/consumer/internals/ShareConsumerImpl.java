@@ -895,12 +895,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         closeTimer.update();
 
         // Prepare shutting down the network thread
-        swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
-                () -> sendAcknowledgementsAndLeaveGroup(closeTimer, firstException), firstException);
-        swallow(log, Level.ERROR, "Failed to stop finding coordinator",
-                this::stopFindCoordinatorOnClose, firstException);
-        swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
-                () -> handleCompletedAcknowledgements(true), firstException);
+        if (applicationEventHandler != null && backgroundEventReaper != null && backgroundEventQueue != null) {
+            swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
+                    () -> sendAcknowledgementsAndLeaveGroup(closeTimer, firstException), firstException);
+            swallow(log, Level.ERROR, "Failed to stop finding coordinator",
+                    this::stopFindCoordinatorOnClose, firstException);
+            swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
+                    () -> handleCompletedAcknowledgements(true), firstException);
+        }
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
