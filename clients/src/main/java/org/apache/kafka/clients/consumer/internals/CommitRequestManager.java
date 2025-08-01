@@ -1065,9 +1065,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 // Re-discover the coordinator and retry
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
                 future.completeExceptionally(exception);
-            } else if (responseError == Errors.UNKNOWN_TOPIC_ID) {
-                log.error("OffsetFetch failed with {} because the topic ids are unknown.", responseError);
-                future.completeExceptionally(exception);
             } else if (exception instanceof RetriableException) {
                 future.completeExceptionally(exception);
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
@@ -1129,7 +1126,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                             failedRequestRegistered = true;
                         }
 
-                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION || error == Errors.UNKNOWN_TOPIC_ID) {
                             future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does not exist"));
                             return;
                         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {

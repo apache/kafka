@@ -1520,6 +1520,7 @@ public class CommitRequestManagerTest {
         return Stream.of(
             Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT, true),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
+            Arguments.of(Errors.UNKNOWN_TOPIC_ID, false),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
             Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false));
     }
