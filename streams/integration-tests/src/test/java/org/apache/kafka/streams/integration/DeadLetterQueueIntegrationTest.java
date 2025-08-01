@@ -55,7 +55,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.errors.internals.ExceptionHandlerUtils.HEADER_ERRORS_EXCEPTION_MESSAGE_NAME;
@@ -116,7 +115,7 @@ public class DeadLetterQueueIntegrationTest {
         try (final KafkaStreams streams = getDslStreams(LogAndFailProcessingExceptionHandler.class.getName())) {
 
             startApplicationAndWaitUntilRunning(streams);
-            
+
             // Produce data to the input topic
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 INPUT_TOPIC,
