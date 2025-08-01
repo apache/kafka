@@ -96,8 +96,6 @@ public class DeadLetterQueueIntegrationTest {
     private static final String OUTPUT_TOPIC = "outputTopic";
     private static final String DLQ_TOPIC = "dlqTopic";
 
-    private static final AtomicInteger TEST_NUMBER = new AtomicInteger(0);
-
     private final List<KeyValue<String, String>> data = prepareData();
     private final List<KeyValue<String, byte[]>> bytesData = prepareBytesData();
 
@@ -118,8 +116,7 @@ public class DeadLetterQueueIntegrationTest {
         try (final KafkaStreams streams = getDslStreams(LogAndFailProcessingExceptionHandler.class.getName())) {
 
             startApplicationAndWaitUntilRunning(streams);
-
-
+            
             // Produce data to the input topic
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 INPUT_TOPIC,
