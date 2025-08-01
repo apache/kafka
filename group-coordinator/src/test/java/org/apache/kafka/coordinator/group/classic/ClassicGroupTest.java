@@ -39,7 +39,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -420,7 +421,7 @@ public class ClassicGroupTest {
 
         group.initNextGeneration();
 
-        Set<String> expectedTopics = new HashSet<>(Set.of("foo"));
+        Set<String> expectedTopics = Set.of("foo");
         assertEquals(expectedTopics, group.subscribedTopics().get());
 
         group.transitionTo(PREPARING_REBALANCE);
@@ -1275,14 +1276,14 @@ public class ClassicGroupTest {
 
 
         group.transitionTo(COMPLETING_REBALANCE);
-        assertTrue(group.isInStates(new HashSet<>(List.of("completingrebalance")), 0));
+        assertTrue(group.isInStates(Set.of("completingrebalance"), 0));
 
         group.transitionTo(STABLE);
         assertTrue(group.isInStates(Set.of("stable"), 0));
         assertFalse(group.isInStates(Set.of("empty"), 0));
 
         group.transitionTo(DEAD);
-        assertTrue(group.isInStates(new HashSet<>(List.of("dead", " ")), 0));
+        assertTrue(group.isInStates(Set.of("dead", " "), 0));
     }
 
     @Test
@@ -1461,7 +1462,7 @@ public class ClassicGroupTest {
             newMember2,
             logContext,
             time,
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         ClassicGroup expectedClassicGroup = new ClassicGroup(
@@ -1592,7 +1593,7 @@ public class ClassicGroupTest {
             null,
             logContext,
             time,
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         ClassicGroup expectedClassicGroup = new ClassicGroup(

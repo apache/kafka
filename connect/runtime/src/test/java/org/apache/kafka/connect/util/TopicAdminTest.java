@@ -65,7 +65,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -667,7 +666,7 @@ public class TopicAdminTest {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         TopicPartition tp2 = new TopicPartition(topicName, 1);
-        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(tp1, tp2));
+        Set<TopicPartition> tps = Set.of(tp1, tp2);
         long offset1 = 1001;
         long offset2 = 1002;
         Cluster cluster = createCluster(1, topicName, 2);

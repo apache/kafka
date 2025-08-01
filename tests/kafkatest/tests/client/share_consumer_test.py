@@ -31,6 +31,8 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     num_producers = 1
     num_brokers = 3
 
+    share_group_id = "test_group_id"
+
     default_timeout_sec = 600
 
     def __init__(self, test_context):
@@ -41,7 +43,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
             })
 
     def setup_share_group(self, topic, **kwargs):
-        consumer = super(ShareConsumerTest, self).setup_share_group(topic, **kwargs)
+        consumer = super(ShareConsumerTest, self).setup_share_group(topic, group_id=self.share_group_id, **kwargs)
         self.mark_for_collect(consumer, 'verifiable_share_consumer_stdout')
         return consumer
 
@@ -124,7 +126,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         total_messages = 100000
         producer = self.setup_producer(self.TOPIC1["name"], max_messages=total_messages)
 
-        consumer = self.setup_share_group(self.TOPIC1["name"], offset_reset_strategy="earliest")
+        consumer = self.setup_share_group(self.TOPIC1["name"])
+
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group_id, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
         producer.start()
 
@@ -153,7 +158,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         total_messages = 1000000
         producer = self.setup_producer(self.TOPIC2["name"], max_messages=total_messages, throughput=5000)
 
-        consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
+        consumer = self.setup_share_group(self.TOPIC2["name"])
+
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group_id, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
         producer.start()
 
@@ -181,7 +189,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     def test_broker_rolling_bounce(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
-        consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
+        consumer = self.setup_share_group(self.TOPIC2["name"])
+
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group_id, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
         producer.start()
         self.await_produced_messages(producer, timeout_sec=self.default_timeout_sec)
@@ -213,7 +224,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     def test_broker_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_brokers=1, use_share_groups=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
-        consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
+        consumer = self.setup_share_group(self.TOPIC2["name"])
+
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group_id, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
         producer.start()
         self.await_produced_messages(producer, timeout_sec=self.default_timeout_sec)
@@ -256,7 +270,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         """
 
         producer = self.setup_producer(self.TOPIC2["name"])
-        consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
+        consumer = self.setup_share_group(self.TOPIC2["name"])
+
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group_id, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
         producer.start()
         self.await_produced_messages(producer, timeout_sec=self.default_timeout_sec)
@@ -287,7 +304,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     def test_share_consumer_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_consumers=1, use_share_groups=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
-        consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
+        consumer = self.setup_share_group(self.TOPIC2["name"])
+
+        wait_until(lambda: self.kafka.set_share_group_offset_reset_strategy(group=self.share_group_id, strategy="earliest"),
+                   timeout_sec=20, backoff_sec=2, err_msg="share.auto.offset.reset not set to earliest")
 
         # startup the producer and ensure that some records have been written
         producer.start()

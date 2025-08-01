@@ -92,13 +92,6 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
         return de.deserialize(currentTopic, Utils.toNullableArray(bytes)).toString();
     }
 
-    private static class Tuple2<T1, T2> {
-        private final T1 t1;
-        private final T2 t2;
-
-        Tuple2(T1 t1, T2 t2) {
-            this.t1 = t1;
-            this.t2 = t2;
-        }
+    private record Tuple2<T1, T2>(T1 t1, T2 t2) {
     }
 }

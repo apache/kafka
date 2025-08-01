@@ -47,7 +47,7 @@ ext {
   gradleVersion = versions.gradle
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
-  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams-scala", ":test-common:test-common-util"]
+  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams:examples", ":streams-scala", ":test-common:test-common-util"]
 
   buildVersionFileName = "kafka-version.properties"
 
@@ -193,7 +193,10 @@ allprojects {
           // ensure we have a single version in the classpath despite transitive dependencies
           libs.scalaLibrary,
           libs.scalaReflect,
-          libs.jacksonAnnotations
+          // Workaround before `commons-validator` has new release. See KAFKA-19359.
+          libs.commonsBeanutils,
+          libs.jacksonAnnotations,
+          libs.commonsLang
         )
       }
     }
@@ -1058,6 +1061,7 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation libs.caffeine
     testImplementation testLog4j2Libs
+    testImplementation libs.mockOAuth2Server
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1145,6 +1149,13 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
   }
 
+  task genGroupConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.coordinator.group.GroupConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "group_config.html").newOutputStream()
+  }
+
   task genConsumerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
@@ -1161,7 +1172,7 @@ project(':core') {
 
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolTypesDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
-                               'genKafkaConfigDocs', 'genTopicConfigDocs',
+                               'genKafkaConfigDocs', 'genTopicConfigDocs', 'genGroupConfigDocs',
                                ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
                                ':connect:runtime:genConnectPredicateDocs',
                                ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
@@ -1986,9 +1997,12 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
     implementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':metadata')
     implementation project(':group-coordinator')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':transaction-coordinator')
+    testImplementation project(':test-common:test-common-util')
 
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine
@@ -2903,10 +2917,10 @@ project(':streams:examples') {
   }
 
   dependencies {
-    // this dependency should be removed after we unify data API
-    implementation(project(':connect:json'))
     implementation project(':streams')
     implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonAnnotations
 
     testImplementation project(':streams:test-utils')
     testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
@@ -2942,6 +2956,7 @@ project(':streams:upgrade-system-tests-0110') {
   dependencies {
     testImplementation libs.kafkaStreams_0110
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -2957,6 +2972,7 @@ project(':streams:upgrade-system-tests-10') {
   dependencies {
     testImplementation libs.kafkaStreams_10
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -2972,6 +2988,7 @@ project(':streams:upgrade-system-tests-11') {
   dependencies {
     testImplementation libs.kafkaStreams_11
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -2987,6 +3004,7 @@ project(':streams:upgrade-system-tests-20') {
   dependencies {
     testImplementation libs.kafkaStreams_20
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3002,6 +3020,7 @@ project(':streams:upgrade-system-tests-21') {
   dependencies {
     testImplementation libs.kafkaStreams_21
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3017,6 +3036,7 @@ project(':streams:upgrade-system-tests-22') {
   dependencies {
     testImplementation libs.kafkaStreams_22
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3032,6 +3052,7 @@ project(':streams:upgrade-system-tests-23') {
   dependencies {
     testImplementation libs.kafkaStreams_23
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3047,6 +3068,7 @@ project(':streams:upgrade-system-tests-24') {
   dependencies {
     testImplementation libs.kafkaStreams_24
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3062,6 +3084,7 @@ project(':streams:upgrade-system-tests-25') {
   dependencies {
     testImplementation libs.kafkaStreams_25
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3077,6 +3100,7 @@ project(':streams:upgrade-system-tests-26') {
   dependencies {
     testImplementation libs.kafkaStreams_26
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3092,6 +3116,7 @@ project(':streams:upgrade-system-tests-27') {
   dependencies {
     testImplementation libs.kafkaStreams_27
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3107,6 +3132,7 @@ project(':streams:upgrade-system-tests-28') {
   dependencies {
     testImplementation libs.kafkaStreams_28
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3122,6 +3148,7 @@ project(':streams:upgrade-system-tests-30') {
   dependencies {
     testImplementation libs.kafkaStreams_30
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3137,6 +3164,7 @@ project(':streams:upgrade-system-tests-31') {
   dependencies {
     testImplementation libs.kafkaStreams_31
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3152,6 +3180,7 @@ project(':streams:upgrade-system-tests-32') {
   dependencies {
     testImplementation libs.kafkaStreams_32
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3167,6 +3196,7 @@ project(':streams:upgrade-system-tests-33') {
   dependencies {
     testImplementation libs.kafkaStreams_33
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3182,6 +3212,7 @@ project(':streams:upgrade-system-tests-34') {
   dependencies {
     testImplementation libs.kafkaStreams_34
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3197,6 +3228,7 @@ project(':streams:upgrade-system-tests-35') {
   dependencies {
     testImplementation libs.kafkaStreams_35
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3212,6 +3244,7 @@ project(':streams:upgrade-system-tests-36') {
   dependencies {
     testImplementation libs.kafkaStreams_36
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3227,6 +3260,7 @@ project(':streams:upgrade-system-tests-37') {
   dependencies {
     testImplementation libs.kafkaStreams_37
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3242,6 +3276,7 @@ project(':streams:upgrade-system-tests-38') {
   dependencies {
     testImplementation libs.kafkaStreams_38
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3257,6 +3292,7 @@ project(':streams:upgrade-system-tests-39') {
   dependencies {
     testImplementation libs.kafkaStreams_39
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {
@@ -3272,6 +3308,7 @@ project(':streams:upgrade-system-tests-40') {
   dependencies {
     testImplementation libs.kafkaStreams_40
     testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
   }
 
   systemTestLibs {

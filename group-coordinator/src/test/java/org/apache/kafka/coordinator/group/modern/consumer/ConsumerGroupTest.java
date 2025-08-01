@@ -33,10 +33,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -48,8 +50,6 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -631,212 +631,6 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testUpdateSubscriptionMetadata() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-        Uuid zarTopicId = Uuid.randomUuid();
-
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(fooTopicId, "foo", 1)
-            .addTopic(barTopicId, "bar", 2)
-            .addTopic(zarTopicId, "zar", 3)
-            .addRacks()
-            .build();
-
-        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(List.of("foo"))
-            .build();
-        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(List.of("bar"))
-            .build();
-        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
-            .setSubscribedTopicNames(List.of("zar"))
-            .build();
-
-        ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
-
-        // It should be empty by default.
-        assertEquals(
-            Map.of(),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account member 1.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, member1),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Updating the group with member1.
-        consumerGroup.updateMember(member1);
-
-        // It should return foo now.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 1.
-        assertEquals(
-            Map.of(),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(member1, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account member 2.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, member2),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Updating the group with member2.
-        consumerGroup.updateMember(member2);
-
-        // It should return foo and bar.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 2.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(member2, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Removing member1 results in returning bar.
-        assertEquals(
-            mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(member1, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account member 3.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, member3),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Updating group with member3.
-        consumerGroup.updateMember(member3);
-
-        // It should return foo, bar and zar.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 1, member 2 and member 3
-        assertEquals(
-            Map.of(),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member1, member2, member3))),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 2 and member 3.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member2, member3))),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // Compute while taking into account removal of member 1.
-        assertEquals(
-            mkMap(
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(Set.of(member1)),
-                image.topics(),
-                image.cluster()
-            )
-        );
-
-        // It should return foo, bar and zar.
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2)),
-                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(Set.of()),
-                image.topics(),
-                image.cluster()
-            )
-        );
-    }
-
-    @Test
     public void testUpdateSubscribedTopicNamesAndSubscriptionType() {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(List.of("foo"))
@@ -915,7 +709,7 @@ public class ConsumerGroupTest {
         // Initial assignment for member1
         Assignment initialAssignment = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(0))
+            Set.of(0)
         ));
         consumerGroup.updateTargetAssignment(memberId1, initialAssignment);
 
@@ -930,7 +724,7 @@ public class ConsumerGroupTest {
         // New assignment for member1
         Assignment newAssignment = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(1))
+            Set.of(1)
         ));
         consumerGroup.updateTargetAssignment(memberId1, newAssignment);
 
@@ -945,7 +739,7 @@ public class ConsumerGroupTest {
         // New assignment for member2 to add partition 1
         Assignment newAssignment2 = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(1))
+            Set.of(1)
         ));
         consumerGroup.updateTargetAssignment(memberId2, newAssignment2);
 
@@ -960,7 +754,7 @@ public class ConsumerGroupTest {
         // New assignment for member1 to revoke partition 1 and assign partition 0
         Assignment newAssignment1 = new Assignment(Map.of(
             topicId,
-            new HashSet<>(List.of(0))
+            Set.of(0)
         ));
         consumerGroup.updateTargetAssignment(memberId1, newAssignment1);
 
@@ -1215,15 +1009,6 @@ public class ConsumerGroupTest {
 
     @Test
     public void testIsSubscribedToTopic() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(fooTopicId, "foo", 1)
-            .addTopic(barTopicId, "bar", 2)
-            .addRacks()
-            .build();
-
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(List.of("foo"))
             .build();
@@ -1235,18 +1020,6 @@ public class ConsumerGroupTest {
 
         consumerGroup.updateMember(member1);
         consumerGroup.updateMember(member2);
-
-        assertEquals(
-            mkMap(
-                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1)),
-                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2))
-            ),
-            consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(null, null),
-                image.topics(),
-                image.cluster()
-            )
-        );
 
         assertTrue(consumerGroup.isSubscribedToTopic("foo"));
         assertTrue(consumerGroup.isSubscribedToTopic("bar"));
@@ -1290,7 +1063,7 @@ public class ConsumerGroupTest {
                     .setMemberType((byte) 1)
             ));
         ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "",
-            new MetadataImageBuilder().build().topics());
+            new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build()));
 
         assertEquals(expected, actual);
     }
@@ -1347,8 +1120,8 @@ public class ConsumerGroupTest {
 
         assertEquals(2, consumerGroup.classicMembersSupportedProtocols().get("range"));
         assertEquals(1, consumerGroup.classicMembersSupportedProtocols().get("roundrobin"));
-        assertTrue(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("range", "sticky"))));
-        assertFalse(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
+        assertTrue(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, Set.of("range", "sticky")));
+        assertFalse(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, Set.of("sticky", "roundrobin")));
 
         member2 = new ConsumerGroupMember.Builder(member2)
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
@@ -1372,7 +1145,7 @@ public class ConsumerGroupTest {
 
         assertEquals(2, consumerGroup.classicMembersSupportedProtocols().get("range"));
         assertEquals(2, consumerGroup.classicMembersSupportedProtocols().get("roundrobin"));
-        assertTrue(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, new HashSet<>(Arrays.asList("sticky", "roundrobin"))));
+        assertTrue(consumerGroup.supportsClassicProtocols(ConsumerProtocol.PROTOCOL_TYPE, Set.of("sticky", "roundrobin")));
     }
 
     @Test
@@ -1489,11 +1262,11 @@ public class ConsumerGroupTest {
         Uuid barTopicId = Uuid.randomUuid();
         String barTopicName = "bar";
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 1)
             .addTopic(barTopicId, barTopicName, 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
 
         ClassicGroup classicGroup = new ClassicGroup(
             logContext,
@@ -1585,7 +1358,6 @@ public class ConsumerGroupTest {
         assertEquals(expectedConsumerGroup.groupEpoch(), consumerGroup.groupEpoch());
         assertEquals(expectedConsumerGroup.state(), consumerGroup.state());
         assertEquals(expectedConsumerGroup.preferredServerAssignor(), consumerGroup.preferredServerAssignor());
-        assertEquals(Map.copyOf(expectedConsumerGroup.subscriptionMetadata()), Map.copyOf(consumerGroup.subscriptionMetadata()));
         assertEquals(expectedConsumerGroup.members(), consumerGroup.members());
     }
 
@@ -2269,11 +2041,11 @@ public class ConsumerGroupTest {
 
     @Test
     public void testComputeMetadataHash() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .addTopic(Uuid.randomUuid(), "bar", 1)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         Map<String, Long> cache = new HashMap<>();
         assertEquals(
             computeGroupHash(Map.of(
@@ -2313,11 +2085,11 @@ public class ConsumerGroupTest {
                     "bar", new SubscriptionCount(1, 0)
                 ),
                 cache,
-                new MetadataImageBuilder()
+                new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                     .addTopic(Uuid.randomUuid(), "foo", 1)
                     .addTopic(Uuid.randomUuid(), "bar", 1)
                     .addRacks()
-                    .build()
+                    .build())
             )
         );
         assertEquals(
@@ -2349,11 +2121,11 @@ public class ConsumerGroupTest {
                     "bar", new SubscriptionCount(1, 0)
                 ),
                 cache,
-                new MetadataImageBuilder()
+                new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                     .addTopic(Uuid.randomUuid(), "foo", 1)
                     .addTopic(Uuid.randomUuid(), "bar", 1)
                     .addRacks()
-                    .build()
+                    .build())
             )
         );
 

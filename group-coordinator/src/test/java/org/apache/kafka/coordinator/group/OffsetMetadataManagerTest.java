@@ -49,6 +49,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
@@ -140,7 +141,7 @@ public class OffsetMetadataManagerTest {
                         .withExecutor(executor)
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
-                        .withMetadataImage(metadataImage)
+                        .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
                         .withGroupCoordinatorMetricsShard(metrics)
                         .withGroupConfigManager(configManager)
                         .withConfig(GroupCoordinatorConfig.fromProps(Map.of()))
@@ -2524,18 +2525,9 @@ public class OffsetMetadataManagerTest {
             "foo",
             true
         );
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(Uuid.randomUuid(), "foo", 1)
-            .addRacks()
-            .build();
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(List.of("bar"))
             .build();
-        group.computeSubscriptionMetadata(
-            group.computeSubscribedTopicNames(null, member1),
-            image.topics(),
-            image.cluster()
-        );
         group.updateMember(member1);
         context.commitOffset("foo", "bar", 0, 100L, 0);
         assertTrue(group.isSubscribedToTopic("bar"));
