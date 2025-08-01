@@ -673,6 +673,8 @@ public class SaslServerAuthenticator implements Authenticator {
             Long connectionsMaxReauthMs = connectionsMaxReauthMsByMechanism.get(saslMechanism);
             boolean maxReauthSet = connectionsMaxReauthMs != null && connectionsMaxReauthMs > 0;
 
+            // give 60 seconds buffer to avoid Clock drift between server and client systems
+            long maxRetvalSessionLifetimeMs = (Long.MAX_VALUE - authenticationEndNanos) / 1000 / 1000 - 60000;
             if (credentialExpirationMs != null || maxReauthSet) {
                 if (credentialExpirationMs == null)
                     retvalSessionLifetimeMs = zeroIfNegative(connectionsMaxReauthMs);
@@ -680,7 +682,8 @@ public class SaslServerAuthenticator implements Authenticator {
                     retvalSessionLifetimeMs = zeroIfNegative(credentialExpirationMs - authenticationEndMs);
                 else
                     retvalSessionLifetimeMs = zeroIfNegative(Math.min(credentialExpirationMs - authenticationEndMs, connectionsMaxReauthMs));
-
+                
+                retvalSessionLifetimeMs = Math.min(retvalSessionLifetimeMs, maxRetvalSessionLifetimeMs);
                 sessionExpirationTimeNanos = authenticationEndNanos + 1000 * 1000 * retvalSessionLifetimeMs;
             }
 
