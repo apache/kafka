@@ -87,6 +87,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -496,6 +497,34 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
         assertTrue(future.isDone());
         assertEquals(offsets, commitOffsets);
+    }
+
+    @Test
+    public void testCommitSyncFailsWithUnknownOffsetAndMetadata() {
+        subscriptionState = mock(SubscriptionState.class);
+        Uuid topicId = Uuid.randomUuid();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        when(metadata.topicIds()).thenReturn(Map.of("topic", topicId));
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
+            new TopicPartition("foo", 1),
+            new OffsetAndMetadata(0));
+
+        CommitRequestManager commitRequestManager = create(false, 100);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitSync(
+            offsets, time.milliseconds() + defaultApiTimeoutMs);
+        assertEquals(1, commitRequestManager.unsentOffsetCommitRequests().size());
+        List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManager);
+        pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponseWithTopicId(
+            "topic",
+            topicId,
+            1,
+            (short) 10,
+            Errors.NONE)));
+
+        verify(subscriptionState, never()).allConsumed();
+        Throwable failure = assertThrows(ExecutionException.class, future::get);
+        assertEquals(IllegalStateException.class, failure.getCause().getClass());
+        assertTrue(failure.getMessage().contains("Can't find metadata for topic id " + topicId));
     }
 
     /**

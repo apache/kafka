@@ -754,21 +754,30 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          *   - fail the future with a non-recoverable KafkaException for all unexpected errors (even if retriable)
          */
         @Override
+        @SuppressWarnings("NPathComplexity")
         public void onResponse(final ClientResponse response) {
             metricsManager.recordRequestLatency(response.requestLatencyMs());
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
             Set<String> unauthorizedTopics = new HashSet<>();
-            Set<Uuid> unknownTopicIds = new HashSet<>();
             boolean failedRequestRegistered = false;
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
-                String topicName = metadata.topicNames().getOrDefault(topic.topicId(), topic.name());
                 for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
-                    TopicPartition tp = new TopicPartition(topicName, partition.partitionIndex());
+                    // Version 10 drop topic name and support to topic id.
+                    // We need to find offsetAndMetadata based on topic id and partition index only as
+                    // topic name in the response will be emtpy.
+                    // For older versions, topic id is zero, and we will find the offsetAndMetadata based on the topic name.
+                    TopicPartition tp = (!Uuid.ZERO_UUID.equals(topic.topicId()) && metadata.topicNames().containsKey(topic.topicId())) ?
+                        new TopicPartition(metadata.topicNames().get(topic.topicId()), partition.partitionIndex()) :
+                        new TopicPartition(topic.name(), partition.partitionIndex());
 
                     Errors error = Errors.forCode(partition.errorCode());
                     if (error == Errors.NONE) {
                         OffsetAndMetadata offsetAndMetadata = offsets.get(tp);
+                        if (offsetAndMetadata == null) {
+                            throw new IllegalStateException("Can't find metadata for topic id " + topic.topicId() +
+                                " topic name " + topic.name() + " partition " + partition.partitionIndex() + " using " + metadata.topicNames());
+                        }
                         long offset = offsetAndMetadata.offset();
                         log.debug("OffsetCommit completed successfully for offset {} partition {}", offset, tp);
                         continue;
@@ -793,7 +802,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         future.completeExceptionally(error.exception());
                         return;
                     } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS ||
-                        error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                        error == Errors.UNKNOWN_TOPIC_OR_PARTITION ||
+                        error == Errors.UNKNOWN_TOPIC_ID) {
                         // just retry
                         future.completeExceptionally(error.exception());
                         return;
@@ -811,9 +821,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                         // Collect all unauthorized topics before failing
                         unauthorizedTopics.add(tp.topic());
-                    } else if (error == Errors.UNKNOWN_TOPIC_ID) {
-                        // Collect all unknown topic ids
-                        unknownTopicIds.add(topic.topicId());
                     } else {
                         // Fail with a non-retriable KafkaException for all unexpected errors
                         // (even if they are retriable)
@@ -826,9 +833,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (!unauthorizedTopics.isEmpty()) {
                 log.error("OffsetCommit failed due to not authorized to commit to topics {}", unauthorizedTopics);
                 future.completeExceptionally(new TopicAuthorizationException(unauthorizedTopics));
-            } else if (!unknownTopicIds.isEmpty()) {
-                log.error("OffsetCommit failed due to unknown topic IDs {}", unknownTopicIds);
-                future.completeExceptionally(Errors.UNKNOWN_TOPIC_ID.exception());
             } else {
                 future.complete(null);
             }
