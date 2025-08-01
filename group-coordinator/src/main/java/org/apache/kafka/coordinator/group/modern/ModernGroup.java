@@ -525,7 +525,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         }
 
         for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
-            if (subscriberCount.byNameCount != numberOfMembers) {
+            if (subscriberCount.byNameCount() != numberOfMembers) {
                 return HETEROGENEOUS;
             }
         }

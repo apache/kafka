@@ -649,7 +649,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
             return new DefaultStateUpdater(
                 name,
-                streamsMetrics.metricsRegistry(),
+                streamsMetrics,
                 streamsConfig,
                 restoreConsumer,
                 changelogReader,

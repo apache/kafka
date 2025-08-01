@@ -14,26 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
-import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+package org.apache.kafka.tiered.storage.specs;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.Objects;
-
-/**
- * A simple record to hold the result of a StreamsGroupHeartbeat request.
- *
- * @param data            The data to be returned to the client.
- * @param creatableTopics The internal topics to be created.
- */
-public record StreamsGroupHeartbeatResult(StreamsGroupHeartbeatResponseData data, Map<String, CreatableTopic> creatableTopics) {
-
-    public StreamsGroupHeartbeatResult {
-        Objects.requireNonNull(data);
-        creatableTopics = Collections.unmodifiableMap(Objects.requireNonNull(creatableTopics));
+public record FetchCountAndOp(
+    int count,
+    RemoteFetchCount.OperationType operationType
+) {
+    public FetchCountAndOp(int count) {
+        this(count, RemoteFetchCount.OperationType.EQUALS_TO);
     }
 
+    @Override
+    public String toString() {
+        return "FetchCountAndOp{" +
+            "count=" + count +
+            ", operationType=" + operationType +
+            '}';
+    }
 }
