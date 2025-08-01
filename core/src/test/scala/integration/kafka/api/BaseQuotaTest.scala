@@ -17,10 +17,10 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, Properties}
+import java.util.Properties
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
-import kafka.server.{ClientQuotaManager, KafkaBroker}
+import kafka.server.KafkaBroker
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
@@ -36,7 +36,7 @@ import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.quota.QuotaType
+import org.apache.kafka.server.quota.{ClientQuotaManager, QuotaType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -165,7 +165,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
     // Since producer may have been throttled after producing a couple of records,
     // consume from beginning till throttled
-    quotaTestClients.consumer.seekToBeginning(Collections.singleton(new TopicPartition(topic1, 0)))
+    quotaTestClients.consumer.seekToBeginning(util.Set.of(new TopicPartition(topic1, 0)))
     quotaTestClients.consumeUntilThrottled(numRecords + produced)
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
@@ -177,7 +177,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, 0.1)
 
     val consumer = quotaTestClients.consumer
-    consumer.subscribe(Collections.singleton(topic1))
+    consumer.subscribe(util.Set.of(topic1))
     val endTimeMs = System.currentTimeMillis + 10000
     var throttled = false
     while ((!throttled || quotaTestClients.exemptRequestMetric == null || metricValue(quotaTestClients.exemptRequestMetric) <= 0)
@@ -236,7 +236,7 @@ abstract class QuotaTestClients(topic: String,
   def consumeUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     val timeoutMs = TimeUnit.MINUTES.toMillis(1)
 
-    consumer.subscribe(Collections.singleton(topic))
+    consumer.subscribe(util.Set.of(topic))
     var numConsumed = 0
     var throttled = false
     val startMs = System.currentTimeMillis

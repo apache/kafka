@@ -45,6 +45,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetrics;
@@ -52,8 +54,8 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSuppli
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.FeaturesImage;
+import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
@@ -76,6 +78,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
@@ -91,6 +94,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
     private final Timer timer;
     private final PartitionWriter writer;
     private final Map<TopicPartition, Long> lastPrunedOffsets;
+    private final Supplier<Boolean> shareGroupConfigEnabledSupplier;
+    private volatile boolean shouldRunPeriodicJob;
 
     public static class Builder {
         private final int nodeId;
@@ -99,7 +104,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         private CoordinatorLoader<CoordinatorRecord> loader;
         private Time time;
         private Timer timer;
-
+        private Supplier<Boolean> shareGroupConfigEnabledSupplier;
         private ShareCoordinatorMetrics coordinatorMetrics;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
 
@@ -138,6 +143,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
             return this;
         }
 
+        public Builder withShareGroupEnabledConfigSupplier(Supplier<Boolean> shareGroupConfigEnabledSupplier) {
+            this.shareGroupConfigEnabledSupplier = shareGroupConfigEnabledSupplier;
+            return this;
+        }
+
         public ShareCoordinatorService build() {
             if (config == null) {
                 throw new IllegalArgumentException("Config must be set.");
@@ -159,6 +169,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
             }
             if (coordinatorRuntimeMetrics == null) {
                 throw new IllegalArgumentException("Coordinator runtime metrics must be set.");
+            }
+            if (shareGroupConfigEnabledSupplier == null) {
+                throw new IllegalArgumentException("Share group enabled config enabled supplier must be set.");
             }
 
             String logPrefix = String.format("ShareCoordinator id=%d", nodeId);
@@ -202,7 +215,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 coordinatorMetrics,
                 time,
                 timer,
-                writer
+                writer,
+                shareGroupConfigEnabledSupplier
             );
         }
     }
@@ -214,7 +228,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
         ShareCoordinatorMetrics shareCoordinatorMetrics,
         Time time,
         Timer timer,
-        PartitionWriter writer
+        PartitionWriter writer,
+        Supplier<Boolean> shareGroupConfigEnabledSupplier
     ) {
         this.log = logContext.logger(ShareCoordinatorService.class);
         this.config = config;
@@ -224,6 +239,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         this.timer = timer;
         this.writer = writer;
         this.lastPrunedOffsets = new ConcurrentHashMap<>();
+        this.shareGroupConfigEnabledSupplier = shareGroupConfigEnabledSupplier;
     }
 
     @Override
@@ -238,10 +254,12 @@ public class ShareCoordinatorService implements ShareCoordinator {
     @Override
     public Properties shareGroupStateTopicConfigs() {
         Properties properties = new Properties();
-        properties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE); // as defined in KIP-932
+        // As defined in KIP-932.
+        properties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
         properties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
         properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.shareCoordinatorStateTopicSegmentBytes());
         properties.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.shareCoordinatorStateTopicMinIsr());
+        properties.put(TopicConfig.RETENTION_MS_CONFIG, -1);
         return properties;
     }
 
@@ -265,7 +283,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         log.info("Starting up.");
         numPartitions = shareGroupTopicPartitionCount.getAsInt();
-        setupPeriodicJobs();
         log.info("Startup complete.");
     }
 
@@ -274,11 +291,15 @@ public class ShareCoordinatorService implements ShareCoordinator {
         setupSnapshotColdPartitions();
     }
 
-    private void setupRecordPruning() {
+    // Visibility for tests
+    void setupRecordPruning() {
         log.debug("Scheduling share-group state topic prune job.");
         timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
             @Override
             public void run() {
+                if (!shouldRunPeriodicJob) {
+                    return;
+                }
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
                 runtime.activeTopicPartitions().forEach(tp -> futures.add(performRecordPruning(tp)));
 
@@ -349,11 +370,15 @@ public class ShareCoordinatorService implements ShareCoordinator {
         return fut;
     }
 
-    private void setupSnapshotColdPartitions() {
+    // Visibility for tests
+    void setupSnapshotColdPartitions() {
         log.debug("Scheduling cold share-partition snapshotting.");
         timer.add(new TimerTask(config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
             @Override
             public void run() {
+                if (!shouldRunPeriodicJob) {
+                    return;
+                }
                 List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
                     "snapshot-cold-partitions",
                     Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
@@ -1072,9 +1097,21 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+    public void onNewMetadataImage(CoordinatorMetadataImage newImage, FeaturesImage newFeaturesImage, CoordinatorMetadataDelta delta) {
         throwIfNotActive();
         this.runtime.onNewMetadataImage(newImage, delta);
+        boolean enabled = isShareGroupsEnabled(newFeaturesImage);
+        // enabled    shouldRunJob         result (XOR)
+        // 0            0               no op on flag, do not call jobs
+        // 0            1               disable flag, do not call jobs                      => action
+        // 1            0               enable flag, call jobs as they are not recursing    => action
+        // 1            1               no op on flag, do not call jobs
+        if (enabled ^ shouldRunPeriodicJob) {
+            shouldRunPeriodicJob = enabled;
+            if (enabled) {
+                setupPeriodicJobs();
+            }
+        }
     }
 
     TopicPartition topicPartitionFor(SharePartitionKey key) {
@@ -1089,5 +1126,16 @@ public class ShareCoordinatorService implements ShareCoordinator {
         if (!isActive.get()) {
             throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
         }
+    }
+
+    private boolean isShareGroupsEnabled(FeaturesImage image) {
+        return shareGroupConfigEnabledSupplier.get() || ShareVersion.fromFeatureLevel(
+            image.finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
+        ).supportsShareGroups();
+    }
+
+    // Visibility for tests
+    boolean shouldRunPeriodicJob() {
+        return shouldRunPeriodicJob;
     }
 }

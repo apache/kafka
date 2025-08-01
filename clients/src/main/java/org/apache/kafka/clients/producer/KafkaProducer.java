@@ -78,6 +78,7 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
@@ -804,7 +805,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         flush();
         transactionManager.prepareTransaction();
         producerMetrics.recordPrepareTxn(time.nanoseconds() - now);
-        return transactionManager.preparedTransactionState();
+        ProducerIdAndEpoch producerIdAndEpoch = transactionManager.preparedTransactionState();
+        return new PreparedTxnState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
     }
 
     /**
@@ -882,6 +884,41 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
         producerMetrics.recordAbortTxn(time.nanoseconds() - abortStart);
+    }
+
+    /**
+     * Completes a prepared transaction by comparing the provided prepared transaction state with the
+     * current prepared state on the producer.
+     * If they match, the transaction is committed; otherwise, it is aborted.
+     * 
+     * @param preparedTxnState              The prepared transaction state to compare against the current state
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws InvalidTxnStateException if the producer is not in prepared state
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws TimeoutException if the time taken for completing the transaction has surpassed <code>max.block.ms</code>
+     * @throws InterruptException if the thread is interrupted while blocked
+     */
+    @Override
+    public void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException {
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
+        
+        if (!transactionManager.isPrepared()) {
+            throw new InvalidTxnStateException("Cannot complete transaction because no transaction has been prepared. " +
+                "Call prepareTransaction() first, or make sure initTransaction(true) was called.");
+        }
+        
+        // Get the current prepared transaction state
+        ProducerIdAndEpoch currentProducerIdAndEpoch = transactionManager.preparedTransactionState();
+        PreparedTxnState currentPreparedState = new PreparedTxnState(currentProducerIdAndEpoch.producerId, currentProducerIdAndEpoch.epoch);
+        
+        // Compare the prepared transaction state token and commit or abort accordingly
+        if (currentPreparedState.equals(preparedTxnState)) {
+            commitTransaction();
+        } else {
+            abortTransaction();
+        }
     }
 
     /**

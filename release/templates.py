@@ -70,7 +70,7 @@ If any of these are missing, see https://cwiki.apache.org/confluence/display/KAF
 Some of these may be used from these previous settings loaded from {prefs_file}:
 {prefs}
 
-Do you have all of of these setup?"""
+Do you have all of these setup?"""
 
 
 def release_announcement_email(release_version, contributors):

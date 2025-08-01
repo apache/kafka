@@ -320,6 +320,11 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(CONFIG_PROVIDERS_CONFIG,
+                    ConfigDef.Type.LIST,
+                    List.of(),
+                    ConfigDef.Importance.LOW, 
+                    CONFIG_PROVIDERS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 

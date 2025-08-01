@@ -107,6 +107,12 @@ public interface ProcessingContext {
     /**
      * Get the state store given the store name.
      *
+     * <p>The returned state store represent one shard of the overall state, which belongs to the current task.
+     * The returned shard of the state store may only be used by the current {@link Processor} or
+     * {@link FixedKeyProcessor} instance.
+     * Sharing a shard across different processors (ie, from different "sibling" tasks; same sub-topology but different
+     * partition) may lead to data corruption and/or data loss.
+     *
      * @param name The store name
      * @param <S> The type or interface of the store to return
      * @return The state store instance

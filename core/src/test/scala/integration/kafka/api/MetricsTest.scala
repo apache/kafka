@@ -98,7 +98,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     sendRecords(producer, numRecords, recordSize, tp)
 
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumer.seek(tp, 0)
     TestUtils.consumeRecords(consumer, numRecords)
 

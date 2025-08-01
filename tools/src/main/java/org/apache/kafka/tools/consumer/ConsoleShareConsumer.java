@@ -36,6 +36,7 @@ import java.io.PrintStream;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -75,7 +76,7 @@ public class ConsoleShareConsumer {
         ShareConsumer<byte[], byte[]> consumer = new KafkaShareConsumer<>(consumerProps, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         ConsumerWrapper consumerWrapper = new ConsumerWrapper(opts.topicArg(), consumer, timeoutMs);
 
-        addShutdownHook(consumerWrapper);
+        addShutdownHook(consumerWrapper, opts);
 
         try {
             process(opts.maxMessages(), opts.formatter(), consumerWrapper, System.out, opts.rejectMessageOnError(), opts.acknowledgeType());
@@ -88,13 +89,16 @@ public class ConsoleShareConsumer {
         }
     }
 
-    private static void addShutdownHook(ConsumerWrapper consumer) {
+    private static void addShutdownHook(ConsumerWrapper consumer, ConsoleShareConsumerOptions conf) {
         Exit.addShutdownHook("consumer-shutdown-hook", () -> {
             try {
                 consumer.wakeup();
                 SHUTDOWN_LATCH.await();
             } catch (Throwable t) {
                 LOG.error("Exception while running shutdown hook: ", t);
+            }
+            if (conf.enableSystestEventsLogging()) {
+                System.out.println("shutdown_complete");
             }
         });
     }
@@ -163,7 +167,7 @@ public class ConsoleShareConsumer {
             this.consumer = consumer;
             this.timeoutMs = timeoutMs;
 
-            consumer.subscribe(Collections.singletonList(topic));
+            consumer.subscribe(List.of(topic));
         }
 
         ConsumerRecord<byte[], byte[]> receive() {

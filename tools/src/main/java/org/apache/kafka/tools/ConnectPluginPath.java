@@ -42,7 +42,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -149,14 +148,12 @@ public class ConnectPluginPath {
         if (subcommand == null) {
             throw new ArgumentParserException("No subcommand specified", parser);
         }
-        switch (subcommand) {
-            case "list":
-                return new Config(Command.LIST, locations, false, false, out, err);
-            case "sync-manifests":
-                return new Config(Command.SYNC_MANIFESTS, locations, namespace.getBoolean("dry_run"), namespace.getBoolean("keep_not_found"), out, err);
-            default:
-                throw new ArgumentParserException("Unrecognized subcommand: '" + subcommand + "'", parser);
-        }
+        return switch (subcommand) {
+            case "list" -> new Config(Command.LIST, locations, false, false, out, err);
+            case "sync-manifests" ->
+                new Config(Command.SYNC_MANIFESTS, locations, namespace.getBoolean("dry_run"), namespace.getBoolean("keep_not_found"), out, err);
+            default -> throw new ArgumentParserException("Unrecognized subcommand: '" + subcommand + "'", parser);
+        };
     }
 
     private static Set<Path> parseLocations(ArgumentParser parser, Namespace namespace) throws ArgumentParserException, TerseException {
@@ -197,7 +194,7 @@ public class ConnectPluginPath {
     }
 
     enum Command {
-        LIST, SYNC_MANIFESTS;
+        LIST, SYNC_MANIFESTS
     }
 
     private static class Config {
@@ -326,11 +323,12 @@ public class ConnectPluginPath {
             rowAliases.add(PluginUtils.prunedName(pluginDesc));
             rows.add(newRow(workspace, pluginDesc.className(), new ArrayList<>(rowAliases), pluginDesc.type(), pluginDesc.version(), true));
             // If a corresponding manifest exists, mark it as loadable by removing it from the map.
+            // TODO: The use of Collections here shall be fixed with KAFKA-19524.
             nonLoadableManifests.getOrDefault(pluginDesc.className(), Collections.emptySet()).remove(pluginDesc.type());
         });
         nonLoadableManifests.forEach((className, types) -> types.forEach(type -> {
             // All manifests which remain in the map are not loadable
-            rows.add(newRow(workspace, className, Collections.emptyList(), type, PluginDesc.UNDEFINED_VERSION, false));
+            rows.add(newRow(workspace, className, List.of(), type, PluginDesc.UNDEFINED_VERSION, false));
         }));
         return rows;
     }
@@ -436,8 +434,8 @@ public class ConnectPluginPath {
     }
 
     private static PluginScanResult discoverPlugins(PluginSource source, ReflectionScanner reflectionScanner, ServiceLoaderScanner serviceLoaderScanner) {
-        PluginScanResult serviceLoadResult = serviceLoaderScanner.discoverPlugins(Collections.singleton(source));
-        PluginScanResult reflectiveResult = reflectionScanner.discoverPlugins(Collections.singleton(source));
-        return new PluginScanResult(Arrays.asList(serviceLoadResult, reflectiveResult));
+        PluginScanResult serviceLoadResult = serviceLoaderScanner.discoverPlugins(Set.of(source));
+        PluginScanResult reflectiveResult = reflectionScanner.discoverPlugins(Set.of(source));
+        return new PluginScanResult(List.of(serviceLoadResult, reflectiveResult));
     }
 }

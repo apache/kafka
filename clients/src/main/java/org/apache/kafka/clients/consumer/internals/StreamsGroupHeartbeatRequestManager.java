@@ -52,7 +52,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
 /**
- * <p>Manages the request creation and response handling for the Streams group heartbeat. The class creates a
+ * <p>Manages the request creation and response handling for the streams group heartbeat. The class creates a
  * heartbeat request using the state stored in the membership manager. The requests can be retrieved
  * by calling {@link StreamsGroupHeartbeatRequestManager#poll(long)}. Once the response is received, it updates the
  * state in the membership manager and handles any errors.
@@ -88,6 +88,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         private final int rebalanceTimeoutMs;
         private final StreamsRebalanceData streamsRebalanceData;
         private final LastSentFields lastSentFields = new LastSentFields();
+        private int endpointInformationEpoch = -1;
+
 
         public HeartbeatState(final StreamsRebalanceData streamsRebalanceData,
                               final StreamsMembershipManager membershipManager,
@@ -101,11 +103,20 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             lastSentFields.reset();
         }
 
+        public int endpointInformationEpoch() {
+            return endpointInformationEpoch;
+        }
+
+        public void setEndpointInformationEpoch(int endpointInformationEpoch) {
+            this.endpointInformationEpoch = endpointInformationEpoch;
+        }
+
         public StreamsGroupHeartbeatRequestData buildRequestData() {
             StreamsGroupHeartbeatRequestData data = new StreamsGroupHeartbeatRequestData();
             data.setGroupId(membershipManager.groupId());
             data.setMemberId(membershipManager.memberId());
             data.setMemberEpoch(membershipManager.memberEpoch());
+            data.setEndpointInformationEpoch(endpointInformationEpoch);
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
             boolean joining = membershipManager.state() == MemberState.JOINING;
@@ -515,6 +526,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         final StreamsGroupHeartbeatResponseData data = response.data();
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
+        heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
 
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));

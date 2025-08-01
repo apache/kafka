@@ -21,12 +21,12 @@
 <import-control pkg="org.apache.kafka">
     <allow pkg="java"/>
     <allow pkg="org.junit"/>
-    <allow pkg="scala" />
 
     <!-- These are tests, allow whatever -->
     <allow pkg="org.apache.kafka"/>
     <allow pkg="org.junit"/>
     <allow pkg="kafka"/>
+    <allow pkg="org.slf4j"/>
 
     <allow pkg="com.yammer.metrics.core" />
 

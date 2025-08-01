@@ -179,6 +179,15 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         expectedError = Errors.UNKNOWN_MEMBER_ID,
         version = version.toShort
       )
+
+      // Heartbeat with empty group id.
+      heartbeat(
+        groupId = "",
+        memberId = leaderMemberId,
+        generationId = -1,
+        expectedError = Errors.INVALID_GROUP_ID,
+        version = version.toShort
+      )
     }
   }
 }

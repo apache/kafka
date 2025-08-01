@@ -186,7 +186,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         /**
          * The initial max read offset which LocalLog instances will be configured with.
          */
-        private long initialMaxReadOffset = Long.MAX_VALUE;
+        private final long initialMaxReadOffset = Long.MAX_VALUE;
 
         public SharedLogData(Optional<RawSnapshotReader> snapshot) {
             if (snapshot.isPresent()) {
@@ -544,7 +544,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                         numEntriesFound++;
                     }
                 }
-                log.trace("Completed log check for node " + nodeId);
+                log.trace("Completed log check for node {}", nodeId);
             } catch (Exception e) {
                 log.error("Exception while handling log check", e);
             }

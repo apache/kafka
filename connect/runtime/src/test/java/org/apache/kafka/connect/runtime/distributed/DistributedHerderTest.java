@@ -1031,7 +1031,7 @@ public class DistributedHerderTest {
         // tasks are revoked
         TopicStatus fooStatus = new TopicStatus(FOO_TOPIC, CONN1, 0, time.milliseconds());
         TopicStatus barStatus = new TopicStatus(BAR_TOPIC, CONN1, 0, time.milliseconds());
-        when(statusBackingStore.getAllTopics(eq(CONN1))).thenReturn(new HashSet<>(Arrays.asList(fooStatus, barStatus)));
+        when(statusBackingStore.getAllTopics(eq(CONN1))).thenReturn(Set.of(fooStatus, barStatus));
         doNothing().when(statusBackingStore).deleteTopic(eq(CONN1), eq(FOO_TOPIC));
         doNothing().when(statusBackingStore).deleteTopic(eq(CONN1), eq(BAR_TOPIC));
 
@@ -3232,7 +3232,7 @@ public class DistributedHerderTest {
         taskConfigGenerations.put(CONN1, 3);
         taskConfigGenerations.put(CONN2, 4);
         taskConfigGenerations.put(conn3, 2);
-        Set<String> pendingFencing = new HashSet<>(Arrays.asList(CONN1, CONN2, conn3));
+        Set<String> pendingFencing = Set.of(CONN1, CONN2, conn3);
         ClusterConfigState configState = exactlyOnceSnapshot(
                 sessionKey,
                 TASK_CONFIGS_MAP,

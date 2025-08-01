@@ -21,7 +21,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.MockAlterPartitionManager
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.requests.LeaderAndIsrRequest
+import org.apache.kafka.common.PartitionState
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.{MetadataCache, MockConfigRepository}
 import org.apache.kafka.server.common.MetadataVersion
@@ -38,7 +38,6 @@ import java.io.File
 import java.lang.{Long => JLong}
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicInteger
-import scala.jdk.CollectionConverters._
 
 object AbstractPartitionTest {
   val brokerId = 101
@@ -100,7 +99,7 @@ class AbstractPartitionTest {
 
   def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000: java.lang.Integer)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, 999: java.lang.Integer)
     overrides.foreach { case (k, v) => logProps.put(k, v) }
@@ -120,13 +119,11 @@ class AbstractPartitionTest {
                                         isLeader: Boolean): Partition = {
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
 
-    val controllerEpoch = 0
-    val replicas = List[Integer](brokerId, remoteReplicaId).asJava
+    val replicas = java.util.List.of[Integer](brokerId, remoteReplicaId)
     val isr = replicas
 
     if (isLeader) {
-      assertTrue(partition.makeLeader(new LeaderAndIsrRequest.PartitionState()
-        .setControllerEpoch(controllerEpoch)
+      assertTrue(partition.makeLeader(new PartitionState()
         .setLeader(brokerId)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(isr)
@@ -135,8 +132,7 @@ class AbstractPartitionTest {
         .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
       assertEquals(leaderEpoch, partition.getLeaderEpoch)
     } else {
-      assertTrue(partition.makeFollower(new LeaderAndIsrRequest.PartitionState()
-        .setControllerEpoch(controllerEpoch)
+      assertTrue(partition.makeFollower(new PartitionState()
         .setLeader(remoteReplicaId)
         .setLeaderEpoch(leaderEpoch)
         .setIsr(isr)

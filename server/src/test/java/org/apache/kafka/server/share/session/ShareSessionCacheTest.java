@@ -45,7 +45,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testShareSessionCache() throws InterruptedException {
-        ShareSessionCache cache = new ShareSessionCache(3, true);
+        ShareSessionCache cache = new ShareSessionCache(3);
         assertEquals(0, cache.size());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(10), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(20), "conn-2");
@@ -59,7 +59,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testResizeCachedSessions() throws InterruptedException {
-        ShareSessionCache cache = new ShareSessionCache(2, true);
+        ShareSessionCache cache = new ShareSessionCache(2);
         assertEquals(0, cache.size());
         assertEquals(0, cache.totalPartitions());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(2), "conn-1");
@@ -113,7 +113,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testRemoveConnection() throws InterruptedException {
-        ShareSessionCache cache = new ShareSessionCache(3, true);
+        ShareSessionCache cache = new ShareSessionCache(3);
         assertEquals(0, cache.size());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(1), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(2), "conn-2");
@@ -143,7 +143,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testRemoveAllSessions() {
-        ShareSessionCache cache = new ShareSessionCache(3, true);
+        ShareSessionCache cache = new ShareSessionCache(3);
         assertEquals(0, cache.size());
         assertEquals(0, cache.totalPartitions());
         cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(10), "conn-1");
@@ -159,7 +159,7 @@ public class ShareSessionCacheTest {
     @Test
     public void testShareGroupListenerEvents() {
         ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
-        ShareSessionCache cache = new ShareSessionCache(3, true);
+        ShareSessionCache cache = new ShareSessionCache(3);
         cache.registerShareGroupListener(mockListener);
 
         String groupId = "grp";
@@ -206,7 +206,7 @@ public class ShareSessionCacheTest {
     @Test
     public void testShareGroupListenerEventsMultipleGroups() {
         ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
-        ShareSessionCache cache = new ShareSessionCache(3, true);
+        ShareSessionCache cache = new ShareSessionCache(3);
         cache.registerShareGroupListener(mockListener);
 
         String groupId1 = "grp1";
@@ -237,7 +237,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testNoShareGroupListenerRegistered() {
-        ShareSessionCache cache = new ShareSessionCache(3, true);
+        ShareSessionCache cache = new ShareSessionCache(3);
 
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();
