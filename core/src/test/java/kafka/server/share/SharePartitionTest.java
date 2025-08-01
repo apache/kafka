@@ -7601,7 +7601,7 @@ public class SharePartitionTest {
               DEFAULT_FETCH_OFFSET,
               fetchPartitionData(records, 0),
               FETCH_ISOLATION_HWM),
-          20);
+            20);
 
         assertEquals(2, sharePartition.cachedState().size());
         assertEquals(2, sharePartition.timer().size());

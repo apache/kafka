@@ -1795,7 +1795,9 @@ public class SharePartition {
                     }
 
                     if (inFlightBatch.batchHasOngoingStateTransition()) {
-                        return Optional.of(new InvalidRecordStateException("The batch has on-going acknowledgement."));
+                        log.debug("The batch has on-going transition, batch: {} for the share "
+                            + "partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
+                        return Optional.of(new InvalidRecordStateException("The record state is invalid. The acknowledgement of delivery could not be completed."));
                     }
                 }
 
@@ -1905,7 +1907,7 @@ public class SharePartition {
                             + " partition: {}-{}", offsetState.getKey(), inFlightBatch, groupId,
                         topicIdPartition);
                     return Optional.of(new InvalidRecordStateException(
-                        "The offset cannot be acknowledged. The offset has on-going acknowledgement."));
+                        "The record state is invalid. The acknowledgement of delivery could not be completed."));
                 }
 
                 // Check if member id is the owner of the offset.
@@ -2410,7 +2412,7 @@ public class SharePartition {
             lock.writeLock().lock();
             try {
                 // Check if timer task is already cancelled. This can happen when concurrent requests
-                // happen to acknoweldge in-flight state and timeout handler is waiting for the lock
+                // happen to acknowledge in-flight state and timeout handler is waiting for the lock
                 // but already cancelled.
                 if (timerTask.isCancelled()) {
                     log.debug("Timer task is already cancelled, not executing further.");

@@ -82,13 +82,6 @@ public class InFlightState {
     }
 
     /**
-     * @return True if the record has achieved a terminal state of ARCHIVED, false otherwise.
-     */
-    public boolean isTerminalState() {
-        return isTerminalState;
-    }
-
-    /**
      * @return The member id of the client that is fetching/acknowledging the record.
      */
     public String memberId() {
@@ -161,9 +154,10 @@ public class InFlightState {
             if (hasOngoingStateTransition()) {
                 // A misbehaving client can send multiple requests to update the same records hence
                 // do not proceed if the transition is already in progress. Do not log an error here
-                // as it might not bea an error rather concurrent update of same state due to multiple
-                // requests.
-                log.info("{} has ongoing state transition, cannot update", this);
+                // as it might not be an error rather concurrent update of same state due to multiple
+                // requests. This ideally should not happen as the client should hence log in info level
+                // to check if the client is misbehaving, however there is already a check in acknowledge.
+                log.info("{} has ongoing state transition, cannot update to: {}", this, newState);
                 return null;
             }
 
@@ -224,7 +218,7 @@ public class InFlightState {
      * @param commit If true, commits the state transition, otherwise rolls back.
      */
     public void completeStateTransition(boolean commit) {
-        if (commit || isTerminalState()) {
+        if (commit || isTerminalState) {
             // Cancel the acquisition lock timeout task for the state since it is acknowledged/released successfully.
             cancelAndClearAcquisitionLockTimeoutTask();
             rollbackState = null;
