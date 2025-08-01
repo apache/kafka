@@ -34,6 +34,7 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -101,6 +102,7 @@ public class DescribeStreamsGroupTest {
     public void testDescribeWithUnrecognizedOption() {
         String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", bootstrapServers, "--describe", "--group", APP_ID};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
+        validateDescribeExitCode(args, 1);
     }
 
     @Test
@@ -128,12 +130,15 @@ public class DescribeStreamsGroupTest {
             List.of(APP_ID, INPUT_TOPIC, "1", "0"),
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "0", "0"),
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "0"));
-
+        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+                Arrays.asList(args1), expectedHeader, expectedRows, List.of());
+        validateDescribeExitCode(args1, 0);
         // --describe --offsets has the same output as --describe
+        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+                Arrays.asList(args2), expectedHeader, expectedRows, List.of());
+        validateDescribeExitCode(args2, 0);
     }
 
     @Test
@@ -145,13 +150,19 @@ public class DescribeStreamsGroupTest {
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "0", "-", "-", "0", "0"),
             List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "-", "-", "0", "0"));
 
+        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+                Arrays.asList(args1), expectedHeader, expectedRows, List.of());
+        validateDescribeExitCode(args1, 0);
         // --describe --offsets has the same output as --describe
+        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+                Arrays.asList(args2), expectedHeader, expectedRows, List.of());
+        validateDescribeExitCode(args2, 0);
+        final String[] args3 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--offsets", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--offsets", "--group", APP_ID), expectedHeader, expectedRows, List.of());
+                Arrays.asList(args3), expectedHeader, expectedRows, List.of());
+        validateDescribeExitCode(args3, 0);
     }
 
     @Test
@@ -160,8 +171,10 @@ public class DescribeStreamsGroupTest {
         final Set<List<String>> expectedRows = Set.of(Arrays.asList(APP_ID, "", "", "Stable", "2"));
         // The coordinator is not deterministic, so we don't care about it.
         final List<Integer> dontCares = List.of(1, 2);
+        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--state", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--state", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            Arrays.asList(args), expectedHeader, expectedRows, dontCares);
+        validateDescribeExitCode(args, 0);
     }
 
     @Test
@@ -171,10 +184,14 @@ public class DescribeStreamsGroupTest {
         // The coordinator is not deterministic, so we don't care about it.
         final List<Integer> dontCares = List.of(1, 2);
 
+        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--state", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--state", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            Arrays.asList(args1), expectedHeader, expectedRows, dontCares);
+        validateDescribeExitCode(args1, 0);
+        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--state", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--state", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            Arrays.asList(args2), expectedHeader, expectedRows, dontCares);
+        validateDescribeExitCode(args2, 0);
     }
 
     @Test
@@ -186,8 +203,10 @@ public class DescribeStreamsGroupTest {
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(1, 2, 3);
 
+        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            Arrays.asList(args), expectedHeader, expectedRows, dontCares);
+        validateDescribeExitCode(args, 0);
     }
 
     @Test
@@ -199,10 +218,14 @@ public class DescribeStreamsGroupTest {
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(3, 6, 7);
 
+        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            Arrays.asList(args1), expectedHeader, expectedRows, dontCares);
+        validateDescribeExitCode(args1, 0);
+        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID), expectedHeader, expectedRows, dontCares);
+            Arrays.asList(args2), expectedHeader, expectedRows, dontCares);
+        validateDescribeExitCode(args2, 0);
     }
 
     @Test
@@ -225,15 +248,21 @@ public class DescribeStreamsGroupTest {
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(3, 6, 7);
 
+        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--group", APP_ID_2};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--group", APP_ID_2),
+            Arrays.asList(args1),
             expectedHeader, expectedRowsMap, dontCares);
+        validateDescribeExitCode(args1, 0);
+        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID, "--group", APP_ID_2};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID, "--group", APP_ID_2),
+            Arrays.asList(args2),
             expectedHeader, expectedRowsMap, dontCares);
+        validateDescribeExitCode(args2, 0);
+        final String[] args3 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--all-groups"};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--all-groups"),
+            Arrays.asList(args3),
             expectedHeader, expectedRowsMap, dontCares);
+        validateDescribeExitCode(args3, 0);
 
         streams2.close();
         streams2.cleanUp();
@@ -246,17 +275,22 @@ public class DescribeStreamsGroupTest {
             "Error: Executing streams group command failed due to org.apache.kafka.common.errors.GroupIdNotFoundException: Group %s not found.",
             nonExistingGroup);
 
+        final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", nonExistingGroup};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", nonExistingGroup), errorMessage);
+            Arrays.asList(args1), errorMessage);
+        validateDescribeExitCode(args1, 1);
+        final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", nonExistingGroup};
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", nonExistingGroup), errorMessage);
+            Arrays.asList(args2), errorMessage);
+        validateDescribeExitCode(args2, 1);
     }
 
     @Test
     public void testDescribeStreamsGroupWithShortTimeout() {
-        List<String> args = Arrays.asList("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--timeout", "1");
-        Throwable e = assertThrows(ExecutionException.class, () -> getStreamsGroupService(args.toArray(new String[0])).describeGroups());
+        final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--timeout", "1"};
+        Throwable e = assertThrows(ExecutionException.class, () -> getStreamsGroupService(args).describeGroups());
         assertEquals(TimeoutException.class, e.getCause().getClass());
+        validateDescribeExitCode(args, 1);
     }
 
     private static Topology topology(String inputTopic, String outputTopic) {
@@ -291,8 +325,14 @@ public class DescribeStreamsGroupTest {
     }
 
     private static void validateDescribeOutput(List<String> args, String errorMessage) {
-        String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
-        assertEquals(errorMessage, output.trim());
+        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+        Exit.setExitProcedure(exitProcedure);
+        try {
+            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
+            assertEquals(errorMessage, output.trim());
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     private static void validateDescribeOutput(
@@ -302,32 +342,38 @@ public class DescribeStreamsGroupTest {
         List<Integer> dontCareIndices
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
-        TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
-            out.set(output);
+        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+        Exit.setExitProcedure(exitProcedure);
+        try {
+            TestUtils.waitForCondition(() -> {
+                String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
+                out.set(output);
 
-            String[] lines = output.split("\n");
-            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
+                String[] lines = output.split("\n");
+                if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-            if (lines.length == 0) return false;
-            List<String> header = Arrays.asList(lines[0].split("\\s+"));
-            if (!expectedHeader.equals(header)) return false;
+                if (lines.length == 0) return false;
+                List<String> header = Arrays.asList(lines[0].split("\\s+"));
+                if (!expectedHeader.equals(header)) return false;
 
-            Set<List<String>> groupDesc = Arrays.stream(Arrays.copyOfRange(lines, 1, lines.length))
-                .map(line -> Arrays.asList(line.split("\\s+")))
-                .collect(Collectors.toSet());
-            if (groupDesc.size() != expectedRows.size()) return false;
-            // clear the dontCare fields and then compare two sets
-            return expectedRows
-                .equals(
-                    groupDesc.stream()
-                        .map(list -> {
-                            List<String> listCloned = new ArrayList<>(list);
-                            dontCareIndices.forEach(index -> listCloned.set(index, ""));
-                            return listCloned;
-                        }).collect(Collectors.toSet())
-                );
-        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
+                Set<List<String>> groupDesc = Arrays.stream(Arrays.copyOfRange(lines, 1, lines.length))
+                    .map(line -> Arrays.asList(line.split("\\s+")))
+                    .collect(Collectors.toSet());
+                if (groupDesc.size() != expectedRows.size()) return false;
+                // clear the dontCare fields and then compare two sets
+                return expectedRows
+                    .equals(
+                        groupDesc.stream()
+                            .map(list -> {
+                                List<String> listCloned = new ArrayList<>(list);
+                                dontCareIndices.forEach(index -> listCloned.set(index, ""));
+                                return listCloned;
+                            }).collect(Collectors.toSet())
+                    );
+            }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     private static void validateDescribeOutput(
@@ -337,41 +383,47 @@ public class DescribeStreamsGroupTest {
         List<Integer> dontCareIndices
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
-        TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
-            out.set(output);
+        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+        Exit.setExitProcedure(exitProcedure);
+        try {
+            TestUtils.waitForCondition(() -> {
+                String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
+                out.set(output);
 
-            String[] lines = output.split("\n");
-            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
+                String[] lines = output.split("\n");
+                if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-            if (lines.length == 0) return false;
-            List<String> header = Arrays.asList(lines[0].split("\\s+"));
-            if (!expectedHeader.equals(header)) return false;
+                if (lines.length == 0) return false;
+                List<String> header = Arrays.asList(lines[0].split("\\s+"));
+                if (!expectedHeader.equals(header)) return false;
 
-            Map<String, Set<List<String>>> groupdescMap = splitOutputByGroup(lines);
+                Map<String, Set<List<String>>> groupdescMap = splitOutputByGroup(lines);
 
-            if (groupdescMap.size() != expectedRows.size()) return false;
+                if (groupdescMap.size() != expectedRows.size()) return false;
 
-            // clear the dontCare fields and then compare two sets
-            boolean compareResult = true;
-            for (Map.Entry<String, Set<List<String>>> entry : groupdescMap.entrySet()) {
-                String group = entry.getKey();
-                Set<List<String>> groupDesc = entry.getValue();
-                if (!expectedRows.containsKey(group)) return false;
-                Set<List<String>> expectedGroupDesc = expectedRows.get(group);
-                if (expectedGroupDesc.size() != groupDesc.size())
-                    compareResult = false;
-                for (List<String> list : groupDesc) {
-                    List<String> listCloned = new ArrayList<>(list);
-                    dontCareIndices.forEach(index -> listCloned.set(index, ""));
-                    if (!expectedGroupDesc.contains(listCloned)) {
+                // clear the dontCare fields and then compare two sets
+                boolean compareResult = true;
+                for (Map.Entry<String, Set<List<String>>> entry : groupdescMap.entrySet()) {
+                    String group = entry.getKey();
+                    Set<List<String>> groupDesc = entry.getValue();
+                    if (!expectedRows.containsKey(group)) return false;
+                    Set<List<String>> expectedGroupDesc = expectedRows.get(group);
+                    if (expectedGroupDesc.size() != groupDesc.size())
                         compareResult = false;
+                    for (List<String> list : groupDesc) {
+                        List<String> listCloned = new ArrayList<>(list);
+                        dontCareIndices.forEach(index -> listCloned.set(index, ""));
+                        if (!expectedGroupDesc.contains(listCloned)) {
+                            compareResult = false;
+                        }
                     }
                 }
-            }
 
-            return compareResult;
-        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
+                return compareResult;
+            }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     private static Map<String, Set<List<String>>> splitOutputByGroup(String[] lines) {
@@ -393,5 +445,28 @@ public class DescribeStreamsGroupTest {
             }
         }
         return groupdescMap;
+    }
+
+    /**
+     * Executes the StreamsGroupCommand with the given arguments and validates the exit code.
+     * <p>
+     * This helper method is used to test scenarios where the command is expected to exit
+     * with a specific status code (e.g., 0 for success, 1 for an error). It captures the
+     * exit code by using a mock {@link Exit.Procedure} and asserts that it matches the
+     * expected value.
+     *
+     * @param args             The command-line arguments to pass to the StreamsGroupCommand.
+     * @param expectedExitCode The expected exit code from the command execution.
+     */
+    private static void validateDescribeExitCode(String[] args, int expectedExitCode) {
+        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+        Exit.setExitProcedure(exitProcedure);
+        try {
+            StreamsGroupCommand.main(args);
+            Assertions.assertEquals(expectedExitCode, exitProcedure.statusCode());
+        } finally {
+            Exit.resetExitProcedure();
+        }
+
     }
 }

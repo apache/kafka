@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
@@ -101,7 +102,8 @@ public class ListStreamsGroupTest {
 
     @Test
     public void testListStreamsGroupWithoutFilters() throws Exception {
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list"})) {
+        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list"};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
             Set<String> expectedGroups = Set.of(APP_ID);
 
             final AtomicReference<Set> foundGroups = new AtomicReference<>();
@@ -111,17 +113,20 @@ public class ListStreamsGroupTest {
             }, "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
 
         }
+        validateListExitCode(args, 0);
     }
 
     @Test
     public void testListWithUnrecognizedNewOption() {
         String[] cgcArgs = new String[]{"--new-option", "--bootstrap-server", cluster.bootstrapServers(), "--list"};
         Assertions.assertThrows(OptionException.class, () -> getStreamsGroupService(cgcArgs));
+        validateListExitCode(cgcArgs, 1);
     }
 
     @Test
     public void testListStreamsGroupWithStates() throws Exception {
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state"})) {
+        final String[] args = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state"};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
             Set<GroupListing> expectedListing = Set.of(
                 new GroupListing(
                     APP_ID,
@@ -137,11 +142,13 @@ public class ListStreamsGroupTest {
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
+        validateListExitCode(args, 0);
     }
 
     @Test
     public void testListStreamsGroupWithSpecifiedStates() throws Exception {
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"})) {
+        final String[] args1 = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args1)) {
             Set<GroupListing> expectedListing = Set.of(
                 new GroupListing(
                     APP_ID,
@@ -157,8 +164,9 @@ public class ListStreamsGroupTest {
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
-
-        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"})) {
+        validateListExitCode(args1, 0);
+        final String[] args2 = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"};
+        try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args2)) {
             Set<GroupListing> expectedListing = Collections.emptySet();
 
             final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
@@ -168,6 +176,7 @@ public class ListStreamsGroupTest {
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
+        validateListExitCode(args2, 1);
     }
 
     @Test
@@ -222,22 +231,50 @@ public class ListStreamsGroupTest {
         Set<List<String>> expectedRows
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
-        TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
-            out.set(output);
+        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+        Exit.setExitProcedure(exitProcedure);
+        try {
+            TestUtils.waitForCondition(() -> {
+                String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
+                out.set(output);
+                String[] lines = output.split("\n");
+                if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-            String[] lines = output.split("\n");
-            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
+                if (!expectedHeader.isEmpty() && lines.length > 0) {
+                    List<String> header = Arrays.asList(lines[0].split("\\s+"));
+                    if (!expectedHeader.equals(header)) return false;
+                }
 
-            if (!expectedHeader.isEmpty() && lines.length > 0) {
-                List<String> header = Arrays.asList(lines[0].split("\\s+"));
-                if (!expectedHeader.equals(header)) return false;
-            }
+                Set<List<String>> groups = Arrays.stream(lines, expectedHeader.isEmpty() ? 0 : 1, lines.length)
+                        .map(line -> Arrays.asList(line.split("\\s+")))
+                        .collect(Collectors.toSet());
+                return expectedRows.equals(groups);
+            }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
+        } finally {
+            Exit.resetExitProcedure();
+        }
 
-            Set<List<String>> groups = Arrays.stream(lines, expectedHeader.isEmpty() ? 0 : 1, lines.length)
-                .map(line -> Arrays.asList(line.split("\\s+")))
-                .collect(Collectors.toSet());
-            return expectedRows.equals(groups);
-        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
+    }
+    /**
+     * Executes the StreamsGroupCommand with the given arguments and validates the exit code.
+     * <p>
+     * This helper method is used to test scenarios where the command is expected to exit
+     * with a specific status code (e.g., 0 for success, 1 for an error). It captures the
+     * exit code by using a mock {@link Exit.Procedure} and asserts that it matches the
+     * expected value.
+     *
+     * @param args             The command-line arguments to pass to the StreamsGroupCommand.
+     * @param expectedExitCode The expected exit code from the command execution.
+     */
+    private static void validateListExitCode(String[] args, int expectedExitCode) {
+        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+        Exit.setExitProcedure(exitProcedure);
+        try {
+            StreamsGroupCommand.main(args);
+            Assertions.assertEquals(expectedExitCode, exitProcedure.statusCode());
+        } finally {
+            Exit.resetExitProcedure();
+        }
+
     }
 }

@@ -40,9 +40,11 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -133,6 +135,7 @@ public class DeleteStreamsGroupOffsetTest {
             Map.Entry<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets();
             assertEquals(Errors.GROUP_ID_NOT_FOUND, res.getKey());
         }
+        validateDeleteOffsetsExitCode(args, 0);
     }
 
     @Test
@@ -312,6 +315,7 @@ public class DeleteStreamsGroupOffsetTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+        validateDeleteOffsetsExitCode(args, 0);
     }
 
     private void assertError(Map.Entry<Errors, Map<TopicPartition, Throwable>> res,
@@ -436,5 +440,27 @@ public class DeleteStreamsGroupOffsetTest {
         return new StreamsGroupCommand.StreamsGroupService(
             opts, cluster.createAdminClient());
 
+    }
+
+    /**
+     * Executes the StreamsGroupCommand with the given arguments and validates the exit code.
+     * <p>
+     * This helper method is used to test scenarios where the command is expected to exit
+     * with a specific status code (e.g., 0 for success, 1 for an error). It captures the
+     * exit code by using a mock {@link Exit.Procedure} and asserts that it matches the
+     * expected value.
+     *
+     * @param args             The command-line arguments to pass to the StreamsGroupCommand.
+     * @param expectedExitCode The expected exit code from the command execution.
+     */
+    private static void validateDeleteOffsetsExitCode(String[] args, int expectedExitCode) {
+        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
+        Exit.setExitProcedure(exitProcedure);
+        try {
+            StreamsGroupCommand.main(args);
+            Assertions.assertEquals(expectedExitCode, exitProcedure.statusCode());
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 }

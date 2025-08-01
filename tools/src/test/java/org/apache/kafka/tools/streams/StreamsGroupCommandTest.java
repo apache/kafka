@@ -47,9 +47,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentMatchers;
 
 import java.util.ArrayList;
@@ -66,7 +63,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import joptsimple.OptionException;
 
@@ -78,7 +74,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -509,63 +504,4 @@ public class StreamsGroupCommandTest {
             __ -> KafkaFuture.completedFuture(resultInfo)));
         return new ListOffsetsResult(futures);
     }
-
-    private static Stream<Arguments> commandArgs() {
-        return Stream.of(
-                Arguments.of("list", new String[]{"--list"}),
-                Arguments.of("describe", new String[]{"--describe"}),
-                Arguments.of("delete", new String[]{"--delete"}),
-                Arguments.of("reset-offsets", new String[]{"--reset-offsets", "--export"}),
-                Arguments.of("reset-offsets", new String[]{"--reset-offsets"}),
-                Arguments.of("delete-offsets", new String[]{"--delete-offsets"}),
-                Arguments.of("unknow-actions", new String[]{})
-        );
-    }
-
-    @ParameterizedTest(name = "{index} => command = {0}")
-    @MethodSource("commandArgs")
-    public void testRunExitCode(final String command, final String[] commandArgs) throws Exception {
-        final StreamsGroupCommand.StreamsGroupService mockService = mock(StreamsGroupCommand.StreamsGroupService.class);
-        final StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(commandArgs);
-
-        when(mockService.resetOffsets()).thenReturn(Collections.emptyMap());
-        when(mockService.deleteGroups()).thenReturn(Collections.emptyMap());
-
-        if (!command.equals("unknow-actions"))
-            assertEquals(0, StreamsGroupCommand.run(opts, mockService));
-
-        switch (command) {
-            case "list":
-                verify(mockService).listGroups();
-                doThrow(new RuntimeException(command + " failed!")).when(mockService).listGroups();
-                break;
-            case "describe":
-                verify(mockService).describeGroups();
-                doThrow(new RuntimeException(command + " failed!")).when(mockService).describeGroups();
-                break;
-            case "delete":
-                verify(mockService).deleteGroups();
-                doThrow(new RuntimeException(command + " failed!")).when(mockService).deleteGroups();
-                break;
-            case "reset-offsets":
-                if (opts.options.has(opts.exportOpt)) {
-                    verify(mockService).resetOffsets();
-                    verify(mockService).exportOffsetsToCsv(Map.of());
-                    doThrow(new RuntimeException(command + " failed!")).when(mockService).exportOffsetsToCsv(Map.of());
-                } else {
-                    verify(mockService).resetOffsets();
-                    doThrow(new RuntimeException(command + " failed!")).when(mockService).resetOffsets();
-                }
-                break;
-            case "delete-offsets":
-                verify(mockService).deleteOffsets();
-                doThrow(new RuntimeException(command + " failed!")).when(mockService).deleteOffsets();
-                break;
-        }
-
-        assertEquals(1, StreamsGroupCommand.run(opts, mockService));
-
-        mockService.close();
-    }
-
 }
