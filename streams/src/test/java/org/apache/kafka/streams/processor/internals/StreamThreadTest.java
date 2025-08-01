@@ -175,6 +175,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atMostOnce;
@@ -4257,251 +4258,280 @@ public class StreamThreadTest {
         );
     }
 
-//    is it okay to use EasyMock?
-//    @Test
-//    public void shouldPauseNonEmptyPartitionsWhenTotalBufferSizeExceedsMaxBufferSize() {
-//        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
-//        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
-//        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
-//        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
-//
-//        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> polledRecords = new HashMap<>();
-//        final List<ConsumerRecord<byte[], byte[]>> t1p1Records = new ArrayList<>();
-//        t1p1Records.add(new ConsumerRecord<>(
-//            t1p1.topic(),
-//            t1p1.partition(),
-//            0,
-//            mockTime.milliseconds(),
-//            TimestampType.CREATE_TIME,
-//            2,
-//            6,
-//            new byte[2],
-//            new byte[6],
-//            new RecordHeaders(),
-//            Optional.empty()));
-//        t1p1Records.add(new ConsumerRecord<>(
-//            t1p1.topic(),
-//            t1p1.partition(),
-//            1,
-//            mockTime.milliseconds(),
-//            TimestampType.CREATE_TIME,
-//            2,
-//            6,
-//            new byte[2],
-//            new byte[6],
-//            new RecordHeaders(),
-//            Optional.empty()));
-//        final List<ConsumerRecord<byte[], byte[]>> t2p1Records = Collections.singletonList(
-//            new ConsumerRecord<>(
-//                t2p1.topic(),
-//                t2p1.partition(),
-//                0,
-//                mockTime.milliseconds(),
-//                TimestampType.CREATE_TIME,
-//                2,
-//                6,
-//                new byte[2],
-//                new byte[6],
-//                new RecordHeaders(),
-//                Optional.empty()));
-//        polledRecords.put(t1p1, t1p1Records);
-//        polledRecords.put(t2p1, t2p1Records);
-//
-//        // First poll
-//        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(polledRecords));
-//        // Buffer size exceeds after adding 3 records for both partitions. Both partitions should be paused.
-//        consumer.pause(mkSet(t1p1, t2p1));
-//        EasyMock.expectLastCall().once();
-//        expect(consumer.paused()).andReturn(mkSet(t1p1, t2p1));
-//
-//        // Second poll, return no records. t1p1 and t2p1 should get resumed.
-//        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(Collections.emptyMap()));
-//        expect(consumer.paused()).andReturn(mkSet(t1p1, t2p1));
-//        consumer.resume(mkSet(t1p1, t2p1));
-//        EasyMock.expectLastCall().once();
-//
-//        // Third poll, return no records. Buffer size has already falled down the threshold so resume
-//        // shouldn't be invoked
-//        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(Collections.emptyMap()));
-//
-//        final Task task1 = mock(Task.class);
-//
-//        expect(task1.inputPartitions()).andReturn(mkSet(t1p1)).anyTimes();
-//        expect(task1.committedOffsets()).andReturn(new HashMap<>()).anyTimes();
-//        expect(task1.highWaterMark()).andReturn(new HashMap<>()).anyTimes();
-//        expect(task1.timeCurrentIdlingStarted()).andReturn(Optional.empty()).anyTimes();
-//
-//        final TaskManager taskManager = mockTaskManager(task1);
-//
-//        expect(taskManager.activeTaskMap()).andReturn(mkMap(mkEntry(new TaskId(0, 0), task1)));
-//        expect(taskManager.standbyTaskMap()).andReturn(new HashMap<>());
-//
-//        taskManager.addRecordsToTasks(anyObject());
-//        EasyMock.expectLastCall().times(1);
-//        // Size at the end of pollPhase.
-//        expect(taskManager.getInputBufferSizeInBytes()).andReturn(18L);
-//        expect(taskManager.nonEmptyPartitions()).andReturn(mkSet(t1p1, t2p1));
-//        expect(taskManager.process(anyInt(), anyObject())).andReturn(1).times(3);
-//        expect(taskManager.process(anyInt(), anyObject())).andReturn(0); // break out of the loop
-//        // With every poll from the TaskExecutors, the buffered size keeps reducing.
-//        expect(taskManager.getInputBufferSizeInBytes()).andReturn(12L);
-//        expect(taskManager.getInputBufferSizeInBytes()).andReturn(6L);
-//        expect(taskManager.getInputBufferSizeInBytes()).andReturn(0L);
-//
-//        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
-//        topologyMetadata.buildAndRewriteTopology();
-//
-//        final StreamsMetricsImpl streamsMetrics =
-//            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
-//
-//        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
-//        expect(taskManager.producerClientIds()).andStubReturn(Collections.emptySet());
-//
-//        EasyMock.replay(consumer, consumerGroupMetadata, taskManager, task1);
-//
-//        final StreamThread thread = new StreamThread(
-//            mockTime,
-//            config,
-//            null,
-//            consumer,
-//            consumer,
-//            changelogReader,
-//            null,
-//            taskManager,
-//            streamsMetrics,
-//            topologyMetadata,
-//            CLIENT_ID,
-//            new LogContext(""),
-//            new AtomicInteger(),
-//            new AtomicLong(Long.MAX_VALUE),
-//            new LinkedList<>(),
-//            null,
-//            HANDLER,
-//            null,
-//            10
-//        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
-//        thread.setState(State.STARTING);
-//        thread.setState(State.PARTITIONS_ASSIGNED);
-//        thread.setState(State.RUNNING);
-//        thread.runOnce();
-//        thread.runOnce();
-//        thread.runOnce();
-//        EasyMock.verify(consumer, taskManager);
-//    }
-//
-//    @Test
-//    public void shouldNotPausePartitionsWhenMaxBufferSizeIsSetToNegative() {
-//        final Consumer<byte[], byte[]> consumer = EasyMock
-//        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
-//        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
-//        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
-//
-//        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> polledRecords = new HashMap<>();
-//        final List<ConsumerRecord<byte[], byte[]>> t1p1Records = new ArrayList<>();
-//        t1p1Records.add(new ConsumerRecord<>(
-//            t1p1.topic(),
-//            t1p1.partition(),
-//            0,
-//            mockTime.milliseconds(),
-//            TimestampType.CREATE_TIME,
-//            2,
-//            6,
-//            new byte[2],
-//            new byte[6],
-//            new RecordHeaders(),
-//            Optional.empty()));
-//        t1p1Records.add(new ConsumerRecord<>(
-//            t1p1.topic(),
-//            t1p1.partition(),
-//            1,
-//            mockTime.milliseconds(),
-//            TimestampType.CREATE_TIME,
-//            2,
-//            6,
-//            new byte[2],
-//            new byte[6],
-//            new RecordHeaders(),
-//            Optional.empty()));
-//        final List<ConsumerRecord<byte[], byte[]>> t2p1Records = Collections.singletonList(
-//            new ConsumerRecord<>(
-//                t2p1.topic(),
-//                t2p1.partition(),
-//                0,
-//                mockTime.milliseconds(),
-//                TimestampType.CREATE_TIME,
-//                2,
-//                6,
-//                new byte[2],
-//                new byte[6],
-//                new RecordHeaders(),
-//                Optional.empty()));
-//        polledRecords.put(t1p1, t1p1Records);
-//        polledRecords.put(t2p1, t2p1Records);
-//
-//        // First poll
-//        expect(consumer.poll(anyObject())).andReturn(new ConsumerRecords<>(polledRecords));
-//
-//        final Task task1 = mock(Task.class);
-//
-//        expect(task1.inputPartitions()).andReturn(mkSet(t1p1)).anyTimes();
-//        expect(task1.committedOffsets()).andReturn(new HashMap<>()).anyTimes();
-//        expect(task1.highWaterMark()).andReturn(new HashMap<>()).anyTimes();
-//        expect(task1.timeCurrentIdlingStarted()).andReturn(Optional.empty()).anyTimes();
-//
-//        final TaskManager taskManager = mockTaskManager(task1);
-//
-//        expect(taskManager.activeTaskMap()).andReturn(mkMap(mkEntry(new TaskId(0, 0), task1)));
-//        expect(taskManager.standbyTaskMap()).andReturn(new HashMap<>());
-//
-//        taskManager.addRecordsToTasks(anyObject());
-//        EasyMock.expectLastCall().times(1);
-//        // Size at the end of pollPhase.
-//        expect(taskManager.getInputBufferSizeInBytes()).andReturn(18L);
-//        expect(taskManager.process(anyInt(), anyObject())).andReturn(1).times(3);
-//        expect(taskManager.process(anyInt(), anyObject())).andReturn(0); // break out of the loop
-//        // With every poll from the TaskExecutors, the buffered size keeps reducing.
-//        expect(taskManager.getInputBufferSizeInBytes()).andReturn(12L);
-//        expect(taskManager.getInputBufferSizeInBytes()).andReturn(6L);
-//        expect(taskManager.getInputBufferSizeInBytes()).andReturn(0L);
-//
-//        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
-//        topologyMetadata.buildAndRewriteTopology();
-//
-//        final StreamsMetricsImpl streamsMetrics =
-//            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
-//
-//        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
-//        expect(taskManager.producerClientIds()).andStubReturn(Collections.emptySet());
-//
-//        EasyMock.replay(consumer, consumerGroupMetadata, taskManager, task1);
-//
-//        final StreamThread thread = new StreamThread(
-//            mockTime,
-//            config,
-//            null,
-//            consumer,
-//            consumer,
-//            changelogReader,
-//            null,
-//            taskManager,
-//            streamsMetrics,
-//            topologyMetadata,
-//            CLIENT_ID,
-//            new LogContext(""),
-//            new AtomicInteger(),
-//            new AtomicLong(Long.MAX_VALUE),
-//            new LinkedList<>(),
-//            null,
-//            HANDLER,
-//            null,
-//            -1
-//        ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
-//        thread.setState(State.STARTING);
-//        thread.setState(State.PARTITIONS_ASSIGNED);
-//        thread.setState(State.RUNNING);
-//        thread.runOnce();
-//        EasyMock.verify(consumer, taskManager);
-//    }
+    @Test
+    public void shouldPauseNonEmptyPartitionsWhenTotalBufferSizeExceedsMaxBufferSize() {
+        // Set up consumer mock
+        @SuppressWarnings("unchecked")
+        final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+
+        // Create records for polling
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> polledRecords = new HashMap<>();
+        final List<ConsumerRecord<byte[], byte[]>> t1p1Records = new ArrayList<>();
+
+        t1p1Records.add(new ConsumerRecord<>(
+            t1p1.topic(),
+            t1p1.partition(),
+            0,
+            mockTime.milliseconds(),
+            TimestampType.CREATE_TIME,
+            2,
+            6,
+            new byte[2],
+            new byte[6],
+            new RecordHeaders(),
+            Optional.empty()));
+
+        t1p1Records.add(new ConsumerRecord<>(
+            t1p1.topic(),
+            t1p1.partition(),
+            1,
+            mockTime.milliseconds(),
+            TimestampType.CREATE_TIME,
+            2,
+            6,
+            new byte[2],
+            new byte[6],
+            new RecordHeaders(),
+            Optional.empty()));
+
+        final List<ConsumerRecord<byte[], byte[]>> t2p1Records = Collections.singletonList(
+            new ConsumerRecord<>(
+                t2p1.topic(),
+                t2p1.partition(),
+                0,
+                mockTime.milliseconds(),
+                TimestampType.CREATE_TIME,
+                2,
+                6,
+                new byte[2],
+                new byte[6],
+                new RecordHeaders(),
+                Optional.empty()));
+
+        polledRecords.put(t1p1, t1p1Records);
+        polledRecords.put(t2p1, t2p1Records);
+
+        // Set up consumer behavior
+        final Set<TopicPartition> partitionSet = new HashSet<>(Arrays.asList(t1p1, t2p1));
+
+        // First poll returns records
+        when(consumer.poll(any())).thenReturn(new ConsumerRecords<>(polledRecords, Map.of()))
+            // Second and third polls return empty
+            .thenReturn(new ConsumerRecords<>(Map.of(), Map.of()))
+            .thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
+
+        // Mock paused partitions behavior
+        when(consumer.paused()).thenReturn(partitionSet) // After pause
+            .thenReturn(partitionSet) // Before resume
+            .thenReturn(Collections.emptySet()); // After resume
+
+        // Set up task mock
+        final Task task1 = mock(Task.class);
+        when(task1.inputPartitions()).thenReturn(Set.of(t1p1));
+        when(task1.committedOffsets()).thenReturn(new HashMap<>());
+        when(task1.highWaterMark()).thenReturn(new HashMap<>());
+        when(task1.timeCurrentIdlingStarted()).thenReturn(Optional.empty());
+
+        // Set up TaskManager mock
+        final TaskManager taskManager = mock(TaskManager.class);
+        when(taskManager.activeTaskMap()).thenReturn(mkMap(mkEntry(new TaskId(0, 0), task1)));
+        when(taskManager.standbyTaskMap()).thenReturn(new HashMap<>());
+        when(taskManager.producerClientIds()).thenReturn("producerClientId");
+
+        // Mock buffer size behavior
+        when(taskManager.getInputBufferSizeInBytes())
+            .thenReturn(18L)  // After first poll
+            .thenReturn(12L)  // After first process
+            .thenReturn(6L)   // After second process
+            .thenReturn(0L);  // After third process
+
+        when(taskManager.nonEmptyPartitions()).thenReturn(partitionSet);
+        when(taskManager.process(anyInt(), any()))
+            .thenReturn(1)
+            .thenReturn(1)
+            .thenReturn(1)
+            .thenReturn(0);
+
+        // Create configuration and thread
+        final Properties props = configProps(false, false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+
+        thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            changelogReader,
+            null,
+            taskManager,
+            null,
+            streamsMetrics,
+            topologyMetadata,
+            PROCESS_ID,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            new LinkedList<>(),
+            null,
+            HANDLER,
+            null,
+            Optional.empty(),
+            null,
+            10L // maxBufferSize set to 10
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.setState(State.RUNNING);
+
+        // Run the test
+        thread.runOnceWithoutProcessingThreads();
+        thread.runOnceWithoutProcessingThreads();
+        thread.runOnceWithoutProcessingThreads();
+
+        // Verify behavior
+        verify(consumer).pause(partitionSet);
+        verify(consumer).resume(partitionSet);
+        verify(taskManager, times(1)).addRecordsToTasks(any());
+    }
+
+    @Test
+    public void shouldNotPausePartitionsWhenMaxBufferSizeIsSetToNegative() {
+        // Set up consumer mock
+        @SuppressWarnings("unchecked")
+        final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+
+        // Create records for polling
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> polledRecords = new HashMap<>();
+        final List<ConsumerRecord<byte[], byte[]>> t1p1Records = new ArrayList<>();
+        t1p1Records.add(new ConsumerRecord<>(
+            t1p1.topic(),
+            t1p1.partition(),
+            0,
+            mockTime.milliseconds(),
+            TimestampType.CREATE_TIME,
+            2,
+            6,
+            new byte[2],
+            new byte[6],
+            new RecordHeaders(),
+            Optional.empty()));
+        t1p1Records.add(new ConsumerRecord<>(
+            t1p1.topic(),
+            t1p1.partition(),
+            1,
+            mockTime.milliseconds(),
+            TimestampType.CREATE_TIME,
+            2,
+            6,
+            new byte[2],
+            new byte[6],
+            new RecordHeaders(),
+            Optional.empty()));
+        final List<ConsumerRecord<byte[], byte[]>> t2p1Records = Collections.singletonList(
+            new ConsumerRecord<>(
+                t2p1.topic(),
+                t2p1.partition(),
+                0,
+                mockTime.milliseconds(),
+                TimestampType.CREATE_TIME,
+                2,
+                6,
+                new byte[2],
+                new byte[6],
+                new RecordHeaders(),
+                Optional.empty()));
+        polledRecords.put(t1p1, t1p1Records);
+        polledRecords.put(t2p1, t2p1Records);
+
+        // First poll returns records
+        when(consumer.poll(any())).thenReturn(new ConsumerRecords<>(polledRecords, Map.of()));
+
+        // Set up task mock
+        final Task task1 = mock(Task.class);
+        when(task1.inputPartitions()).thenReturn(Set.of(t1p1));
+        when(task1.committedOffsets()).thenReturn(new HashMap<>());
+        when(task1.highWaterMark()).thenReturn(new HashMap<>());
+        when(task1.timeCurrentIdlingStarted()).thenReturn(Optional.empty());
+
+        // Set up TaskManager mock
+        final TaskManager taskManager = mock(TaskManager.class);
+        when(taskManager.activeTaskMap()).thenReturn(mkMap(mkEntry(new TaskId(0, 0), task1)));
+        when(taskManager.standbyTaskMap()).thenReturn(new HashMap<>());
+        when(taskManager.producerClientIds()).thenReturn("producerClientId");
+
+        // Mock buffer size behavior
+        when(taskManager.getInputBufferSizeInBytes())
+            .thenReturn(18L)
+            .thenReturn(12L)
+            .thenReturn(6L)
+            .thenReturn(0L);
+
+        when(taskManager.process(anyInt(), any()))
+            .thenReturn(1)
+            .thenReturn(1)
+            .thenReturn(1)
+            .thenReturn(0);
+
+        // Create configuration and thread
+        final Properties props = configProps(false, false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+
+        thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            changelogReader,
+            null,
+            taskManager,
+            null,
+            streamsMetrics,
+            topologyMetadata,
+            PROCESS_ID,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            new LinkedList<>(),
+            null,
+            HANDLER,
+            null,
+            Optional.empty(),
+            null,
+            -1L // maxBufferSize set to -1 to disable pausing
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.setState(State.RUNNING);
+
+        // Run the test
+        thread.runOnceWithoutProcessingThreads();
+
+        // Verify that pause was never called since maxBufferSize is -1
+        verify(consumer, never()).pause(any());
+        verify(taskManager, times(1)).addRecordsToTasks(any());
+    }
 
     private StreamThread setUpThread(final Properties streamsConfigProps) {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);
