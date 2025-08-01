@@ -69,6 +69,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -76,38 +77,42 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import joptsimple.OptionException;
-
 
 public class StreamsGroupCommand {
-    private static final int EXIT_CODE_SUCCESS = 0;
-    private static final int EXIT_CODE_ERROR = 1;
+
     static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
-        StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
+        StreamsGroupCommandOptions opts = null;
         try {
-            opts.checkArgs();
+            opts = new StreamsGroupCommandOptions(args);
+            Objects.requireNonNull(opts).checkArgs();
             // should have exactly one action
             long numberOfActions = Stream.of(
-                opts.listOpt,
-                opts.describeOpt,
-                opts.resetOffsetsOpt,
-                opts.deleteOpt,
-                opts.deleteOffsetsOpt
+                    opts.listOpt,
+                    opts.describeOpt,
+                    opts.resetOffsetsOpt,
+                    opts.deleteOpt,
+                    opts.deleteOffsetsOpt
             ).filter(opts.options::has).count();
             if (numberOfActions != 1)
                 CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
 
-            Exit.exit(run(opts));
-        } catch (OptionException e) {
-            CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
+            run(opts);
+            Exit.exit(0);
+        } catch (IllegalArgumentException e) {
+            if (opts != null)
+                CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
+            else
+                CommandLineUtils.printErrorAndExit(e.getMessage());
+        } catch (Throwable e) {
+            printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
+            Exit.exit(1);
         }
     }
 
-    // Visibility for testing
-    static int run(StreamsGroupCommandOptions opts, StreamsGroupService streamsGroupService) {
-        try {
+    public static void run(StreamsGroupCommandOptions opts) throws IllegalArgumentException, ExecutionException, InterruptedException {
+        try (StreamsGroupService streamsGroupService = new StreamsGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt)) {
                 streamsGroupService.listGroups();
             } else if (opts.options.has(opts.describeOpt)) {
@@ -126,22 +131,6 @@ public class StreamsGroupCommand {
             } else {
                 throw new IllegalArgumentException("Unknown action!");
             }
-            return EXIT_CODE_SUCCESS;
-        } catch (IllegalArgumentException e) {
-            printError(e.getMessage(), Optional.of(e));
-            return EXIT_CODE_ERROR;
-        } catch (Throwable e) {
-            printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
-            return EXIT_CODE_ERROR;
-        }
-    }
-
-    public static int run(StreamsGroupCommandOptions opts) {
-        try (StreamsGroupService streamsGroupService = new StreamsGroupService(opts, Map.of())) {
-            return run(opts, streamsGroupService);
-        } catch (Throwable e) {
-            printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
-            return EXIT_CODE_ERROR;
         }
     }
 
