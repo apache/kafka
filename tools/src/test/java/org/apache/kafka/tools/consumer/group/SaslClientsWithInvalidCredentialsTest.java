@@ -134,10 +134,10 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         closeSasl();
     }
 
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
-    public void testConsumerGroupServiceWithAuthenticationFailure(String quorum, String groupProtocol) throws Exception {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void testConsumerGroupServiceWithAuthenticationFailure(String groupProtocol) throws Exception {
         try (
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
             Consumer<byte[], byte[]> consumer = createConsumer()
@@ -147,10 +147,10 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         }
     }
 
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
-    public void testConsumerGroupServiceWithAuthenticationSuccess(String quorum, String groupProtocol) throws Exception {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void testConsumerGroupServiceWithAuthenticationSuccess(String groupProtocol) throws Exception {
         createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2);
         try (
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();

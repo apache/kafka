@@ -17,16 +17,13 @@
 package org.apache.kafka.tiered.storage.integration;
 
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.test.api.Flaky;
 
-import java.util.Collections;
 import java.util.Map;
 
-@Flaky("KAFKA-18606")
 public final class DeleteSegmentsByRetentionTimeTest extends BaseDeleteSegmentsTest {
 
     @Override
     protected Map<String, String> configsToBeAdded() {
-        return Collections.singletonMap(TopicConfig.RETENTION_MS_CONFIG, "1");
+        return Map.of(TopicConfig.RETENTION_MS_CONFIG, "1");
     }
 }

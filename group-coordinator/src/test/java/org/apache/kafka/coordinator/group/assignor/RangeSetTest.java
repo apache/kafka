@@ -18,12 +18,12 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -32,6 +32,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class RangeSetTest {
+    @Test
+    void testNegativeSize() {
+        assertThrows(IllegalArgumentException.class, () -> new RangeSet(0, -1));
+    }
+
+    @Test
+    void testOverflow() {
+        // This range is the maximum size we allow.
+        assertDoesNotThrow(() -> new RangeSet(0, Integer.MAX_VALUE));
+
+        assertThrows(IllegalArgumentException.class, () -> new RangeSet(-1, Integer.MAX_VALUE));
+    }
+
     @Test
     void testSize() {
         RangeSet rangeSet = new RangeSet(5, 10);
@@ -110,22 +123,46 @@ public class RangeSetTest {
         RangeSet rangeSet2 = new RangeSet(5, 10);
         RangeSet rangeSet3 = new RangeSet(6, 10);
         Set<Integer> set = Set.of(5, 6, 7, 8, 9);
-        HashSet<Integer> hashSet = new HashSet<>(Set.of(6, 7, 8, 9));
+        Set<Integer> hashSet = Set.of(6, 7, 8, 9);
 
         assertEquals(rangeSet1, rangeSet2);
         assertNotEquals(rangeSet1, rangeSet3);
-        assertEquals(rangeSet1, set);
-        assertEquals(rangeSet3, hashSet);
-        assertNotEquals(rangeSet1, new Object());
+        assertEquals(set, rangeSet1);
+        assertEquals(hashSet, rangeSet3);
+        assertNotEquals(new Object(), rangeSet1);
+
+        // Empty sets are equal.
+        RangeSet emptyRangeSet1 = new RangeSet(0, 0);
+        RangeSet emptyRangeSet2 = new RangeSet(5, 5);
+        Set<Integer> emptySet = Set.of();
+
+        assertEquals(emptySet, emptyRangeSet1);
+        assertEquals(emptySet, emptyRangeSet2);
+        assertEquals(emptyRangeSet1, emptyRangeSet2);
     }
 
     @Test
     void testHashCode() {
         RangeSet rangeSet1 = new RangeSet(5, 10);
-        RangeSet rangeSet2 = new RangeSet(5, 10);
-        RangeSet rangeSet3 = new RangeSet(6, 10);
+        RangeSet rangeSet2 = new RangeSet(6, 10);
 
-        assertEquals(rangeSet1.hashCode(), rangeSet2.hashCode());
-        assertNotEquals(rangeSet1.hashCode(), rangeSet3.hashCode());
+        assertEquals(Set.of(5, 6, 7, 8, 9).hashCode(), rangeSet1.hashCode());
+        assertEquals(Set.of(6, 7, 8, 9).hashCode(), rangeSet2.hashCode());
+
+        RangeSet emptySet = new RangeSet(5, 5);
+        assertEquals(Set.of().hashCode(), emptySet.hashCode());
+
+        // Both these cases overflow the range of an int when calculating the hash code. They're
+        // chosen so that their hash codes are almost the same except for the most significant bit.
+        RangeSet overflowRangeSet1 = new RangeSet(0x3FFFFFFD, 0x3FFFFFFF);
+        RangeSet overflowRangeSet2 = new RangeSet(0x7FFFFFFD, 0x7FFFFFFF);
+        assertEquals(
+            Set.of(0x3FFFFFFD, 0x3FFFFFFE).hashCode(),
+            overflowRangeSet1.hashCode() // == 0x0_FFFFFFF6 / 2
+        );
+        assertEquals(
+            Set.of(0x7FFFFFFD, 0x7FFFFFFE).hashCode(),
+            overflowRangeSet2.hashCode() // == 0x1_FFFFFFF6 / 2
+        );
     }
 }

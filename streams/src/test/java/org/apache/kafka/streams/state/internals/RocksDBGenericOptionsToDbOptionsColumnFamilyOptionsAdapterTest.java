@@ -58,11 +58,11 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -81,41 +81,39 @@ import static org.mockito.Mockito.mockingDetails;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
-    private final List<String> walRelatedMethods = new LinkedList<String>() {
-        {
-            add("setManualWalFlush");
-            add("setMaxTotalWalSize");
-            add("setWalBytesPerSync");
-            add("setWalDir");
-            add("setWalFilter");
-            add("setWalRecoveryMode");
-            add("setWalSizeLimitMB");
-            add("setWalTtlSeconds");
-        }
-    };
+    private final List<String> walRelatedMethods = List.of(
+        "setManualWalFlush",
+        "setMaxTotalWalSize",
+        "setWalBytesPerSync",
+        "setWalDir",
+        "setWalFilter",
+        "setWalRecoveryMode",
+        "setWalSizeLimitMB",
+        "setWalTtlSeconds"
+    );
 
-    private final List<String> ignoreMethods = new LinkedList<String>() {
-        {
-            add("isOwningHandle");
-            add("getNativeHandle");
-            add("dispose");
-            add("wait");
-            add("equals");
-            add("getClass");
-            add("hashCode");
-            add("notify");
-            add("notifyAll");
-            add("toString");
-            add("getOptionStringFromProps");
-            add("maxBackgroundCompactions");
-            add("setMaxBackgroundCompactions");
-            add("maxBackgroundFlushes");
-            add("setMaxBackgroundFlushes");
-            add("tablePropertiesCollectorFactory");
-            add("setTablePropertiesCollectorFactory");
-            addAll(walRelatedMethods);
-        }
-    };
+    private final List<String> ignoreMethods = Stream.concat(
+        Stream.of(
+            "isOwningHandle",
+            "getNativeHandle",
+            "dispose",
+            "wait",
+            "equals",
+            "getClass",
+            "hashCode",
+            "notify",
+            "notifyAll",
+            "toString",
+            "getOptionStringFromProps",
+            "maxBackgroundCompactions",
+            "setMaxBackgroundCompactions",
+            "maxBackgroundFlushes",
+            "setMaxBackgroundFlushes",
+            "tablePropertiesCollectorFactory",
+            "setTablePropertiesCollectorFactory"
+        ),
+        walRelatedMethods.stream()
+    ).collect(Collectors.toList());
 
     @Test
     public void shouldOverwriteAllOptionsMethods() throws Exception {

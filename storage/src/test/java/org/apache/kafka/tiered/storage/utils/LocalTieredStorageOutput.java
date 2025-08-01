@@ -25,7 +25,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
 
@@ -68,15 +68,15 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
             if (records.isEmpty()) {
                 output += row(segFilename, -1, "");
             } else {
-                List<Tuple2<Long, String>> offsetKeyValues = records
+                List<Map.Entry<Long, String>> offsetKeyValues = records
                         .stream()
-                        .map(record -> new Tuple2<>(record.offset(),
+                        .map(record -> Map.entry(record.offset(),
                                 "(" + des(keyDe, record.key()) + ", " + des(valueDe, record.value()) + ")"))
-                        .collect(Collectors.toList());
-                output += row(segFilename, offsetKeyValues.get(0).t1, offsetKeyValues.get(0).t2);
+                        .toList();
+                output += row(segFilename, offsetKeyValues.get(0).getKey(), offsetKeyValues.get(0).getValue());
                 if (offsetKeyValues.size() > 1) {
                     offsetKeyValues.subList(1, records.size()).forEach(offsetKeyValue ->
-                            output += row("", offsetKeyValue.t1, offsetKeyValue.t2));
+                            output += row("", offsetKeyValue.getKey(), offsetKeyValue.getValue()));
                 }
             }
             output += row();
@@ -91,15 +91,5 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
 
     private String des(Deserializer<?> de, ByteBuffer bytes) {
         return de.deserialize(currentTopic, Utils.toNullableArray(bytes)).toString();
-    }
-
-    private static class Tuple2<T1, T2> {
-        private final T1 t1;
-        private final T2 t2;
-
-        Tuple2(T1 t1, T2 t2) {
-            this.t1 = t1;
-            this.t2 = t2;
-        }
     }
 }

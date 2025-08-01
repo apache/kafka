@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
@@ -26,8 +25,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataVa
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.Endpoint;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue.TaskIds;
@@ -253,59 +250,19 @@ class StreamsCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewStreamsGroupPartitionMetadataRecord() {
-        Uuid uuid1 = Uuid.randomUuid();
-        Uuid uuid2 = Uuid.randomUuid();
-        Map<String, TopicMetadata> newPartitionMetadata = Map.of(
-            TOPIC_1, new TopicMetadata(uuid1, TOPIC_1, 1),
-            TOPIC_2, new TopicMetadata(uuid2, TOPIC_2, 2)
-        );
-
-        StreamsGroupPartitionMetadataValue value = new StreamsGroupPartitionMetadataValue();
-        value.topics().add(new StreamsGroupPartitionMetadataValue.TopicMetadata()
-            .setTopicId(uuid1)
-            .setTopicName(TOPIC_1)
-            .setNumPartitions(1)
-        );
-        value.topics().add(new StreamsGroupPartitionMetadataValue.TopicMetadata()
-            .setTopicId(uuid2)
-            .setTopicName(TOPIC_2)
-            .setNumPartitions(2)
-        );
-
-        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
-            new StreamsGroupPartitionMetadataKey()
-                .setGroupId(GROUP_ID),
-            new ApiMessageAndVersion(value, (short) 0)
-        );
-
-        assertEquals(expectedRecord,
-            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(GROUP_ID, newPartitionMetadata));
-    }
-
-    @Test
-    public void testNewStreamsGroupPartitionMetadataTombstoneRecord() {
-        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
-            new StreamsGroupPartitionMetadataKey()
-                .setGroupId(GROUP_ID)
-        );
-
-        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(GROUP_ID));
-    }
-
-    @Test
     public void testNewStreamsGroupEpochRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new StreamsGroupMetadataKey()
                 .setGroupId(GROUP_ID),
             new ApiMessageAndVersion(
                 new StreamsGroupMetadataValue()
-                    .setEpoch(42),
+                    .setEpoch(42)
+                    .setMetadataHash(42),
                 (short) 0
             )
         );
 
-        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(GROUP_ID, 42));
+        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(GROUP_ID, 42, 42));
     }
 
     @Test
@@ -717,30 +674,9 @@ class StreamsCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewStreamsGroupPartitionMetadataRecordNullGroupId() {
-        NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(null, Map.of()));
-        assertEquals("groupId should not be null here", exception.getMessage());
-    }
-
-    @Test
-    public void testNewStreamsGroupPartitionMetadataRecordNullNewPartitionMetadata() {
-        NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord("groupId", null));
-        assertEquals("newPartitionMetadata should not be null here", exception.getMessage());
-    }
-
-    @Test
-    public void testNewStreamsGroupPartitionMetadataTombstoneRecordNullGroupId() {
-        NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(null));
-        assertEquals("groupId should not be null here", exception.getMessage());
-    }
-
-    @Test
     public void testNewStreamsGroupEpochRecordNullGroupId() {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(null, 1));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(null, 1, 1));
         assertEquals("groupId should not be null here", exception.getMessage());
     }
 

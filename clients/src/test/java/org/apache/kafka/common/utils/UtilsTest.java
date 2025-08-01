@@ -896,10 +896,169 @@ public class UtilsTest {
         assertValue(Collections.emptyMap());
     }
 
+    @Test
+    public void testPropsToMapNonStringKey() {
+        ConfigException ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, "value");
+            Utils.propsToMap(props);
+        });
+        assertTrue(ce.getMessage().contains("One or more keys is not a string."));
+
+        ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(true, "value");
+            props.put('a', "value");
+            Utils.propsToMap(props);
+        });
+        assertEquals("One or more keys is not a string.", ce.getMessage());
+    }
+
+    @Test
+    public void testPropsToMapWithDefaults() {
+        Properties defaultProperties = new Properties();
+        defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
+        defaultProperties.setProperty("DefaultKey2", "DefaultValue2");
+
+        Properties actualProperties = new Properties(defaultProperties);
+        actualProperties.setProperty("ActualKey1", "ActualValue1");
+        actualProperties.setProperty("ActualKey2", "ActualValue2");
+
+        final Map<String, Object> mapProperties = Utils.propsToMap(actualProperties);
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("DefaultKey1", "DefaultValue1");
+        expectedMap.put("DefaultKey2", "DefaultValue2");
+        expectedMap.put("ActualKey1", "ActualValue1");
+        expectedMap.put("ActualKey2", "ActualValue2");
+
+        assertEquals(expectedMap, mapProperties);
+    }
+
+    @Test
+    public void testPropsToMapWithDefaultsAndSameKey() {
+        Properties defaultProperties = new Properties();
+        defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
+        defaultProperties.setProperty("DefaultKey2", "DefaultValue2");
+
+        Properties actualProperties = new Properties(defaultProperties);
+        actualProperties.setProperty("DefaultKey1", "ActualValue1");
+        actualProperties.setProperty("ActualKey2", "ActualValue2");
+
+        final Map<String, Object> mapProperties = Utils.propsToMap(actualProperties);
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("DefaultKey1", "ActualValue1");
+        expectedMap.put("DefaultKey2", "DefaultValue2");
+        expectedMap.put("ActualKey2", "ActualValue2");
+
+        assertEquals(expectedMap, mapProperties);
+    }
+
     private static void assertValue(Object value) {
         Properties props = new Properties();
         props.put("key", value);
         assertEquals(Utils.propsToMap(props).get("key"), value);
+    }
+
+    @Test
+    public void testCastToStringObjectMap() {
+        Map<Object, Object> map = new HashMap<>();
+        map.put("key1", "value1");
+        map.put("key2", 1);
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("key1", "value1");
+        expectedMap.put("key2", 1);
+
+        assertEquals(map, expectedMap);
+    }
+
+    @Test
+    public void testCastToStringObjectMapNonStringKey() {
+        ConfigException ce = assertThrows(ConfigException.class, () -> {
+            Map<Object, Object> map = new HashMap<>();
+            map.put(1, "value");
+            Utils.castToStringObjectMap(map);
+        });
+        assertTrue(ce.getMessage().contains("Key must be a string."));
+
+        ce = assertThrows(ConfigException.class, () -> {
+            Map<Object, Object> map = new HashMap<>();
+            map.put(true, "value");
+            map.put('a', "value");
+            Utils.castToStringObjectMap(map);
+        });
+        assertTrue(ce.getMessage().contains("Key must be a string."));
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesAsInput() {
+        Properties props = new Properties();
+        props.put("key1", "value1");
+        props.put("key2", "value2");
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("key1", "value1");
+        expectedMap.put("key2", "value2");
+
+        assertEquals(expectedMap, Utils.castToStringObjectMap(props));
+        assertEquals(Utils.propsToMap(props), Utils.castToStringObjectMap(props));
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesNonStringKey() {
+        ConfigException ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, "value");
+            Utils.castToStringObjectMap(props);
+        });
+        assertEquals("One or more keys is not a string.", ce.getMessage());
+
+        ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(true, "value");
+            props.put('a', "value");
+            Utils.castToStringObjectMap(props);
+        });
+        assertEquals("One or more keys is not a string.", ce.getMessage());
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesWithDefaults() {
+        Properties defaultProperties = new Properties();
+        defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
+        defaultProperties.setProperty("DefaultKey2", "DefaultValue2");
+
+        Properties actualProperties = new Properties(defaultProperties);
+        actualProperties.setProperty("ActualKey1", "ActualValue1");
+        actualProperties.setProperty("ActualKey2", "ActualValue2");
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("DefaultKey1", "DefaultValue1");
+        expectedMap.put("DefaultKey2", "DefaultValue2");
+        expectedMap.put("ActualKey1", "ActualValue1");
+        expectedMap.put("ActualKey2", "ActualValue2");
+
+        assertEquals(expectedMap, Utils.castToStringObjectMap(actualProperties));
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesWithDefaultsAndSameKey() {
+        Properties defaultProperties = new Properties();
+        defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
+        defaultProperties.setProperty("DefaultKey2", "DefaultValue2");
+
+        Properties actualProperties = new Properties(defaultProperties);
+        actualProperties.setProperty("DefaultKey1", "ActualValue1");
+        actualProperties.setProperty("ActualKey2", "ActualValue2");
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("DefaultKey1", "ActualValue1");
+        expectedMap.put("DefaultKey2", "DefaultValue2");
+        expectedMap.put("ActualKey2", "ActualValue2");
+
+        assertEquals(expectedMap, Utils.castToStringObjectMap(actualProperties));
     }
 
     @Test

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -52,6 +53,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
@@ -82,8 +84,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
@@ -94,8 +96,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -108,11 +108,17 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
+import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
-import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.TasksTuple;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import java.net.InetAddress;
@@ -157,6 +163,7 @@ import static org.mockito.Mockito.mock;
 public class GroupMetadataManagerTestContext {
     static final String DEFAULT_CLIENT_ID = "client";
     static final InetAddress DEFAULT_CLIENT_ADDRESS = InetAddress.getLoopbackAddress();
+    static final String DEFAULT_PROCESS_ID = "process-id";
 
     private static class GroupCoordinatorConfigContext extends GroupCoordinatorConfig {
         GroupCoordinatorConfigContext(AbstractConfig config) {
@@ -193,7 +200,7 @@ public class GroupMetadataManagerTestContext {
 
     public static void assertNoOrEmptyResult(List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts) {
         assertTrue(timeouts.size() <= 1);
-        timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result));
+        timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result()));
     }
 
     public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toProtocols(String... protocolNames) {
@@ -450,12 +457,12 @@ public class GroupMetadataManagerTestContext {
     }
 
     public static class Builder {
-        private final MockTime time = new MockTime(0, 0, 0);
+        private MockTime time = new MockTime(0, 0, 0);
         private final MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
         private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
         private final LogContext logContext = new LogContext();
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        private MetadataImage metadataImage;
+        private CoordinatorMetadataImage metadataImage;
         private GroupConfigManager groupConfigManager;
         private final List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private final List<StreamsGroupBuilder> streamsGroupBuilders = new ArrayList<>();
@@ -463,14 +470,15 @@ public class GroupMetadataManagerTestContext {
         private ShareGroupPartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
         private final List<ShareGroupBuilder> shareGroupBuilders = new ArrayList<>();
         private final Map<String, Object> config = new HashMap<>();
-        private Optional<Authorizer> authorizer = Optional.empty();
+        private Optional<Plugin<Authorizer>> authorizerPlugin = Optional.empty();
+        private List<TaskAssignor> streamsGroupAssignors = Collections.singletonList(new MockTaskAssignor("mock"));
 
         public Builder withConfig(String key, Object value) {
             config.put(key, value);
             return this;
         }
 
-        public Builder withMetadataImage(MetadataImage metadataImage) {
+        public Builder withMetadataImage(CoordinatorMetadataImage metadataImage) {
             this.metadataImage = metadataImage;
             return this;
         }
@@ -495,13 +503,23 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withAuthorizer(Authorizer authorizer) {
-            this.authorizer = Optional.of(authorizer);
+        public Builder withAuthorizerPlugin(Plugin<Authorizer> authorizerPlugin) {
+            this.authorizerPlugin = Optional.of(authorizerPlugin);
+            return this;
+        }
+        
+        public Builder withStreamsGroupTaskAssignors(List<TaskAssignor> assignors) {
+            this.streamsGroupAssignors = assignors;
+            return this;
+        }
+
+        public Builder withTime(MockTime time) {
+            this.time = time;
             return this;
         }
 
         public GroupMetadataManagerTestContext build() {
-            if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
+            if (metadataImage == null) metadataImage = CoordinatorMetadataImage.EMPTY;
             if (groupConfigManager == null) groupConfigManager = createConfigManager();
 
             config.putIfAbsent(
@@ -529,14 +547,26 @@ public class GroupMetadataManagerTestContext {
                     .withGroupCoordinatorMetricsShard(metrics)
                     .withShareGroupAssignor(shareGroupAssignor)
                     .withGroupConfigManager(groupConfigManager)
-                    .withAuthorizer(authorizer)
+                    .withAuthorizerPlugin(authorizerPlugin)
+                    .withStreamsGroupAssignors(streamsGroupAssignors)
                     .build(),
                 groupConfigManager
             );
 
-            consumerGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
-            shareGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
-            streamsGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
+            consumerGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
+            shareGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
+            streamsGroupBuilders.forEach(builder -> {
+                builder.build().forEach(context::replay);
+                StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(builder.groupId());
+                if (group.topology().isPresent()) {
+                    group.setConfiguredTopology(InternalTopicManager.configureTopics(
+                        new LogContext(),
+                        0,
+                        group.topology().get(),
+                        metadataImage)
+                    );
+                }
+            });
 
             context.commit();
 
@@ -606,6 +636,14 @@ public class GroupMetadataManagerTestContext {
             .state();
     }
 
+    public StreamsGroup.StreamsGroupState streamsGroupState(
+        String groupId
+    ) {
+        return groupMetadataManager
+            .streamsGroup(groupId)
+            .state();
+    }
+
     public MemberState consumerGroupMemberState(
         String groupId,
         String memberId
@@ -616,6 +654,16 @@ public class GroupMetadataManagerTestContext {
             .state();
     }
 
+    public org.apache.kafka.coordinator.group.streams.MemberState streamsGroupMemberState(
+        String groupId,
+        String memberId
+    ) {
+        return groupMetadataManager
+            .streamsGroup(groupId)
+            .getMemberOrThrow(memberId)
+            .state();
+    }
+    
     public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         ConsumerGroupHeartbeatRequestData request
     ) {
@@ -653,7 +701,7 @@ public class GroupMetadataManagerTestContext {
         return result;
     }
 
-    public CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> shareGroupHeartbeat(
+    public CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(
         ShareGroupHeartbeatRequestData request
     ) {
         RequestContext context = new RequestContext(
@@ -672,10 +720,11 @@ public class GroupMetadataManagerTestContext {
             false
         );
 
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = groupMetadataManager.shareGroupHeartbeat(
-            context,
-            request
-        );
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result =
+            groupMetadataManager.shareGroupHeartbeat(
+                context,
+                request
+            );
 
         result.records().forEach(this::replay);
         return result;
@@ -715,8 +764,8 @@ public class GroupMetadataManagerTestContext {
         time.sleep(ms);
         List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = timer.poll();
         timeouts.forEach(timeout -> {
-            if (timeout.result.replayRecords()) {
-                timeout.result.records().forEach(this::replay);
+            if (timeout.result().replayRecords()) {
+                timeout.result().records().forEach(this::replay);
             }
         });
         return timeouts;
@@ -725,8 +774,8 @@ public class GroupMetadataManagerTestContext {
     public List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> processTasks() {
         List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> results = executor.poll();
         results.forEach(taskResult -> {
-            if (taskResult.result.replayRecords()) {
-                taskResult.result.records().forEach(this::replay);
+            if (taskResult.result().replayRecords()) {
+                taskResult.result().records().forEach(this::replay);
             }
         });
         return results;
@@ -740,7 +789,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(groupSessionTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
     }
 
     public void assertNoSessionTimeout(
@@ -760,7 +809,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(groupRebalanceTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
         return timeout;
     }
 
@@ -781,7 +830,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(consumerGroupJoinKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
         return timeout;
     }
 
@@ -802,7 +851,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(consumerGroupSyncKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
         return timeout;
     }
 
@@ -1275,12 +1324,12 @@ public class GroupMetadataManagerTestContext {
         ));
 
 
-        Set<String> heartbeatKeys = timeouts.stream().map(timeout -> timeout.key).collect(Collectors.toSet());
+        Set<String> heartbeatKeys = timeouts.stream().map(timeout -> timeout.key()).collect(Collectors.toSet());
         assertEquals(expectedHeartbeatKeys, heartbeatKeys);
 
         // Only the last member leaving the group should result in the empty group metadata record.
         int timeoutsSize = timeouts.size();
-        assertEquals(expectedRecords, timeouts.get(timeoutsSize - 1).result.records());
+        assertEquals(expectedRecords, timeouts.get(timeoutsSize - 1).result().records());
         assertNoOrEmptyResult(timeouts.subList(0, timeoutsSize - 1));
         assertTrue(group.isInState(EMPTY));
         assertEquals(0, group.numMembers());
@@ -1417,7 +1466,7 @@ public class GroupMetadataManagerTestContext {
                 fail("Unexpected exception: " + e.getMessage());
             }
             return null;
-        }).collect(Collectors.toList());
+        }).toList();
 
         // Second join requests
         List<CompletableFuture<JoinGroupResponseData>> secondJoinFutures = IntStream.range(0, numMembers).mapToObj(i -> {
@@ -1427,7 +1476,7 @@ public class GroupMetadataManagerTestContext {
             assertFalse(joinResult.joinFuture.isDone());
 
             return joinResult.joinFuture;
-        }).collect(Collectors.toList());
+        }).toList();
 
         // Advance clock by initial rebalance delay.
         assertNoOrEmptyResult(sleep(classicGroupInitialRebalanceDelayMs));
@@ -1640,13 +1689,6 @@ public class GroupMetadataManagerTestContext {
                 );
                 break;
 
-            case SHARE_GROUP_PARTITION_METADATA:
-                groupMetadataManager.replay(
-                    (ShareGroupPartitionMetadataKey) key,
-                    (ShareGroupPartitionMetadataValue) messageOrNull(value)
-                );
-                break;
-
             case SHARE_GROUP_TARGET_ASSIGNMENT_MEMBER:
                 groupMetadataManager.replay(
                     (ShareGroupTargetAssignmentMemberKey) key,
@@ -1665,6 +1707,13 @@ public class GroupMetadataManagerTestContext {
                 groupMetadataManager.replay(
                     (ShareGroupCurrentMemberAssignmentKey) key,
                     (ShareGroupCurrentMemberAssignmentValue) messageOrNull(value)
+                );
+                break;
+
+            case SHARE_GROUP_STATE_PARTITION_METADATA:
+                groupMetadataManager.replay(
+                    (ShareGroupStatePartitionMetadataKey) key,
+                    (ShareGroupStatePartitionMetadataValue) messageOrNull(value)
                 );
                 break;
 
@@ -1693,13 +1742,6 @@ public class GroupMetadataManagerTestContext {
                 groupMetadataManager.replay(
                     (StreamsGroupMetadataKey) key,
                     (StreamsGroupMetadataValue) messageOrNull(value)
-                );
-                break;
-
-            case STREAMS_GROUP_PARTITION_METADATA:
-                groupMetadataManager.replay(
-                    (StreamsGroupPartitionMetadataKey) key,
-                    (StreamsGroupPartitionMetadataValue) messageOrNull(value)
                 );
                 break;
 
@@ -1743,5 +1785,21 @@ public class GroupMetadataManagerTestContext {
 
     public void updateGroupConfig(String groupId, Properties newGroupConfig) {
         groupConfigManager.updateGroupConfig(groupId, newGroupConfig);
+    }
+
+    public static StreamsGroupMember.Builder streamsGroupMemberBuilderWithDefaults(String memberId) {
+        return new StreamsGroupMember.Builder(memberId)
+            .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+            .setAssignedTasks(TasksTuple.EMPTY)
+            .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setRackId(null)
+            .setInstanceId(null)
+            .setRebalanceTimeoutMs(1500)
+            .setTopologyEpoch(0)
+            .setClientTags(Map.of())
+            .setProcessId(DEFAULT_PROCESS_ID)
+            .setUserEndpoint(null);
     }
 }

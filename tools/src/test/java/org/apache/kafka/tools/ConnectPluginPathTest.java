@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
-import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -591,34 +590,30 @@ public class ConnectPluginPathTest {
     private static CommandResult runCommand(Object... args) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
-        try {
-            int returnCode = ConnectPluginPath.mainNoExit(
-                    Arrays.stream(args)
-                            .map(Object::toString)
-                            .collect(Collectors.toList())
-                            .toArray(new String[]{}),
-                    new PrintStream(out, true, "utf-8"),
-                    new PrintStream(err, true, "utf-8"));
-            Set<Path> pluginLocations = getPluginLocations(args);
-            ClassLoader parent = ConnectPluginPath.class.getClassLoader();
-            ClassLoaderFactory factory = new ClassLoaderFactory();
-            try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
-                Set<PluginSource> sources = PluginUtils.pluginSources(pluginLocations, delegatingClassLoader, factory);
-                String stdout = new String(out.toByteArray(), StandardCharsets.UTF_8);
-                String stderr = new String(err.toByteArray(), StandardCharsets.UTF_8);
-                log.info("STDOUT:\n{}", stdout);
-                log.info("STDERR:\n{}", stderr);
-                return new CommandResult(
-                        returnCode,
-                        stdout,
-                        stderr,
-                        new ReflectionScanner().discoverPlugins(sources),
-                        new ServiceLoaderScanner().discoverPlugins(sources)
-                );
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        } catch (UnsupportedEncodingException e) {
+        int returnCode = ConnectPluginPath.mainNoExit(
+                Arrays.stream(args)
+                        .map(Object::toString)
+                        .toList()
+                        .toArray(new String[]{}),
+                new PrintStream(out, true, StandardCharsets.UTF_8),
+                new PrintStream(err, true, StandardCharsets.UTF_8));
+        Set<Path> pluginLocations = getPluginLocations(args);
+        ClassLoader parent = ConnectPluginPath.class.getClassLoader();
+        ClassLoaderFactory factory = new ClassLoaderFactory();
+        try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
+            Set<PluginSource> sources = PluginUtils.pluginSources(pluginLocations, delegatingClassLoader, factory);
+            String stdout = out.toString(StandardCharsets.UTF_8);
+            String stderr = err.toString(StandardCharsets.UTF_8);
+            log.info("STDOUT:\n{}", stdout);
+            log.info("STDERR:\n{}", stderr);
+            return new CommandResult(
+                    returnCode,
+                    stdout,
+                    stderr,
+                    new ReflectionScanner().discoverPlugins(sources),
+                    new ServiceLoaderScanner().discoverPlugins(sources)
+            );
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }

@@ -20,10 +20,11 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class MockSerializer implements ClusterResourceListener, Serializer<byte[]> {
+public class MockSerializer implements ClusterResourceListener, Serializer<String> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
@@ -35,11 +36,12 @@ public class MockSerializer implements ClusterResourceListener, Serializer<byte[
     }
 
     @Override
-    public byte[] serialize(String topic, byte[] data) {
+    public byte[] serialize(String topic, String data) {
         // This will ensure that we get the cluster metadata when serialize is called for the first time
         // as subsequent compareAndSet operations will fail.
         CLUSTER_ID_BEFORE_SERIALIZE.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
-        return data;
+        if (data == null) return null;
+        return data.getBytes(StandardCharsets.UTF_8);
     }
 
     @Override

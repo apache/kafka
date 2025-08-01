@@ -112,7 +112,12 @@ public enum AclOperation {
     /**
      * DESCRIBE_TOKENS operation.
      */
-    DESCRIBE_TOKENS((byte) 14);
+    DESCRIBE_TOKENS((byte) 14),
+
+    /**
+     * TWO_PHASE_COMMIT operation.
+     */
+    TWO_PHASE_COMMIT((byte) 15);
 
     // Note: we cannot have more than 30 ACL operations without modifying the format used
     // to describe ACL operations in MetadataResponse.

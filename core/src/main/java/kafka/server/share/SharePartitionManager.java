@@ -34,7 +34,9 @@ import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.share.CachedSharePartition;
+import org.apache.kafka.server.share.ShareGroupListener;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.context.FinalContext;
@@ -56,6 +58,7 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.slf4j.Logger;
@@ -63,7 +66,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -72,7 +74,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -85,9 +86,9 @@ public class SharePartitionManager implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(SharePartitionManager.class);
 
     /**
-     * The partition cache map is used to store the SharePartition objects for each share group topic-partition.
+     * The partition cache is used to store the SharePartition objects for each share group topic-partition.
      */
-    private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
+    private final SharePartitionCache partitionCache;
 
     /**
      * The replica manager is used to fetch messages from the log.
@@ -129,6 +130,10 @@ public class SharePartitionManager implements AutoCloseable {
      * The max delivery count is the maximum number of times a message can be delivered before it is considered to be archived.
      */
     private final int maxDeliveryCount;
+    /**
+     * The max wait time for a share fetch request having remote storage fetch.
+     */
+    private final long remoteFetchMaxWaitMs;
 
     /**
      * The persister is used to persist the share partition state.
@@ -145,11 +150,6 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final BrokerTopicStats brokerTopicStats;
 
-    /**
-     * The max fetch records is the maximum number of records that can be fetched by a share fetch request.
-     */
-    private final int maxFetchRecords;
-
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -157,7 +157,7 @@ public class SharePartitionManager implements AutoCloseable {
         int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
-        int maxFetchRecords,
+        long remoteFetchMaxWaitMs,
         Persister persister,
         GroupConfigManager groupConfigManager,
         BrokerTopicStats brokerTopicStats
@@ -165,11 +165,11 @@ public class SharePartitionManager implements AutoCloseable {
         this(replicaManager,
             time,
             cache,
-            new ConcurrentHashMap<>(),
+            new SharePartitionCache(),
             defaultRecordLockDurationMs,
             maxDeliveryCount,
             maxInFlightMessages,
-            maxFetchRecords,
+            remoteFetchMaxWaitMs,
             persister,
             groupConfigManager,
             new ShareGroupMetrics(time),
@@ -181,11 +181,11 @@ public class SharePartitionManager implements AutoCloseable {
         ReplicaManager replicaManager,
         Time time,
         ShareSessionCache cache,
-        Map<SharePartitionKey, SharePartition> partitionCacheMap,
+        SharePartitionCache partitionCache,
         int defaultRecordLockDurationMs,
         int maxDeliveryCount,
         int maxInFlightMessages,
-        int maxFetchRecords,
+        long remoteFetchMaxWaitMs,
         Persister persister,
         GroupConfigManager groupConfigManager,
         ShareGroupMetrics shareGroupMetrics,
@@ -194,13 +194,13 @@ public class SharePartitionManager implements AutoCloseable {
         this(replicaManager,
             time,
             cache,
-            partitionCacheMap,
+            partitionCache,
             defaultRecordLockDurationMs,
             new SystemTimerReaper("share-group-lock-timeout-reaper",
                 new SystemTimer("share-group-lock-timeout")),
             maxDeliveryCount,
             maxInFlightMessages,
-            maxFetchRecords,
+            remoteFetchMaxWaitMs,
             persister,
             groupConfigManager,
             shareGroupMetrics,
@@ -213,12 +213,12 @@ public class SharePartitionManager implements AutoCloseable {
             ReplicaManager replicaManager,
             Time time,
             ShareSessionCache cache,
-            Map<SharePartitionKey, SharePartition> partitionCacheMap,
+            SharePartitionCache partitionCache,
             int defaultRecordLockDurationMs,
             Timer timer,
             int maxDeliveryCount,
             int maxInFlightMessages,
-            int maxFetchRecords,
+            long remoteFetchMaxWaitMs,
             Persister persister,
             GroupConfigManager groupConfigManager,
             ShareGroupMetrics shareGroupMetrics,
@@ -227,16 +227,17 @@ public class SharePartitionManager implements AutoCloseable {
         this.replicaManager = replicaManager;
         this.time = time;
         this.cache = cache;
-        this.partitionCacheMap = partitionCacheMap;
+        this.partitionCache = partitionCache;
         this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.maxDeliveryCount = maxDeliveryCount;
         this.maxInFlightMessages = maxInFlightMessages;
+        this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
         this.persister = persister;
         this.groupConfigManager = groupConfigManager;
         this.shareGroupMetrics = shareGroupMetrics;
-        this.maxFetchRecords = maxFetchRecords;
         this.brokerTopicStats = brokerTopicStats;
+        this.cache.registerShareGroupListener(new ShareGroupListenerImpl());
     }
 
     /**
@@ -246,6 +247,8 @@ public class SharePartitionManager implements AutoCloseable {
      * @param groupId The group id, this is used to identify the share group.
      * @param memberId The member id, generated by the group-coordinator, this is used to identify the client.
      * @param fetchParams The fetch parameters from the share fetch request.
+     * @param sessionEpoch The session epoch for the member.
+     * @param maxFetchRecords The maximum number of records to fetch.
      * @param batchSize The number of records per acquired records batch.
      * @param topicIdPartitions The topic partitions to fetch for.
      *
@@ -256,6 +259,7 @@ public class SharePartitionManager implements AutoCloseable {
         String memberId,
         FetchParams fetchParams,
         int sessionEpoch,
+        int maxFetchRecords,
         int batchSize,
         List<TopicIdPartition> topicIdPartitions
     ) {
@@ -295,7 +299,7 @@ public class SharePartitionManager implements AutoCloseable {
         acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
             topics.add(topicIdPartition.topic());
             SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
-            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey);
+            SharePartition sharePartition = partitionCache.get(sharePartitionKey);
             if (sharePartition != null) {
                 CompletableFuture<Throwable> future = new CompletableFuture<>();
                 sharePartition.acknowledge(memberId, acknowledgePartitionBatches).whenComplete((result, throwable) -> {
@@ -360,18 +364,18 @@ public class SharePartitionManager implements AutoCloseable {
             log.error("Share session error for {}: no such share session found", key);
             return FutureUtils.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
         } else {
-            log.debug("Removed share session with key " + key);
+            log.debug("Removed share session with key {}", key);
         }
 
         // Additionally release the acquired records for the respective member.
         if (topicIdPartitions.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
 
         Map<TopicIdPartition, CompletableFuture<Throwable>> futuresMap = new HashMap<>();
         topicIdPartitions.forEach(topicIdPartition -> {
             SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
-            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey);
+            SharePartition sharePartition = partitionCache.get(sharePartitionKey);
             if (sharePartition == null) {
                 log.error("No share partition found for groupId {} topicPartition {} while releasing acquired topic partitions", groupId, topicIdPartition);
                 futuresMap.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
@@ -395,6 +399,21 @@ public class SharePartitionManager implements AutoCloseable {
         });
 
         return mapAcknowledgementFutures(futuresMap, Optional.empty());
+    }
+
+    /**
+     * The method creates a timer task to delay the share fetch request for maxWaitMs duration.
+     * A future is created and returned which will be completed when the timer task is completed.
+     *
+     * @param maxWaitMs The duration after which the timer task will be completed.
+     *
+     * @return A future that will be completed when the timer task is completed.
+     */
+    public CompletableFuture<Void> createIdleShareFetchTimerTask(long maxWaitMs) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        TimerTask idleShareFetchTimerTask = new IdleShareFetchTimerTask(maxWaitMs, future);
+        replicaManager.addShareFetchTimerRequest(idleShareFetchTimerTask);
+        return future;
     }
 
     private CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> mapAcknowledgementFutures(
@@ -429,11 +448,18 @@ public class SharePartitionManager implements AutoCloseable {
      * @param shareFetchData The topic-partitions in the share fetch request.
      * @param toForget The topic-partitions to forget present in the share fetch request.
      * @param reqMetadata The metadata in the share fetch request.
-     * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not
+     * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not.
+     * @param clientConnectionId The client connection id.
      * @return The new share fetch context object
      */
-    public ShareFetchContext newContext(String groupId, List<TopicIdPartition> shareFetchData,
-                                        List<TopicIdPartition> toForget, ShareRequestMetadata reqMetadata, Boolean isAcknowledgeDataPresent) {
+    public ShareFetchContext newContext(
+        String groupId,
+        List<TopicIdPartition> shareFetchData,
+        List<TopicIdPartition> toForget,
+        ShareRequestMetadata reqMetadata,
+        Boolean isAcknowledgeDataPresent,
+        String clientConnectionId
+    ) {
         ShareFetchContext context;
         // If the request's epoch is FINAL_EPOCH or INITIAL_EPOCH, we should remove the existing sessions. Also, start a
         // new session in case it is INITIAL_EPOCH. Hence, we need to treat them as special cases.
@@ -458,10 +484,10 @@ public class SharePartitionManager implements AutoCloseable {
                 shareFetchData.forEach(topicIdPartition ->
                     cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
                 ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, reqMetadata.memberId(),
-                        time.milliseconds(), cachedSharePartitions);
+                    cachedSharePartitions, clientConnectionId);
                 if (responseShareSessionKey == null) {
                     log.error("Could not create a share session for group {} member {}", groupId, reqMetadata.memberId());
-                    throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+                    throw Errors.SHARE_SESSION_LIMIT_REACHED.exception();
                 }
 
                 context = new ShareSessionContext(reqMetadata, shareFetchData);
@@ -485,7 +511,7 @@ public class SharePartitionManager implements AutoCloseable {
                 }
                 Map<ShareSession.ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
                     shareFetchData, toForget);
-                cache.touch(shareSession, time.milliseconds());
+                cache.updateNumPartitions(shareSession);
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
                 log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
                                 "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
@@ -526,9 +552,27 @@ public class SharePartitionManager implements AutoCloseable {
                             shareSession.epoch, reqMetadata.epoch());
                     throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
                 }
-                cache.touch(shareSession, time.milliseconds());
+                cache.updateNumPartitions(shareSession);
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
+        }
+    }
+
+    /**
+     * The handler for share version feature metadata changes.
+     * @param shareVersion the new share version feature
+     * @param isEnabledFromConfig whether the share version feature is enabled from config
+     */
+    public void onShareVersionToggle(ShareVersion shareVersion, boolean isEnabledFromConfig) {
+        // Clear the cache and remove all share partitions from the cache if the share version does
+        // not support share groups.
+        if (!shareVersion.supportsShareGroups() && !isEnabledFromConfig) {
+            cache.removeAllSessions();
+            Set<SharePartitionKey> sharePartitionKeys = partitionCache.cachedSharePartitionKeys();
+            // Remove all share partitions from partition cache.
+            sharePartitionKeys.forEach(sharePartitionKey ->
+                removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager)
+            );
         }
     }
 
@@ -545,7 +589,7 @@ public class SharePartitionManager implements AutoCloseable {
         ShareSessionKey key = shareSessionKey(groupId, memberId);
         ShareSession shareSession = cache.get(key);
         if (shareSession == null) {
-            return Collections.emptyList();
+            return List.of();
         }
         List<TopicIdPartition> cachedTopicIdPartitions = new ArrayList<>();
         shareSession.partitionMap().forEach(cachedSharePartition -> cachedTopicIdPartitions.add(
@@ -578,7 +622,7 @@ public class SharePartitionManager implements AutoCloseable {
     void processShareFetch(ShareFetch shareFetch) {
         if (shareFetch.topicIdPartitions().isEmpty()) {
             // If there are no partitions to fetch then complete the future with an empty map.
-            shareFetch.maybeComplete(Collections.emptyMap());
+            shareFetch.maybeComplete(Map.of());
             return;
         }
 
@@ -641,7 +685,7 @@ public class SharePartitionManager implements AutoCloseable {
 
         // If all the partitions in the request errored out, then complete the fetch request with an exception.
         if (shareFetch.errorInAllPartitions()) {
-            shareFetch.maybeComplete(Collections.emptyMap());
+            shareFetch.maybeComplete(Map.of());
             // Do not proceed with share fetch processing as all the partitions errored out.
             return;
         }
@@ -649,20 +693,20 @@ public class SharePartitionManager implements AutoCloseable {
         // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
         // The request will be added irrespective of whether the share partition is initialized or not.
         // Once the share partition is initialized, the delayed share fetch will be completed.
-        addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, fencedSharePartitionHandler(), sharePartitions, shareGroupMetrics, time), delayedShareFetchWatchKeys);
+        addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, fencedSharePartitionHandler(), sharePartitions, shareGroupMetrics, time, remoteFetchMaxWaitMs), delayedShareFetchWatchKeys);
     }
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {
-        return partitionCacheMap.computeIfAbsent(sharePartitionKey,
+        return partitionCache.computeIfAbsent(sharePartitionKey,
                 k -> {
                     int leaderEpoch = ShareFetchUtils.leaderEpoch(replicaManager, sharePartitionKey.topicIdPartition().topicPartition());
                     // Attach listener to Partition which shall invoke partition change handlers.
                     // However, as there could be multiple share partitions (per group name) for a single topic-partition,
                     // hence create separate listeners per share partition which holds the share partition key
                     // to identify the respective share partition.
-                    SharePartitionListener listener = new SharePartitionListener(sharePartitionKey, replicaManager, partitionCacheMap);
+                    SharePartitionListener listener = new SharePartitionListener(sharePartitionKey, replicaManager, partitionCache);
                     replicaManager.maybeAddListener(sharePartitionKey.topicIdPartition().topicPartition(), listener);
-                    SharePartition partition = new SharePartition(
+                    return new SharePartition(
                             sharePartitionKey.groupId(),
                             sharePartitionKey.topicIdPartition(),
                             leaderEpoch,
@@ -676,7 +720,6 @@ public class SharePartitionManager implements AutoCloseable {
                             groupConfigManager,
                             listener
                     );
-                    return partition;
                 });
     }
 
@@ -693,7 +736,7 @@ public class SharePartitionManager implements AutoCloseable {
         }
 
         // Remove the partition from the cache as it's failed to initialize.
-        removeSharePartitionFromCache(sharePartitionKey, partitionCacheMap, replicaManager);
+        removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager);
         // The partition initialization failed, so add the partition to the erroneous partitions.
         log.debug("Error initializing share partition with key {}", sharePartitionKey, throwable);
         shareFetch.addErroneous(sharePartitionKey.topicIdPartition(), throwable);
@@ -713,7 +756,7 @@ public class SharePartitionManager implements AutoCloseable {
                 // The share partition is fenced hence remove the partition from map and let the client retry.
                 // But surface the error to the client so client might take some action i.e. re-fetch
                 // the metadata and retry the fetch on new leader.
-                removeSharePartitionFromCache(sharePartitionKey, partitionCacheMap, replicaManager);
+                removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager);
             }
         };
     }
@@ -724,10 +767,10 @@ public class SharePartitionManager implements AutoCloseable {
 
     private static void removeSharePartitionFromCache(
         SharePartitionKey sharePartitionKey,
-        Map<SharePartitionKey, SharePartition> map,
+        SharePartitionCache partitionCache,
         ReplicaManager replicaManager
     ) {
-        SharePartition sharePartition = map.remove(sharePartitionKey);
+        SharePartition sharePartition = partitionCache.remove(sharePartitionKey);
         if (sharePartition != null) {
             sharePartition.markFenced();
             replicaManager.removeListener(sharePartitionKey.topicIdPartition().topicPartition(), sharePartition.listener());
@@ -761,16 +804,16 @@ public class SharePartitionManager implements AutoCloseable {
 
         private final SharePartitionKey sharePartitionKey;
         private final ReplicaManager replicaManager;
-        private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
+        private final SharePartitionCache partitionCache;
 
         SharePartitionListener(
             SharePartitionKey sharePartitionKey,
             ReplicaManager replicaManager,
-            Map<SharePartitionKey, SharePartition> partitionCacheMap
+            SharePartitionCache partitionCache
         ) {
             this.sharePartitionKey = sharePartitionKey;
             this.replicaManager = replicaManager;
-            this.partitionCacheMap = partitionCacheMap;
+            this.partitionCache = partitionCache;
         }
 
         @Override
@@ -800,7 +843,65 @@ public class SharePartitionManager implements AutoCloseable {
                     topicPartition, sharePartitionKey);
                 return;
             }
-            removeSharePartitionFromCache(sharePartitionKey, partitionCacheMap, replicaManager);
+            removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager);
         }
     }
+
+    /**
+     * The ShareGroupListenerImpl is used to listen for group events. The share group is associated
+     * with the group id, need to handle the group events for the share group.
+     */
+    private class ShareGroupListenerImpl implements ShareGroupListener {
+
+        @Override
+        public void onMemberLeave(String groupId, Uuid memberId) {
+            releaseSession(groupId, memberId.toString());
+        }
+
+        @Override
+        public void onGroupEmpty(String groupId) {
+            // Remove all share partitions from the cache. Instead of defining an API in SharePartitionCache
+            // for removing all share partitions for a group, share partitions are removed after fetching
+            // associated topic-partitions from the cache. This is done to mark the share partitions fenced
+            // and remove the listeners from the replica manager.
+            Set<TopicIdPartition> topicIdPartitions = partitionCache.topicIdPartitionsForGroup(groupId);
+            if (topicIdPartitions != null) {
+                // Remove all share partitions from partition cache.
+                topicIdPartitions.forEach(topicIdPartition ->
+                    removeSharePartitionFromCache(new SharePartitionKey(groupId, topicIdPartition), partitionCache, replicaManager)
+                );
+            }
+        }
+    }
+
+    /**
+     * The IdleShareFetchTimerTask creates a timer task for a share fetch request which tries to initialize a new share
+     * session when the share session cache is full. Such a request is delayed for maxWaitMs by passing the corresponding
+     * IdleShareFetchTimerTask to {@link ReplicaManager#delayedShareFetchTimer}.
+     */
+    private static class IdleShareFetchTimerTask extends TimerTask {
+
+        /**
+         * This future is used to complete the share fetch request when the timer task is completed.
+         */
+        private final CompletableFuture<Void> future;
+
+        public IdleShareFetchTimerTask(
+            long delayMs,
+            CompletableFuture<Void> future
+        ) {
+            super(delayMs);
+            this.future = future;
+        }
+
+        /**
+         * The run method which is executed when the timer task expires. This completes the future indicating that the
+         * delay for the corresponding share fetch request is over.
+         */
+        @Override
+        public void run() {
+            future.complete(null);
+        }
+    }
+
 }

@@ -23,7 +23,6 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,9 +60,9 @@ public class TopicNameMatchesTest {
     @Test
     public void testConfig() {
         TopicNameMatches<SourceRecord> predicate = new TopicNameMatches<>();
-        predicate.config().validate(Collections.singletonMap("pattern", "my-prefix-.*"));
+        predicate.config().validate(Map.of("pattern", "my-prefix-.*"));
 
-        List<ConfigValue> configs = predicate.config().validate(Collections.singletonMap("pattern", "*"));
+        List<ConfigValue> configs = predicate.config().validate(Map.of("pattern", "*"));
         List<String> errorMsgs = configs.get(0).errorMessages();
         assertEquals(1, errorMsgs.size());
         assertTrue(errorMsgs.get(0).contains("Invalid regex"));
@@ -72,7 +71,7 @@ public class TopicNameMatchesTest {
     @Test
     public void testTest() {
         TopicNameMatches<SourceRecord> predicate = new TopicNameMatches<>();
-        predicate.configure(Collections.singletonMap("pattern", "my-prefix-.*"));
+        predicate.configure(Map.of("pattern", "my-prefix-.*"));
 
         assertTrue(predicate.test(recordWithTopicName("my-prefix-")));
         assertTrue(predicate.test(recordWithTopicName("my-prefix-foo")));

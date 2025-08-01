@@ -20,10 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class BeginQuorumEpochRequest extends AbstractRequest {
@@ -64,8 +63,8 @@ public class BeginQuorumEpochRequest extends AbstractRequest {
             .setErrorCode(Errors.forException(e).code()));
     }
 
-    public static BeginQuorumEpochRequest parse(ByteBuffer buffer, short version) {
-        return new BeginQuorumEpochRequest(new BeginQuorumEpochRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static BeginQuorumEpochRequest parse(Readable readable, short version) {
+        return new BeginQuorumEpochRequest(new BeginQuorumEpochRequestData(readable, version), version);
     }
 
     public static BeginQuorumEpochRequestData singletonRequest(

@@ -368,7 +368,7 @@ public final class AssignmentsManager {
             previousGlobalFailures++;
             log.error("handleResponse: {} assignments failed; global error: {}. Retrying.",
                 sent.size(), globalResponseError.get());
-            sent.entrySet().forEach(e -> ready.putIfAbsent(e.getKey(), e.getValue()));
+            sent.forEach(ready::putIfAbsent);
             return;
         }
         previousGlobalFailures = 0;
@@ -435,7 +435,7 @@ public final class AssignmentsManager {
             return Optional.of("AuthenticationException");
         }
         if (response.get().wasTimedOut()) {
-            return Optional.of("Disonnected[Timeout]");
+            return Optional.of("Disconnected[Timeout]");
         }
         if (response.get().wasDisconnected()) {
             return Optional.of("Disconnected");

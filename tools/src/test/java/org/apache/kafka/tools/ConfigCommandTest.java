@@ -433,29 +433,29 @@ public class ConfigCommandTest {
     public void testOptionEntityTypeNames() {
         List<String> connectOpts = Arrays.asList("--bootstrap-server", "localhost:9092");
 
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.singletonList("A"), connectOpts, "--entity-type", "topics", "--entity-name", "A");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.singletonList("1.2.3.4"), connectOpts, "--entity-name", "1.2.3.4", "--entity-type", "ips");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS), Collections.singletonList("A"), connectOpts, "--entity-type", "client-metrics", "--entity-name", "A");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.singletonList("A"), connectOpts, "--entity-type", "groups", "--entity-name", "A");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.USER, ConfigType.CLIENT), Arrays.asList("A", ""), connectOpts,
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC.value()), Collections.singletonList("A"), connectOpts, "--entity-type", "topics", "--entity-name", "A");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP.value()), Collections.singletonList("1.2.3.4"), connectOpts, "--entity-name", "1.2.3.4", "--entity-type", "ips");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS.value()), Collections.singletonList("A"), connectOpts, "--entity-type", "client-metrics", "--entity-name", "A");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP.value()), Collections.singletonList("A"), connectOpts, "--entity-type", "groups", "--entity-name", "A");
+        testExpectedEntityTypeNames(Arrays.asList(ConfigType.USER.value(), ConfigType.CLIENT.value()), Arrays.asList("A", ""), connectOpts,
             "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.USER, ConfigType.CLIENT), Arrays.asList("", "B"), connectOpts,
+        testExpectedEntityTypeNames(Arrays.asList(ConfigType.USER.value(), ConfigType.CLIENT.value()), Arrays.asList("", "B"), connectOpts,
             "--entity-default", "--entity-name", "B", "--entity-type", "users", "--entity-type", "clients");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.singletonList("A"), connectOpts, "--topic", "A");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.singletonList("1.2.3.4"), connectOpts, "--ip", "1.2.3.4");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.singletonList("A"), connectOpts, "--group", "A");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT, ConfigType.USER), Arrays.asList("B", "A"), connectOpts, "--client", "B", "--user", "A");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT, ConfigType.USER), Arrays.asList("B", ""), connectOpts, "--client", "B", "--user-defaults");
-        testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT, ConfigType.USER), Collections.singletonList("A"), connectOpts,
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC.value()), Collections.singletonList("A"), connectOpts, "--topic", "A");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP.value()), Collections.singletonList("1.2.3.4"), connectOpts, "--ip", "1.2.3.4");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP.value()), Collections.singletonList("A"), connectOpts, "--group", "A");
+        testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT.value(), ConfigType.USER.value()), Arrays.asList("B", "A"), connectOpts, "--client", "B", "--user", "A");
+        testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT.value(), ConfigType.USER.value()), Arrays.asList("B", ""), connectOpts, "--client", "B", "--user-defaults");
+        testExpectedEntityTypeNames(Arrays.asList(ConfigType.CLIENT.value(), ConfigType.USER.value()), Collections.singletonList("A"), connectOpts,
             "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC), Collections.emptyList(), connectOpts, "--entity-type", "topics");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP), Collections.emptyList(), connectOpts, "--entity-type", "ips");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP), Collections.emptyList(), connectOpts, "--entity-type", "groups");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS), Collections.emptyList(), connectOpts, "--entity-type", "client-metrics");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER), Collections.singletonList("0"), connectOpts, "--entity-name", "0", "--entity-type", "brokers");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER), Collections.singletonList("0"), connectOpts, "--broker", "0");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.USER), Collections.emptyList(), connectOpts, "--entity-type", "users");
-        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER), Collections.emptyList(), connectOpts, "--entity-type", "brokers");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.TOPIC.value()), Collections.emptyList(), connectOpts, "--entity-type", "topics");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.IP.value()), Collections.emptyList(), connectOpts, "--entity-type", "ips");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.GROUP.value()), Collections.emptyList(), connectOpts, "--entity-type", "groups");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.CLIENT_METRICS.value()), Collections.emptyList(), connectOpts, "--entity-type", "client-metrics");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER.value()), Collections.singletonList("0"), connectOpts, "--entity-name", "0", "--entity-type", "brokers");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER.value()), Collections.singletonList("0"), connectOpts, "--broker", "0");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.USER.value()), Collections.emptyList(), connectOpts, "--entity-type", "users");
+        testExpectedEntityTypeNames(Collections.singletonList(ConfigType.BROKER.value()), Collections.emptyList(), connectOpts, "--entity-type", "brokers");
     }
 
     @Test
@@ -639,11 +639,11 @@ public class ConfigCommandTest {
 
 
         List<String> deleteArgs = Arrays.asList("--delete-config", "connection_creation_rate");
-        Set<ClientQuotaAlteration.Op> deleteAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", null)));
+        Set<ClientQuotaAlteration.Op> deleteAlterationOps = Set.of(new ClientQuotaAlteration.Op("connection_creation_rate", null));
         Map<String, Double> propsToDelete = Collections.singletonMap("connection_creation_rate", 50.0);
 
         List<String> addArgs = Arrays.asList("--add-config", "connection_creation_rate=100");
-        Set<ClientQuotaAlteration.Op> addAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0)));
+        Set<ClientQuotaAlteration.Op> addAlterationOps = Set.of(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0));
 
         verifyAlterQuotas(
             concat(singleIpArgsAndEntity.getKey(), deleteArgs),
@@ -672,11 +672,11 @@ public class ConfigCommandTest {
             "--delete-config", "request_percentage");
         Map<String, Double> propsToDelete = Collections.singletonMap("request_percentage", 50.0);
 
-        Set<ClientQuotaAlteration.Op> alterationOps = new HashSet<>(Arrays.asList(
+        Set<ClientQuotaAlteration.Op> alterationOps = Set.of(
             new ClientQuotaAlteration.Op("consumer_byte_rate", 20000d),
             new ClientQuotaAlteration.Op("producer_byte_rate", 10000d),
             new ClientQuotaAlteration.Op("request_percentage", null)
-        ));
+        );
 
         Entry<List<String>, Map<String, String>> userArgsAndEntity = argsAndExpectedEntity(Optional.ofNullable(user), ClientQuotaEntity.USER);
         Entry<List<String>, Map<String, String>> clientArgsAndEntry = argsAndExpectedEntity(Optional.ofNullable(client), ClientQuotaEntity.CLIENT_ID);
@@ -844,11 +844,11 @@ public class ConfigCommandTest {
                 assertEquals(ConfigResource.Type.TOPIC, entry.getKey().type());
                 assertEquals(3, alterConfigOps.size());
 
-                Set<AlterConfigOp> expectedConfigOps = new HashSet<>(Arrays.asList(
+                Set<AlterConfigOp> expectedConfigOps = Set.of(
                     new AlterConfigOp(newConfigEntry("delete.retention.ms", "1000000"), AlterConfigOp.OpType.SET),
                     new AlterConfigOp(newConfigEntry("min.insync.replicas", "2"), AlterConfigOp.OpType.SET),
                     new AlterConfigOp(newConfigEntry("unclean.leader.election.enable", ""), AlterConfigOp.OpType.DELETE)
-                ));
+                );
                 assertEquals(expectedConfigOps.size(), alterConfigOps.size());
                 expectedConfigOps.forEach(expectedOp -> {
                     Optional<AlterConfigOp> actual = alterConfigOps.stream()
@@ -913,7 +913,7 @@ public class ConfigCommandTest {
     @Test
     public void testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsAllowed() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigType.BROKER,
+            "--entity-type", ConfigType.BROKER.value(),
             "--describe"
         };
 
@@ -923,7 +923,7 @@ public class ConfigCommandTest {
     @Test
     public void testDescribeAllBrokerConfig() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigType.BROKER,
+            "--entity-type", ConfigType.BROKER.value(),
             "--entity-name", "1",
             "--describe",
             "--all"};
@@ -934,7 +934,7 @@ public class ConfigCommandTest {
     @Test
     public void testDescribeAllTopicConfig() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigType.TOPIC,
+            "--entity-type", ConfigType.TOPIC.value(),
             "--entity-name", "foo",
             "--describe",
             "--all"};

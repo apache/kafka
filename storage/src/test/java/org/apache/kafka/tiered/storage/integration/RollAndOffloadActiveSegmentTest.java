@@ -21,7 +21,6 @@ import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,12 +38,12 @@ public class RollAndOffloadActiveSegmentTest extends TieredStorageTestHarness {
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
+        final int broker0 = 0;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 1;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int partitionCount = 1;
+        final int replicationFactor = 1;
+        final int maxBatchCountPerSegment = 1;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
 
@@ -52,7 +51,7 @@ public class RollAndOffloadActiveSegmentTest extends TieredStorageTestHarness {
         builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
                         enableRemoteLogStorage)
                 // update the topic config such that it triggers the rolling of the active segment
-                .updateTopicConfig(topicA, configsToBeAdded(), Collections.emptyList())
+                .updateTopicConfig(topicA, configsToBeAdded(), List.of())
                 // produce events to partition 0 and expect all the 4 segments to be offloaded
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 1, new KeyValueSpec("k1", "v1"))
