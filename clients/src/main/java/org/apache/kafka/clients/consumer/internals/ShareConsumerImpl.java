@@ -1106,19 +1106,23 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         LinkedList<BackgroundEvent> events = new LinkedList<>();
         backgroundEventQueue.drainTo(events);
+        if (!events.isEmpty()) {
+            long startMs = time.milliseconds();
+            for (BackgroundEvent event : events) {
+                asyncConsumerMetrics.recordBackgroundEventQueueTime(time.milliseconds() - event.enqueuedMs());
+                try {
+                    if (event instanceof CompletableEvent)
+                        backgroundEventReaper.add((CompletableEvent<?>) event);
 
-        for (BackgroundEvent event : events) {
-            try {
-                if (event instanceof CompletableEvent)
-                    backgroundEventReaper.add((CompletableEvent<?>) event);
+                    backgroundEventProcessor.process(event);
+                } catch (Throwable t) {
+                    KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
 
-                backgroundEventProcessor.process(event);
-            } catch (Throwable t) {
-                KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
-
-                if (!firstError.compareAndSet(null, e))
-                    log.warn("An error occurred when processing the background event: {}", e.getMessage(), e);
+                    if (!firstError.compareAndSet(null, e))
+                        log.warn("An error occurred when processing the background event: {}", e.getMessage(), e);
+                }
             }
+            asyncConsumerMetrics.recordBackgroundEventQueueProcessingTime(time.milliseconds() - startMs);
         }
 
         backgroundEventReaper.reap(time.milliseconds());

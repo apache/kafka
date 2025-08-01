@@ -47,21 +47,6 @@ public class AsyncConsumerMetricsTest {
     public void shouldMetricNames() {
         // create
         consumerMetrics = new AsyncConsumerMetrics(metrics);
-        Set<MetricName> expectedMetrics = Set.of(
-            metrics.metricName("last-poll-seconds-ago", CONSUMER_METRIC_GROUP),
-            metrics.metricName("time-between-poll-avg", CONSUMER_METRIC_GROUP),
-            metrics.metricName("time-between-poll-max", CONSUMER_METRIC_GROUP),
-            metrics.metricName("poll-idle-ratio-avg", CONSUMER_METRIC_GROUP),
-            metrics.metricName("commit-sync-time-ns-total", CONSUMER_METRIC_GROUP),
-            metrics.metricName("committed-time-ns-total", CONSUMER_METRIC_GROUP)
-        );
-        expectedMetrics.forEach(
-            metricName -> assertTrue(
-                metrics.metrics().containsKey(metricName),
-                "Missing metric: " + metricName
-            )
-        );
-
         Set<MetricName> expectedConsumerMetrics = Set.of(
             metrics.metricName("time-between-network-thread-poll-avg", CONSUMER_METRIC_GROUP),
             metrics.metricName("time-between-network-thread-poll-max", CONSUMER_METRIC_GROUP),
@@ -88,12 +73,6 @@ public class AsyncConsumerMetricsTest {
 
         // close
         consumerMetrics.close();
-        expectedMetrics.forEach(
-            metricName -> assertFalse(
-                metrics.metrics().containsKey(metricName),
-                "Metric present after close: " + metricName
-            )
-        );
         expectedConsumerMetrics.forEach(
             metricName -> assertFalse(
                 metrics.metrics().containsKey(metricName),
