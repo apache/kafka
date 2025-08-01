@@ -280,7 +280,7 @@ public class ProcessorTopologyTest {
     public void testDrivingSimpleTopology() {
         final int partition = 10;
         driver = new TopologyTestDriver(createSimpleTopology(partition), props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.EPOCH, Duration.ZERO);
         final TestOutputTopic<String, String> outputTopic1 =
                 driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
 
@@ -304,7 +304,7 @@ public class ProcessorTopologyTest {
     @Test
     public void testDrivingSimpleTopologyWithDroppingPartitioner() {
         driver = new TopologyTestDriver(createSimpleTopologyWithDroppingPartitioner(), props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.EPOCH, Duration.ZERO);
         final TestOutputTopic<String, String> outputTopic1 =
                 driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
 
@@ -808,7 +808,7 @@ public class ProcessorTopologyTest {
     public void testDrivingSimpleMultiSourceTopology() {
         final int partition = 10;
         driver = new TopologyTestDriver(createSimpleMultiSourceTopology(partition), props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.EPOCH, Duration.ZERO);
         final TestOutputTopic<String, String> outputTopic1 =
                 driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
         final TestOutputTopic<String, String> outputTopic2 =
@@ -818,7 +818,7 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1");
         assertTrue(outputTopic2.isEmpty());
 
-        final TestInputTopic<String, String> inputTopic2 = driver.createInputTopic(INPUT_TOPIC_2, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
+        final TestInputTopic<String, String> inputTopic2 = driver.createInputTopic(INPUT_TOPIC_2, STRING_SERIALIZER, STRING_SERIALIZER, Instant.EPOCH, Duration.ZERO);
         inputTopic2.pipeInput("key2", "value2");
         assertNextOutputRecord(outputTopic2.readRecord(), "key2", "value2");
         assertTrue(outputTopic2.isEmpty());
@@ -827,7 +827,7 @@ public class ProcessorTopologyTest {
     @Test
     public void testDrivingForwardToSourceTopology() {
         driver = new TopologyTestDriver(createForwardToSourceTopology(), props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.EPOCH, Duration.ZERO);
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
         inputTopic.pipeInput("key3", "value3");
@@ -841,7 +841,7 @@ public class ProcessorTopologyTest {
     @Test
     public void testDrivingInternalRepartitioningTopology() {
         driver = new TopologyTestDriver(createInternalRepartitioningTopology(), props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.EPOCH, Duration.ZERO);
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
         inputTopic.pipeInput("key3", "value3");

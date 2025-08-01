@@ -1234,7 +1234,7 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             inputTopic.pipeInput("a", "b");
         }
         assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
@@ -1250,7 +1250,7 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             inputTopic.pipeInput("e", "f");
         }
         assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("e", "f", 0))));
@@ -1268,7 +1268,7 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             inputTopic.pipeInput("a", "v1");
             inputTopic.pipeInput("a", "v2");
             inputTopic.pipeInput("b", "v1");
@@ -1370,9 +1370,9 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic2 =
-                driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             inputTopic1.pipeInput("A", "aa");
             inputTopic2.pipeInput("B", "bb");
             inputTopic2.pipeInput("C", "cc");
@@ -1402,13 +1402,13 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic2 =
-                driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic3 =
-                driver.createInputTopic(topic3, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic3, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic4 =
-                driver.createInputTopic(topic4, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic4, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             inputTopic1.pipeInput("A", "aa", 1L);
             inputTopic2.pipeInput("B", "bb", 9L);
@@ -1439,15 +1439,15 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic3 =
-                driver.createInputTopic("topic-3", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-3", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic4 =
-                driver.createInputTopic("topic-4", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-4", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic5 =
-                driver.createInputTopic("topic-5", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-5", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic6 =
-                driver.createInputTopic("topic-6", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-6", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic7 =
-                driver.createInputTopic("topic-7", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-7", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             inputTopic3.pipeInput("A", "aa", 1L);
             inputTopic4.pipeInput("B", "bb", 5L);
@@ -1477,15 +1477,15 @@ public class KStreamImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic3 =
-                driver.createInputTopic("topic-3", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-3", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic4 =
-                driver.createInputTopic("topic-4", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-4", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopicA =
-                driver.createInputTopic("topic-A", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-A", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopicZ =
-                driver.createInputTopic("topic-Z", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-Z", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(topic3, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic3, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             inputTopic3.pipeInput("A", "aa", 1L);
             inputTopic4.pipeInput("B", "bb", 5L);
@@ -1801,8 +1801,8 @@ public class KStreamImplTest {
             final List<TestRecord<String, String>> outputExpectRecords = new ArrayList<>();
             outputExpectRecords.add(new TestRecord<>("A", "01", Instant.ofEpochMilli(5L)));
             outputExpectRecords.add(new TestRecord<>("B", "02", Instant.ofEpochMilli(100L)));
-            outputExpectRecords.add(new TestRecord<>("C", "03", Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>("D", "04", Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>("C", "03", Instant.EPOCH));
+            outputExpectRecords.add(new TestRecord<>("D", "04", Instant.EPOCH));
             outputExpectRecords.add(new TestRecord<>("A", "05", Instant.ofEpochMilli(10L)));
             outputExpectRecords.add(new TestRecord<>("A", "06", Instant.ofEpochMilli(8L)));
 
@@ -2032,8 +2032,8 @@ public class KStreamImplTest {
             final List<TestRecord<String, Integer>> outputExpectRecords = new ArrayList<>();
             outputExpectRecords.add(new TestRecord<>("A", 1, Instant.ofEpochMilli(5L)));
             outputExpectRecords.add(new TestRecord<>("B", 2, Instant.ofEpochMilli(100L)));
-            outputExpectRecords.add(new TestRecord<>("C", 3, Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>("D", 4, Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>("C", 3, Instant.EPOCH));
+            outputExpectRecords.add(new TestRecord<>("D", 4, Instant.EPOCH));
             outputExpectRecords.add(new TestRecord<>("A", 5, Instant.ofEpochMilli(10L)));
             outputExpectRecords.add(new TestRecord<>("A", 6, Instant.ofEpochMilli(8L)));
 
@@ -2141,8 +2141,8 @@ public class KStreamImplTest {
             final List<TestRecord<Integer, String>> outputExpectRecords = new ArrayList<>();
             outputExpectRecords.add(new TestRecord<>(0, "01", Instant.ofEpochMilli(5L)));
             outputExpectRecords.add(new TestRecord<>(1, "02", Instant.ofEpochMilli(100L)));
-            outputExpectRecords.add(new TestRecord<>(2, "03", Instant.ofEpochMilli(0L)));
-            outputExpectRecords.add(new TestRecord<>(3, "04", Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>(2, "03", Instant.EPOCH));
+            outputExpectRecords.add(new TestRecord<>(3, "04", Instant.EPOCH));
             outputExpectRecords.add(new TestRecord<>(0, "05", Instant.ofEpochMilli(10L)));
             outputExpectRecords.add(new TestRecord<>(0, "06", Instant.ofEpochMilli(8L)));
 
@@ -2475,7 +2475,7 @@ public class KStreamImplTest {
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestOutputTopic<String, Long> outputTopic =
                 driver.createOutputTopic(output, new StringDeserializer(), new LongDeserializer());
 
@@ -2540,7 +2540,7 @@ public class KStreamImplTest {
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestOutputTopic<String, Integer> outputTopic =
                 driver.createOutputTopic(output, new StringDeserializer(), new IntegerDeserializer());
             final KeyValueStore<String, Integer> store = driver.getKeyValueStore(storeName);

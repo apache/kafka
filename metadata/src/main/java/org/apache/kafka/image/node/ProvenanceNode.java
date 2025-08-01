@@ -21,7 +21,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.node.printer.MetadataNodePrinter;
 
 import java.time.Instant;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -49,7 +49,7 @@ public class ProvenanceNode implements MetadataNode {
     @Override
     public void print(MetadataNodePrinter printer) {
         ZonedDateTime zonedDateTime =
-            Instant.ofEpochMilli(provenance.lastContainedLogTimeMs()).atZone(ZoneId.of("UTC"));
+            Instant.ofEpochMilli(provenance.lastContainedLogTimeMs()).atZone(ZoneOffset.UTC);
         printer.output("offset " + provenance.lastContainedOffset() +
                 ", epoch " + provenance.lastContainedEpoch() +
                 ", time " + DateTimeFormatter.ISO_ZONED_DATE_TIME.format(zonedDateTime));

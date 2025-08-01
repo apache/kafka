@@ -145,7 +145,7 @@ public class KTableSourceTest {
                     topic,
                     new StringSerializer(),
                     new StringSerializer(),
-                    Instant.ofEpochMilli(0L),
+                    Instant.EPOCH,
                     Duration.ZERO
                 );
             inputTopic.pipeInput(null, "value");
@@ -174,7 +174,7 @@ public class KTableSourceTest {
                     topic,
                     new StringSerializer(),
                     new StringSerializer(),
-                    Instant.ofEpochMilli(0L),
+                    Instant.EPOCH,
                     Duration.ZERO
                 );
             inputTopic.pipeInput("key", "value", 10L);
@@ -211,7 +211,7 @@ public class KTableSourceTest {
                     topic1,
                     new StringSerializer(),
                     new StringSerializer(),
-                    Instant.ofEpochMilli(0L),
+                    Instant.EPOCH,
                     Duration.ZERO
                 );
             final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
@@ -265,7 +265,7 @@ public class KTableSourceTest {
                     topic1,
                     new StringSerializer(),
                     new StringSerializer(),
-                    Instant.ofEpochMilli(0L),
+                    Instant.EPOCH,
                     Duration.ZERO
                 );
             final MockApiProcessor<String, Integer, Void, Void> proc1 = supplier.theCapturedProcessor();
@@ -320,7 +320,7 @@ public class KTableSourceTest {
                     topic1,
                     new StringSerializer(),
                     new StringSerializer(),
-                    Instant.ofEpochMilli(0L),
+                    Instant.EPOCH,
                     Duration.ZERO
                 );
             final MockApiProcessor<String, Integer, Void, Void> proc1 = supplier.theCapturedProcessor();

@@ -59,7 +59,7 @@ public class KTableMapValuesTest {
                               final MockApiProcessorSupplier<String, Integer, Void, Void> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             inputTopic1.pipeInput("A", "1", 5L);
             inputTopic1.pipeInput("B", "2", 25L);
             inputTopic1.pipeInput("C", "3", 20L);
@@ -119,7 +119,7 @@ public class KTableMapValuesTest {
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
@@ -215,7 +215,7 @@ public class KTableMapValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();
 
             assertFalse(table1.sendingOldValueEnabled());
@@ -290,7 +290,7 @@ public class KTableMapValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();
 
             inputTopic1.pipeInput("A", "01", 5L);

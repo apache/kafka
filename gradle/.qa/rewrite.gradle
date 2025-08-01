@@ -1,0 +1,71 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+project.apply plugin: "org.openrewrite.rewrite"
+
+rewrite {
+    activeRecipe(
+            "tech.picnic.errorprone.refasterrules.BugCheckerRulesRecipes",
+            "tech.picnic.errorprone.refasterrules.FileRulesRecipes",
+            "tech.picnic.errorprone.refasterrules.MicrometerRulesRecipes",
+            "tech.picnic.errorprone.refasterrules.SuggestedFixRulesRecipes",
+            "tech.picnic.errorprone.refasterrules.TimeRulesRecipes",
+            //"org.apache.kafka.openrewrite.java.AddLicenseHeader", https://github.com/openrewrite/rewrite/issues/5762
+            //"org.openrewrite.java.RemoveUnusedImports",
+            //"org.openrewrite.java.migrate.UpgradeToJava17",
+            //"org.openrewrite.java.recipes.JavaRecipeBestPractices",
+            //"org.openrewrite.java.recipes.RecipeNullabilityBestPractices",
+            //"org.openrewrite.java.recipes.RecipeTestingBestPractices",
+            //"org.openrewrite.staticanalysis.CodeCleanup",
+            //"org.openrewrite.staticanalysis.CommonStaticAnalysis",
+            //"org.openrewrite.staticanalysis.EqualsAvoidsNull",
+            //"org.openrewrite.staticanalysis.JavaApiBestPractices",
+            //"org.openrewrite.staticanalysis.LowercasePackage",
+            //"org.openrewrite.staticanalysis.MissingOverrideAnnotation",
+            //"org.openrewrite.staticanalysis.ModifierOrder",
+            //"org.openrewrite.staticanalysis.NoFinalizer",
+            //"org.openrewrite.staticanalysis.RemoveUnusedLocalVariables",
+            //"org.openrewrite.staticanalysis.RemoveUnusedPrivateFields",
+            //"org.openrewrite.staticanalysis.RemoveUnusedPrivateMethods",
+            //"org.openrewrite.staticanalysis.UnnecessaryThrows",
+            //"tech.picnic.errorprone.refasterrules.BigDecimalRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.CharSequenceRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.ClassRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.CollectionRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.ComparatorRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.EqualityRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.JUnitRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.NullRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.OptionalRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.PatternRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.PreconditionsRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.PrimitiveRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.StreamRulesRecipes",
+            //"tech.picnic.errorprone.refasterrules.StringRulesRecipes",
+    )
+    exportDatatables = true
+    exclusions.add("**.GarbageCollectedMemoryPoolTest.java")
+    exclusions.add("**.MetadataVersionTest.java")
+    failOnDryRunResults = true
+}
+
+dependencies {
+    //rewrite("org.openrewrite.recipe:rewrite-migrate-java")
+    //rewrite("org.openrewrite.recipe:rewrite-static-analysis")
+    rewrite("org.openrewrite.recipe:rewrite-third-party")
+    rewrite(platform("org.openrewrite.recipe:rewrite-recipe-bom:latest.release"))
+}

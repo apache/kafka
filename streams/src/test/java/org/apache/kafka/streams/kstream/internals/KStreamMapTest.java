@@ -57,7 +57,7 @@ public class KStreamMapTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
                 final TestInputTopic<Integer, String> inputTopic =
-                        driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                        driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
                 inputTopic.pipeInput(expectedKey, "V" + expectedKey, 10L - expectedKey);
             }
         }

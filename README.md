@@ -201,7 +201,17 @@ For experiments (or regression testing purposes) add `-PcheckstyleVersion=X.y.z`
 #### Spotless ####
 The import order is a part of static check. please call `spotlessApply` to optimize the imports of Java codes before filing pull request.
 
-    ./gradlew spotlessApply
+`./gradlew spotlessApply`
+
+#### Rewrite
+The build system incorporates [Moderne](https://moderne.io/) rewrite capabilities for automated code transformations.
+
+- **Convention** (e.g., JUnit's naming rules)
+- **Refactor** safely (e.g., rename methods, migrate APIs)
+- **Modernize** (e.g., Java 8 → Java 17 features)
+- **Patterns** (e.g., replace `Vector` with `ArrayList`)
+
+`./gradlew rewriteRun`
 
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.

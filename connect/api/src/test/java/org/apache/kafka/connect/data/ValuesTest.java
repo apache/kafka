@@ -872,7 +872,7 @@ public class ValuesTest {
 
         // ISO8601 strings - accept a string matching pattern "HH:mm:ss.SSS'Z'"
         java.util.Date t3 = Values.convertToTime(Time.SCHEMA, localTime.format(DateTimeFormatter.ofPattern(Values.ISO_8601_TIME_FORMAT_PATTERN)));
-        LocalTime time3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(t3.getTime()), ZoneId.systemDefault()).toLocalTime();
+        LocalTime time3 = LocalTime.ofInstant(Instant.ofEpochMilli(t3.getTime()), ZoneId.systemDefault());
         assertEquals(localTimeTruncated, time3);
 
         // Millis as string

@@ -250,7 +250,7 @@ public class MeteredVersionedKeyValueStore<K, V>
 
             final Instant fromTime = typedKeyQuery.fromTime().orElse(Instant.ofEpochMilli(Long.MIN_VALUE));
             final Instant toTime = typedKeyQuery.toTime().orElse(Instant.ofEpochMilli(Long.MAX_VALUE));
-            if (fromTime.compareTo(toTime) > 0) {
+            if (fromTime.isAfter(toTime)) {
                 throw new IllegalArgumentException("The `fromTime` timestamp must be smaller than the `toTime` timestamp.");
             }
             MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));

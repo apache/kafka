@@ -80,6 +80,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.io.StringReader;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -1237,7 +1238,7 @@ public class QueryableStateIntegrationTest {
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
                                               final String key) {
         try (final WindowStoreIterator<Long> fetch =
-                 store.fetch(key, ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis()))) {
+                 store.fetch(key, Instant.EPOCH, ofEpochMilli(System.currentTimeMillis()))) {
             if (fetch.hasNext()) {
                 final KeyValue<Long, Long> next = fetch.next();
                 return Collections.singleton(KeyValue.pair(key, next.value));

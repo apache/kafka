@@ -102,7 +102,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, FailProcessingExceptionHandlerMockTest.class);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
 
             final StreamsException exception = assertThrows(StreamsException.class,
@@ -150,7 +150,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndFailProcessingExceptionHandler.class);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
 
             final StreamsException exception = assertThrows(StreamsException.class,
@@ -198,7 +198,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             inputTopic.pipeKeyValueList(events, TIMESTAMP, Duration.ZERO);
 
@@ -242,7 +242,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, LogAndContinueProcessingExceptionHandler.class);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             inputTopic.pipeKeyValueList(events, TIMESTAMP, Duration.ZERO);
 
@@ -279,7 +279,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, FailProcessingExceptionHandlerMockTest.class);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             isExecuted.set(false);
             inputTopic.pipeInput(event.key, event.value, TIMESTAMP);
@@ -315,7 +315,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             isExecuted.set(false);
             inputTopic.pipeInput(event.key, event.value, TIMESTAMP);
@@ -348,7 +348,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             isExecuted.set(false);
             inputTopic.pipeInput(event.key, event.value, TIMESTAMP);
@@ -384,7 +384,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             isExecuted.set(false);
             inputTopic.pipeInput(event.key, event.value, TIMESTAMP);
@@ -506,7 +506,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 AssertSourceRawRecordProcessingExceptionHandlerMockTest.class);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, properties, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, properties, Instant.EPOCH)) {
             for (final ProducerRecord<String, String> event : events) {
                 final TestInputTopic<String, String> inputTopic = driver.createInputTopic(event.topic(), new StringSerializer(), new StringSerializer());
 

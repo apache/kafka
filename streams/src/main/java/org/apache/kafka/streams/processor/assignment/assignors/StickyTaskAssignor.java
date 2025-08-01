@@ -83,7 +83,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             // We set the followup deadline for only one of the clients.
             final ProcessId clientId = finalAssignments.entrySet().iterator().next().getKey();
             final KafkaStreamsAssignment previousAssignment = finalAssignments.get(clientId);
-            finalAssignments.put(clientId, previousAssignment.withFollowupRebalance(Instant.ofEpochMilli(0)));
+            finalAssignments.put(clientId, previousAssignment.withFollowupRebalance(Instant.EPOCH));
         }
 
         return new TaskAssignment(finalAssignments.values());

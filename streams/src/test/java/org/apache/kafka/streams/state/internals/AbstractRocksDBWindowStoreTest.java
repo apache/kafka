@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -479,7 +480,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
 
         int fetchedCount;
 
-        try (final WindowStoreIterator<String> iter = windowStore.fetch(0, ofEpochMilli(0L), ofEpochMilli(SEGMENT_INTERVAL * 4))) {
+        try (final WindowStoreIterator<String> iter = windowStore.fetch(0, Instant.EPOCH, ofEpochMilli(SEGMENT_INTERVAL * 4))) {
             fetchedCount = 0;
             while (iter.hasNext()) {
                 iter.next();
@@ -495,7 +496,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
 
         windowStore.put(0, "v", SEGMENT_INTERVAL * 3);
 
-        try (final WindowStoreIterator<String> iter = windowStore.fetch(0, ofEpochMilli(0L), ofEpochMilli(SEGMENT_INTERVAL * 4))) {
+        try (final WindowStoreIterator<String> iter = windowStore.fetch(0, Instant.EPOCH, ofEpochMilli(SEGMENT_INTERVAL * 4))) {
             fetchedCount = 0;
             while (iter.hasNext()) {
                 iter.next();
@@ -567,7 +568,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
 
         assertEquals(expected, actual);
 
-        try (final WindowStoreIterator<String> iter = windowStore.fetch(0, ofEpochMilli(0L), ofEpochMilli(1000000L))) {
+        try (final WindowStoreIterator<String> iter = windowStore.fetch(0, Instant.EPOCH, ofEpochMilli(1000000L))) {
             while (iter.hasNext()) {
                 iter.next();
             }

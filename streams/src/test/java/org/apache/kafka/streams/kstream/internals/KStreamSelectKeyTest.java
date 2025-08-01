@@ -63,7 +63,7 @@ public class KStreamSelectKeyTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, Integer> inputTopic =
-                    driver.createInputTopic(topicName, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topicName, new StringSerializer(), new IntegerSerializer(), Instant.EPOCH, Duration.ZERO);
             for (final int expectedValue : expectedValues) {
                 inputTopic.pipeInput(expectedValue);
             }

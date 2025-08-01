@@ -81,7 +81,7 @@ public class FileOffsetBackingStoreTest {
         when(converter.toConnectData(anyString(), any(byte[].class))).thenReturn(new SchemaAndValue(null,
                 Arrays.asList("connector", Collections.singletonMap("partitionKey", "dummy"))));
         store = new FileOffsetBackingStore(converter);
-        tempFile = assertDoesNotThrow(() -> File.createTempFile("fileoffsetbackingstore", null));
+        tempFile = assertDoesNotThrow(() -> Files.createTempFile("fileoffsetbackingstore", null).toFile());
         Map<String, String> props = new HashMap<>();
         props.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
         props.put(StandaloneConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");

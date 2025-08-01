@@ -61,6 +61,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -421,7 +422,7 @@ public class TimeWindowedKStreamIntegrationTest {
         final TimeWindowedKStream<String, String> windowedStream = builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(
-            UnlimitedWindows.of().startOn(ofEpochMilli(0))
+            UnlimitedWindows.of().startOn(Instant.EPOCH)
         );
 
         final boolean emitFinal = type == StrategyType.ON_WINDOW_CLOSE;

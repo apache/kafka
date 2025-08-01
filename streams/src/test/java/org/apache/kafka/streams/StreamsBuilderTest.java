@@ -348,7 +348,7 @@ public class StreamsBuilderTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             inputTopic.pipeInput("A", "aa");
         }
 
@@ -370,7 +370,7 @@ public class StreamsBuilderTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             inputTopic.pipeInput("A", "aa");
         }
 
@@ -392,9 +392,9 @@ public class StreamsBuilderTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, String> inputTopic2 =
-                driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             inputTopic1.pipeInput("A", "aa");
             inputTopic2.pipeInput("B", "bb");

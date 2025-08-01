@@ -1469,8 +1469,8 @@ public class IQv2StoreIntegrationTest {
         // Should fail to execute this query on a SessionStore.
         final WindowRangeQuery<Integer, T> query =
             WindowRangeQuery.withWindowStartRange(
-                Instant.ofEpochMilli(0L),
-                Instant.ofEpochMilli(0L)
+                Instant.EPOCH,
+                Instant.EPOCH
             );
 
         final StateQueryRequest<KeyValueIterator<Windowed<Integer>, T>> request =
@@ -1542,8 +1542,8 @@ public class IQv2StoreIntegrationTest {
         // Should fail to execute this query on a SessionStore.
         final WindowRangeQuery<Integer, T> query =
             WindowRangeQuery.withWindowStartRange(
-                Instant.ofEpochMilli(0L),
-                Instant.ofEpochMilli(0L)
+                Instant.EPOCH,
+                Instant.EPOCH
             );
 
         final StateQueryRequest<KeyValueIterator<Windowed<Integer>, T>> request =

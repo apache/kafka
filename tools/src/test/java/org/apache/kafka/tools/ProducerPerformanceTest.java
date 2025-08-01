@@ -72,7 +72,7 @@ public class ProducerPerformanceTest {
     ProducerPerformance producerPerformanceSpy;
 
     private File createTempFile(String contents) throws IOException {
-        File file = File.createTempFile("ProducerPerformanceTest", ".tmp");
+        File file = Files.createTempFile("ProducerPerformanceTest", ".tmp").toFile();
         file.deleteOnExit();
         Files.write(file.toPath(), contents.getBytes());
         return file;

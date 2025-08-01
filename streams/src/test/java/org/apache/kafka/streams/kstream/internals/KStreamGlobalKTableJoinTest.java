@@ -106,7 +106,7 @@ public class KStreamGlobalKTableJoinTest {
         processor = supplier.theCapturedProcessor();
 
         // auto-advance stream timestamps by default, but not global table timestamps
-        inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
+        inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ofMillis(1L));
         inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());
     }
 

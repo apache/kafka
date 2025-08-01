@@ -157,9 +157,9 @@ public class KTableKTableInnerJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> proc = supplier.theCapturedProcessor();
 
             assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -279,9 +279,9 @@ public class KTableKTableInnerJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> proc = supplier.theCapturedProcessor();
 
             assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -376,9 +376,9 @@ public class KTableKTableInnerJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.EPOCH, Duration.ZERO);
             final TestOutputTopic<Integer, String> outputTopic =
                     driver.createOutputTopic(output, Serdes.Integer().deserializer(), Serdes.String().deserializer());
 

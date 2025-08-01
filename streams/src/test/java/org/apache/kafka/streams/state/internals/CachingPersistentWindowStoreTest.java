@@ -207,7 +207,7 @@ public class CachingPersistentWindowStoreTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000L);
 
-        final Instant initialWallClockTime = Instant.ofEpochMilli(0L);
+        final Instant initialWallClockTime = Instant.EPOCH;
         final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(TOPIC,
@@ -529,7 +529,7 @@ public class CachingPersistentWindowStoreTest {
         }
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 cachingStore.fetchAll(ofEpochMilli(0), ofEpochMilli(7))) {
+                 cachingStore.fetchAll(Instant.EPOCH, ofEpochMilli(7))) {
             for (int i = 0; i < array.length; i++) {
                 final String str = array[i];
                 verifyWindowedKeyValue(
@@ -573,7 +573,7 @@ public class CachingPersistentWindowStoreTest {
         }
 
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 cachingStore.backwardFetchAll(ofEpochMilli(0), ofEpochMilli(7))) {
+                 cachingStore.backwardFetchAll(Instant.EPOCH, ofEpochMilli(7))) {
             for (int i = array.length - 1; i >= 0; i--) {
                 final String str = array[i];
                 verifyWindowedKeyValue(
@@ -818,14 +818,14 @@ public class CachingPersistentWindowStoreTest {
     @Test
     public void shouldThrowIfTryingToFetchFromClosedCachingStore() {
         cachingStore.close();
-        assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(10)));
+        assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), Instant.EPOCH, ofEpochMilli(10)));
     }
 
     @SuppressWarnings("resource")
     @Test
     public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore() {
         cachingStore.close();
-        assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(0), ofEpochMilli(10)));
+        assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), bytesKey("b"), Instant.EPOCH, ofEpochMilli(10)));
     }
 
     @Test
@@ -848,7 +848,7 @@ public class CachingPersistentWindowStoreTest {
             KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005"))
         );
         final List<KeyValue<Long, byte[]>> actual =
-            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)));
         verifyKeyValueList(expected, actual);
     }
 
@@ -866,7 +866,7 @@ public class CachingPersistentWindowStoreTest {
             KeyValue.pair(0L, bytesValue("0001"))
         );
         final List<KeyValue<Long, byte[]>> actual =
-            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)));
         verifyKeyValueList(expected, actual);
     }
 
@@ -884,14 +884,14 @@ public class CachingPersistentWindowStoreTest {
                 windowedPair("a", "0003", 1),
                 windowedPair("a", "0005", SEGMENT_INTERVAL)
             ),
-            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("a"), Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)))
         );
 
         verifyKeyValueList(
             asList(
                 windowedPair("aa", "0002", 0),
                 windowedPair("aa", "0004", 1)),
-            toListAndCloseIterator(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)))
         );
 
         verifyKeyValueList(
@@ -902,7 +902,7 @@ public class CachingPersistentWindowStoreTest {
                 windowedPair("aa", "0004", 1),
                 windowedPair("a", "0005", SEGMENT_INTERVAL)
             ),
-            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)))
         );
     }
 
@@ -920,14 +920,14 @@ public class CachingPersistentWindowStoreTest {
                 windowedPair("a", "0003", 1),
                 windowedPair("a", "0001", 0)
             ),
-            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)))
         );
 
         verifyKeyValueList(
             asList(
                 windowedPair("aa", "0004", 1),
                 windowedPair("aa", "0002", 0)),
-            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)))
         );
 
         verifyKeyValueList(
@@ -938,7 +938,7 @@ public class CachingPersistentWindowStoreTest {
                 windowedPair("a", "0003", 1),
                 windowedPair("a", "0001", 0)
             ),
-            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+            toListAndCloseIterator(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)))
         );
     }
 
@@ -967,9 +967,9 @@ public class CachingPersistentWindowStoreTest {
         cachingStore.put(bytesKey("aaa"), bytesValue("0004"), 3);
 
         try (final WindowStoreIterator<byte[]> singleKeyIterator =
-                 cachingStore.backwardFetch(bytesKey("aa"), Instant.ofEpochMilli(0L), Instant.ofEpochMilli(5L));
+                 cachingStore.backwardFetch(bytesKey("aa"), Instant.EPOCH, Instant.ofEpochMilli(5L));
              final KeyValueIterator<Windowed<Bytes>, byte[]> keyRangeIterator =
-                 cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), Instant.ofEpochMilli(0L), Instant.ofEpochMilli(5L))) {
+                 cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), Instant.EPOCH, Instant.ofEpochMilli(5L))) {
 
             assertEquals(stringFrom(singleKeyIterator.next().value), stringFrom(keyRangeIterator.next().value));
             assertEquals(stringFrom(singleKeyIterator.next().value), stringFrom(keyRangeIterator.next().value));
@@ -1023,7 +1023,7 @@ public class CachingPersistentWindowStoreTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingWindowStore.class);
              final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                 cachingStore.backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(0L), Instant.ofEpochMilli(10L))) {
+                 cachingStore.backwardFetch(keyFrom, keyTo, Instant.EPOCH, Instant.ofEpochMilli(10L))) {
             assertFalse(iterator.hasNext());
 
             final List<String> messages = appender.getMessages();

@@ -92,9 +92,9 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), CONFIG, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             inputTopic.pipeInput("A", "1", 10L);
             inputTopic.pipeInput("B", "2", 15L);
@@ -149,9 +149,9 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), CONFIG, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             inputTopic.pipeInput("A", "1", 10L);
             inputTopic.pipeInput("A", (String) null, 15L);
@@ -208,9 +208,9 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), CONFIG, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             inputTopic.pipeInput("A", "1", 10L);
             inputTopic.pipeInput("A", (String) null, 15L);
@@ -237,9 +237,9 @@ public class KTableAggregateTest {
                                         final MockApiProcessorSupplier<String, Object, Void, Void> supplier) {
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), CONFIG, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             inputTopic.pipeInput("A", "green", 10L);
             inputTopic.pipeInput("B", "green", 9L);
@@ -306,9 +306,9 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), CONFIG, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             inputTopic.pipeInput("A", "green", 10L);
             inputTopic.pipeInput("B", "green", 9L);
@@ -353,9 +353,9 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), CONFIG, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
 
             final MockApiProcessor<String, String, Void, Void> proc = supplier.theCapturedProcessor();
 
@@ -390,9 +390,9 @@ public class KTableAggregateTest {
                 .toStream()
                 .to(output);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config, Instant.EPOCH)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestOutputTopic<String, Long> outputTopic =
                     driver.createOutputTopic(output, new StringDeserializer(), new LongDeserializer());
 
@@ -472,9 +472,9 @@ public class KTableAggregateTest {
                 .toStream()
                 .to(output);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), CONFIG, Instant.EPOCH)) {
             final TestInputTopic<NoEqualsImpl, NoEqualsImpl> inputTopic =
-                    driver.createInputTopic(input, noEqualsImplSerde.serializer(), noEqualsImplSerde.serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(input, noEqualsImplSerde.serializer(), noEqualsImplSerde.serializer(), Instant.EPOCH, Duration.ZERO);
             final TestOutputTopic<NoEqualsImpl, Long> outputTopic =
                     driver.createOutputTopic(output, noEqualsImplSerde.deserializer(), new LongDeserializer());
 

@@ -106,8 +106,8 @@ public class KStreamGlobalKTableLeftJoinTest {
         processor = supplier.theCapturedProcessor();
 
         // auto-advance timestamps by default
-        inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
-        inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
+        inputStreamTopic = driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ofMillis(1L));
+        inputTableTopic = driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ofMillis(1L));
     }
 
     @AfterEach

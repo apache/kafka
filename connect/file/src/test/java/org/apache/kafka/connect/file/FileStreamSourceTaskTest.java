@@ -53,7 +53,7 @@ public class FileStreamSourceTaskTest {
 
     @BeforeEach
     public void setup() throws IOException {
-        tempFile = File.createTempFile("file-stream-source-task-test", null);
+        tempFile = Files.createTempFile("file-stream-source-task-test", null).toFile();
         config = new HashMap<>();
         config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
         config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);

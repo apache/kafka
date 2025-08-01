@@ -48,6 +48,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -239,7 +240,7 @@ public class TimeWindowedKStreamImplTest {
             {
                 final WindowStore<String, Long> windowStore = driver.getWindowStore("count-store");
                 final List<KeyValue<Windowed<String>, Long>> data =
-                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", Instant.EPOCH, ofEpochMilli(1000L)));
 
                 if (withCache) {
                     // with cache returns all records (expired from underneath as well) as part of
@@ -266,7 +267,7 @@ public class TimeWindowedKStreamImplTest {
                 final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
                     driver.getTimestampedWindowStore("count-store");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
-                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", Instant.EPOCH, ofEpochMilli(1000L)));
 
                 // the same values and logic described above applies here as well.
                 if (withCache) {
@@ -305,7 +306,7 @@ public class TimeWindowedKStreamImplTest {
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("reduced");
                 final List<KeyValue<Windowed<String>, String>> data =
-                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", Instant.EPOCH, ofEpochMilli(1000L)));
 
                 if (withCache) {
                     // with cache returns all records (expired from underneath as well) as part of
@@ -325,7 +326,7 @@ public class TimeWindowedKStreamImplTest {
             {
                 final WindowStore<String, ValueAndTimestamp<String>> windowStore = driver.getTimestampedWindowStore("reduced");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<String>>> data =
-                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", Instant.EPOCH, ofEpochMilli(1000L)));
 
                 // same logic/data as explained above.
                 if (withCache) {
@@ -358,7 +359,7 @@ public class TimeWindowedKStreamImplTest {
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("aggregated");
                 final List<KeyValue<Windowed<String>, String>> data =
-                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", Instant.EPOCH, ofEpochMilli(1000L)));
 
                 if (withCache) {
                     // with cache returns all records (expired from underneath as well) as part of
@@ -379,7 +380,7 @@ public class TimeWindowedKStreamImplTest {
             {
                 final WindowStore<String, ValueAndTimestamp<String>> windowStore = driver.getTimestampedWindowStore("aggregated");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<String>>> data =
-                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", Instant.EPOCH, ofEpochMilli(1000L)));
                 if (withCache) {
                     assertThat(data, equalTo(asList(
                             KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make("0+1+2", 15L)),

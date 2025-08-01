@@ -62,7 +62,7 @@ public class KStreamFlatMapValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer(), Instant.EPOCH, Duration.ZERO);
             for (final int expectedKey : expectedKeys) {
                 // passing the timestamp to inputTopic.create to disambiguate the call
                 inputTopic.pipeInput(expectedKey, expectedKey, 0L);
@@ -99,7 +99,7 @@ public class KStreamFlatMapValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer(), Instant.EPOCH, Duration.ZERO);
             for (final int expectedKey : expectedKeys) {
                 // passing the timestamp to inputTopic.create to disambiguate the call
                 inputTopic.pipeInput(expectedKey, expectedKey, 0L);

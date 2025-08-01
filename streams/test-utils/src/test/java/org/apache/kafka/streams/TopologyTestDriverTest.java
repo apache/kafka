@@ -839,7 +839,7 @@ public abstract class TopologyTestDriverTest {
         final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
             setupSingleProcessorTopology(10L, PunctuationType.WALL_CLOCK_TIME, mockPunctuator),
-            config, Instant.ofEpochMilli(0L));
+            config, Instant.EPOCH);
 
         final List<Long> expectedPunctuations = new LinkedList<>();
 

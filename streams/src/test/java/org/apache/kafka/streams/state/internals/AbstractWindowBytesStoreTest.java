@@ -46,6 +46,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -854,12 +855,12 @@ public abstract class AbstractWindowBytesStoreTest {
 
         final Set<String> expected = Set.of("0001", "0003", "0005");
         assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch("a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
+            valuesToSetAndCloseIterator(windowStore.fetch("a", Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE))),
             equalTo(expected)
         );
 
         Set<KeyValue<Windowed<String>, String>> set =
-            toSet(windowStore.fetch("a", "a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+            toSet(windowStore.fetch("a", "a", Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)));
         assertThat(
             set,
             equalTo(Set.of(
@@ -869,7 +870,7 @@ public abstract class AbstractWindowBytesStoreTest {
             ))
         );
 
-        set = toSet(windowStore.fetch("aa", "aa", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+        set = toSet(windowStore.fetch("aa", "aa", Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE)));
         assertThat(
             set,
             equalTo(Set.of(
@@ -936,17 +937,17 @@ public abstract class AbstractWindowBytesStoreTest {
 
         final Set<String> expectedKey1 = Set.of("1", "4", "7");
         assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch(key1, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
+            valuesToSetAndCloseIterator(windowStore.fetch(key1, Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE))),
             equalTo(expectedKey1)
         );
         final Set<String> expectedKey2 = Set.of("2", "5", "8");
         assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch(key2, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
+            valuesToSetAndCloseIterator(windowStore.fetch(key2, Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE))),
             equalTo(expectedKey2)
         );
         final Set<String> expectedKey3 = Set.of("3", "6", "9");
         assertThat(
-            valuesToSetAndCloseIterator(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))),
+            valuesToSetAndCloseIterator(windowStore.fetch(key3, Instant.EPOCH, ofEpochMilli(Long.MAX_VALUE))),
             equalTo(expectedKey3)
         );
 

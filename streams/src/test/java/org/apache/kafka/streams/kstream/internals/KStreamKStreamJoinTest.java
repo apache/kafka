@@ -541,9 +541,9 @@ public class KStreamKStreamJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, Integer> inputTopicLeft =
-                    driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<String, Integer> inputTopicRight =
-                    driver.createInputTopic("right", new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic("right", new StringSerializer(), new IntegerSerializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<String, Integer, Void, Void> processor = supplier.theCapturedProcessor();
 
             inputTopicLeft.pipeInput("A", 1, 1L);
@@ -587,9 +587,9 @@ public class KStreamKStreamJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             // push two items to the primary stream; the other window is empty
@@ -709,9 +709,9 @@ public class KStreamKStreamJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             // push two items to the primary stream; the other window is empty; this should not produce items yet
@@ -832,9 +832,9 @@ public class KStreamKStreamJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
             long time = 0L;
 
@@ -1397,9 +1397,9 @@ public class KStreamKStreamJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
             long time = 1000L;
 
@@ -1664,9 +1664,9 @@ public class KStreamKStreamJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.EPOCH, Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
             long time = 1000L;
 
