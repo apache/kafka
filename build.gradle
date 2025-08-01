@@ -312,7 +312,7 @@ subprojects {
         String numThreadsAsString = numThreads.toString()
 
         // Forking must be enabled on the task's main options to set JVM args and other fork options.
-        options.fork = false
+        options.fork = true
         options.forkOptions.jvmArgs = [
                 "-Xss512k",
                 "-Xgcpolicy:gencon",
@@ -320,7 +320,6 @@ subprojects {
                 "-Xgcthreads1",
                 "-XX:+DisableExplicitGC",
                 "-Xtune:virtualized",
-                "-Xnojit",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
                 "-Xmx" + defaultMaxHeapSize
         ]
@@ -328,7 +327,20 @@ subprojects {
     }
 
     project.tasks.withType(JavaCompile).configureEach {
-        options.fork = false
+        def numThreads = project.findProperty('maxScalacThreads')
+        String numThreadsAsString = numThreads.toString()
+
+        options.fork = true
+        options.forkOptions.jvmArgs = [
+                "-Xss512k",
+                "-Xgcpolicy:gencon",
+                "-XcompilationThreads1",
+                "-Xgcthreads1",
+                "-XX:+DisableExplicitGC",
+                "-Xtune:virtualized",
+                "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
+                "-Xmx" + defaultMaxHeapSize
+        ]
     }
 
         // enable running :dependencies task recursively on all subprojects
