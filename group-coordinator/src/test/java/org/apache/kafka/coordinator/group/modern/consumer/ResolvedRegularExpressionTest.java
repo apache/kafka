@@ -32,9 +32,9 @@ public class ResolvedRegularExpressionTest {
             12345L
         );
 
-        assertEquals(Set.of("foo", "bar"), resolvedRegularExpression.topics);
-        assertEquals(10L, resolvedRegularExpression.version);
-        assertEquals(12345L, resolvedRegularExpression.timestamp);
+        assertEquals(Set.of("foo", "bar"), resolvedRegularExpression.topics());
+        assertEquals(10L, resolvedRegularExpression.version());
+        assertEquals(12345L, resolvedRegularExpression.timestamp());
     }
 
     @Test
