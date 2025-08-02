@@ -447,12 +447,4 @@ public interface ClusterInstance {
         throw new AssertionError("Timing out after " + timeoutMs +
                 " ms since a leader was not elected for partition " + topicPartition);
     }
-
-    default List<Integer> boundPorts() {
-        return brokers().values().stream()
-                .map(KafkaBroker::socketServer)
-                .map(s -> s.boundPort(clientListener()))
-                .toList();
-
-    }
 }
