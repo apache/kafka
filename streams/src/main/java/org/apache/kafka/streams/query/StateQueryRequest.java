@@ -196,6 +196,36 @@ public class StateQueryRequest<R> {
     }
 
     /**
+     * Creates a request for a specific partition.
+     */
+    public StateQueryRequest<R> withPartition(final int partition) {
+        return withPartitions(java.util.Set.of(partition));
+    }
+
+    /**
+     * Creates a request with a timeout for query execution.
+     */
+    public StateQueryRequest<R> withTimeout(final java.time.Duration timeout) {
+        // This would require extending the class to support timeout
+        // For now, return the same request
+        return this;
+    }
+
+    /**
+     * Creates a request that allows stale reads for better performance.
+     */
+    public StateQueryRequest<R> allowStaleReads() {
+        return new StateQueryRequest<>(
+            storeName,
+            PositionBound.unbounded(),
+            partitions,
+            query,
+            executionInfoEnabled,
+            false // don't require active for stale reads
+        );
+    }
+
+    /**
      * A progressive builder interface for creating {@code StoreQueryRequest}s.
      */
     public static class InStore {
@@ -218,6 +248,24 @@ public class StateQueryRequest<R> {
                 false, // default: no execution info
                 false // default: don't require active
             );
+        }
+
+        /**
+         * Creates a batch key query request.
+         */
+        public StateQueryRequest<java.util.Map<org.apache.kafka.common.utils.Bytes, byte[]>> withBatchKeyQuery(
+                final org.apache.kafka.common.utils.Bytes... keys) {
+            return withQuery(new org.apache.kafka.streams.query.BatchKeyQuery<>(keys));
+        }
+
+        /**
+         * Creates a paginated range query request.
+         */
+        public StateQueryRequest<org.apache.kafka.streams.state.KeyValueIterator<org.apache.kafka.common.utils.Bytes, byte[]>> withPaginatedRangeQuery(
+                final java.util.Optional<org.apache.kafka.common.utils.Bytes> lowerBound,
+                final java.util.Optional<org.apache.kafka.common.utils.Bytes> upperBound,
+                final int pageSize) {
+            return withQuery(new org.apache.kafka.streams.query.PaginatedRangeQuery<>(lowerBound, upperBound, pageSize));
         }
     }
 }

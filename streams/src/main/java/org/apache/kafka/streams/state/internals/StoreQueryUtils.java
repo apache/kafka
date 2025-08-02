@@ -61,6 +61,10 @@ import java.util.function.Function;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
+import org.apache.kafka.streams.query.BatchKeyQuery;
+import org.apache.kafka.streams.query.PaginatedRangeQuery;
+import java.util.LinkedHashMap;
+
 public final class StoreQueryUtils {
 
     /**
@@ -104,6 +108,14 @@ public final class StoreQueryUtils {
             mkEntry(
                 MultiVersionedKeyQuery.class,
                 StoreQueryUtils::runMultiVersionedKeyQuery
+            ),
+            mkEntry(
+                BatchKeyQuery.class,
+                StoreQueryUtils::runBatchKeyQuery
+            ),
+            mkEntry(
+                PaginatedRangeQuery.class,
+                StoreQueryUtils::runPaginatedRangeQuery
             )
         );
 
@@ -489,6 +501,110 @@ public final class StoreQueryUtils {
                 .put(e.getKey().partition(), e.getValue());
         }
         return Position.fromMap(pos);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runBatchKeyQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store
+    ) {
+        if (!(store instanceof KeyValueStore)) {
+            return QueryResult.forUnknownQueryType(query, store);
+        }
+        
+        final KeyValueStore<Bytes, byte[]> kvStore = (KeyValueStore<Bytes, byte[]>) store;
+        final BatchKeyQuery<Bytes, byte[]> batchQuery = (BatchKeyQuery<Bytes, byte[]>) query;
+        
+        try {
+            final Map<Bytes, byte[]> results = new LinkedHashMap<>();
+            for (final Bytes key : batchQuery.getKeys()) {
+                final byte[] value = kvStore.get(key);
+                if (value != null) {
+                    results.put(key, value);
+                }
+            }
+            return (QueryResult<R>) QueryResult.forResult(results);
+        } catch (final Exception e) {
+            final String message = parseStoreException(e, store, query);
+            return QueryResult.forFailure(
+                FailureReason.STORE_EXCEPTION,
+                message
+            );
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <R> QueryResult<R> runPaginatedRangeQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store
+    ) {
+        if (!(store instanceof KeyValueStore)) {
+            return QueryResult.forUnknownQueryType(query, store);
+        }
+        
+        final KeyValueStore<Bytes, byte[]> kvStore = (KeyValueStore<Bytes, byte[]>) store;
+        final PaginatedRangeQuery<Bytes, byte[]> paginatedQuery = (PaginatedRangeQuery<Bytes, byte[]>) query;
+        
+        try {
+            final Optional<Bytes> lowerBound = paginatedQuery.getLowerBound();
+            final Optional<Bytes> upperBound = paginatedQuery.getUpperBound();
+            final Optional<Bytes> startKey = paginatedQuery.getStartKey();
+            final int pageSize = paginatedQuery.getPageSize();
+            final ResultOrder order = paginatedQuery.getResultOrder();
+            
+            final Optional<Bytes> effectiveLowerBound = startKey.isPresent() ? startKey : lowerBound;
+            
+            final KeyValueIterator<Bytes, byte[]> iterator;
+            if (order == ResultOrder.DESCENDING) {
+                iterator = kvStore.reverseRange(effectiveLowerBound.orElse(null), upperBound.orElse(null));
+            } else {
+                iterator = kvStore.range(effectiveLowerBound.orElse(null), upperBound.orElse(null));
+            }
+            
+            final KeyValueIterator<Bytes, byte[]> limitedIterator = new LimitedKeyValueIterator<>(iterator, pageSize);
+            
+            return (QueryResult<R>) QueryResult.forResult(limitedIterator);
+        } catch (final Exception e) {
+            final String message = parseStoreException(e, store, query);
+            return QueryResult.forFailure(
+                FailureReason.STORE_EXCEPTION,
+                message
+            );
+        }
+    }
+
+    private static class LimitedKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
+        private final KeyValueIterator<K, V> delegate;
+        private final int limit;
+        private int count = 0;
+
+        LimitedKeyValueIterator(KeyValueIterator<K, V> delegate, int limit) {
+            this.delegate = delegate;
+            this.limit = limit;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return count < limit && delegate.hasNext();
+        }
+
+        @Override
+        public org.apache.kafka.streams.KeyValue<K, V> next() {
+            if (count >= limit) {
+                throw new java.util.NoSuchElementException();
+            }
+            count++;
+            return delegate.next();
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
     }
 
     private static <R> String parseStoreException(final Exception e, final StateStore store, final Query<R> query) {
