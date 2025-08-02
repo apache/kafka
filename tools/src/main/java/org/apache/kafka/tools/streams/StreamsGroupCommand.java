@@ -89,11 +89,11 @@ public class StreamsGroupCommand {
             Objects.requireNonNull(opts).checkArgs();
             // should have exactly one action
             long numberOfActions = Stream.of(
-                    opts.listOpt,
-                    opts.describeOpt,
-                    opts.resetOffsetsOpt,
-                    opts.deleteOpt,
-                    opts.deleteOffsetsOpt
+                opts.listOpt,
+                opts.describeOpt,
+                opts.resetOffsetsOpt,
+                opts.deleteOpt,
+                opts.deleteOffsetsOpt
             ).filter(opts.options::has).count();
             if (numberOfActions != 1)
                 CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
