@@ -323,7 +323,7 @@ subprojects {
                 "-XX:ActiveProcessorCount=10",
                 "-Djava.util.concurrent.ForkJoinPool.common.parallelism=4",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
-                "-Xmx" + defaultMaxHeapSize
+                "-Xmx2G"
         ]
 
     }
@@ -343,7 +343,7 @@ subprojects {
                 "-XX:ActiveProcessorCount=10",
                 "-Djava.util.concurrent.ForkJoinPool.common.parallelism=4",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
-                "-Xmx" + defaultMaxHeapSize
+                "-Xmx2G"
         ]
     }
 
