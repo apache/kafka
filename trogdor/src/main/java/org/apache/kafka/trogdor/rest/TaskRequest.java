@@ -29,8 +29,6 @@ public record TaskRequest(String taskId) {
         this.taskId = taskId == null ? "" : taskId;
     }
 
-    @Override
-    @JsonProperty
     public String taskId() {
         return taskId;
     }
