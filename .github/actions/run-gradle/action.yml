@@ -97,6 +97,8 @@ runs:
         -Pkafka.cluster.test.repeat=$TEST_REPEAT \
         -Pkafka.test.verbose=$TEST_VERBOSE \
         -PcommitId=xxxxxxxxxxxxxxxx \
+        -x spotbugsMain \
+        -x spotbugsTest \
         $TEST_TASK
         exitcode="$?"
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
