@@ -314,7 +314,7 @@ subprojects {
         // Forking must be enabled on the task's main options to set JVM args and other fork options.
         options.fork = true
         options.forkOptions.jvmArgs += [
-                "-Xss512k",
+                "-Xss256k",
                 "-Xgcpolicy:gencon",
                 "-XcompilationThreads2",
                 "-Xgcthreads1",
@@ -334,7 +334,7 @@ subprojects {
 
         options.fork = true
         options.forkOptions.jvmArgs += [
-                "-Xss512k",
+                "-Xss256k",
                 "-Xgcpolicy:gencon",
                 "-XcompilationThreads2",
                 "-Xgcthreads1",
