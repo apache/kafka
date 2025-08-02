@@ -3347,14 +3347,14 @@ public class GroupMetadataManager {
                     .resolvedRegularExpression(regex)
                     .orElse(ResolvedRegularExpression.EMPTY);
 
-                if (!oldResolvedRegularExpression.topics.equals(newResolvedRegularExpression.topics)) {
+                if (!oldResolvedRegularExpression.topics().equals(newResolvedRegularExpression.topics())) {
                     bumpGroupEpoch = true;
 
-                    oldResolvedRegularExpression.topics.forEach(topicName ->
+                    oldResolvedRegularExpression.topics().forEach(topicName ->
                         subscribedTopicNames.compute(topicName, SubscriptionCount::decRegexCount)
                     );
 
-                    newResolvedRegularExpression.topics.forEach(topicName ->
+                    newResolvedRegularExpression.topics().forEach(topicName ->
                         subscribedTopicNames.compute(topicName, SubscriptionCount::incRegexCount)
                     );
                 }

@@ -201,7 +201,7 @@ public class OffsetMetadataManager {
 
     /**
      * Tracks open transactions (producer ids) by group id, topic name and partition id.
-     * It is the responsiblity of the caller to update {@link #pendingTransactionalOffsets}.
+     * It is the responsibility of the caller to update {@link #pendingTransactionalOffsets}.
      */
     private class OpenTransactions {
         /**
