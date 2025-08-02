@@ -80,7 +80,7 @@ pipeline {
             when { expression { params.RUN_TESTS == true } }
             steps {
                 script {
-                    def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace"
+                    def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace --no-daemon"
                     echo "Running Gradle build with tests:./gradlew clean build ${gradleArgs}"
                     sh "strace -f -o /tmp/strace.log ./gradlew clean build ${gradleArgs}"
                 }
