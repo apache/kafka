@@ -281,7 +281,8 @@ public class RecordAccumulator {
                                      AppendCallbacks callbacks,
                                      long maxTimeToBlock,
                                      long nowMs,
-                                     Cluster cluster) throws InterruptedException {
+                                     Cluster cluster,
+                                     boolean abortOnNewBatch) throws InterruptedException {
         TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
@@ -323,6 +324,12 @@ public class RecordAccumulator {
                         topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
                         return appendResult;
                     }
+                }
+
+                // we don't have an in-progress record batch try to allocate a new batch
+                if (abortOnNewBatch) {
+                    // Return a result that will cause another call to append.
+                    return new RecordAppendResult(null, false, false, 0, true);
                 }
 
                 if (buffer == null) {
@@ -398,7 +405,7 @@ public class RecordAccumulator {
         dq.addLast(batch);
         incomplete.add(batch);
 
-        return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
+        return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes(), false);
     }
 
     private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer) {
@@ -434,7 +441,7 @@ public class RecordAccumulator {
                 last.closeForRecordAppends();
             } else {
                 int appendedBytes = last.estimatedSizeInBytes() - initialBytes;
-                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, appendedBytes);
+                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, appendedBytes, false);
             }
         }
         return null;
@@ -1197,15 +1204,19 @@ public class RecordAccumulator {
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
         public final int appendedBytes;
+        public final boolean abortOnNewBatch;
+
 
         public RecordAppendResult(FutureRecordMetadata future,
                                   boolean batchIsFull,
                                   boolean newBatchCreated,
-                                  int appendedBytes) {
+                                  int appendedBytes,
+                                  boolean abortOnNewBatch) {
             this.future = future;
             this.batchIsFull = batchIsFull;
             this.newBatchCreated = newBatchCreated;
             this.appendedBytes = appendedBytes;
+            this.abortOnNewBatch = abortOnNewBatch;
         }
     }
 

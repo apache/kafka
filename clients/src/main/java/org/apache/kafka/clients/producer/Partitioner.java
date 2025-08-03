@@ -45,7 +45,4 @@ public interface Partitioner extends Configurable, Closeable {
      * This is called when partitioner is closed.
      */
     void close();
-
-    default void onNewBatch(String topic, Cluster cluster, int prevPartition) {
-    }
 }

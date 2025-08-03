@@ -1121,11 +1121,29 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
 
+            // A custom RoundRobinPartitioner may take advantage on the onNewBatch callback.
+            boolean abortOnNewBatch = false;
+            if (partitionerPlugin.get() instanceof RoundRobinPartitioner) {
+                abortOnNewBatch = true;
+            }
+
             // Append the record to the accumulator.  Note, that the actual partition may be
             // calculated there and can be accessed via appendCallbacks.topicPartition.
             RecordAccumulator.RecordAppendResult result = accumulator.append(record.topic(), partition, timestamp, serializedKey,
-                    serializedValue, headers, appendCallbacks, remainingWaitMs, nowMs, cluster);
+                    serializedValue, headers, appendCallbacks, remainingWaitMs, nowMs, cluster, abortOnNewBatch);
             assert appendCallbacks.getPartition() != RecordMetadata.UNKNOWN_PARTITION;
+
+            // Notify the RoundRobinPartitioner that the previous batch is full, and request it to return prevPartition to the idle queue.
+            if (result.abortOnNewBatch) {
+                int prevPartition = partition;
+                ((RoundRobinPartitioner) partitionerPlugin.get()).onNewBatch(record.topic(), cluster, prevPartition);
+                partition = partition(record, serializedKey, serializedValue, cluster);
+                if (log.isTraceEnabled()) {
+                    log.trace("Retrying append due to new batch creation for topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
+                }
+                result = accumulator.append(record.topic(), partition, timestamp, serializedKey,
+                    serializedValue, headers, appendCallbacks, remainingWaitMs, nowMs, cluster, false);
+            }
 
             // Add the partition to the transaction (if in progress) after it has been successfully
             // appended to the accumulator. We cannot do it before because the partition may be

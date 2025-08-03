@@ -35,7 +35,7 @@ public class RoundRobinPartitionerTest {
     private static final Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
-        new Node(2, "localhost", 101)
+        new Node(2, "localhost", 101),
     };
 
     @Test
@@ -98,22 +98,43 @@ public class RoundRobinPartitionerTest {
     }
 
     @Test
-    public void testRoundRobinWithAbortForNewBatch() throws Exception {
+    public void testRoundRobinWithAbortOnNewBatch() throws Exception {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
-        Cluster testCluster = new Cluster("clusterId", asList(NODES[0]), Collections.emptyList(),
+        List<PartitionInfo> allPartitions = asList(
+            new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
+            new PartitionInfo(topicA, 1, NODES[0], NODES, NODES),
+            new PartitionInfo(topicA, 2, NODES[0], NODES, NODES),
+            new PartitionInfo(topicA, 3, NODES[0], NODES, NODES),
+            new PartitionInfo(topicA, 4, NODES[0], NODES, NODES),
+            new PartitionInfo(topicB, 0, NODES[1], NODES, NODES),
+            new PartitionInfo(topicB, 1, NODES[1], NODES, NODES));
+
+        Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1]), allPartitions,
                 Collections.<String>emptySet(), Collections.<String>emptySet());
 
-        Partitioner partitioner = new RoundRobinPartitioner();
+        RoundRobinPartitioner partitioner = new RoundRobinPartitioner();
 
-        //abort for new batch - previous partition should be returned on subsequent call
-        //simulate three threads producing to two topics, with race condition in producer
-        partitioner.onNewBatch(topicA, testCluster, 7);
-        partitioner.onNewBatch(topicA, testCluster, 8);
-        partitioner.onNewBatch(topicB, testCluster, 1);
-        assertEquals(7, partitioner.partition(topicA, null, null, null, null, testCluster));
-        assertEquals(8, partitioner.partition(topicA, null, null, null, null, testCluster));
+        // Verify that partition selection still works correctly when queue is empty.
+        assertEquals(0, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(1, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(0, partitioner.partition(topicB, null, null, null, null, testCluster));
+
+        // Abort for new batch - previous partition should be returned on subsequent call
+        // Simulate three threads producing to two topics, with race condition in producer
+        partitioner.onNewBatch(topicA, testCluster, 0);
+        partitioner.onNewBatch(topicA, testCluster, 1);
+        partitioner.onNewBatch(topicB, testCluster, 0);
+        assertEquals(0, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(1, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(0, partitioner.partition(topicB, null, null, null, null, testCluster));
+
+        // Verify that partition selection still works correctly after call to onNewBatch.
+        assertEquals(2, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(3, partitioner.partition(topicA, null, null, null, null, testCluster));
+        assertEquals(4, partitioner.partition(topicA, null, null, null, null, testCluster));
         assertEquals(1, partitioner.partition(topicB, null, null, null, null, testCluster));
+        assertEquals(0, partitioner.partition(topicB, null, null, null, null, testCluster));
     }
 }

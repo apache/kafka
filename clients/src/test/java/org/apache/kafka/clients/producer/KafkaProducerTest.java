@@ -1509,7 +1509,8 @@ public class KafkaProducerTest {
                 any(),
                 anyLong(),
                 anyLong(),
-                any()
+                any(),
+                eq(false)
             );
         }
     }
@@ -2767,7 +2768,8 @@ public class KafkaProducerTest {
             any(RecordAccumulator.AppendCallbacks.class),    // 6 <--
             anyLong(),
             anyLong(),
-            any()
+            any(),
+            eq(false)
         )).thenAnswer(invocation -> {
             RecordAccumulator.AppendCallbacks callbacks =
                 (RecordAccumulator.AppendCallbacks) invocation.getArguments()[6];
@@ -2776,7 +2778,8 @@ public class KafkaProducerTest {
                 futureRecordMetadata,
                 false,
                 false,
-                0);
+                0,
+                false);
         });
 
         return futureRecordMetadata;

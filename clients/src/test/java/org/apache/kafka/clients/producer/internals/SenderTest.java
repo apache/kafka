@@ -428,7 +428,7 @@ public class SenderTest {
                     expiryCallbackCount.incrementAndGet();
                     try {
                         accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value,
-                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), metadataCache.cluster());
+                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), metadataCache.cluster(), false);
                     } catch (InterruptedException e) {
                         throw new RuntimeException("Unexpected interruption", e);
                     }
@@ -439,7 +439,7 @@ public class SenderTest {
 
         final long nowMs = time.milliseconds();
         for (int i = 0; i < messagesPerBatch; i++)
-            accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value, null, callbacks, maxBlockTimeMs, nowMs, metadataCache.cluster());
+            accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value, null, callbacks, maxBlockTimeMs, nowMs, metadataCache.cluster(), false);
 
         // Advance the clock to expire the first batch.
         time.sleep(10000);
@@ -2423,9 +2423,9 @@ public class SenderTest {
             long nowMs = time.milliseconds();
             Cluster cluster = TestUtils.singletonCluster();
             Future<RecordMetadata> f1 =
-                    accumulator.append(tpId.topic(), tpId.partition(), 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
+                    accumulator.append(tpId.topic(), tpId.partition(), 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster, false).future;
             Future<RecordMetadata> f2 =
-                    accumulator.append(tpId.topic(), tpId.partition(), 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
+                    accumulator.append(tpId.topic(), tpId.partition(), 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster, false).future;
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
 
@@ -3705,7 +3705,7 @@ public class SenderTest {
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp, long timestamp, String key, String value) throws InterruptedException {
         return accumulator.append(tp.topic(), tp.partition(), timestamp, key.getBytes(), value.getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, time.milliseconds(), TestUtils.singletonCluster()).future;
+                null, MAX_BLOCK_TIMEOUT, time.milliseconds(), TestUtils.singletonCluster(), false).future;
     }
 
     @SuppressWarnings("deprecation")

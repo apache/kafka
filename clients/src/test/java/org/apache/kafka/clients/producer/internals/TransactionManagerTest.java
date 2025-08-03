@@ -766,7 +766,7 @@ public class TransactionManagerTest {
 
         Future<RecordMetadata> responseFuture1 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
                 "1".getBytes(), "1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
-                TestUtils.singletonCluster()).future;
+                TestUtils.singletonCluster(), false).future;
         sender.runOnce();
         assertEquals(1, transactionManager.sequenceNumber(tp0));
 
@@ -797,7 +797,7 @@ public class TransactionManagerTest {
 
         Future<RecordMetadata> responseFuture2 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
                 "2".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
-                TestUtils.singletonCluster()).future;
+                TestUtils.singletonCluster(), false).future;
         sender.runOnce();
         sender.runOnce();
         assertEquals(0, transactionManager.firstInFlightSequence(tp0));
@@ -3991,7 +3991,7 @@ public class TransactionManagerTest {
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
         return accumulator.append(tp.topic(), tp.partition(), nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, nowMs, TestUtils.singletonCluster()).future;
+                null, MAX_BLOCK_TIMEOUT, nowMs, TestUtils.singletonCluster(), false).future;
     }
 
     private void verifyCommitOrAbortTransactionRetriable(TransactionResult firstTransactionResult,

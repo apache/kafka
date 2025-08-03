@@ -90,9 +90,7 @@ public class RoundRobinPartitioner implements Partitioner {
     }
 
     private Queue<Integer> partitionQueueComputeIfAbsent(String topic) {
-        return topicPartitionQueueMap.computeIfAbsent(topic, k -> {
-            return new ConcurrentLinkedQueue<>();
-        });
+        return topicPartitionQueueMap.computeIfAbsent(topic, k -> new ConcurrentLinkedQueue<>());
     }
 
     public void close() {}
@@ -107,7 +105,6 @@ public class RoundRobinPartitioner implements Partitioner {
      * @param prevPartition The partition previously selected for the record that triggered a new
      *                      batch
      */
-    @Override
     public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
         LOGGER.trace("New batch so enqueuing partition {} for topic {}", prevPartition, topic);
         Queue<Integer> partitionQueue = partitionQueueComputeIfAbsent(topic);
