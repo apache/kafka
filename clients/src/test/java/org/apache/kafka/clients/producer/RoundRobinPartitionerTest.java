@@ -35,7 +35,7 @@ public class RoundRobinPartitionerTest {
     private static final Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
-        new Node(2, "localhost", 101),
+        new Node(2, "localhost", 101)
     };
 
     @Test
@@ -70,8 +70,10 @@ public class RoundRobinPartitionerTest {
         final String topicA = "topicA";
         final String topicB = "topicB";
 
-        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
-            new PartitionInfo(topicA, 1, NODES[1], NODES, NODES), new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
+        List<PartitionInfo> allPartitions = asList(
+            new PartitionInfo(topicA, 0, NODES[0], NODES, NODES),
+            new PartitionInfo(topicA, 1, NODES[1], NODES, NODES),
+            new PartitionInfo(topicA, 2, NODES[2], NODES, NODES),
             new PartitionInfo(topicB, 0, NODES[0], NODES, NODES));
         Cluster testCluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), allPartitions,
             Collections.emptySet(), Collections.emptySet());
