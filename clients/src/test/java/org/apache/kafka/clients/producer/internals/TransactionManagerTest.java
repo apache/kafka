@@ -23,7 +23,6 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.PreparedTxnState;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -4068,11 +4067,92 @@ public class TransactionManagerTest {
         transactionManager.prepareTransaction();
         assertTrue(transactionManager.isPrepared());
 
-        PreparedTxnState preparedState = transactionManager.preparedTransactionState();
-        // Validate the state contains the correct serialized producer ID and epoch
-        assertEquals(producerId + ":" + epoch, preparedState.toString());
-        assertEquals(producerId, preparedState.producerId());
-        assertEquals(epoch, preparedState.epoch());
+        ProducerIdAndEpoch preparedState = transactionManager.preparedTransactionState();
+        // Validate the state contains the correct producer ID and epoch
+        assertEquals(producerId, preparedState.producerId);
+        assertEquals(epoch, preparedState.epoch);
+    }
+
+    @Test
+    public void testInitPidResponseWithKeepPreparedTrueAndOngoingTransaction() {
+        // Initialize transaction manager with 2PC enabled
+        initializeTransactionManager(Optional.of(transactionalId), true, true);
+        
+        // Start initializeTransactions with keepPreparedTxn=true
+        TransactionalRequestResult result = transactionManager.initializeTransactions(true);
+        
+        // Prepare coordinator response
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        
+        // Simulate InitProducerId response with ongoing transaction
+        long ongoingPid = 12345L;
+        short ongoingEpoch = 5;
+        prepareInitPidResponse(
+            Errors.NONE,
+            false,
+            producerId,
+            epoch,
+            true,
+            true,
+            ongoingPid,
+            ongoingEpoch
+        );
+        
+        runUntil(transactionManager::hasProducerId);
+        transactionManager.maybeUpdateTransactionV2Enabled(true);
+        
+        result.await();
+        assertTrue(result.isSuccessful());
+        
+        // Verify transaction manager transitioned to PREPARED_TRANSACTION state
+        assertTrue(transactionManager.isPrepared());
+        
+        // Verify preparedTxnState was set with ongoing producer ID and epoch
+        ProducerIdAndEpoch preparedState = transactionManager.preparedTransactionState();
+        assertNotNull(preparedState);
+        assertEquals(ongoingPid, preparedState.producerId);
+        assertEquals(ongoingEpoch, preparedState.epoch);
+    }
+
+    @Test
+    public void testInitPidResponseWithKeepPreparedTrueAndNoOngoingTransaction() {
+        // Initialize transaction manager without 2PC enabled
+        // keepPrepared can be true even when enable2Pc is false, and we expect the same behavior
+        initializeTransactionManager(Optional.of(transactionalId), true, false);
+        
+        // Start initializeTransactions with keepPreparedTxn=true
+        TransactionalRequestResult result = transactionManager.initializeTransactions(true);
+        
+        // Prepare coordinator response
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        
+        // Simulate InitProducerId response without ongoing transaction
+        prepareInitPidResponse(
+            Errors.NONE,
+            false,
+            producerId,
+            epoch,
+            true,
+            false,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH
+        );
+        
+        runUntil(transactionManager::hasProducerId);
+        transactionManager.maybeUpdateTransactionV2Enabled(true);
+        
+        result.await();
+        assertTrue(result.isSuccessful());
+        
+        // Verify transaction manager transitioned to READY state (not PREPARED_TRANSACTION)
+        assertFalse(transactionManager.isPrepared());
+        assertTrue(transactionManager.isReady());
+        
+        // Verify preparedTxnState was not set or is empty
+        ProducerIdAndEpoch preparedState = transactionManager.preparedTransactionState();
+        assertEquals(ProducerIdAndEpoch.NONE, preparedState);
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {

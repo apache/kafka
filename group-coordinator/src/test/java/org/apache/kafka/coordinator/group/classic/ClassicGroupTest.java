@@ -39,7 +39,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -559,8 +560,8 @@ public class ClassicGroupTest {
         int newSessionTimeoutMs = 20000;
         group.updateMember(member, newProtocols, newRebalanceTimeoutMs, newSessionTimeoutMs, null);
 
-        assertEquals(group.rebalanceTimeoutMs(), newRebalanceTimeoutMs);
-        assertEquals(member.sessionTimeoutMs(), newSessionTimeoutMs);
+        assertEquals(newRebalanceTimeoutMs, group.rebalanceTimeoutMs());
+        assertEquals(newSessionTimeoutMs, member.sessionTimeoutMs());
         assertEquals(newProtocols, member.supportedProtocols());
     }
 
@@ -1461,7 +1462,7 @@ public class ClassicGroupTest {
             newMember2,
             logContext,
             time,
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         ClassicGroup expectedClassicGroup = new ClassicGroup(
@@ -1592,7 +1593,7 @@ public class ClassicGroupTest {
             null,
             logContext,
             time,
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         ClassicGroup expectedClassicGroup = new ClassicGroup(

@@ -48,7 +48,6 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
     private TopicBasedRemoteLogMetadataManager createTopicBasedRemoteLogMetadataManager() {
         return RemoteLogMetadataManagerTestUtils.builder()
                 .bootstrapServers(clusterInstance.bootstrapServers())
-                .startConsumerThread(true)
                 .remoteLogMetadataTopicPartitioner(RemoteLogMetadataTopicPartitioner::new)
                 .overrideRemoteLogMetadataManagerProps(Map.of(LOG_DIR, logDir))
                 .build();
@@ -66,8 +65,8 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
             NewTopic newFollowerTopic = new NewTopic(followerTopic, Map.of(0, List.of(1, 2, 0)));
             admin.createTopics(List.of(newLeaderTopic, newFollowerTopic)).all().get();
         }
-        clusterInstance.waitForTopic(leaderTopic, 1);
-        clusterInstance.waitForTopic(followerTopic, 1);
+        clusterInstance.waitTopicCreation(leaderTopic, 1);
+        clusterInstance.waitTopicCreation(followerTopic, 1);
 
         TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));

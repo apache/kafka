@@ -16,44 +16,13 @@
  */
 package org.apache.kafka.server.log.remote.quota;
 
-public class RLMQuotaManagerConfig {
+/**
+ * Configuration settings for quota management
+ *
+ * @param quotaBytesPerSecond    The quota in bytes per second
+ * @param numQuotaSamples        The number of samples to retain in memory
+ * @param quotaWindowSizeSeconds The time span of each sample
+ */
+public record RLMQuotaManagerConfig(long quotaBytesPerSecond, int numQuotaSamples, int quotaWindowSizeSeconds) {
     public static final int INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS = 3600;
-
-    private final long quotaBytesPerSecond;
-    private final int numQuotaSamples;
-    private final int quotaWindowSizeSeconds;
-
-    /**
-     * Configuration settings for quota management
-     *
-     * @param quotaBytesPerSecond    The quota in bytes per second
-     * @param numQuotaSamples        The number of samples to retain in memory
-     * @param quotaWindowSizeSeconds The time span of each sample
-     */
-    public RLMQuotaManagerConfig(long quotaBytesPerSecond, int numQuotaSamples, int quotaWindowSizeSeconds) {
-        this.quotaBytesPerSecond = quotaBytesPerSecond;
-        this.numQuotaSamples = numQuotaSamples;
-        this.quotaWindowSizeSeconds = quotaWindowSizeSeconds;
-    }
-
-    public long quotaBytesPerSecond() {
-        return quotaBytesPerSecond;
-    }
-
-    public int numQuotaSamples() {
-        return numQuotaSamples;
-    }
-
-    public int quotaWindowSizeSeconds() {
-        return quotaWindowSizeSeconds;
-    }
-
-    @Override
-    public String toString() {
-        return "RLMQuotaManagerConfig{" +
-            "quotaBytesPerSecond=" + quotaBytesPerSecond +
-            ", numQuotaSamples=" + numQuotaSamples +
-            ", quotaWindowSizeSeconds=" + quotaWindowSizeSeconds +
-            '}';
-    }
 }

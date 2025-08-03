@@ -17,7 +17,8 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
@@ -66,7 +67,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             .addTopic(topic1Uuid, topic1Name, 3)
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
@@ -99,7 +100,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             .addTopic(topic1Uuid, topic1Name, 3)
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
@@ -159,7 +160,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -218,7 +219,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -257,7 +258,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -313,7 +314,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -371,7 +372,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -438,7 +439,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -497,7 +498,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -553,7 +554,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             invertedTargetAssignment(members)
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -620,7 +621,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             HOMOGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(new KRaftCoordinatorMetadataImage(metadataImage));
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
