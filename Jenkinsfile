@@ -82,7 +82,7 @@ pipeline {
                 script {
                     def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace --no-daemon"
                     echo "Running Gradle build with tests:./gradlew clean build ${gradleArgs}"
-                    sh "./gradlew clean build ${gradleArgs}"
+                    sh "strace -f -e trace=clone,mmap,mprotect,futex -tt -o /tmp/strace_filtered.log ./gradlew clean build ${gradleArgs}"
                 }
             }
         }
@@ -94,10 +94,10 @@ pipeline {
                     def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace"
                     if (params.RUN_TESTS) {
                         echo "Running Gradle packaging:./gradlew releaseTarGz ${gradleArgs}"
-                        sh "./gradlew releaseTarGz ${gradleArgs}"
+                        sh "strace -f -e trace=clone,mmap,mprotect,futex -tt -o /tmp/strace_filtered.log ./gradlew releaseTarGz ${gradleArgs}"
                     } else {
                         echo "Running Gradle packaging without tests:./gradlew clean releaseTarGz -x test ${gradleArgs}"
-                        sh "./gradlew clean releaseTarGz -x test ${gradleArgs}"
+                        sh "strace -f -e trace=clone,mmap,mprotect,futex -tt -o /tmp/strace_filtered.log ./gradlew clean releaseTarGz -x test ${gradleArgs}"
                     }
                     sh "mv core/build/distributions/kafka_2.13-${env.KAFKA_VERSION}.tgz ${env.TGZ_ARTIFACT_NAME}"
                     archiveArtifacts artifacts: env.TGZ_ARTIFACT_NAME, followSymlinks: false
