@@ -320,7 +320,7 @@ subprojects {
                 "-Xgcthreads1",
                 "-XX:+DisableExplicitGC",
                 "-Xtune:virtualized",
-                "-XX:ActiveProcessorCount=20",
+                "-XX:ActiveProcessorCount=4",
                 "-Djava.util.concurrent.ForkJoinPool.common.parallelism=4",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
                 "-Xmx1536M"
@@ -340,7 +340,7 @@ subprojects {
                 "-Xgcthreads1",
                 "-XX:+DisableExplicitGC",
                 "-Xtune:virtualized",
-                "-XX:ActiveProcessorCount=20",
+                "-XX:ActiveProcessorCount=4",
                 "-Djava.util.concurrent.ForkJoinPool.common.parallelism=4",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
                 "-Xmx1536M"
