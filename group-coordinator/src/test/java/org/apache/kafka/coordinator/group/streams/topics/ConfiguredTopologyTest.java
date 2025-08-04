@@ -100,7 +100,7 @@ public class ConfiguredTopologyTest {
                 Optional.empty()
             )
         );
-        assertEquals(ex.getMessage(), "Subtopologies must be present if topicConfigurationException is empty.");
+        assertEquals("Subtopologies must be present if topicConfigurationException is empty.", ex.getMessage());
     }
 
     @Test
