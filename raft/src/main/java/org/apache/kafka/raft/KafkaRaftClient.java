@@ -1512,6 +1512,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             FetchRequest.replicaId(request),
             fetchPartition.replicaDirectoryId()
         );
+        if (quorum.isLeader()) {
+            quorum.leaderStateOrThrow().updateLastReceivedFetchRequest(replicaKey, currentTimeMs);
+        }
         FetchResponseData response = tryCompleteFetchRequest(
             requestMetadata.listenerName(),
             requestMetadata.apiVersion(),
@@ -3043,12 +3046,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         )
                     );
 
+            Set<ReplicaKey> needToSendBeginQuorumRequest = state.needSendBeginQuorumRequestNodes(currentTimeMs);
             timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
                 voters
                     .voterKeys()
                     .stream()
                     .filter(key -> key.id() != quorum.localIdOrThrow())
+                    .filter(key -> !needToSendBeginQuorumRequest.contains(key))
                     .collect(Collectors.toSet()),
                 nodeSupplier,
                 this::buildBeginQuorumEpochRequest
