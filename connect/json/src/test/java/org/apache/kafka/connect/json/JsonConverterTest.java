@@ -981,7 +981,7 @@ public class JsonConverterTest {
 
     @Test
     public void testSchemaContentIsNull() {
-        converter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, null), false);
+        converter.configure(Map.of(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, null), false);
         assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
     }
 
