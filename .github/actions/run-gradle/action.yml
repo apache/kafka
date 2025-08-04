@@ -99,7 +99,7 @@ runs:
         -Pkafka.test.xml.output.dir=$TEST_XML_OUTPUT_DIR \
         -Pkafka.cluster.test.repeat=$TEST_REPEAT \
         -Pkafka.test.verbose=$TEST_VERBOSE \
-        -PcommitId=xxxxxxxxxxxxxxxx \ 
+        -PcommitId=xxxxxxxxxxxxxxxx \
         -x spotbugsMain \
         -x spotbugsTest \
         $TEST_TASK
