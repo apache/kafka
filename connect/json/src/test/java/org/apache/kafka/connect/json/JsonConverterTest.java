@@ -981,9 +981,12 @@ public class JsonConverterTest {
 
     @Test
     public void testSchemaContentIsNull() {
-        Map<String, Object> config =  new HashMap<>();
-        converter.configure(config.put(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, null), false);
-        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
+        Map<String, Object> config = new HashMap<>();
+        config.put(JsonConverterConfig.SCHEMA_CONTENT_CONFIG, null);
+        converter.configure(config, false);
+        byte[] jsonBytes = "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes();
+        SchemaAndValue result = converter.toConnectData(TOPIC, jsonBytes);
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), result);
     }
 
     @Test
