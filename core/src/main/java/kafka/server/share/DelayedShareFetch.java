@@ -368,13 +368,12 @@ public class DelayedShareFetch extends DelayedOperation {
                         "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     sharePartitions.keySet());
             }
-            for (TopicIdPartition topicIdPartition : sharePartitions.keySet()) {
-                Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
-                if (!partition.isLeader()) {
-                    log.error("Broker is no longer the leader of topicIdPartition {}", topicIdPartition);
-                    throw new NotLeaderOrFollowerException("Broker is no longer the leader of topicIdPartition: " +  topicIdPartition);
-                }
-            }
+            // At this point, there could be delayed requests sitting in the purgatory which are waiting on
+            // DelayedShareFetchPartitionKeys corresponding to partitions, whose leader has been changed to a different broker.
+            // In that case, such partitions would not be able to get acquired, and the tryComplete will keep on returning false.
+            // Eventually the operation will get timed out and completed, but it might not get removed from the purgatory.
+            // This has been eventually left it like this because the purge interval will make sure that the remaining operations
+            // in the purgatory do not grow indefinitely and are purged time to time.
             return false;
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
