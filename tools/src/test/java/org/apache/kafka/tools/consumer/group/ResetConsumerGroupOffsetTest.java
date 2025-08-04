@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -150,6 +151,28 @@ public class ResetConsumerGroupOffsetTest {
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
             assertTrue(resetOffsets.isEmpty());
             assertTrue(committedOffsets(cluster, topic, group).isEmpty());
+        }
+    }
+
+    @ClusterTest(
+        brokers = 2,
+        serverProperties = {
+            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2"),
+        }
+    )
+    public void testResetOffsetsWithOfflinePartitionNotInResetTarget(ClusterInstance cluster) throws Exception {
+        String topic = generateRandomTopic();
+        String group = "new.group";
+        String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":0");
+
+        try (Admin admin = cluster.admin(); ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0), 1, List.of(1)))));
+            cluster.waitTopicCreation(topic, 2);
+
+            cluster.shutdownBroker(1);
+
+            Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
+            assertEquals(Set.of(new TopicPartition(topic, 0)), resetOffsets.keySet());
         }
     }
 
