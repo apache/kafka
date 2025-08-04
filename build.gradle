@@ -323,7 +323,7 @@ subprojects {
                 "-XX:ActiveProcessorCount=20",
                 "-Djava.util.concurrent.ForkJoinPool.common.parallelism=4",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
-                "-Xmx1G"
+                "-Xmx1536M"
         ]
 
     }
@@ -343,7 +343,7 @@ subprojects {
                 "-XX:ActiveProcessorCount=20",
                 "-Djava.util.concurrent.ForkJoinPool.common.parallelism=4",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
-                "-Xmx1G"
+                "-Xmx1536M"
         ]
     }
 
