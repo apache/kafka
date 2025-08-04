@@ -52,6 +52,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Collections.unmodifiableList;
+
 /**
  * Tracks the state of a single member in relationship to a group:
  * <p/>
@@ -171,7 +173,7 @@ public class StreamsMembershipManager implements RequestManager {
     private MemberState state;
 
     /**
-     * Group ID of the Streams group the member will be part of, provided when creating the current
+     * Group ID of the streams group the member will be part of, provided when creating the current
      * membership manager.
      */
     private final String groupId;
@@ -661,7 +663,7 @@ public class StreamsMembershipManager implements RequestManager {
                 "already leaving the group.", memberId, memberEpoch);
             return;
         }
-        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
+        if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
                 "to leave the group and completed the leave operation. ", memberId, memberEpoch);
             return;
@@ -669,6 +671,13 @@ public class StreamsMembershipManager implements RequestManager {
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
                 " so it's not a member of the group. ", memberId, state);
+            return;
+        }
+        if (responseData.memberEpoch() < 0) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
+                "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
+                responseData.memberEpoch());
+            maybeCompleteLeaveInProgress();
             return;
         }
         
@@ -1304,5 +1313,10 @@ public class StreamsMembershipManager implements RequestManager {
             log.debug("The onAllTasksLost callback completed successfully; signaling to continue to the next phase of rebalance");
             future.complete(null);
         }
+    }
+
+    // visible for testing
+    List<MemberStateListener> stateListeners() {
+        return unmodifiableList(stateUpdatesListeners);
     }
 }

@@ -66,20 +66,6 @@
     <allow class="com.fasterxml.jackson.annotation.JsonIgnoreProperties" />
   </subpackage>
 
-  <subpackage name="log.remote">
-    <allow pkg="org.apache.kafka.server.common" />
-    <allow pkg="org.apache.kafka.server.log.remote" />
-    <allow pkg="org.apache.kafka.server.log.remote.quota" />
-    <allow pkg="org.apache.kafka.server.metrics" />
-    <allow pkg="org.apache.kafka.storage.internals" />
-    <allow pkg="org.apache.kafka.storage.log.metrics" />
-    <allow pkg="kafka.log" />
-    <allow pkg="kafka.cluster" />
-    <allow pkg="kafka.server" />
-    <allow pkg="org.mockito" />
-    <allow pkg="org.apache.kafka.test" />
-  </subpackage>
-
   <subpackage name="server">
     <allow pkg="kafka" />
     <allow pkg="org.apache.kafka" />

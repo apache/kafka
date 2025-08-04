@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
@@ -77,8 +76,8 @@ public class DeleteGroupsResponse extends AbstractResponse {
         return counts;
     }
 
-    public static DeleteGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteGroupsResponse(new DeleteGroupsResponseData(new ByteBufferAccessor(buffer), version));
+    public static DeleteGroupsResponse parse(Readable readable, short version) {
+        return new DeleteGroupsResponse(new DeleteGroupsResponseData(readable, version));
     }
 
     @Override

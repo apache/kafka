@@ -23,7 +23,6 @@ import org.apache.kafka.server.ServerSocketFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -174,7 +173,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         // SocketServer.)
         for (Entry<Integer, Map<String, ServerSocketChannel>> socketsEntry : sockets.entrySet()) {
             Set<String> usedListeners = usedSockets.getOrDefault(
-                socketsEntry.getKey(), Collections.emptySet());
+                socketsEntry.getKey(), Set.of());
             for (Entry<String, ServerSocketChannel> entry : socketsEntry.getValue().entrySet()) {
                 if (!usedListeners.contains(entry.getKey())) {
                     Utils.closeQuietly(entry.getValue(), "serverSocketChannel");

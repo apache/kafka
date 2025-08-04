@@ -108,7 +108,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private static final String REPARTITION_SOURCE_TOPIC_1 = "repartitionSourceTopic1";
     private static final String REPARTITION_SOURCE_TOPIC_2 = "repartitionSourceTopic2";
     private static final Map<String, StreamsRebalanceData.TopicInfo> REPARTITION_SOURCE_TOPICS = Map.of(
-        REPARTITION_SOURCE_TOPIC_1, new StreamsRebalanceData.TopicInfo(Optional.of(2), Optional.of((short) 1), Map.of("config1", "value1")),
+        REPARTITION_SOURCE_TOPIC_1, new StreamsRebalanceData.TopicInfo(Optional.of(2), Optional.of((short) 1), Map.of("config3", "value3", "config1", "value1")),
         REPARTITION_SOURCE_TOPIC_2, new StreamsRebalanceData.TopicInfo(Optional.of(3), Optional.of((short) 3), Collections.emptyMap())
     );
     private static final String CHANGELOG_TOPIC_1 = "changelogTopic1";
@@ -117,7 +117,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private static final Map<String, StreamsRebalanceData.TopicInfo> CHANGELOG_TOPICS = Map.of(
         CHANGELOG_TOPIC_1, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 1), Map.of()),
         CHANGELOG_TOPIC_2, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 2), Map.of()),
-        CHANGELOG_TOPIC_3, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 3), Map.of("config2", "value2"))
+        CHANGELOG_TOPIC_3, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 3), Map.of("config4", "value4", "config2", "value2"))
     );
     private static final Collection<Set<String>> COPARTITION_GROUP = Set.of(
         Set.of(SOURCE_TOPIC_1, REPARTITION_SOURCE_TOPIC_2),
@@ -153,7 +153,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         List.of(
             new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
                 .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint().setHost("localhost").setPort(8080))
-                .setPartitions(List.of(
+                .setActivePartitions(List.of(
                     new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic("topic").setPartitions(List.of(0)))
                 )
         );
@@ -591,9 +591,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 .get(new StreamsRebalanceData.HostInfo(
                     ENDPOINT_TO_PARTITIONS.get(0).userEndpoint().host(),
                     ENDPOINT_TO_PARTITIONS.get(0).userEndpoint().port())
-                );
-            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).partitions().get(0).topic(), topicPartitions.get(0).topic());
-            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).partitions().get(0).partitions().get(0), topicPartitions.get(0).partition());
+                ).activePartitions();
+            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).topic(), topicPartitions.get(0).topic());
+            assertEquals(ENDPOINT_TO_PARTITIONS.get(0).activePartitions().get(0).partitions().get(0), topicPartitions.get(0).partition());
             assertEquals(
                 1.0,
                 metrics.metric(metrics.metricName("heartbeat-total", "consumer-coordinator-metrics")).metricValue()
@@ -664,6 +664,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             assertEquals(repartitionTopic.numPartitions().get(), topicInfo.partitions());
             assertEquals(repartitionTopic.replicationFactor().get(), topicInfo.replicationFactor());
             assertEquals(repartitionTopic.topicConfigs().size(), topicInfo.topicConfigs().size());
+            assertTrue(isSorted(topicInfo.topicConfigs(), Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key)));
         });
         assertEquals(CHANGELOG_TOPICS.size(), subtopology1.stateChangelogTopics().size());
         subtopology1.stateChangelogTopics().forEach(topicInfo -> {
@@ -672,6 +673,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final StreamsRebalanceData.TopicInfo changelogTopic = CHANGELOG_TOPICS.get(topicInfo.name());
             assertEquals(changelogTopic.replicationFactor().get(), topicInfo.replicationFactor());
             assertEquals(changelogTopic.topicConfigs().size(), topicInfo.topicConfigs().size());
+            assertTrue(isSorted(topicInfo.topicConfigs(), Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key)));
         });
         assertEquals(2, subtopology1.copartitionGroups().size());
         final StreamsGroupHeartbeatRequestData.CopartitionGroup expectedCopartitionGroupData1 =
@@ -699,6 +701,15 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
         StreamsGroupHeartbeatRequestData nonJoiningRequestData = heartbeatState.buildRequestData();
         assertNull(nonJoiningRequestData.topology());
+    }
+
+    private <V> boolean isSorted(List<V> collection, Comparator<V> comparator) {
+        for (int i = 1; i < collection.size(); i++) {
+            if (comparator.compare(collection.get(i - 1), collection.get(i)) > 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @ParameterizedTest
@@ -1506,6 +1517,36 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             assertEquals(5, maximumTimeToWait);
             verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @Test
+    public void testResetPollTimer() {
+        try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = pollTimerMockedConstruction.constructed().get(1);
+
+            heartbeatRequestManager.resetPollTimer(time.milliseconds());
+            verify(pollTimer).update(time.milliseconds());
+            verify(pollTimer).isExpired();
+            verify(pollTimer).reset(DEFAULT_MAX_POLL_INTERVAL_MS);
+        }
+    }
+
+    @Test
+    public void testResetPollTimerWhenExpired() {
+        try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = pollTimerMockedConstruction.constructed().get(1);
+
+            when(pollTimer.isExpired()).thenReturn(true);
+            heartbeatRequestManager.resetPollTimer(time.milliseconds());
+            verify(pollTimer).update(time.milliseconds());
+            verify(pollTimer).isExpired();
+            verify(pollTimer).isExpiredBy();
+            verify(membershipManager).memberId();
+            verify(membershipManager).maybeRejoinStaleMember();
+            verify(pollTimer).reset(DEFAULT_MAX_POLL_INTERVAL_MS);
         }
     }
 

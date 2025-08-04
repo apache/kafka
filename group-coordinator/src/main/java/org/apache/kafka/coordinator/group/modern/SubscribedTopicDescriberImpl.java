@@ -17,14 +17,15 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
-import java.util.Map;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * The subscribed topic metadata class is used by the {@link PartitionAssignor} to obtain
@@ -32,28 +33,12 @@ import java.util.stream.IntStream;
  */
 public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     /**
-     * The topic Ids mapped to their corresponding {@link TopicMetadata}
-     * object, which contains topic and partition metadata.
+     * The metadata image that contains the latest metadata information.
      */
-    private final Map<Uuid, TopicMetadata> topicMetadata;
-    private final Map<Uuid, Set<Integer>> topicPartitionAllowedMap;
+    private final CoordinatorMetadataImage metadataImage;
 
-    public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata) {
-        this(topicMetadata, null);
-    }
-
-    public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata, Map<Uuid, Set<Integer>> topicPartitionAllowedMap) {
-        this.topicMetadata = Objects.requireNonNull(topicMetadata);
-        this.topicPartitionAllowedMap = topicPartitionAllowedMap;
-    }
-
-    /**
-     * Map of topic Ids to topic metadata.
-     *
-     * @return The map of topic Ids to topic metadata.
-     */
-    public Map<Uuid, TopicMetadata> topicMetadata() {
-        return this.topicMetadata;
+    public SubscribedTopicDescriberImpl(CoordinatorMetadataImage metadataImage) {
+        this.metadataImage = Objects.requireNonNull(metadataImage);
     }
 
     /**
@@ -65,8 +50,7 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public int numPartitions(Uuid topicId) {
-        TopicMetadata topic = this.topicMetadata.get(topicId);
-        return topic == null ? -1 : topic.numPartitions();
+        return this.metadataImage.topicMetadata(topicId).map(CoordinatorMetadataImage.TopicMetadata::partitionCount).orElse(-1);
     }
 
     /**
@@ -79,30 +63,18 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
-        return Set.of();
-    }
-
-    /**
-     * Returns a set of assignable partitions from the topic metadata.
-     * If the allowed partition map is null, all the partitions in the corresponding
-     * topic metadata are returned for the argument topic id. If allowed map is empty,
-     * empty set is returned.
-     *
-     * @param topicId The uuid of the topic
-     * @return Set of integers if assignable partitions available, empty otherwise.
-     */
-    @Override
-    public Set<Integer> assignablePartitions(Uuid topicId) {
-        TopicMetadata topic = this.topicMetadata.get(topicId);
-        if (topic == null) {
+        Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(topicId);
+        if (topicMetadataOp.isEmpty()) {
             return Set.of();
         }
 
-        if (topicPartitionAllowedMap == null) {
-            return IntStream.range(0, topic.numPartitions()).boxed().collect(Collectors.toUnmodifiableSet());
+        CoordinatorMetadataImage.TopicMetadata topicMetadata = topicMetadataOp.get();
+        List<String> racks = topicMetadata.partitionRacks(partition);
+        if (racks == null) {
+            return Set.of();
+        } else {
+            return new HashSet<>(racks);
         }
-
-        return topicPartitionAllowedMap.getOrDefault(topicId, Set.of());
     }
 
     @Override
@@ -110,18 +82,18 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         SubscribedTopicDescriberImpl that = (SubscribedTopicDescriberImpl) o;
-        return topicMetadata.equals(that.topicMetadata);
+        return metadataImage.equals(that.metadataImage);
     }
 
     @Override
     public int hashCode() {
-        return topicMetadata.hashCode();
+        return Objects.hashCode(metadataImage);
     }
 
     @Override
     public String toString() {
         return "SubscribedTopicMetadata(" +
-            "topicMetadata=" + topicMetadata +
+            "metadataImage=" + metadataImage +
             ')';
     }
 }

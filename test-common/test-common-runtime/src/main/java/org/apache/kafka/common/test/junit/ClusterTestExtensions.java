@@ -42,7 +42,6 @@ import org.junit.platform.commons.util.ReflectionUtils;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -116,6 +115,19 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
+        return true;
+    }
+
+    /**
+     * Indicates whether this provider may return zero test template invocation contexts.
+     * Prior to JUnit 5.12, returning zero contexts was silently allowed. Starting from JUnit 5.12,
+     * a PreconditionViolationException is thrown unless this method explicitly returns {@code true}.
+     *
+     * @param context the extension context for the test template method
+     * @return {@code true} to allow this provider to return zero invocation contexts
+     * @see <a href="https://github.com/junit-team/junit5/commit/89a46dfa10c6447ef010fbff7903bfcb3c18975a">JUnit 5.12 Breaking Change</a>
+     */
+    public boolean mayReturnZeroTestTemplateInvocationContexts(ExtensionContext context) {
         return true;
     }
 
@@ -268,7 +280,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
 
         ClusterConfig config = ClusterConfig.builder()
-            .setTypes(new HashSet<>(Arrays.asList(types)))
+            .setTypes(Set.of(types))
             .setBrokers(clusterTest.brokers() == 0 ? defaults.brokers() : clusterTest.brokers())
             .setControllers(clusterTest.controllers() == 0 ? defaults.controllers() : clusterTest.controllers())
             .setDisksPerBroker(clusterTest.disksPerBroker() == 0 ? defaults.disksPerBroker() : clusterTest.disksPerBroker())
@@ -280,7 +292,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .setServerProperties(serverProperties)
             .setPerServerProperties(perServerProperties)
             .setMetadataVersion(clusterTest.metadataVersion())
-            .setTags(Arrays.asList(clusterTest.tags()))
+            .setTags(List.of(clusterTest.tags()))
             .setFeatures(features)
             .build();
 

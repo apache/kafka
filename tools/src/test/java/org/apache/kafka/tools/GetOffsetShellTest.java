@@ -40,6 +40,7 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
@@ -97,7 +98,7 @@ public class GetOffsetShellTest {
         Map<String, String> rlsConfigs = new HashMap<>();
         rlsConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
         rlsConfigs.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1");
-        rlsConfigs.put(TopicConfig.SEGMENT_BYTES_CONFIG, "100");
+        rlsConfigs.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "100");
         setupTopics(this::getRemoteLogStorageEnabledTopicName, rlsConfigs);
         sendProducerRecords(this::getRemoteLogStorageEnabledTopicName);
     }

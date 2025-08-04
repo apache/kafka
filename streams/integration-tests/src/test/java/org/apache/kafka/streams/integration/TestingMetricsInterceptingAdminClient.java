@@ -110,6 +110,8 @@ import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.admin.ListClientMetricsResourcesOptions;
 import org.apache.kafka.clients.admin.ListClientMetricsResourcesResult;
+import org.apache.kafka.clients.admin.ListConfigResourcesOptions;
+import org.apache.kafka.clients.admin.ListConfigResourcesResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
@@ -296,6 +298,7 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public ListConsumerGroupsResult listConsumerGroups(final ListConsumerGroupsOptions options) {
         return adminDelegate.listConsumerGroups(options);
     }
@@ -436,6 +439,12 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
+    public ListConfigResourcesResult listConfigResources(final Set<ConfigResource.Type> configResourceTypes, final ListConfigResourcesOptions options) {
+        return adminDelegate.listConfigResources(configResourceTypes, options);
+    }
+
+    @SuppressWarnings({"deprecation", "removal"})
+    @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(final ListClientMetricsResourcesOptions options) {
         return adminDelegate.listClientMetricsResources(options);
     }
@@ -476,8 +485,8 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
-    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(final String groupId, final Set<TopicPartition> partitions, final DeleteShareGroupOffsetsOptions options) {
-        return adminDelegate.deleteShareGroupOffsets(groupId, partitions, options);
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(final String groupId, final Set<String> topics, final DeleteShareGroupOffsetsOptions options) {
+        return adminDelegate.deleteShareGroupOffsets(groupId, topics, options);
     }
 
     @Override

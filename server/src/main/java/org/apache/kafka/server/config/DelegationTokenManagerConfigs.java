@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.types.Password;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -49,4 +51,38 @@ public class DelegationTokenManagerConfigs {
             .define(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG, LONG, DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_MS_DEFAULT, atLeast(1), MEDIUM, DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_DOC)
             .define(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG, LONG, DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_DEFAULT, atLeast(1), MEDIUM, DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_DOC)
             .define(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG, LONG, DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_DEFAULT, atLeast(1), LOW, DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_DOC);
+
+    private final Password delegationTokenSecretKey;
+    private final boolean tokenAuthEnabled;
+    private final long delegationTokenMaxLifeMs;
+    private final long delegationTokenExpiryTimeMs;
+    private final long delegationTokenExpiryCheckIntervalMs;
+
+    public DelegationTokenManagerConfigs(AbstractConfig config) {
+        this.delegationTokenSecretKey = config.getPassword(DELEGATION_TOKEN_SECRET_KEY_CONFIG);
+        this.tokenAuthEnabled = delegationTokenSecretKey != null && !delegationTokenSecretKey.value().isEmpty();
+        this.delegationTokenMaxLifeMs = config.getLong(DELEGATION_TOKEN_MAX_LIFETIME_CONFIG);
+        this.delegationTokenExpiryTimeMs = config.getLong(DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG);
+        this.delegationTokenExpiryCheckIntervalMs = config.getLong(DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG);
+    }
+
+    public Password delegationTokenSecretKey() {
+        return delegationTokenSecretKey;
+    }
+
+    public boolean tokenAuthEnabled() {
+        return tokenAuthEnabled;
+    }
+
+    public long delegationTokenMaxLifeMs() {
+        return delegationTokenMaxLifeMs;
+    }
+
+    public long delegationTokenExpiryTimeMs() {
+        return delegationTokenExpiryTimeMs;
+    }
+
+    public long delegationTokenExpiryCheckIntervalMs() {
+        return delegationTokenExpiryCheckIntervalMs;
+    }
 }

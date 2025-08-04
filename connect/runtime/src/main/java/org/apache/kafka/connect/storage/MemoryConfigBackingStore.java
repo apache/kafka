@@ -22,9 +22,6 @@ import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,8 +35,6 @@ import java.util.concurrent.TimeUnit;
  * aren't persisted and will be wiped if the worker is restarted).
  */
 public class MemoryConfigBackingStore implements ConfigBackingStore {
-
-    private static final Logger log = LoggerFactory.getLogger(MemoryConfigBackingStore.class);
 
     private final Map<String, ConnectorState> connectors = new HashMap<>();
     private UpdateListener updateListener;

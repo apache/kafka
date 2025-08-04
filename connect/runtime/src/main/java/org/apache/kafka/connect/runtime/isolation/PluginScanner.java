@@ -198,7 +198,7 @@ public abstract class PluginScanner {
                 return ((Versioned) pluginImpl).version();
             }
         } catch (Throwable t) {
-            log.error("Failed to get plugin version for " + pluginImpl.getClass(), t);
+            log.error("Failed to get plugin version for {}", pluginImpl.getClass(), t);
         }
         return PluginDesc.UNDEFINED_VERSION;
     }

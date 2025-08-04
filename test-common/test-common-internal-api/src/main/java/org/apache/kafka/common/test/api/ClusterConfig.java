@@ -207,10 +207,10 @@ public class ClusterConfig {
         private ListenerName controllerListenerName;
         private File trustStoreFile;
         private MetadataVersion metadataVersion;
-        private Map<String, String> serverProperties = Collections.emptyMap();
-        private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
-        private List<String> tags = Collections.emptyList();
-        private Map<Feature, Short> features = Collections.emptyMap();
+        private Map<String, String> serverProperties = Map.of();
+        private Map<Integer, Map<String, String>> perServerProperties = Map.of();
+        private List<String> tags = List.of();
+        private Map<Feature, Short> features = Map.of();
 
         private Builder() {}
 

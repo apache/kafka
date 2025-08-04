@@ -1256,7 +1256,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             if (enableBloomFilters) {
                 filter = new BloomFilter();
                 tableConfig.setFilterPolicy(filter);
-                options.optimizeFiltersForHits();
+                options.setOptimizeFiltersForHits(true);
                 bloomFiltersSet = true;
             } else {
                 options.setOptimizeFiltersForHits(false);

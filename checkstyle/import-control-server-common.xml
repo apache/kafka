@@ -130,6 +130,7 @@
         </subpackage>
         <subpackage name="config">
             <allow pkg="org.apache.kafka.server"/>
+            <allow pkg="org.apache.kafka.clients"/>
         </subpackage>
     </subpackage>
 

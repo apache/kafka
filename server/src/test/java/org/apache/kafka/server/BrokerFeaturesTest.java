@@ -30,6 +30,7 @@ import java.util.Map;
 import static org.apache.kafka.server.common.Feature.ELIGIBLE_LEADER_REPLICAS_VERSION;
 import static org.apache.kafka.server.common.Feature.GROUP_VERSION;
 import static org.apache.kafka.server.common.Feature.SHARE_VERSION;
+import static org.apache.kafka.server.common.Feature.STREAMS_VERSION;
 import static org.apache.kafka.server.common.Feature.TRANSACTION_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -99,6 +100,7 @@ public class BrokerFeaturesTest {
                 GROUP_VERSION.featureName(), GROUP_VERSION.latestTesting(),
                 ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), ELIGIBLE_LEADER_REPLICAS_VERSION.latestTesting(),
                 SHARE_VERSION.featureName(), SHARE_VERSION.latestTesting(),
+                STREAMS_VERSION.featureName(), STREAMS_VERSION.latestTesting(),
                 "kraft.version", (short) 0,
                 "test_feature_1", (short) 4,
                 "test_feature_2", (short) 3,

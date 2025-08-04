@@ -21,7 +21,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * The task assignment for a Streams group member.
+ * The task assignment for a streams group member.
  *
  * @param activeTasks  The active tasks assigned to this member keyed by subtopologyId.
  * @param standbyTasks The standby tasks assigned to this member keyed by subtopologyId.

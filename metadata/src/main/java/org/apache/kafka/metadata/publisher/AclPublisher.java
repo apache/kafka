@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.metadata.publisher;
 
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -36,14 +37,14 @@ public class AclPublisher implements MetadataPublisher {
     private final int nodeId;
     private final FaultHandler faultHandler;
     private final String nodeType;
-    private final Optional<ClusterMetadataAuthorizer> authorizer;
+    private final Optional<Plugin<Authorizer>> authorizer;
     private boolean completedInitialLoad = false;
 
-    public AclPublisher(int nodeId, FaultHandler faultHandler, String nodeType, Optional<Authorizer> authorizer) {
+    public AclPublisher(int nodeId, FaultHandler faultHandler, String nodeType, Optional<Plugin<Authorizer>> authorizer) {
         this.nodeId = nodeId;
         this.faultHandler = faultHandler;
         this.nodeType = nodeType;
-        this.authorizer = authorizer.filter(ClusterMetadataAuthorizer.class::isInstance).map(ClusterMetadataAuthorizer.class::cast);
+        this.authorizer = authorizer.filter(plugin -> plugin.get() instanceof ClusterMetadataAuthorizer);
         this.log = new LogContext(name()).logger(AclPublisher.class);
     }
 
@@ -63,7 +64,8 @@ public class AclPublisher implements MetadataPublisher {
         // we want to apply those changes in that order, not the reverse order! Otherwise
         // there could be a window during which incorrect authorization results are returned.
         Optional.ofNullable(delta.aclsDelta()).ifPresent(aclsDelta -> {
-            authorizer.ifPresent(clusterMetadataAuthorizer -> {
+            authorizer.ifPresent(authorizer -> {
+                ClusterMetadataAuthorizer clusterMetadataAuthorizer = (ClusterMetadataAuthorizer) authorizer.get();
                 if (manifest.type().equals(LoaderManifestType.SNAPSHOT)) {
                     try {
                         // If the delta resulted from a snapshot load, we want to apply the new changes
@@ -103,6 +105,9 @@ public class AclPublisher implements MetadataPublisher {
 
     @Override
     public void close() {
-        authorizer.ifPresent(clusterMetadataAuthorizer -> clusterMetadataAuthorizer.completeInitialLoad(new TimeoutException()));
+        authorizer.ifPresent(authorizer -> {
+            ClusterMetadataAuthorizer clusterMetadataAuthorizer = (ClusterMetadataAuthorizer) authorizer.get();
+            clusterMetadataAuthorizer.completeInitialLoad(new TimeoutException());
+        });
     }
 }

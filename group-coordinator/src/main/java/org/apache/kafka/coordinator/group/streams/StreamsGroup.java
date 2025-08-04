@@ -25,19 +25,19 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
-import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
+import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
 import org.slf4j.Logger;
@@ -54,6 +54,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
+import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.NOT_READY;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.RECONCILING;
@@ -153,6 +154,11 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, TopicMetadata> partitionMetadata;
 
     /**
+     * The metadata hash which is computed based on the all subscribed topics.
+     */
+    protected final TimelineLong metadataHash;
+
+    /**
      * The target assignment epoch. An assignment epoch smaller than the group epoch means that a new assignment is required. The assignment
      * epoch is updated when a new assignment is installed.
      */
@@ -205,6 +211,12 @@ public class StreamsGroup implements Group {
      */
     private Optional<String> shutdownRequestMemberId = Optional.empty();
 
+    /**
+     * The current epoch for endpoint information, this is used to determine when to send
+     * updated endpoint information to members of the group.
+     */
+    private int endpointInformationEpoch = -1;
+
     public StreamsGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -220,6 +232,7 @@ public class StreamsGroup implements Group {
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.partitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.metadataHash = new TimelineLong(snapshotRegistry);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -274,7 +287,11 @@ public class StreamsGroup implements Group {
 
     public void setTopology(StreamsTopology topology) {
         this.topology.set(Optional.ofNullable(topology));
-        maybeUpdateConfiguredTopology();
+        maybeUpdateGroupState();
+    }
+
+    public void setConfiguredTopology(ConfiguredTopology configuredTopology) {
+        this.configuredTopology.set(Optional.ofNullable(configuredTopology));
         maybeUpdateGroupState();
     }
 
@@ -576,54 +593,45 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return An immutable map of partition metadata for each topic that are inputs for this streams group.
+     * @return The metadata hash.
      */
-    public Map<String, TopicMetadata> partitionMetadata() {
-        return Collections.unmodifiableMap(partitionMetadata);
+    public long metadataHash() {
+        return metadataHash.get();
     }
 
     /**
-     * Updates the partition metadata. This replaces the previous one.
+     * Updates the metadata hash.
      *
-     * @param partitionMetadata The new partition metadata.
+     * @param metadataHash The new metadata hash.
      */
-    public void setPartitionMetadata(
-        Map<String, TopicMetadata> partitionMetadata
-    ) {
-        this.partitionMetadata.clear();
-        this.partitionMetadata.putAll(partitionMetadata);
-        maybeUpdateConfiguredTopology();
-        maybeUpdateGroupState();
+    public void setMetadataHash(long metadataHash) {
+        this.metadataHash.set(metadataHash);
     }
 
     /**
-     * Computes the partition metadata based on the current topology and the current topics image.
+     * Computes the metadata hash based on the current topology and the current metadata image.
      *
-     * @param topicsImage The current metadata for all available topics.
-     * @param topology    The current metadata for the Streams topology
-     * @return An immutable map of partition metadata for each topic that the Streams topology is using (besides non-repartition sink topics)
+     * @param metadataImage  The current metadata image.
+     * @param topicHashCache The cache for the topic hashes.
+     * @param topology       The current metadata for the Streams topology
+     * @return The metadata hash.
      */
-    public Map<String, TopicMetadata> computePartitionMetadata(
-        TopicsImage topicsImage,
+    public long computeMetadataHash(
+        CoordinatorMetadataImage metadataImage,
+        Map<String, Long> topicHashCache,
         StreamsTopology topology
     ) {
         Set<String> requiredTopicNames = topology.requiredTopics();
 
-        // Create the topic metadata for each subscribed topic.
-        Map<String, TopicMetadata> newPartitionMetadata = new HashMap<>(requiredTopicNames.size());
-
+        Map<String, Long> topicHash = new HashMap<>(requiredTopicNames.size());
         requiredTopicNames.forEach(topicName -> {
-            TopicImage topicImage = topicsImage.getTopic(topicName);
-            if (topicImage != null) {
-                newPartitionMetadata.put(topicName, new TopicMetadata(
-                    topicImage.id(),
-                    topicImage.name(),
-                    topicImage.partitions().size())
-                );
-            }
+            metadataImage.topicMetadata(topicName).ifPresent(__ ->
+                topicHash.put(
+                    topicName,
+                    topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
+                ));
         });
-
-        return Collections.unmodifiableMap(newPartitionMetadata);
+        return Utils.computeGroupHash(topicHash);
     }
 
     /**
@@ -683,7 +691,7 @@ public class StreamsGroup implements Group {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
     ) throws UnknownMemberIdException, StaleMemberEpochException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
@@ -755,6 +763,11 @@ public class StreamsGroup implements Group {
 
     @Override
     public boolean isSubscribedToTopic(String topic) {
+        if (state.get() == EMPTY || state.get() == DEAD) {
+            // No topic subscriptions if the group is empty.
+            // This allows offsets to expire for empty groups.
+            return false;
+        }
         Optional<ConfiguredTopology> maybeConfiguredTopology = configuredTopology.get();
         if (maybeConfiguredTopology.isEmpty() || !maybeConfiguredTopology.get().isReady()) {
             return false;
@@ -787,7 +800,6 @@ public class StreamsGroup implements Group {
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(groupId()));
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
     }
@@ -847,18 +859,6 @@ public class StreamsGroup implements Group {
         }
 
         state.set(newState);
-    }
-
-    private void maybeUpdateConfiguredTopology() {
-        if (topology.get().isPresent()) {
-            final StreamsTopology streamsTopology = topology.get().get();
-
-            log.info("[GroupId {}] Configuring the topology {}", groupId, streamsTopology);
-            this.configuredTopology.set(Optional.of(InternalTopicManager.configureTopics(logContext, streamsTopology, partitionMetadata)));
-
-        } else {
-            configuredTopology.set(Optional.empty());
-        }
     }
 
     /**
@@ -1074,5 +1074,13 @@ public class StreamsGroup implements Group {
             log.info("[GroupId {}] Clearing shutdown requested for the streams application.", groupId);
             shutdownRequestMemberId = Optional.empty();
         }
+    }
+
+    public int endpointInformationEpoch() {
+        return endpointInformationEpoch;
+    }
+
+    public void setEndpointInformationEpoch(int endpointInformationEpoch) {
+        this.endpointInformationEpoch = endpointInformationEpoch;
     }
 }
