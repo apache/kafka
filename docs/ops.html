@@ -4502,10 +4502,10 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <p>Note that when the ELR feature is enabled:</p>
   <ul>
     <li>The cluster-level <code>min.insync.replicas</code> config will be added if there is not any. The value is the same as the static config in the active controller.</li>
-    <li>The removal of <code>min.insync.replicas</code> config in cluster-level is not allowed.</li>
+    <li>The removal of <code>min.insync.replicas</code> config at the cluster-level is not allowed.</li>
     <li>If the cluster-level <code>min.insync.replicas</code> is updated, even if the value is unchanged, all the ELR state will be cleaned.</li>
-    <li>The previously set <code>min.insync.replicas</code> value at the broker-level config will be removed. Please set in the cluster-level if necessary.</li>
-    <li>The alteration of <code>min.insync.replicas</code> config in broker-level is not allowed.</li>
+    <li>The previously set <code>min.insync.replicas</code> value at the broker-level config will be removed. Please set at the cluster-level if necessary.</li>
+    <li>The alteration of <code>min.insync.replicas</code> config at the broker-level is not allowed.</li>
     <li>If <code>min.insync.replicas</code> is updated for a topic, the ELR state will be cleaned.</li>
   </ul>
 

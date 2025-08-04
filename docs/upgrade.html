@@ -68,6 +68,8 @@
                     </li>
                     <li>
                         The KIP-966 part 1: Eligible Leader Replicas(ELR) will be enabled by default on the new clusters.
+                        After the ELR feature enabled, the previously set <code>min.insync.replicas</code> value at the broker-level config will be removed.
+                        Please set at the cluster-level if necessary.
                         For further details, please refer to <a href="/{{version}}/documentation.html#eligible_leader_replicas">here</a>.
                     </li>
                 </ul>
