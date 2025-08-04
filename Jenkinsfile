@@ -1,6 +1,6 @@
 // Unified, Parameterized Jenkinsfile for Multi-JVM Kafka Builds
 pipeline {
-    agent { label 'dual_xeon_ibm_openj9_jdk21' }// Hardcoding Agent as there will be a job for each openj9 open edition and certified
+    agent { label 'tsweet_i7_2600k' }// Hardcoding Agent as there will be a job for each openj9 open edition and certified
 
     parameters {
         choice(name: 'JDK_TYPE', choices: ['openj9-open', 'openj9-certified', 'hotspot'], description: 'Select the target JDK for the build.')
@@ -29,7 +29,7 @@ pipeline {
                     // Explicitly set the agent label for subsequent stages using if/else
                     def agentLabel = ''
                     if (params.JDK_TYPE == 'openj9-open') {
-                        agentLabel = 'dual_xeon_ibm_openj9_jdk21'
+                        agentLabel = 'tsweet_i7_2600k'
                     } else if (params.JDK_TYPE == 'openj9-certified') {
                         agentLabel = 'i7_2600k_ibm_openj9_jdk21_certified'
                     } else if (params.JDK_TYPE == 'hotspot') {
@@ -82,7 +82,7 @@ pipeline {
                 script {
                     def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace --no-daemon"
                     echo "Running Gradle build with tests:./gradlew clean build ${gradleArgs}"
-                    sh "strace -f -o /tmp/strace.log ./gradlew clean build ${gradleArgs}"
+                    sh "./gradlew clean build ${gradleArgs}"
                 }
             }
         }
@@ -94,10 +94,10 @@ pipeline {
                     def gradleArgs = "--no-build-cache --no-configuration-cache --max-workers=${params.GRADLE_MAX_WORKERS} -PmaxParallelForks=${params.GRADLE_MAX_FORKS} -PmaxScalacThreads=${params.GRADLE_MAX_SCALAC_THREADS} --info --stacktrace"
                     if (params.RUN_TESTS) {
                         echo "Running Gradle packaging:./gradlew releaseTarGz ${gradleArgs}"
-                        sh "strace -f -o /tmp/strace.log ./gradlew releaseTarGz ${gradleArgs}"
+                        sh "./gradlew releaseTarGz ${gradleArgs}"
                     } else {
                         echo "Running Gradle packaging without tests:./gradlew clean releaseTarGz -x test ${gradleArgs}"
-                        sh "strace -f -o /tmp/strace.log ./gradlew clean releaseTarGz -x test ${gradleArgs}"
+                        sh "./gradlew clean releaseTarGz -x test ${gradleArgs}"
                     }
                     sh "mv core/build/distributions/kafka_2.13-${env.KAFKA_VERSION}.tgz ${env.TGZ_ARTIFACT_NAME}"
                     archiveArtifacts artifacts: env.TGZ_ARTIFACT_NAME, followSymlinks: false
@@ -144,7 +144,7 @@ pipeline {
                 // Determine the correct agent label for post-build actions
                 def agentLabel
                 if (params.JDK_TYPE == 'openj9-open') {
-                    agentLabel = 'dual_xeon_ibm_openj9_jdk21'
+                    agentLabel = 'tsweet_i7_2600k'
                 } else if (params.JDK_TYPE == 'openj9-certified') {
                     agentLabel = 'i7_2600k_ibm_openj9_jdk21_certified'
                 } else if (params.JDK_TYPE == 'hotspot') {

@@ -314,7 +314,7 @@ subprojects {
         // Forking must be enabled on the task's main options to set JVM args and other fork options.
         options.fork = true
         options.forkOptions.jvmArgs += [
-                "-Xss256k",
+                "-Xss512k",
                 "-Xgcpolicy:gencon",
                 "-XcompilationThreads2",
                 "-Xgcthreads1",
@@ -323,7 +323,7 @@ subprojects {
                 "-XX:ActiveProcessorCount=4",
                 "-Djava.util.concurrent.ForkJoinPool.common.parallelism=4",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
-                "-Xmx1536M"
+                "-Xmx2G"
         ]
 
     }
@@ -334,7 +334,7 @@ subprojects {
 
         options.fork = true
         options.forkOptions.jvmArgs += [
-                "-Xss256k",
+                "-Xss512k",
                 "-Xgcpolicy:gencon",
                 "-XcompilationThreads2",
                 "-Xgcthreads1",
@@ -343,7 +343,7 @@ subprojects {
                 "-XX:ActiveProcessorCount=4",
                 "-Djava.util.concurrent.ForkJoinPool.common.parallelism=4",
                 "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
-                "-Xmx1536M"
+                "-Xmx2G"
         ]
     }
 
