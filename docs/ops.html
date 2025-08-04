@@ -2107,6 +2107,16 @@ The following set of metrics are available for monitoring the group coordinator:
         <td>The max time in millis remote copies was throttled by a broker</td>
         <td>kafka.server:type=RemoteLogManager, name=remote-copy-throttle-time-max</td>
       </tr>
+      <tr>
+        <td>RemoteLogReader Fetch Rate And Time</td>
+        <td>The time to read data from remote storage by a broker</td>
+        <td>kafka.log.remote:type=RemoteLogManager,name=RemoteLogReaderFetchRateAndTimeMs</td>
+      </tr>
+      <tr>
+        <td>Delayed Remote List Offsets Expires Per Sec</td>
+        <td>The number of expired remote list offsets per second. Omitting 'topic=(...), partition=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=DelayedRemoteListOffsetsMetrics,name=ExpiresPerSec,topic=([-.\w]+),partition=([0-9]+)</td>
+      </tr>
 
     </tbody>
   </table>
