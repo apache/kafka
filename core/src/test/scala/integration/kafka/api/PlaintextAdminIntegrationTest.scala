@@ -4401,26 +4401,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           .anyMatch(g => g.groupId() == streamsGroupId)
       }, "Streams group not ready to describe yet")
 
-      Thread.sleep(10000)
-
       TestUtils.waitUntilTrue(() => {
-        try {
-          val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
-          val group = describedGroups.get(streamsGroupId)
-          if (group != null) {
-            group.groupState() == GroupState.STABLE && !group.subtopologies().isEmpty
-          } else {
-            false
-          }
-        } catch {
-          case _: Exception => false
-        }
-      }, "Stream group not fully initialized with topology")
+        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
+        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+      }, "Stream group not stable yet")
 
       // Verify the describe call works correctly
       val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
       val group = describedGroups.get(streamsGroupId)
-
       assertNotNull(group)
       assertEquals(streamsGroupId, group.groupId())
       assertFalse(group.members().isEmpty)
