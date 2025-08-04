@@ -256,6 +256,7 @@ public class Formatter {
         releaseVersion = calculateEffectiveReleaseVersion();
         featureLevels = calculateEffectiveFeatureLevels();
         this.bootstrapMetadata = calculateBootstrapMetadata();
+        printStream.println("Bootstrap metadata: " + bootstrapMetadata);
         doFormat(bootstrapMetadata);
     }
 

@@ -180,14 +180,16 @@ public class FormatterTest {
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.run();
-            assertEquals("Formatting metadata directory " + testEnv.directory(0) +
-                " with metadata.version " + MetadataVersion.latestProduction() + ".",
-                    formatter1.output().trim());
+            assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
+                    "\nFormatting metadata directory " + testEnv.directory(0) +
+                    " with metadata.version " + MetadataVersion.latestProduction() + ".",
+                formatter1.output().trim());
 
             FormatterContext formatter2 = testEnv.newFormatter();
             formatter2.formatter.setIgnoreFormatted(true);
             formatter2.formatter.run();
-            assertEquals("All of the log directories are already formatted.",
+            assertEquals("Bootstrap metadata: " + formatter2.formatter.bootstrapMetadata() +
+                    "\nAll of the log directories are already formatted.",
                 formatter2.output().trim());
         }
     }
@@ -201,7 +203,8 @@ public class FormatterTest {
             formatter1.formatter
                 .setInitialControllers(DynamicVoters.parse("1@localhost:8020:" + originalDirectoryId))
                 .run();
-            assertEquals("Formatting dynamic metadata voter directory " + testEnv.directory(0) +
+            assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
+                    "\nFormatting dynamic metadata voter directory " + testEnv.directory(0) +
                     " with metadata.version " + MetadataVersion.latestProduction() + ".",
                 formatter1.output().trim());
             assertMetadataDirectoryId(testEnv, Uuid.fromString(originalDirectoryId));
@@ -211,7 +214,8 @@ public class FormatterTest {
                 .setIgnoreFormatted(true)
                 .setInitialControllers(DynamicVoters.parse("1@localhost:8020:" + newDirectoryId))
                 .run();
-            assertEquals("All of the log directories are already formatted.",
+            assertEquals("Bootstrap metadata: " + formatter2.formatter.bootstrapMetadata() +
+                    "\nAll of the log directories are already formatted.",
                 formatter2.output().trim());
             assertMetadataDirectoryId(testEnv, Uuid.fromString(originalDirectoryId));
         }
@@ -244,9 +248,10 @@ public class FormatterTest {
             FormatterContext formatter2 = testEnv.newFormatter();
             formatter2.formatter.setIgnoreFormatted(true);
             formatter2.formatter.run();
-            assertEquals("Formatting data directory " + testEnv.directory(1) + " with metadata.version " +
-                MetadataVersion.latestProduction() + ".",
-                    formatter2.output().trim());
+            assertEquals("Bootstrap metadata: " + formatter2.formatter.bootstrapMetadata() +
+                    "\nFormatting data directory " + testEnv.directory(1) + " with metadata.version " +
+                    MetadataVersion.latestProduction() + ".",
+                formatter2.output().trim());
         }
     }
 
@@ -256,9 +261,10 @@ public class FormatterTest {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_5_IV0);
             formatter1.formatter.run();
-            assertEquals("Formatting metadata directory " + testEnv.directory(0) +
-                " with metadata.version " + MetadataVersion.IBP_3_5_IV0 + ".",
-                    formatter1.output().trim());
+            assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
+                    "\nFormatting metadata directory " + testEnv.directory(0) +
+                    " with metadata.version " + MetadataVersion.IBP_3_5_IV0 + ".",
+                formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
                 new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.IBP_3_5_IV0, bootstrapMetadata.metadataVersion());
@@ -283,9 +289,10 @@ public class FormatterTest {
             formatter1.formatter.setReleaseVersion(MetadataVersion.latestTesting());
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.run();
-            assertEquals("Formatting metadata directory " + testEnv.directory(0) +
-                " with metadata.version " + MetadataVersion.latestTesting() + ".",
-                    formatter1.output().trim());
+            assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
+                    "\nFormatting metadata directory " + testEnv.directory(0) +
+                    " with metadata.version " + MetadataVersion.latestTesting() + ".",
+                formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
                     new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.latestTesting(), bootstrapMetadata.metadataVersion());
@@ -333,9 +340,10 @@ public class FormatterTest {
                 "SCRAM-SHA-512=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\"," +
                     "saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\"]"));
             formatter1.formatter.run();
-            assertEquals("Formatting metadata directory " + testEnv.directory(0) +
-                " with metadata.version " + MetadataVersion.IBP_3_8_IV0 + ".",
-                    formatter1.output().trim());
+            assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
+                    "\nFormatting metadata directory " + testEnv.directory(0) +
+                    " with metadata.version " + MetadataVersion.IBP_3_8_IV0 + ".",
+                formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
                 new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.IBP_3_8_IV0, bootstrapMetadata.metadataVersion());
@@ -425,6 +433,7 @@ public class FormatterTest {
             formatter1.formatter.run();
             assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
             assertEquals(List.of(
+                "Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata(),
                 String.format("Formatting data directory %s with %s %s.",
                     testEnv.directory(1),
                     MetadataVersion.FEATURE_NAME,
@@ -539,6 +548,7 @@ public class FormatterTest {
             formatter1.formatter.run();
             assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
             assertEquals(List.of(
+                    "Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata(),
                     String.format("Formatting data directory %s with %s %s.",
                         testEnv.directory(1),
                         MetadataVersion.FEATURE_NAME,
