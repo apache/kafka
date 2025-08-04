@@ -26,13 +26,11 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -58,16 +56,16 @@ public class HasHeaderKeyTest {
     @Test
     public void testConfig() {
         HasHeaderKey<SourceRecord> predicate = new HasHeaderKey<>();
-        predicate.config().validate(Collections.singletonMap("name", "foo"));
+        predicate.config().validate(Map.of("name", "foo"));
 
-        List<ConfigValue> configs = predicate.config().validate(Collections.singletonMap("name", ""));
-        assertEquals(singletonList("Invalid value  for configuration name: String must be non-empty"), configs.get(0).errorMessages());
+        List<ConfigValue> configs = predicate.config().validate(Map.of("name", ""));
+        assertEquals(List.of("Invalid value  for configuration name: String must be non-empty"), configs.get(0).errorMessages());
     }
 
     @Test
     public void testTest() {
         HasHeaderKey<SourceRecord> predicate = new HasHeaderKey<>();
-        predicate.configure(Collections.singletonMap("name", "foo"));
+        predicate.configure(Map.of("name", "foo"));
 
         assertTrue(predicate.test(recordWithHeaders("foo")));
         assertTrue(predicate.test(recordWithHeaders("foo", "bar")));

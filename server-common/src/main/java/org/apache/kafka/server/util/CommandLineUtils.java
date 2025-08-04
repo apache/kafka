@@ -130,6 +130,11 @@ public class CommandLineUtils {
         }
     }
 
+    public static void printErrorAndExit(String message) {
+        System.err.println(message);
+        Exit.exit(1, message);
+    }
+
     public static void printUsageAndExit(OptionParser parser, String message) {
         System.err.println(message);
         try {

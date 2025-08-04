@@ -23,7 +23,6 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.PreparedTxnState;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -147,7 +146,7 @@ public class TransactionManager {
     private volatile long latestFinalizedFeaturesEpoch = -1;
     private volatile boolean isTransactionV2Enabled = false;
     private final boolean enable2PC;
-    private volatile PreparedTxnState preparedTxnState;
+    private volatile ProducerIdAndEpoch preparedTxnState = ProducerIdAndEpoch.NONE;
 
     private enum State {
         UNINITIALIZED,
@@ -230,7 +229,6 @@ public class TransactionManager {
         this.txnPartitionMap = new TxnPartitionMap(logContext);
         this.apiVersions = apiVersions;
         this.enable2PC = enable2PC;
-        this.preparedTxnState = new PreparedTxnState();
     }
 
     /**
@@ -348,8 +346,8 @@ public class TransactionManager {
         throwIfPendingState("prepareTransaction");
         maybeFailWithError();
         transitionTo(State.PREPARED_TRANSACTION);
-        this.preparedTxnState = new PreparedTxnState(
-            this.producerIdAndEpoch.producerId + ":" +
+        this.preparedTxnState = new ProducerIdAndEpoch(
+            this.producerIdAndEpoch.producerId,
             this.producerIdAndEpoch.epoch
         );
     }
@@ -1343,7 +1341,7 @@ public class TransactionManager {
         newPartitionsInTransaction.clear();
         pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
-        preparedTxnState = new PreparedTxnState();
+        preparedTxnState = ProducerIdAndEpoch.NONE;
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
@@ -1500,8 +1498,21 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-                // TO_DO Add code to handle transition to prepared_txn when keepPrepared = true
-                transitionTo(State.READY);
+                // If this is a transaction with keepPreparedTxn=true, transition directly
+                // to PREPARED_TRANSACTION state IFF there is an ongoing transaction.
+                if (builder.data.keepPreparedTxn() &&
+                    initProducerIdResponse.data().ongoingTxnProducerId() != RecordBatch.NO_PRODUCER_ID
+                ) {
+                    transitionTo(State.PREPARED_TRANSACTION);
+                    // Update the preparedTxnState with the ongoing pid and epoch from the response.
+                    // This will be used to complete the transaction later.
+                    TransactionManager.this.preparedTxnState = new ProducerIdAndEpoch(
+                        initProducerIdResponse.data().ongoingTxnProducerId(),
+                        initProducerIdResponse.data().ongoingTxnProducerEpoch()
+                    );
+                } else {
+                    transitionTo(State.READY);
+                }
                 lastError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
@@ -1958,13 +1969,13 @@ public class TransactionManager {
     }
 
     /**
-     * Returns a PreparedTxnState object containing the producer ID and epoch
+     * Returns a ProducerIdAndEpoch object containing the producer ID and epoch
      * of the ongoing transaction.
      * This is used when preparing a transaction for a two-phase commit.
      *
-     * @return a PreparedTxnState with the current producer ID and epoch
+     * @return a ProducerIdAndEpoch with the current producer ID and epoch.
      */
-    public PreparedTxnState preparedTransactionState() {
+    public ProducerIdAndEpoch preparedTransactionState() {
         return this.preparedTxnState;
     }
 }
