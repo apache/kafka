@@ -57,6 +57,9 @@
                         The logger class name for LogCleaner has been updated from <code>kafka.log.LogCleaner</code> to <code>org.apache.kafka.storage.internals.log.LogCleaner</code> in the log4j2.yaml configuration file.
                         Added loggers for <code>org.apache.kafka.storage.internals.log.LogCleaner$CleanerThread</code> and <code>org.apache.kafka.storage.internals.log.Cleaner</code> classes to CleanerAppender.
                     </li>
+                    <li>
+                        The filename for rotated <code>state-change.log</code> files has been updated from <code>stage-change.log.[date]</code> to <code>state-change.log.[date]</code> in the log4j2.yaml configuration file.
+                    </li>
                 </ul>
             </li>
             <li><b>Broker</b>
@@ -494,6 +497,10 @@
                     <li> See <a href="https://cwiki.apache.org/confluence/x/B40ODg">KIP-890</a> and
                     <a href="https://cwiki.apache.org/confluence/x/8ItyEg">KIP-1050</a> for more details </li>
                 </ul>
+                <li>
+                    The filename for rotated <code>state-change.log</code> files has been updated from <code>stage-change.log.[date]</code> to <code>state-change.log.[date]</code> in the log4j2.yaml configuration file.
+                    See <a href="https://issues.apache.org/jira/browse/KAFKA-19576">KAFKA-19576</a> for details.
+                </li>
             </ul>
         </li>
     </ul>
