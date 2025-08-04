@@ -1476,6 +1476,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
      *     or if either the fetch offset or the last fetched epoch is invalid
      */
+    @SuppressWarnings("CyclomaticComplexity")
     private CompletableFuture<FetchResponseData> handleFetchRequest(
         RaftRequest.Inbound requestMetadata,
         long currentTimeMs
