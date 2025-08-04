@@ -555,8 +555,8 @@ public class RemoteLogManagerTest {
         verify(remoteLogMetadataManager).addRemoteLogSegmentMetadata(remoteLogSegmentMetadataArg.capture());
         // The old segment should only contain leader epoch [0->0, 1->100] since its offset range is [0, 149]
         Map<Integer, Long> expectedLeaderEpochs = new TreeMap<>();
-        expectedLeaderEpochs.put(epochEntry0.epoch, epochEntry0.startOffset);
-        expectedLeaderEpochs.put(epochEntry1.epoch, epochEntry1.startOffset);
+        expectedLeaderEpochs.put(epochEntry0.epoch(), epochEntry0.startOffset());
+        expectedLeaderEpochs.put(epochEntry1.epoch(), epochEntry1.startOffset());
         verifyRemoteLogSegmentMetadata(remoteLogSegmentMetadataArg.getValue(), oldSegmentStartOffset, oldSegmentEndOffset, expectedLeaderEpochs);
 
         // verify copyLogSegmentData is passing the RemoteLogSegmentMetadata we created above
@@ -691,6 +691,8 @@ public class RemoteLogManagerTest {
         long lastStableOffset = 150L;
         long logEndOffset = 150L;
 
+        when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(12L);
+        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(2L);
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
 
         // leader epoch preparation
@@ -708,6 +710,7 @@ public class RemoteLogManagerTest {
 
         when(oldSegment.baseOffset()).thenReturn(oldSegmentStartOffset);
         when(activeSegment.baseOffset()).thenReturn(nextSegmentStartOffset);
+        when(activeSegment.size()).thenReturn(2);
         verify(oldSegment, times(0)).readNextOffset();
         verify(activeSegment, times(0)).readNextOffset();
 
@@ -764,6 +767,8 @@ public class RemoteLogManagerTest {
         assertEquals(1, brokerTopicStats.allTopicsStats().remoteCopyRequestRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().remoteCopyBytesRate().count());
         assertEquals(1, brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().count());
+        assertEquals(10, brokerTopicStats.allTopicsStats().remoteCopyLagBytesAggrMetric().value());
+        assertEquals(1, brokerTopicStats.allTopicsStats().remoteCopyLagSegmentsAggrMetric().value());
     }
 
     @Test
@@ -1620,15 +1625,12 @@ public class RemoteLogManagerTest {
                             metadata.startOffset(), maxEntries * 8);
                     TimeIndex timeIdx = new TimeIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.TIME_INDEX_FILE_SUFFIX),
                             metadata.startOffset(), maxEntries * 12);
-                    switch (indexType) {
-                        case OFFSET:
-                            return Files.newInputStream(offsetIdx.file().toPath());
-                        case TIMESTAMP:
-                            return Files.newInputStream(timeIdx.file().toPath());
-                        case TRANSACTION:
-                            return Files.newInputStream(txnIdxFile.toPath());
-                    }
-                    return null;
+                    return switch (indexType) {
+                        case OFFSET -> Files.newInputStream(offsetIdx.file().toPath());
+                        case TIMESTAMP -> Files.newInputStream(timeIdx.file().toPath());
+                        case TRANSACTION -> Files.newInputStream(txnIdxFile.toPath());
+                        default -> null;
+                    };
                 });
 
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
@@ -3090,7 +3092,7 @@ public class RemoteLogManagerTest {
         LeaderEpochFileCache cache = new LeaderEpochFileCache(null, myCheckpoint, scheduler);
         cache.truncateFromStartAsyncFlush(startOffset);
         cache.truncateFromEndAsyncFlush(endOffset);
-        return myCheckpoint.read().stream().collect(Collectors.toMap(e -> e.epoch, e -> e.startOffset));
+        return myCheckpoint.read().stream().collect(Collectors.toMap(EpochEntry::epoch, EpochEntry::startOffset));
     }
 
     @Test
@@ -3425,8 +3427,14 @@ public class RemoteLogManagerTest {
             Map<org.apache.kafka.common.MetricName, KafkaMetric> allMetrics = metrics.metrics();
             KafkaMetric avgMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-avg", "RemoteLogManager"));
             KafkaMetric maxMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-max", "RemoteLogManager"));
-            assertEquals(Double.NaN, avgMetric.metricValue());
-            assertEquals(Double.NaN, maxMetric.metricValue());
+            if (quotaExceeded) {
+                assertEquals(Double.NaN, avgMetric.metricValue());
+                assertEquals(Double.NaN, maxMetric.metricValue());
+            } else {
+                // Metrics are not created until they actually get recorded (e.g. if the quota is exceeded).
+                assertNull(avgMetric);
+                assertNull(maxMetric);
+            }
 
             // Verify the highest offset in remote storage is updated
             ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);

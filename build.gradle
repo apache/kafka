@@ -37,7 +37,7 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.0.25' apply false
+  id "com.github.spotbugs" version '6.2.3' apply false
   id 'org.scoverage' version '8.0.3' apply false
   id 'com.gradleup.shadow' version '8.3.6' apply false
   id 'com.diffplug.spotless' version "6.25.0"
