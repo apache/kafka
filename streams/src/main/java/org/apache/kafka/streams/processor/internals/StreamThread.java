@@ -16,6 +16,24 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Queue;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -45,6 +63,7 @@ import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -58,12 +77,16 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ConsumerWrapper;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.restoreConsumerClientId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -72,31 +95,7 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager.DefaultTaskExecutorCreator;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-
 import org.slf4j.Logger;
-
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Queue;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiConsumer;
-import java.util.stream.Collectors;
-
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerClientId;
-import static org.apache.kafka.streams.processor.internals.ClientUtils.restoreConsumerClientId;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
 public class StreamThread extends Thread implements ProcessingThread {
@@ -372,8 +371,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile KafkaFutureImpl<Uuid> restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> producerInstanceIdFuture = new KafkaFutureImpl<>();
 
-    // Missing source topic timeout tracking
-    private long firstMissingSourceTopicTime = -1L;
+    private Timer topicsReadyTimer;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -1558,7 +1556,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                 handleMissingSourceTopicsWithTimeout(missingTopicsDetail);
             } else {
                 // Reset timeout tracking when no missing source topics are reported
-                firstMissingSourceTopicTime = -1L;
+                topicsReadyTimer = null;
             }
 
             final Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> partitionsByEndpoint =
@@ -1579,28 +1577,28 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private void handleMissingSourceTopicsWithTimeout(final String missingTopicsDetail) {
-        final long currentTime = time.milliseconds();
-        
         // Start timeout tracking on first encounter with missing topics
-        if (firstMissingSourceTopicTime == -1L) {
-            firstMissingSourceTopicTime = currentTime;
+        if (topicsReadyTimer == null) {
+            topicsReadyTimer = time.timer(maxPollTimeMs);
             log.info("Missing source topics detected: {}. Will wait up to {}ms before failing.", 
                 missingTopicsDetail, maxPollTimeMs);
+        } else {
+            topicsReadyTimer.update();
         }
         
-        final long elapsedTime = currentTime - firstMissingSourceTopicTime;
-        if (elapsedTime >= maxPollTimeMs) {
+        if (topicsReadyTimer.isExpired()) {
+            final long elapsedTime = topicsReadyTimer.elapsedMs();
             final String errorMsg = String.format("Missing source topics: %s. Timeout exceeded after %dms.", 
                 missingTopicsDetail, elapsedTime);
             log.error(errorMsg);
             
             // Reset timer for next timeout cycle
-            firstMissingSourceTopicTime = currentTime;
+            topicsReadyTimer.updateAndReset(maxPollTimeMs);
             
             throw new MissingSourceTopicException(errorMsg);
         } else {
             log.debug("Missing source topics: {}. Elapsed time: {}ms, timeout in: {}ms", 
-                missingTopicsDetail, elapsedTime, maxPollTimeMs - elapsedTime);
+                missingTopicsDetail, topicsReadyTimer.elapsedMs(), topicsReadyTimer.remainingMs());
         }
     }
     
