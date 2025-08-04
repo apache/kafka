@@ -2856,7 +2856,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return minBackoffMs;
     }
 
-    private long maybeSendRequest(
+    private long maybeSendRequests(
         long currentTimeMs,
         Set<ReplicaKey> remoteVoters,
         Function<Integer, Node> destinationSupplier,
@@ -3043,7 +3043,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         )
                     );
 
-            timeUntilNextBeginQuorumSend = maybeSendRequest(
+            timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
                 voters
                     .voterKeys()
@@ -3131,7 +3131,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (!state.epochElection().isVoteRejected()) {
             VoterSet voters = partitionState.lastVoterSet();
             boolean preVote = quorum.isProspective();
-            return maybeSendRequest(
+            return maybeSendRequests(
                 currentTimeMs,
                 state.epochElection().unrecordedVoters(),
                 voterId -> voters
