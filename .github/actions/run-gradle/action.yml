@@ -97,6 +97,8 @@ runs:
         -Pkafka.cluster.test.repeat=$TEST_REPEAT \
         -Pkafka.test.verbose=$TEST_VERBOSE \
         -PcommitId=xxxxxxxxxxxxxxxx \
+        # This build step is invoked by build.yml to run junit tests only,
+        # Spotbugs is being run by that workflow via the "check" task and does not need to also be run here.
         -x spotbugsMain \
         -x spotbugsTest \
         $TEST_TASK
