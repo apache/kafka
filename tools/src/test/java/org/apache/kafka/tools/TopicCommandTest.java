@@ -236,7 +236,7 @@ public class TopicCommandTest {
     public void testParseAssignment() {
         Map<Integer, List<Integer>> actualAssignment = TopicCommand.parseReplicaAssignment("5:4,3:2,1:0");
         Map<Integer, List<Integer>>  expectedAssignment = new HashMap<>();
-        expectedAssignment.put(0,  List.of(5, 4));
+        expectedAssignment.put(0, List.of(5, 4));
         expectedAssignment.put(1, List.of(3, 2));
         expectedAssignment.put(2, List.of(1, 0));
         assertEquals(expectedAssignment, actualAssignment);
