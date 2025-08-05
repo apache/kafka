@@ -55,6 +55,7 @@ public class DelayedRemoteFetch extends DelayedOperation {
 
     private static final Logger LOG = LoggerFactory.getLogger(DelayedRemoteFetch.class);
 
+    // For compatibility, metrics are defined to be under `kafka.server.DelayedRemoteFetchMetrics` class
     private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup("kafka.server", "DelayedRemoteFetchMetrics");
 
     static final Meter EXPIRED_REQUEST_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
@@ -162,11 +163,11 @@ public class DelayedRemoteFetch extends DelayedOperation {
                     && remoteFetchResult.isDone() && result.error() == Errors.NONE
                     && result.info().delayedRemoteStorageFetch.isPresent()) {
 
-                    if (remoteFetchResult.get().error.isPresent()) {
+                    if (remoteFetchResult.get().error().isPresent()) {
                         fetchPartitionData.put(tp,
-                            new LogReadResult(remoteFetchResult.get().error.get()).toFetchPartitionData(false));
+                            new LogReadResult(remoteFetchResult.get().error().get()).toFetchPartitionData(false));
                     } else {
-                        FetchDataInfo info = remoteFetchResult.get().fetchDataInfo.get();
+                        FetchDataInfo info = remoteFetchResult.get().fetchDataInfo().get();
                         fetchPartitionData.put(tp,
                             new FetchPartitionData(
                                 result.error(),
