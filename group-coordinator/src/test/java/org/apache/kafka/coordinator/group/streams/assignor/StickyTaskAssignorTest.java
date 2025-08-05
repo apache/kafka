@@ -987,21 +987,7 @@ public class StickyTaskAssignorTest {
             Map.of());
     }
 
-    static class TopologyDescriberImpl implements TopologyDescriber {
-        final int numTasks;
-        final boolean isStateful;
-        final List<String> subtopologies;
-
-        TopologyDescriberImpl(int numTasks, boolean isStateful, List<String> subtopologies) {
-            this.numTasks = numTasks;
-            this.isStateful = isStateful;
-            this.subtopologies = subtopologies;
-        }
-
-        @Override
-        public List<String> subtopologies() {
-            return subtopologies;
-        }
+    record TopologyDescriberImpl(int numTasks, boolean isStateful, List<String> subtopologies) implements TopologyDescriber {
 
         @Override
         public int maxNumInputPartitions(String subtopologyId) throws NoSuchElementException {
