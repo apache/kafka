@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.SplittableRandom;
@@ -94,7 +93,7 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testReadProps() throws Exception {
-        List<String> producerProps = Collections.singletonList("bootstrap.servers=localhost:9000");
+        List<String> producerProps = List.of("bootstrap.servers=localhost:9000");
         File producerConfig = createTempFile("acks=1");
 
         Properties prop = ProducerPerformance.readProps(producerProps, producerConfig.getAbsolutePath());
@@ -360,7 +359,7 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testClientIdOverride()  throws Exception {
-        List<String> producerProps = Collections.singletonList("client.id=producer-1");
+        List<String> producerProps = List.of("client.id=producer-1");
 
         Properties prop = ProducerPerformance.readProps(producerProps, null);
 
@@ -370,7 +369,7 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testDefaultClientId() throws Exception {
-        List<String> producerProps = Collections.singletonList("acks=1");
+        List<String> producerProps = List.of("acks=1");
 
         Properties prop = ProducerPerformance.readProps(producerProps, null);
 
@@ -391,9 +390,7 @@ public class ProducerPerformanceTest {
         ProducerPerformance.Stats stats = new ProducerPerformance.Stats(numRecords, false);
         for (long i = 0; i < numRecords; i++) {
             final Callback callback = new ProducerPerformance.PerfCallback(0, 100, stats, null);
-            CompletableFuture.runAsync(() -> {
-                callback.onCompletion(null, null);
-            }, singleThreaded);
+            CompletableFuture.runAsync(() -> callback.onCompletion(null, null), singleThreaded);
         }
 
         singleThreaded.shutdown();
