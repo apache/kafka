@@ -57,6 +57,7 @@ import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConf
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
 import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
+import org.apache.kafka.streams.GroupProtocol.STREAMS
 import org.apache.kafka.test.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
 import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
@@ -2574,7 +2575,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val consumerGroupId = "consumer_group_id"
     val shareGroupId = "share_group_id"
     val simpleGroupId = "simple_group_id"
+    val streamsGroupId = "streams_group_id"
     val testTopicName = "test_topic"
+    val testStreamsOutputTopicName = "test_streams_output_topic"
 
     consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name)
     val classicGroupConfig = new Properties(consumerConfig)
@@ -2590,12 +2593,26 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     shareGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, shareGroupId)
     val shareGroup = createShareConsumer(configOverrides = shareGroupConfig)
 
+    val streamsConfig = new Properties()
+    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
+
+    val streamsGroup = createStreamsGroup(
+      configOverrides = streamsConfig,
+      inputTopic = testTopicName,
+      outputTopic = testStreamsOutputTopicName,
+      streamsGroupId = streamsGroupId,
+      groupProtocol = STREAMS.toString
+    )
+
     val config = createConfig
     client = Admin.create(config)
     try {
       client.createTopics(util.Set.of(
-        new NewTopic(testTopicName, 1, 1.toShort)
+        new NewTopic(testTopicName, 1, 1.toShort),
+        new NewTopic(testStreamsOutputTopicName, 1, 1.toShort)
       )).all().get()
+
       waitForTopics(client, List(testTopicName), List())
       val topicPartition = new TopicPartition(testTopicName, 0)
 
@@ -2605,6 +2622,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       consumerGroup.poll(JDuration.ofMillis(1000))
       shareGroup.subscribe(util.Set.of(testTopicName))
       shareGroup.poll(JDuration.ofMillis(1000))
+      streamsGroup.start()
 
       val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(simpleGroupId,
         util.Map.of(topicPartition, new OffsetAndMetadata(0L)))
@@ -2613,18 +2631,27 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       TestUtils.waitUntilTrue(() => {
         val groups = client.listGroups().all().get()
-        groups.size() == 4
+        groups.size() == 5
       }, "Expected to find all groups")
 
       val classicGroupListing = new GroupListing(classicGroupId, Optional.of(GroupType.CLASSIC), "consumer", Optional.of(GroupState.STABLE))
       val consumerGroupListing = new GroupListing(consumerGroupId, Optional.of(GroupType.CONSUMER), "consumer", Optional.of(GroupState.STABLE))
       val shareGroupListing = new GroupListing(shareGroupId, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.STABLE))
       val simpleGroupListing = new GroupListing(simpleGroupId, Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.EMPTY))
+      // Streams group could either be in STABLE or NOT_READY state
+      val streamsGroupListingStable = new GroupListing(streamsGroupId, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.STABLE))
+      val streamsGroupListingNotReady = new GroupListing(streamsGroupId, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.NOT_READY))
 
       var listGroupsResult = client.listGroups()
       assertTrue(listGroupsResult.errors().get().isEmpty)
-      assertEquals(Set(classicGroupListing, simpleGroupListing, consumerGroupListing, shareGroupListing), listGroupsResult.all().get().asScala.toSet)
-      assertEquals(Set(classicGroupListing, simpleGroupListing, consumerGroupListing, shareGroupListing), listGroupsResult.valid().get().asScala.toSet)
+
+      val expectedStreamListings = Set(streamsGroupListingStable, streamsGroupListingNotReady)
+      val expectedListings = Set(classicGroupListing, simpleGroupListing, consumerGroupListing, shareGroupListing)
+      val actualListings = listGroupsResult.all().get().asScala.toSet
+
+      // Check that actualListings contains all expectedListings and one of the streams listings
+      assertTrue(expectedListings.subsetOf(actualListings))
+      assertTrue(actualListings.exists(expectedStreamListings.contains))
 
       listGroupsResult = client.listGroups(new ListGroupsOptions().withTypes(util.Set.of(GroupType.CLASSIC)))
       assertTrue(listGroupsResult.errors().get().isEmpty)
@@ -2640,11 +2667,21 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertTrue(listGroupsResult.errors().get().isEmpty)
       assertEquals(Set(shareGroupListing), listGroupsResult.all().get().asScala.toSet)
       assertEquals(Set(shareGroupListing), listGroupsResult.valid().get().asScala.toSet)
+
+      listGroupsResult = client.listGroups(new ListGroupsOptions().withTypes(util.Set.of(GroupType.STREAMS)))
+      assertTrue(listGroupsResult.errors().get().isEmpty)
+      assertTrue(listGroupsResult.all().get().asScala.toSet.equals(Set(streamsGroupListingStable)) ||
+        listGroupsResult.all().get().asScala.toSet.equals(Set(streamsGroupListingNotReady)))
+      assertTrue(listGroupsResult.valid().get().asScala.toSet.equals(Set(streamsGroupListingStable)) ||
+        listGroupsResult.valid().get().asScala.toSet.equals(Set(streamsGroupListingNotReady)))
+
+
     } finally {
       Utils.closeQuietly(classicGroup, "classicGroup")
       Utils.closeQuietly(consumerGroup, "consumerGroup")
       Utils.closeQuietly(shareGroup, "shareGroup")
       Utils.closeQuietly(client, "adminClient")
+      Utils.closeQuietly(streamsGroup, "streamsGroup")
     }
   }
 
@@ -4362,71 +4399,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           }
         }
       }
-    }
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
-  def testListStreamsGroups(groupProtocol: String): Unit = {
-    val streamsGroupIdPrefix = "stream_group_id"
-    val testInputTopicNamePrefix = "test_topic"
-    val testOutputTopicNamePrefix = "test_output_topic"
-    val testNumPartitions = 1
-    val testNumStreamsGroup = 3
-
-    val config = createConfig
-    client = Admin.create(config)
-    val streamsList = scala.collection.mutable.ListBuffer[(String, KafkaStreams)]()
-
-    val streamsConfig = new Properties()
-    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
-
-    for (i <- 1 to testNumStreamsGroup) {
-      val streamsGroupId = s"$streamsGroupIdPrefix-$i"
-      val inputTopicName = s"$testInputTopicNamePrefix-$i"
-      val outputTopicName = s"$testOutputTopicNamePrefix-$i"
-      prepareTopics(List(inputTopicName, outputTopicName), testNumPartitions)
-
-      val streams = createStreamsGroup(
-        configOverrides = streamsConfig,
-        inputTopic = inputTopicName,
-        outputTopic = outputTopicName,
-        streamsGroupId = streamsGroupId,
-        groupProtocol = groupProtocol
-      )
-      streamsList += ((streamsGroupId, streams))
-    }
-
-    try {
-      for ((streamsGroupId, streams) <- streamsList) {
-        streams.cleanUp()
-        streams.start()
-        TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
-      }
-
-      TestUtils.waitUntilTrue(() => {
-        client.listGroups().all().get().stream() != null
-      }, "Streams group not ready to describe yet")
-
-      val groups = client.listGroups().all().get()
-      assertEquals(testNumStreamsGroup, groups.size())
-
-      val groupsSeq = groups.asScala.toSeq
-      val expected = (1 to testNumStreamsGroup).map { i =>
-        (s"stream_group_id-$i", s"test_topic-$i", s"test_output_topic-$i")
-      }
-      expected.foreach { case (expectedGroupId, expectedInputTopic, expectedOutputTopic) =>
-        assert(groupsSeq.exists { group =>
-          group.groupId() == expectedGroupId &&
-            group.protocol() == groupProtocol
-        })
-      }
-    } finally {
-      for ((_, streams) <- streamsList) {
-        Utils.closeQuietly(streams, "streams")
-      }
-      Utils.closeQuietly(client, "adminClient")
     }
   }
 
