@@ -41,6 +41,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
@@ -252,12 +253,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         return running;
     }
 
-    public void wakeup() {
-        // The network client can be null if the initializeResources method has not yet been called.
-        if (networkClientDelegate != null)
-            networkClientDelegate.wakeup();
-    }
-
     /**
      * Returns the delay for which the application thread can safely wait before it should be responsive
      * to results from the request managers. For example, the subscription state can change when heartbeats
@@ -311,7 +306,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Signaling the consumer network thread to close in {}ms", timeoutMs);
         running = false;
         closeTimeout = timeout;
-        wakeup();
+
+        if (networkClientDelegate != null)
+            networkClientDelegate.wakeup();
 
         try {
             join();

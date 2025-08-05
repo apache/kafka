@@ -645,16 +645,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             if (fetch.isEmpty()) {
                 // Check for any acknowledgements which could have come from control records (GAP) and include them.
                 applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap, fetch.takeAcknowledgedRecords()));
-
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
             } else if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
                 Timer timer = time.timer(defaultApiTimeoutMs);
                 applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
-
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
             }
             return fetch;
         } else {
@@ -662,9 +656,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 // Asynchronously commit any waiting acknowledgements
                 Timer timer = time.timer(defaultApiTimeoutMs);
                 applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
-
-                // Notify the network thread to wake up and start the next round of fetching
-                applicationEventHandler.wakeupNetworkThread();
             }
             if (acknowledgementMode == ShareAcknowledgementMode.EXPLICIT) {
                 // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
