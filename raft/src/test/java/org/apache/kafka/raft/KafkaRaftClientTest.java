@@ -634,6 +634,38 @@ class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
+    @ValueSource(booleans = { false })
+    public void testBeginQuorumShouldNotSendAfterFetchRequest(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int remoteId1 = localId + 1;
+        int remoteId2 = localId + 2;
+        Set<Integer> voters = Set.of(localId, remoteId1, remoteId2);
+        ReplicaKey replicaKey = replicaKey(localId + 1, withKip853Rpc);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .withKip853Rpc(withKip853Rpc)
+                .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+
+        // begin epoch requests should be sent out every beginQuorumEpochTimeoutMs
+        context.time.sleep(context.beginQuorumEpochTimeoutMs);
+        context.client.poll();
+        context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
+
+        context.deliverRequest(context.fetchRequest(epoch, replicaKey, 0, 0, 0));
+
+        int partialDelay = context.beginQuorumEpochTimeoutMs / 2;
+        context.time.sleep(partialDelay);
+        context.client.poll();
+        // don't send BeginQuorumEpochRequest again if fetchRequest is sent.
+        context.assertSentBeginQuorumEpochRequest(epoch, Set.of());
+    }
+
+
+    @ParameterizedTest
     @ValueSource(booleans = { true, false })
     public void testLeaderShouldResignLeadershipIfNotGetFetchRequestFromMajorityVoters(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
