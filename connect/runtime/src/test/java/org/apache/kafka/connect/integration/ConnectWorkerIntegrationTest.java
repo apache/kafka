@@ -867,6 +867,9 @@ public class ConnectWorkerIntegrationTest {
                 "writing a config for connector " + CONNECTOR_NAME + " to the config topic",
                 false
         );
+
+        // Fix for KAFKA-17103: Recreate the config topic to allow producer shutdown and avoid thread leak
+        connect.kafka().createTopic(configTopic);
     }
 
     @Test
