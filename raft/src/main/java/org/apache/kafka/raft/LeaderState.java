@@ -191,22 +191,18 @@ public class LeaderState<T> implements EpochState {
 
     public void updateLastReceivedFetchRequest(ReplicaKey replicaKey, long currentTimeMs) {
         beginQuorumEpochTimer.update(currentTimeMs);
-        lastFetchRequestMs.put(replicaKey, currentTimeMs);
+        lastFetchRequestMs.put(replicaKey, beginQuorumEpochTimer.currentTimeMs());
     }
 
     public Set<ReplicaKey> needSendBeginQuorumRequestNodes(long currentTimeMs) {
         Set<ReplicaKey> replicaKeys = new HashSet<>();
         beginQuorumEpochTimer.update(currentTimeMs);
         for (Map.Entry<ReplicaKey, Long> entry : lastFetchRequestMs.entrySet()) {
-            if (entry.getValue() - currentTimeMs >= beginQuorumEpochTimeoutMs) {
+            if (beginQuorumEpochTimer.currentTimeMs() - entry.getValue() >= beginQuorumEpochTimeoutMs) {
                 replicaKeys.add(entry.getKey());
             }
         }
         return replicaKeys;
-    }
-
-    public long getLastFetchRequestTimeMs(ReplicaKey replicaKey) {
-        return lastFetchRequestMs.get(replicaKey);
     }
 
     /**

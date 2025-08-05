@@ -655,7 +655,9 @@ class KafkaRaftClientTest {
         context.client.poll();
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
 
+        context.time.sleep(context.beginQuorumEpochTimeoutMs / 3);
         context.deliverRequest(context.fetchRequest(epoch, replicaKey, 0, 0, 0));
+        context.pollUntilResponse();
 
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
         context.client.poll();
