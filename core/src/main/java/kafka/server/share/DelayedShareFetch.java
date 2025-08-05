@@ -512,11 +512,11 @@ public class DelayedShareFetch extends DelayedOperation {
         // extend it to support other FetchIsolation types.
         FetchIsolation isolationType = shareFetch.fetchParams().isolation;
         if (isolationType == FetchIsolation.LOG_END)
-            return offsetSnapshot.logEndOffset;
+            return offsetSnapshot.logEndOffset();
         else if (isolationType == FetchIsolation.HIGH_WATERMARK)
-            return offsetSnapshot.highWatermark;
+            return offsetSnapshot.highWatermark();
         else
-            return offsetSnapshot.lastStableOffset;
+            return offsetSnapshot.lastStableOffset();
 
     }
 
@@ -835,8 +835,8 @@ public class DelayedShareFetch extends DelayedOperation {
             for (RemoteFetch remoteFetch : pendingRemoteFetchesOpt.get().remoteFetches()) {
                 if (remoteFetch.remoteFetchResult().isDone()) {
                     RemoteLogReadResult remoteLogReadResult = remoteFetch.remoteFetchResult().get();
-                    if (remoteLogReadResult.error.isPresent()) {
-                        Throwable error = remoteLogReadResult.error.get();
+                    if (remoteLogReadResult.error().isPresent()) {
+                        Throwable error = remoteLogReadResult.error().get();
                         // If there is any error for the remote fetch topic partition, we populate the error accordingly.
                         shareFetchPartitionData.add(
                             new ShareFetchPartitionData(
@@ -846,7 +846,7 @@ public class DelayedShareFetch extends DelayedOperation {
                             )
                         );
                     } else {
-                        FetchDataInfo info = remoteLogReadResult.fetchDataInfo.get();
+                        FetchDataInfo info = remoteLogReadResult.fetchDataInfo().get();
                         TopicIdPartition topicIdPartition = remoteFetch.topicIdPartition();
                         LogReadResult logReadResult = remoteFetch.logReadResult();
                         shareFetchPartitionData.add(

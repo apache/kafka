@@ -362,13 +362,13 @@ public class UnifiedLog implements AutoCloseable {
                 dir,
                 config,
                 segments,
-                offsets.recoveryPoint,
-                offsets.nextOffsetMetadata,
+                offsets.recoveryPoint(),
+                offsets.nextOffsetMetadata(),
                 scheduler,
                 time,
                 topicPartition,
                 logDirFailureChannel);
-        return new UnifiedLog(offsets.logStartOffset,
+        return new UnifiedLog(offsets.logStartOffset(),
                 localLog,
                 brokerTopicStats,
                 producerIdExpirationCheckIntervalMs,
@@ -1128,17 +1128,17 @@ public class UnifiedLog implements AutoCloseable {
                                         requestLocal.orElseThrow(() -> new IllegalArgumentException(
                                                 "requestLocal should be defined if assignOffsets is true")).bufferSupplier());
 
-                                validRecords = validateAndOffsetAssignResult.validatedRecords;
-                                appendInfo.setMaxTimestamp(validateAndOffsetAssignResult.maxTimestampMs);
+                                validRecords = validateAndOffsetAssignResult.validatedRecords();
+                                appendInfo.setMaxTimestamp(validateAndOffsetAssignResult.maxTimestampMs());
                                 appendInfo.setLastOffset(offset.value - 1);
-                                appendInfo.setRecordValidationStats(validateAndOffsetAssignResult.recordValidationStats);
+                                appendInfo.setRecordValidationStats(validateAndOffsetAssignResult.recordValidationStats());
                                 if (config().messageTimestampType == TimestampType.LOG_APPEND_TIME) {
-                                    appendInfo.setLogAppendTime(validateAndOffsetAssignResult.logAppendTimeMs);
+                                    appendInfo.setLogAppendTime(validateAndOffsetAssignResult.logAppendTimeMs());
                                 }
 
                                 // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
                                 // format conversion)
-                                if (!ignoreRecordSize && validateAndOffsetAssignResult.messageSizeMaybeChanged) {
+                                if (!ignoreRecordSize && validateAndOffsetAssignResult.messageSizeMaybeChanged()) {
                                     validRecords.batches().forEach(batch -> {
                                         if (batch.sizeInBytes() > config().maxMessageSize()) {
                                             // we record the original message set size instead of the trimmed size
@@ -1211,8 +1211,8 @@ public class UnifiedLog implements AutoCloseable {
                             if (result.maybeDuplicate.isPresent()) {
                                 BatchMetadata duplicate = result.maybeDuplicate.get();
                                 appendInfo.setFirstOffset(duplicate.firstOffset());
-                                appendInfo.setLastOffset(duplicate.lastOffset);
-                                appendInfo.setLogAppendTime(duplicate.timestamp);
+                                appendInfo.setLastOffset(duplicate.lastOffset());
+                                appendInfo.setLogAppendTime(duplicate.timestamp());
                                 appendInfo.setLogStartOffset(logStartOffset);
                             } else {
                                 // Append the records, and increment the local log end offset immediately after the append because a
@@ -1638,8 +1638,8 @@ public class UnifiedLog implements AutoCloseable {
                         // it may not be true following a message format version bump as the epoch will not be available for
                         // log entries written in the older format.
                         Optional<EpochEntry> earliestEpochEntry = leaderEpochCache.earliestEntry();
-                        Optional<Integer> epochOpt = (earliestEpochEntry.isPresent() && earliestEpochEntry.get().startOffset <= logStartOffset)
-                            ? Optional.of(earliestEpochEntry.get().epoch)
+                        Optional<Integer> epochOpt = (earliestEpochEntry.isPresent() && earliestEpochEntry.get().startOffset() <= logStartOffset)
+                            ? Optional.of(earliestEpochEntry.get().epoch())
                             : Optional.empty();
 
                         return new OffsetResultHolder(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt));
@@ -1681,10 +1681,10 @@ public class UnifiedLog implements AutoCloseable {
                         // cache the timestamp and offset
                         TimestampOffset maxTimestampSoFar = latestTimestampSegment.readMaxTimestampAndOffsetSoFar();
                         // lookup the position of batch to avoid extra I/O
-                        OffsetPosition position = latestTimestampSegment.offsetIndex().lookup(maxTimestampSoFar.offset);
+                        OffsetPosition position = latestTimestampSegment.offsetIndex().lookup(maxTimestampSoFar.offset());
                         Optional<FileRecords.TimestampAndOffset> timestampAndOffsetOpt = findFirst(
-                                latestTimestampSegment.log().batchesFrom(position.position),
-                                item -> item.maxTimestamp() == maxTimestampSoFar.timestamp)
+                                latestTimestampSegment.log().batchesFrom(position.position()),
+                                item -> item.maxTimestamp() == maxTimestampSoFar.timestamp())
                                     .flatMap(batch -> batch.offsetOfMaxTimestamp()
                                         .map(offset -> new FileRecords.TimestampAndOffset(
                                             batch.maxTimestamp(),
@@ -2397,8 +2397,8 @@ public class UnifiedLog implements AutoCloseable {
     public List<LogSegment> splitOverflowedSegment(LogSegment segment) throws IOException {
         synchronized (lock) {
             LocalLog.SplitSegmentResult result = LocalLog.splitOverflowedSegment(segment, localLog.segments(), dir(), topicPartition(), config(), scheduler(), logDirFailureChannel(), logIdent);
-            deleteProducerSnapshots(result.deletedSegments, true);
-            return result.newSegments;
+            deleteProducerSnapshots(result.deletedSegments(), true);
+            return result.newSegments();
         }
     }
 

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server.share.persister;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -56,6 +57,18 @@ public class InitializeShareGroupStateResult implements PersisterResult {
             .collect(Collectors.groupingBy(
                 partitionError -> Errors.forCode(partitionError.errorCode()),
                 Collectors.summingInt(partitionError -> 1)
+            ));
+    }
+
+    public Map<Uuid, Map<Integer, PartitionErrorData>> getErrors() {
+        return topicsData.stream()
+            .collect(Collectors.toMap(
+                TopicData::topicId,
+                topicData -> topicData.partitions().stream()
+                    .collect(Collectors.toMap(
+                        PartitionIdData::partition,
+                        partitionErrorData -> partitionErrorData
+                    ))
             ));
     }
 
