@@ -41,6 +41,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
@@ -185,10 +186,14 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         if (!networkClientDelegate.hasAnyPendingRequests()) {
             // If we don't have any outstanding network requests, we can park here until the next event comes.
-            ApplicationEvent head = applicationEventQueue.poll();
+            try {
+                ApplicationEvent head = applicationEventQueue.poll(MAX_POLL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
-            if (head != null)
-                events.add(head);
+                if (head != null)
+                    events.add(head);
+            } catch (InterruptedException swallow) {
+                // Ignore...
+            }
         }
 
         applicationEventQueue.drainTo(events);
