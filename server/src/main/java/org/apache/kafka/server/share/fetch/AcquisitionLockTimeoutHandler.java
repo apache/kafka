@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.share.fetch;
 
+import org.apache.kafka.server.util.timer.TimerTask;
+
 /**
  * AcquisitionLockTimeoutHandler is an interface that defines a handler for acquisition lock timeouts.
  * It is used to handle cases where the acquisition lock for a share partition times out.
@@ -29,6 +31,6 @@ public interface AcquisitionLockTimeoutHandler {
      * @param firstOffset the first offset
      * @param lastOffset the last offset
      */
-    void handle(String memberId, long firstOffset, long lastOffset);
+    void handle(String memberId, long firstOffset, long lastOffset, TimerTask timerTask);
 
 }
