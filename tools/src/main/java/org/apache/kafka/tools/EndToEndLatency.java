@@ -55,13 +55,13 @@ import joptsimple.OptionSpec;
 /**
  * This class records the average end to end latency for a single message to travel through Kafka.
  * Following are the required arguments
- * <p> --bootstrap-server = location of the bootstrap broker for both the producer and the consumer </p>
- * <p> --topic = topic name used by both the producer and the consumer to send/receive messages </p>
- * <p> --num-records = # messages to send </p>
- * <p> --producer-acks = See ProducerConfig.ACKS_DOC </p>
- * <p> --record-size = size of each message value in bytes </p>
+ * <p> --bootstrap-server = location of the bootstrap broker for both the producer and the consumer
+ * <p> --topic = topic name used by both the producer and the consumer to send/receive messages
+ * <p> --num-records = # messages to send
+ * <p> --producer-acks = See ProducerConfig.ACKS_DOC
+ * <p> --record-size = size of each message value in bytes
  *
- * <p> e.g. [/bin/kafka-e2e-latency.sh --bootstrap-server localhost:9092 --topic test-topic --num-records 1000 --producer-acks 1 --record-size 512] </p>
+ * <p> e.g. [./bin/kafka-e2e-latency.sh --bootstrap-server localhost:9092 --topic test-topic --num-records 1000 --producer-acks 1 --record-size 512]
  */
 public class EndToEndLatency {
     private static final long POLL_TIMEOUT_MS = 60000;
@@ -91,14 +91,14 @@ public class EndToEndLatency {
         String[] processedArgs = convertLegacyArgsIfNeeded(args);
         EndToEndLatencyCommandOptions opts = new EndToEndLatencyCommandOptions(processedArgs);
 
-        //required
+        // required
         String brokers = opts.options.valueOf(opts.bootstrapServerOpt);
         String topic = opts.options.valueOf(opts.topicOpt);
         int numRecords = opts.options.valueOf(opts.numRecordsOpt);
         String acks = opts.options.valueOf(opts.acksOpt);
         int recordValueSize = opts.options.valueOf(opts.recordSizeOpt);
 
-        //optional
+        // optional
         Optional<String> propertiesFile = opts.options.has(opts.commandConfigOpt) ?
                 Optional.of(opts.options.valueOf(opts.commandConfigOpt)) : Optional.empty();
         int recordKeySize = 0;
@@ -304,7 +304,16 @@ public class EndToEndLatency {
         return new KafkaProducer<>(producerProps);
     }
 
-    // Visible for testing
+    /**
+     * Converts legacy positional arguments to named arguments for backward compatibility.
+     *
+     * @param args the command line arguments to convert
+     * @return converted named arguments
+     * @throws Exception if the legacy arguments are invalid
+     * @deprecated Positional argument usage is deprecated and will be removed in Apache Kafka 5.0.
+     *             Use named arguments instead: --bootstrap-server, --topic, --num-records, --producer-acks, --record-size, --command-config
+     */
+    @Deprecated(since = "4.2", forRemoval = true)
     static String[] convertLegacyArgsIfNeeded(String[] args) throws Exception {
         if (args.length == 0) {
             return args;
