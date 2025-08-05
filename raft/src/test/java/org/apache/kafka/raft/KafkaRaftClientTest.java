@@ -634,7 +634,7 @@ class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { false })
+    @ValueSource(booleans = { true, false })
     public void testBeginQuorumShouldNotSendAfterFetchRequest(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int remoteId1 = localId + 1;
@@ -657,11 +657,10 @@ class KafkaRaftClientTest {
 
         context.deliverRequest(context.fetchRequest(epoch, replicaKey, 0, 0, 0));
 
-        int partialDelay = context.beginQuorumEpochTimeoutMs / 2;
-        context.time.sleep(partialDelay);
+        context.time.sleep(context.beginQuorumEpochTimeoutMs);
         context.client.poll();
         // don't send BeginQuorumEpochRequest again if fetchRequest is sent.
-        context.assertSentBeginQuorumEpochRequest(epoch, Set.of());
+        context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId2));
     }
 
 
