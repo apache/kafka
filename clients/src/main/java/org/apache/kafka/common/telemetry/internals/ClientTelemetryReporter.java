@@ -382,14 +382,25 @@ public class ClientTelemetryReporter implements MetricsReporter {
             } finally {
                 lock.readLock().unlock();
             }
-
-            if (localState == ClientTelemetryState.SUBSCRIPTION_NEEDED) {
-                return createSubscriptionRequest(localSubscription);
-            } else if (localState == ClientTelemetryState.PUSH_NEEDED || localState == ClientTelemetryState.TERMINATING_PUSH_NEEDED) {
-                return createPushRequest(localSubscription);
+            
+            try {
+                if (localState == ClientTelemetryState.SUBSCRIPTION_NEEDED) {
+                    return createSubscriptionRequest(localSubscription);
+                } else if (localState == ClientTelemetryState.PUSH_NEEDED || localState == ClientTelemetryState.TERMINATING_PUSH_NEEDED) {
+                    return createPushRequest(localSubscription);
+                }
+                log.warn("Cannot make telemetry request as telemetry is in state: {}", localState);
+            } catch (RuntimeException e) {
+                // Transition to TERMINATED state to prevent further attempts
+                lock.writeLock().lock();
+                try {
+                    state = ClientTelemetryState.TERMINATED;
+                } finally {
+                    lock.writeLock().unlock();
+                }
+                log.error("Fatal telemetry error encountered, disabling telemetry permanently: {}", e.getMessage());
             }
 
-            log.warn("Cannot make telemetry request as telemetry is in state: {}", localState);
             return Optional.empty();
         }
 

@@ -493,6 +493,82 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
+    public void testCreateRequestPushCompressionFatalOutOfMemoryError() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+        // Set up subscription with GZIP compression
+        ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
+            uuid, 1234, 20000, List.of(CompressionType.GZIP), true, null);
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
+            // Set up mock to work normally for first 2 calls, then throw exception on 3rd call
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.GZIP)))
+                          .thenCallRealMethod()  // Request 1: Call real method
+                          .thenCallRealMethod()  // Request 2: Call real method  
+                          .thenThrow(new OutOfMemoryError("Java heap space")); // Request 3: Throw fatal error
+            
+            // === REQUEST 1: Should work fine ===
+            assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
+            
+            Optional<AbstractRequest.Builder<?>> request1 = telemetrySender.createRequest();
+            assertNotNull(request1);
+            assertTrue(request1.isPresent()); // Should create request successfully
+            assertInstanceOf(PushTelemetryRequest.class, request1.get().build());
+            PushTelemetryRequest pushRequest1 = (PushTelemetryRequest) request1.get().build();
+            assertEquals(CompressionType.GZIP.id, pushRequest1.data().compressionType()); // Using GZIP compression
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+            
+            // Reset state for next request (simulate successful response handling)
+            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+            
+            // === REQUEST 2: Should also work fine ===
+            assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
+            
+            Optional<AbstractRequest.Builder<?>> request2 = telemetrySender.createRequest();
+            assertNotNull(request2);
+            assertTrue(request2.isPresent()); // Should create request successfully
+            assertInstanceOf(PushTelemetryRequest.class, request2.get().build());
+            PushTelemetryRequest pushRequest2 = (PushTelemetryRequest) request2.get().build();
+            assertEquals(CompressionType.GZIP.id, pushRequest2.data().compressionType()); // Using GZIP compression
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+            
+            // Reset state for next request (simulate successful response handling)
+            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+            
+            // === REQUEST 3: OutOfMemoryError - FATAL ===
+            assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
+            
+            Optional<AbstractRequest.Builder<?>> request3 = telemetrySender.createRequest();
+            
+            // Verify fatal error handling - OutOfMemoryError causes telemetry termination
+            assertNotNull(request3);
+            assertFalse(request3.isPresent()); // Should return empty Optional (no request sent)
+            assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state()); // Should transition to TERMINATED
+            
+            // === REQUEST 4: Should return empty (telemetry permanently disabled) ===
+            Optional<AbstractRequest.Builder<?>> request4 = telemetrySender.createRequest();
+            assertNotNull(request4);
+            assertFalse(request4.isPresent()); // Telemetry is terminated
+            assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state()); // State remains TERMINATED
+            
+            // === REQUEST 5: Should also return empty (telemetry permanently disabled) ===
+            Optional<AbstractRequest.Builder<?>> request5 = telemetrySender.createRequest();
+            assertNotNull(request5);
+            assertFalse(request5.isPresent()); // Telemetry is terminated
+            assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state()); // State remains TERMINATED
+            
+            // Verify that the mock was called exactly 3 times (requests 1, 2, and 3)
+            mockedCompress.verify(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.GZIP)), Mockito.times(3));
+        }
+    }
+
+    @Test
     public void testHandleResponseGetSubscriptions() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
