@@ -4367,6 +4367,71 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
+  def testListStreamsGroups(groupProtocol: String): Unit = {
+    val streamsGroupIdPrefix = "stream_group_id"
+    val testInputTopicNamePrefix = "test_topic"
+    val testOutputTopicNamePrefix = "test_output_topic"
+    val testNumPartitions = 1
+    val testNumStreamsGroup = 3
+
+    val config = createConfig
+    client = Admin.create(config)
+    val streamsList = scala.collection.mutable.ListBuffer[(String, KafkaStreams)]()
+
+    val streamsConfig = new Properties()
+    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
+
+    for (i <- 1 to testNumStreamsGroup) {
+      val streamsGroupId = s"$streamsGroupIdPrefix-$i"
+      val inputTopicName = s"$testInputTopicNamePrefix-$i"
+      val outputTopicName = s"$testOutputTopicNamePrefix-$i"
+      prepareTopics(List(inputTopicName, outputTopicName), testNumPartitions)
+
+      val streams = createStreamsGroup(
+        configOverrides = streamsConfig,
+        inputTopic = inputTopicName,
+        outputTopic = outputTopicName,
+        streamsGroupId = streamsGroupId,
+        groupProtocol = groupProtocol
+      )
+      streamsList += ((streamsGroupId, streams))
+    }
+
+    try {
+      for ((streamsGroupId, streams) <- streamsList) {
+        streams.cleanUp()
+        streams.start()
+        TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
+      }
+
+      TestUtils.waitUntilTrue(() => {
+        client.listGroups().all().get().stream() != null
+      }, "Streams group not ready to describe yet")
+
+      val groups = client.listGroups().all().get()
+      assertEquals(testNumStreamsGroup, groups.size())
+
+      val groupsSeq = groups.asScala.toSeq
+      val expected = (1 to testNumStreamsGroup).map { i =>
+        (s"stream_group_id-$i", s"test_topic-$i", s"test_output_topic-$i")
+      }
+      expected.foreach { case (expectedGroupId, expectedInputTopic, expectedOutputTopic) =>
+        assert(groupsSeq.exists { group =>
+          group.groupId() == expectedGroupId &&
+            group.protocol() == groupProtocol
+        })
+      }
+    } finally {
+      for ((_, streams) <- streamsList) {
+        Utils.closeQuietly(streams, "streams")
+      }
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
   def testDescribeStreamsGroups(groupProtocol: String): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"
