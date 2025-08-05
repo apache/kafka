@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -242,11 +243,11 @@ public interface RaftClient<T> extends AutoCloseable {
 
     /**
      * Request that the leader to upgrade the kraft version.
-     * When the upgrade fails to validate will throw an ApiException.
-     * 
+     *
      * @param epoch the current epoch
      * @param version the new kraft version to upgrade to
      * @param validateOnly whether to just validate the change and not persist it
+     * @throws ApiException when the upgrade fails to validate
      */
     void upgradeKRaftVersion(
         int epoch,
