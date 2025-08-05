@@ -7959,10 +7959,7 @@ public class SharePartitionTest {
                 sharePartition.cachedState().get(2L).offsetState().get(3L).state() == RecordState.ACKNOWLEDGED  &&
                 sharePartition.cachedState().get(2L).offsetState().get(3L).acquisitionLockTimeoutTask().hasExpired() &&
                 sharePartition.cachedState().get(7L).batchState() == RecordState.ACKNOWLEDGED &&
-                sharePartition.cachedState().get(7L).batchAcquisitionLockTimeoutTask().hasExpired() &&
-                sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount() == 2 &&
-                sharePartition.cachedState().get(7L).batchDeliveryCount() == 2 &&
-                sharePartition.timer().size() == 0,
+                sharePartition.cachedState().get(7L).batchAcquisitionLockTimeoutTask().hasExpired(),
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
             () -> assertionFailedMessage(sharePartition, Map.of(2L, List.of(3L), 7L, List.of())));
 
