@@ -3340,7 +3340,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     .filter(replicaKey -> replicaKey.id() == localReplicaKey.id())
                     .findFirst()
                     .get();
-                sendResult = maybeSendRemoveVoterRequest(state, currentTimeMs, oldVoter);
+                sendResult = maybeSendRemoveVoterRequest(state, oldVoter, currentTimeMs);
             } else {
                 sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             }
@@ -3414,7 +3414,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             quorumConfig.requestTimeoutMs(),
             quorum.localReplicaKeyOrThrow(),
             localListeners,
-            !quorumConfig.autoJoin()
+            false
         );
     }
 
@@ -3446,8 +3446,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private RequestSendResult maybeSendRemoveVoterRequest(
         FollowerState state,
-        long currentTimeMs,
-        ReplicaKey replicaKey
+        ReplicaKey replicaKey,
+        long currentTimeMs
     ) {
         return maybeSendRequest(
             currentTimeMs,

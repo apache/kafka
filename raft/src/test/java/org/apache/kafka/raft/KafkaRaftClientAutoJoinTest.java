@@ -100,10 +100,12 @@ public class KafkaRaftClientAutoJoinTest {
             RaftUtil.addVoterResponse(Errors.NONE, Errors.NONE.message())
         );
 
-        // verify the replica can perform a fetch to commit the new voter set while the add
-        // voter request is still in-flight
-        pollAndDeliverFetchToUpdateVoterSet(context, epoch,
-            VoterSetTest.voterSet(Stream.of(leader, newVoter)));
+        // verify the replica can perform a fetch to commit the new voter set
+        pollAndDeliverFetchToUpdateVoterSet(
+            context,
+            epoch,
+            VoterSetTest.voterSet(Stream.of(leader, newVoter))
+        );
     }
 
     @Test
@@ -152,8 +154,7 @@ public class KafkaRaftClientAutoJoinTest {
             RaftUtil.addVoterResponse(Errors.NONE, Errors.NONE.message())
         );
 
-        // verify the replica can perform a fetch to commit the new voter set while the add
-        // voter request is still in-flight
+        // verify the replica can perform a fetch to commit the new voter set
         pollAndDeliverFetchToUpdateVoterSet(
             context,
             epoch,
@@ -276,8 +277,7 @@ public class KafkaRaftClientAutoJoinTest {
         context.pollUntilRequest();
         return context.assertSentAddVoterRequest(
             newVoter,
-            context.client.quorum().localVoterNodeOrThrow().listeners(),
-            false
+            context.client.quorum().localVoterNodeOrThrow().listeners()
         );
     }
 
@@ -304,7 +304,7 @@ public class KafkaRaftClientAutoJoinTest {
                 fetchRequest.destination().id(),
                 MemoryRecords.withVotersRecord(
                     context.log.endOffset().offset(),
-                    0,
+                    context.time.milliseconds(),
                     epoch,
                     BufferSupplier.NO_CACHING.get(300),
                     newVoterSet.toVotersRecord((short) 0)

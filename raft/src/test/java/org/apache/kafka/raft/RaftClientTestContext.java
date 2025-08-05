@@ -1315,8 +1315,7 @@ public final class RaftClientTestContext {
 
     RaftRequest.Outbound assertSentAddVoterRequest(
         ReplicaKey replicaKey,
-        Endpoints endpoints,
-        boolean expectedAckWhenCommitted
+        Endpoints endpoints
     ) {
         final var sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.ADD_RAFT_VOTER));
         assertEquals(1, sentRequests.size());
@@ -1329,7 +1328,7 @@ public final class RaftClientTestContext {
         assertEquals(replicaKey.id(), addRaftVoterRequestData.voterId());
         assertEquals(replicaKey.directoryId().get(), addRaftVoterRequestData.voterDirectoryId());
         assertEquals(endpoints, Endpoints.fromAddVoterRequest(addRaftVoterRequestData.listeners()));
-        assertEquals(expectedAckWhenCommitted, addRaftVoterRequestData.ackWhenCommitted());
+        assertEquals(false, addRaftVoterRequestData.ackWhenCommitted());
 
         return request;
     }

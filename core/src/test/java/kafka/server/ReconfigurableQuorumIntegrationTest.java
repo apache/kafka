@@ -172,13 +172,12 @@ public class ReconfigurableQuorumIntegrationTest {
 
     @Test
     public void testControllersAutoJoinStandaloneVoter() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder().
-                setNumBrokerNodes(1).
-                setNumControllerNodes(3).
-                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
-                build()
-            ).
+        final var nodes = new TestKitNodes.Builder().
+            setNumBrokerNodes(1).
+            setNumControllerNodes(3).
+            setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
+            build();
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
             setConfigProp(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, true).
             setStandalone(true).
             build()
@@ -190,7 +189,7 @@ public class ReconfigurableQuorumIntegrationTest {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(new HashSet<>(List.of(3000, 3001, 3002)), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001, 3002}) {
-                        assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
+                        assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
                     }
                 });
             }
@@ -229,8 +228,7 @@ public class ReconfigurableQuorumIntegrationTest {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(new HashSet<>(List.of(3000, 3001, 3002)), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001, 3002}) {
-                        assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
-                        assertNotEquals(oldDirectoryId, voters.get(replicaId));
+                        assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
                     }
                 });
             }
