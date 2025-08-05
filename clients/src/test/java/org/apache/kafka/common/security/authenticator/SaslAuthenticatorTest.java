@@ -158,6 +158,7 @@ public class SaslAuthenticatorTest {
     private static final long CONNECTIONS_MAX_REAUTH_MS_VALUE = 100L;
     private static final int BUFFER_SIZE = 4 * 1024;
     private static Time time = Time.SYSTEM;
+    private static boolean needLargeExpiration = false;
 
     private NioEchoServer server;
     private Selector selector;
@@ -181,6 +182,7 @@ public class SaslAuthenticatorTest {
 
     @AfterEach
     public void teardown() throws Exception {
+        needLargeExpiration = false;
         if (server != null)
             this.server.close();
         if (selector != null)
@@ -1611,6 +1613,42 @@ public class SaslAuthenticatorTest {
     }
 
     @Test
+    public void testReauthenticateWithLargeReauthValue() throws Exception {
+        // enable it, we'll get a large expiration timestamp token
+        needLargeExpiration = true;
+        String node = "0";
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+
+        configureMechanisms(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+            List.of(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM));
+        // set a large re-auth timeout in server side
+        saslServerConfigs.put(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, Long.MAX_VALUE);
+        server = createEchoServer(securityProtocol);
+
+        // set to default value for sasl login configs for initialization in ExpiringCredentialRefreshConfig
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR, SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_FACTOR);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER, SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_JITTER);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS, SaslConfigs.DEFAULT_LOGIN_REFRESH_MIN_PERIOD_SECONDS);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS, SaslConfigs.DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS);
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, AlternateLoginCallbackHandler.class);
+
+        createCustomClientConnection(securityProtocol, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM, node, true);
+
+        // channel should be not null before sasl handshake
+        assertNotNull(selector.channel(node));
+
+        TestUtils.waitForCondition(() -> {
+            selector.poll(1000);
+            // this channel should be closed due to session timeout calculation overflow
+            return selector.channel(node) == null;
+        }, "channel didn't close with large re-authentication value");
+
+        // ensure metrics are as expected
+        server.verifyAuthenticationMetrics(0, 0);
+        server.verifyReauthenticationMetrics(0, 0);
+    }
+
+    @Test
     public void testCorrelationId() {
         SaslClientAuthenticator authenticator = new SaslClientAuthenticator(
               Collections.emptyMap(),
@@ -2002,7 +2040,7 @@ public class SaslAuthenticatorTest {
         if (enableSaslAuthenticateHeader)
             createClientConnection(securityProtocol, node);
         else
-            createClientConnectionWithoutSaslAuthenticateHeader(securityProtocol, saslMechanism, node);
+            createCustomClientConnection(securityProtocol, saslMechanism, node, false);
     }
 
     private NioEchoServer startServerApiVersionsUnsupportedByClient(final SecurityProtocol securityProtocol, String saslMechanism) throws Exception {
@@ -2090,15 +2128,13 @@ public class SaslAuthenticatorTest {
         return server;
     }
 
-    private void createClientConnectionWithoutSaslAuthenticateHeader(final SecurityProtocol securityProtocol,
-            final String saslMechanism, String node) throws Exception {
-
-        final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
-        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
-
-        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
+    private SaslChannelBuilder saslChannelBuilderWithoutHeader(
+        final SecurityProtocol securityProtocol,
+        final String saslMechanism,
+        final Map<String, JaasContext> jaasContexts,
+        final ListenerName listenerName
+    ) {
+        return new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism,
                 null, null, null, time, new LogContext(), null) {
 
@@ -2125,6 +2161,42 @@ public class SaslAuthenticatorTest {
                 };
             }
         };
+    }
+
+    private void createCustomClientConnection(
+        final SecurityProtocol securityProtocol,
+        final String saslMechanism,
+        String node,
+        boolean withSaslAuthenticateHeader
+    ) throws Exception {
+
+        final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        final Map<String, ?> configs = Collections.emptyMap();
+        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
+        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
+
+        SaslChannelBuilder clientChannelBuilder;
+        if (!withSaslAuthenticateHeader) {
+            clientChannelBuilder = saslChannelBuilderWithoutHeader(securityProtocol, saslMechanism, jaasContexts, listenerName);
+        } else {
+            clientChannelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts,
+                securityProtocol, listenerName, false, saslMechanism,
+                null, null, null, time, new LogContext(), null) {
+
+                @Override
+                protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
+                                                                           AuthenticateCallbackHandler callbackHandler,
+                                                                           String id,
+                                                                           String serverHost,
+                                                                           String servicePrincipal,
+                                                                           TransportLayer transportLayer,
+                                                                           Subject subject) {
+
+                    return new SaslClientAuthenticator(configs, callbackHandler, id, subject,
+                        servicePrincipal, serverHost, saslMechanism, transportLayer, time, new LogContext());
+                }
+            };
+        }
         clientChannelBuilder.configure(saslClientConfigs);
         this.selector = NetworkTestUtils.createSelector(clientChannelBuilder, time);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
@@ -2581,10 +2653,11 @@ public class SaslAuthenticatorTest {
                                 + ++numInvocations;
                         String headerJson = "{" + claimOrHeaderJsonText("alg", "none") + "}";
                         /*
-                         * Use a short lifetime so the background refresh thread replaces it before we
+                         * If we're testing large expiration scenario, use a large lifetime.
+                         * Otherwise, use a short lifetime so the background refresh thread replaces it before we
                          * re-authenticate
                          */
-                        String lifetimeSecondsValueToUse = "1";
+                        String lifetimeSecondsValueToUse = needLargeExpiration ? String.valueOf(Long.MAX_VALUE) : "1";
                         String claimsJson;
                         try {
                             claimsJson = String.format("{%s,%s,%s}",
