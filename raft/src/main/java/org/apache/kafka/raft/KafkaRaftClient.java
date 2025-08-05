@@ -1514,6 +1514,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             fetchPartition.replicaDirectoryId()
         );
         if (quorum.isLeader()) {
+            System.err.println("ZZZ update " + replicaKey + " time: " + currentTimeMs);
             quorum.leaderStateOrThrow().updateLastReceivedFetchRequest(replicaKey, currentTimeMs);
         }
         FetchResponseData response = tryCompleteFetchRequest(
@@ -3047,14 +3048,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         )
                     );
 
-            Set<ReplicaKey> needToSendBeginQuorumRequest = state.needSendBeginQuorumRequestNodes(currentTimeMs);
+            Set<ReplicaKey> needToSendBeginQuorumRequest = state.needSendBeginQuorumRequestReplicaKey(currentTimeMs);
+            Set<Integer> needToSendBeginQuorumRequestNode = needToSendBeginQuorumRequest.stream().
+                    map(ReplicaKey::id).collect(Collectors.toSet());
+
             timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
                 voters
                     .voterKeys()
                     .stream()
                     .filter(key -> key.id() != quorum.localIdOrThrow())
-                    .filter(key -> !needToSendBeginQuorumRequest.contains(key))
+                    .filter(key -> !needToSendBeginQuorumRequestNode.contains(key.id()))
                     .collect(Collectors.toSet()),
                 nodeSupplier,
                 this::buildBeginQuorumEpochRequest
