@@ -139,9 +139,9 @@ public class JmxToolTest {
             "--one-time"
         };
         String out = executeAndGetOut(args);
-        Arrays.stream(out.split("\\r?\\n")).forEach(line -> {
-            assertTrue(line.matches("([a-zA-Z0-9=:,.]+),\"([ -~]+)\""), line);
-        });
+        Arrays.stream(out.split("\\r?\\n")).forEach(line ->
+            assertTrue(line.matches("([a-zA-Z0-9=:,.]+),\"([ -~]+)\""), line)
+        );
     }
 
     @Test
@@ -153,9 +153,9 @@ public class JmxToolTest {
             "--one-time"
         };
         String out = executeAndGetOut(args);
-        Arrays.stream(out.split("\\r?\\n")).forEach(line -> {
-            assertTrue(line.matches("([a-zA-Z0-9=:,.]+)\\t([ -~]+)"), line);
-        });
+        Arrays.stream(out.split("\\r?\\n")).forEach(line ->
+            assertTrue(line.matches("([a-zA-Z0-9=:,.]+)\\t([ -~]+)"), line)
+        );
     }
 
     @Test

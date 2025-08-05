@@ -57,6 +57,9 @@
                         The logger class name for LogCleaner has been updated from <code>kafka.log.LogCleaner</code> to <code>org.apache.kafka.storage.internals.log.LogCleaner</code> in the log4j2.yaml configuration file.
                         Added loggers for <code>org.apache.kafka.storage.internals.log.LogCleaner$CleanerThread</code> and <code>org.apache.kafka.storage.internals.log.Cleaner</code> classes to CleanerAppender.
                     </li>
+                    <li>
+                        The filename for rotated <code>state-change.log</code> files has been updated from <code>stage-change.log.[date]</code> to <code>state-change.log.[date]</code> in the log4j2.yaml configuration file.
+                    </li>
                 </ul>
             </li>
             <li><b>Broker</b>
@@ -104,9 +107,9 @@
             </li>
         </ul>
 
-<h4><a id="upgrade_4_0_0_from" href="#upgrade_4_0_0_from">Upgrading to 4.0.0</a></h4>
+<h4><a id="upgrade_4_0_1_from" href="#upgrade_4_0_1_from">Upgrading to 4.0.1</a></h4>
 
-<h5><a id="upgrade_clients_4_0_0" href="#upgrade_clients_4_0_0">Upgrading Clients to 4.0.0</a></h5>
+<h5><a id="upgrade_clients_4_0_1" href="#upgrade_clients_4_0_1">Upgrading Clients to 4.0.1</a></h5>
 
 <p><b>For a rolling upgrade:</b></p>
 
@@ -117,7 +120,7 @@
         or <a href="https://cwiki.apache.org/confluence/x/y4kgF">KIP-1124</a>.</li>
 </ol>
 
-<h5><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading Servers to 4.0.0 from any version 3.3.x through 3.9.x</a></h5>
+<h5><a id="upgrade_4_0_1" href="#upgrade_4_0_1">Upgrading Servers to 4.0.1 from any version 3.3.x through 3.9.x</a></h5>
 
 <p>Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. As such, <b>broker upgrades to 4.0.0 (and higher) require KRaft mode and
     the software and metadata versions must be at least 3.3.x</b> (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode
@@ -141,7 +144,13 @@
         has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_4_0_IV1(23, "4.0", "IV1", true)</code> means this version has metadata changes).
         Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
 </ol>
-
+    <h5><a id="upgrade_servers_401_notable" href="#upgrade_servers_401_notable">Notable changes in 4.0.1</a></h5>
+    <ul>
+        <li>
+            The filename for rotated <code>state-change.log</code> files has been updated from <code>stage-change.log.[date]</code> to <code>state-change.log.[date]</code> in the log4j2.yaml configuration file.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-19576">KAFKA-19576</a> for details.
+        </li>
+    </ul>
     <h5><a id="upgrade_servers_400_notable" href="#upgrade_servers_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
         <li>
@@ -153,7 +162,7 @@
         </li>
         <li>
             Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. About version upgrade,
-            check <a href="/{{version}}/documentation.html#upgrade_4_0_0">Upgrading to 4.0.0 from any version 3.3.x through 3.9.x</a> for more info.
+            check <a href="/{{version}}/documentation.html#upgrade_4_0_1">Upgrading to 4.0.1 from any version 3.3.x through 3.9.x</a> for more info.
         </li>
         <li>
             Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/x/HhD1D">here</a>).
@@ -496,6 +505,10 @@
                     <li> See <a href="https://cwiki.apache.org/confluence/x/B40ODg">KIP-890</a> and
                     <a href="https://cwiki.apache.org/confluence/x/8ItyEg">KIP-1050</a> for more details </li>
                 </ul>
+                <li>
+                    The filename for rotated <code>state-change.log</code> files incorrectly rotates to <code>stage-change.log.[date]</code> (changing state to stage). This issue is corrected in 4.0.1.
+                    See <a href="https://issues.apache.org/jira/browse/KAFKA-19576">KAFKA-19576</a> for details.
+                </li>
             </ul>
         </li>
     </ul>

@@ -33,9 +33,9 @@ import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -53,7 +53,7 @@ public class StreamsResetterTest {
 
     @BeforeEach
     public void beforeEach() {
-        consumer.assign(Collections.singletonList(topicPartition));
+        consumer.assign(List.of(topicPartition));
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0L, new byte[] {}, new byte[] {}));
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1L, new byte[] {}, new byte[] {}));
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 2L, new byte[] {}, new byte[] {}));
@@ -82,7 +82,7 @@ public class StreamsResetterTest {
         final long beginningOffset = 5L;
         final long endOffset = 10L;
         final MockConsumer<byte[], byte[]> emptyConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
-        emptyConsumer.assign(Collections.singletonList(topicPartition));
+        emptyConsumer.assign(List.of(topicPartition));
 
         final Map<TopicPartition, Long> beginningOffsetsMap = new HashMap<>();
         beginningOffsetsMap.put(topicPartition, beginningOffset);
@@ -255,10 +255,10 @@ public class StreamsResetterTest {
     public void shouldDeleteTopic() throws InterruptedException, ExecutionException {
         final Cluster cluster = createCluster(1);
         try (final MockAdminClient adminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
-            adminClient.addTopic(false, TOPIC, Collections.singletonList(topicPartitionInfo), null);
-            streamsResetter.doDelete(Collections.singletonList(TOPIC), adminClient);
-            assertEquals(Collections.emptySet(), adminClient.listTopics().names().get());
+            final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
+            adminClient.addTopic(false, TOPIC, List.of(topicPartitionInfo), null);
+            streamsResetter.doDelete(List.of(TOPIC), adminClient);
+            assertEquals(Set.of(), adminClient.listTopics().names().get());
         }
     }
 
@@ -274,7 +274,7 @@ public class StreamsResetterTest {
     public void testResetToDatetimeWhenPartitionIsEmptyResetsToLatestOffset() {
         final long beginningAndEndOffset = 5L; // Empty partition implies beginning offset == end offset
         final MockConsumer<byte[], byte[]> emptyConsumer = new EmptyPartitionConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
-        emptyConsumer.assign(Collections.singletonList(topicPartition));
+        emptyConsumer.assign(List.of(topicPartition));
 
         final Map<TopicPartition, Long> beginningOffsetsMap = new HashMap<>();
         beginningOffsetsMap.put(topicPartition, beginningAndEndOffset);
@@ -299,8 +299,8 @@ public class StreamsResetterTest {
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         }
         return new Cluster("mockClusterId", nodes.values(),
-            Collections.emptySet(), Collections.emptySet(),
-            Collections.emptySet(), nodes.get(0));
+            Set.of(), Set.of(),
+            Set.of(), nodes.get(0));
     }
 
     private static class EmptyPartitionConsumer<K, V> extends MockConsumer<K, V> {
