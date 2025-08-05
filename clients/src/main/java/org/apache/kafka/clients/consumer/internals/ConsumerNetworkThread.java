@@ -183,19 +183,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      */
     private void processApplicationEvents() {
         LinkedList<ApplicationEvent> events = new LinkedList<>();
-
-        if (!networkClientDelegate.hasAnyPendingRequests()) {
-            // If we don't have any outstanding network requests, we can park here until the next event comes.
-            try {
-                ApplicationEvent head = applicationEventQueue.poll(MAX_POLL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-
-                if (head != null)
-                    events.add(head);
-            } catch (InterruptedException swallow) {
-                // Ignore...
-            }
-        }
-
         applicationEventQueue.drainTo(events);
         if (events.isEmpty())
             return;
