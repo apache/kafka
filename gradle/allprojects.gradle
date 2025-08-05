@@ -1,0 +1,224 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import org.ajoberstar.grgit.Grgit
+
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  apply from: "$rootDir/gradle/dependencies.gradle"
+
+  dependencies {
+    // For Apache Rat plugin to ignore non-Git files
+    classpath "org.ajoberstar.grgit:grgit-core:$versions.grgit"
+  }
+}
+
+def determineCommitId() {
+  def takeFromHash = 16
+  if (project.hasProperty('commitId')) {
+    commitId.take(takeFromHash)
+  } else if (repo != null) {
+    repo.head().id.take(takeFromHash)
+  } else {
+    "unknown"
+  }
+}
+
+allprojects {
+
+  ext {
+    gradleVersion = versions.gradle
+    minClientJavaVersion = 11
+    minNonClientJavaVersion = 17
+    modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams:examples", ":streams-scala", ":test-common:test-common-util"]
+
+    buildVersionFileName = "kafka-version.properties"
+
+    defaultMaxHeapSize = "2g"
+    defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
+
+    // "JEP 403: Strongly Encapsulate JDK Internals" causes some tests to fail when they try
+    // to access internals (often via mocking libraries). We use `--add-opens` as a workaround
+    // for now and we'll fix it properly (where possible) via KAFKA-13275.
+    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
+      defaultJvmArgs.addAll(
+              "--add-opens=java.base/java.io=ALL-UNNAMED",
+              "--add-opens=java.base/java.lang=ALL-UNNAMED",
+              "--add-opens=java.base/java.nio=ALL-UNNAMED",
+              "--add-opens=java.base/java.nio.file=ALL-UNNAMED",
+              "--add-opens=java.base/java.util=ALL-UNNAMED",
+              "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+              "--add-opens=java.base/java.util.regex=ALL-UNNAMED",
+              "--add-opens=java.base/java.util.stream=ALL-UNNAMED",
+              "--add-opens=java.base/java.text=ALL-UNNAMED",
+              "--add-opens=java.base/java.time=ALL-UNNAMED",
+              "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
+      )
+
+    maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
+    maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
+            Math.min(Runtime.runtime.availableProcessors(), 8)
+    userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures.toBoolean() : false
+
+    userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
+    userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
+
+    skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
+    shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
+
+    mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
+    mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
+    mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+
+    userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
+
+    userTestLoggingEvents = project.hasProperty("testLoggingEvents") ? Arrays.asList(testLoggingEvents.split(",")) : null
+
+    userEnableTestCoverage = project.hasProperty("enableTestCoverage") ? enableTestCoverage : false
+
+    userKeepAliveModeString = project.hasProperty("keepAliveMode") ? keepAliveMode : "daemon"
+    userKeepAliveMode = KeepAliveMode.values().find(m -> m.name().toLowerCase().equals(userKeepAliveModeString))
+    if (userKeepAliveMode == null) {
+      def keepAliveValues = KeepAliveMode.values().collect(m -> m.name.toLowerCase())
+      throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
+    }
+
+    // Used by :test task
+    isGithubActions = System.getenv('GITHUB_ACTIONS') != null
+
+    // See README.md for details on this option and the reasoning for the default
+    userScalaOptimizerMode = project.hasProperty("scalaOptimizerMode") ? scalaOptimizerMode : "inline-kafka"
+    def scalaOptimizerValues = ["none", "method", "inline-kafka", "inline-scala"]
+    if (!scalaOptimizerValues.contains(userScalaOptimizerMode))
+      throw new GradleException("Unexpected value for scalaOptimizerMode property. Expected one of $scalaOptimizerValues, but received: $userScalaOptimizerMode")
+
+    generatedDocsDir = new File("${project.rootDir}/docs/generated")
+    repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
+
+    commitId = determineCommitId()
+
+    configureJavaCompiler = { name, options, projectPath ->
+      // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
+      // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
+
+      def releaseVersion = modulesNeedingJava11.any { projectPath == it } ? minClientJavaVersion : minNonClientJavaVersion
+
+      options.compilerArgs << "-encoding" << "UTF-8"
+      options.release = releaseVersion
+
+      if (name in ["compileTestJava", "compileTestScala"]) {
+        options.compilerArgs << "-parameters"
+      } else if (name in ["compileJava", "compileScala"]) {
+        options.compilerArgs << "-Xlint:all"
+        options.compilerArgs << "-Xlint:-serial"
+        options.compilerArgs << "-Xlint:-try"
+        options.compilerArgs << "-Werror"
+      }
+    }
+
+    runtimeTestLibs = [
+            libs.slf4jLog4j2,
+            libs.junitPlatformLanucher,
+            libs.jacksonDatabindYaml,
+            project(":test-common:test-common-util")
+    ]
+
+    log4jReleaseLibs = [
+            libs.slf4jLog4j2,
+            libs.log4j1Bridge2Api,
+            libs.jacksonDatabindYaml
+    ]
+
+    log4j2Libs = [
+            libs.log4j2Api,
+            libs.log4j2Core
+    ]
+
+    testLog4j2Libs = [
+            libs.slf4jApi,
+            libs.slf4jLog4j2,
+            libs.log4j2Api,
+            libs.log4j2Core
+    ]
+
+  }
+
+  repositories {
+    mavenCentral()
+  }
+
+  dependencyUpdates {
+    revision="release"
+    resolutionStrategy {
+      componentSelection { rules ->
+        rules.all { ComponentSelection selection ->
+          boolean rejected = ['snap', 'alpha', 'beta', 'rc', 'cr', 'm'].any { qualifier ->
+            selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
+          }
+          if (rejected) {
+            selection.reject('Release candidate')
+          }
+        }
+      }
+    }
+  }
+
+  configurations.all {
+    // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
+    // that are unrelated to the project dependencies, we should not change them
+    if (name != "zinc") {
+      resolutionStrategy {
+        force(
+          // be explicit about the javassist dependency version instead of relying on the transitive version
+          libs.javassist,
+          // ensure we have a single version in the classpath despite transitive dependencies
+          libs.scalaLibrary,
+          libs.scalaReflect,
+          // Workaround before `commons-validator` has new release. See KAFKA-19359.
+          libs.commonsBeanutils,
+          libs.jacksonAnnotations,
+          libs.commonsLang
+        )
+      }
+    }
+  }
+  task printAllDependencies(type: DependencyReportTask) {}
+
+  tasks.withType(Javadoc) {
+    options.charSet = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+    options.encoding = 'UTF-8'
+    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
+    // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
+    options.addStringOption('Xdoclint:none', '-quiet')
+    // Javadoc warnings should fail the build in JDK 15+ https://bugs.openjdk.org/browse/JDK-8200363
+    options.addBooleanOption('Werror', JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_15))
+    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+  }
+
+  tasks.withType(Checkstyle) {
+    minHeapSize = "200m"
+    maxHeapSize = "1g"
+  }
+
+  clean {
+    delete "${projectDir}/src/generated"
+    delete "${projectDir}/src/generated-test"
+  }
+}

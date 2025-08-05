@@ -1,0 +1,574 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import java.nio.charset.StandardCharsets
+
+/**
+ * For a given Project, compute a nice dash separated directory name
+ * to store the JUnit XML files in. E.g., Project ":connect:api" -> "connect-api"
+ */
+static def projectToJUnitXmlPath(project) {
+  var p = project
+  var projectNames = []
+  while (p != null) {
+    projectNames.push(p.name)
+    p = p.parent
+    if (p.name == "kafka") {
+      break
+    }
+  }
+  return projectNames.join("/")
+}
+
+def fineTuneEclipseClasspathFile(eclipse, project) {
+  eclipse.classpath.file {
+    beforeMerged { cp ->
+      cp.entries.clear()
+      // for the core project add the directories defined under test/scala as separate source directories
+      if (project.name.equals('core')) {
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/integration", null))
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/other", null))
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/unit", null))
+      }
+    }
+    whenMerged { cp ->
+      // for the core project exclude the separate sub-directories defined under test/scala. These are added as source dirs above
+      if (project.name.equals('core')) {
+        cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
+      }
+      /*
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different
+       * build output directories, and also avoid using the eclipse default of 'bin' which clashes with some of our script directories.
+       * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
+       */
+      cp.entries.findAll { it.kind == "output" }*.path = "build_eclipse"
+      /*
+       * Some projects have explicitly added test output dependencies. These are required for the gradle build but not required
+       * in Eclipse since the dependent projects are added as dependencies. So clean up these from the generated classpath.
+       */
+      cp.entries.removeAll { it.kind == "lib" && it.path.matches(".*/build/(classes|resources)/test") }
+    }
+  }
+}
+
+def configureJavaCompiler = { name, options, projectPath ->
+  // -parameters generates arguments with parameter names in TestInfo#getDisplayName.
+  // ref: https://github.com/junit-team/junit5/blob/4c0dddad1b96d4a20e92a2cd583954643ac56ac0/junit-jupiter-params/src/main/java/org/junit/jupiter/params/ParameterizedTest.java#L161-L164
+
+  def releaseVersion = modulesNeedingJava11.any { projectPath == it } ? minClientJavaVersion : minNonClientJavaVersion
+
+  options.compilerArgs << "-encoding" << "UTF-8"
+  options.release = releaseVersion
+
+  if (name in ["compileTestJava", "compileTestScala"]) {
+    options.compilerArgs << "-parameters"
+  } else if (name in ["compileJava", "compileScala"]) {
+    options.compilerArgs << "-Xlint:all"
+    options.compilerArgs << "-Xlint:-serial"
+    options.compilerArgs << "-Xlint:-try"
+    options.compilerArgs << "-Werror"
+  }
+}
+
+subprojects {
+
+  // enable running :dependencies task recursively on all subprojects
+  // eg: ./gradlew allDeps
+  task allDeps(type: DependencyReportTask) {}
+  // enable running :dependencyInsight task recursively on all subprojects
+  // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
+  task allDepInsight(type: DependencyInsightReportTask) {showingAllVariants = false} doLast {}
+
+  apply plugin: 'java-library'
+
+  // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
+  // don't publish it
+  def shouldPublish = !project.name.equals('jmh-benchmarks')
+  def shouldPublishWithShadow = (['clients'].contains(project.name))
+
+  if (shouldPublish) {
+    apply plugin: 'maven-publish'
+    apply plugin: 'signing'
+
+    // Add aliases for the task names used by the maven plugin for backwards compatibility
+    // The maven plugin was replaced by the maven-publish plugin in Gradle 7.0
+    tasks.register('install').configure { dependsOn(publishToMavenLocal) }
+    tasks.register('uploadArchives').configure { dependsOn(publish) }
+  }
+
+  // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
+  if (!project.name.equals('connect')) {
+    apply plugin: 'eclipse'
+    fineTuneEclipseClasspathFile(eclipse, project)
+  }
+
+  java {
+    consistentResolution {
+      // resolve the compileClasspath and then "inject" the result of resolution as strict constraints into the runtimeClasspath
+      useCompileClasspathVersions()
+    }
+  }
+
+  tasks.withType(JavaCompile) {
+    configureJavaCompiler(name, options, project.path)
+  }
+
+  if (shouldPublish) {
+
+    publishing {
+      repositories {
+        // To test locally, invoke gradlew with `-PmavenUrl=file:///some/local/path`
+        maven {
+          url = mavenUrl
+          credentials {
+            username = mavenUsername
+            password = mavenPassword
+          }
+        }
+      }
+      publications {
+        mavenJava(MavenPublication) {
+          if (!shouldPublishWithShadow) {
+            from components.java
+          } else {
+            apply plugin: 'com.gradleup.shadow'
+            from components.shadow
+
+            // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
+            // https://github.com/GradleUp/shadow/issues/324
+              pom.withXml { xml ->
+                def dependenciesNode = xml.asNode().get('dependencies') ?: xml.asNode().appendNode('dependencies')
+                project.configurations.shadowed.allDependencies.each {
+                  def dependencyNode = dependenciesNode.appendNode('dependency')
+                  dependencyNode.appendNode('groupId', it.group)
+                  dependencyNode.appendNode('artifactId', it.name)
+                  dependencyNode.appendNode('version', it.version)
+                  dependencyNode.appendNode('scope', 'runtime')
+                }
+              }
+          }
+
+          afterEvaluate {
+            ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"].forEach { taskName ->
+              def task = tasks.findByName(taskName)
+              if (task != null)
+                artifact task
+            }
+
+            artifactId = base.archivesName.get()
+            pom {
+              name = 'Apache Kafka'
+              url = 'https://kafka.apache.org'
+              licenses {
+                license {
+                  name = 'The Apache License, Version 2.0'
+                  url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                  distribution = 'repo'
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (shouldSign) {
+      signing {
+        sign publishing.publications.mavenJava
+      }
+    }
+  }
+
+  def testLoggingEvents = ["passed", "skipped", "failed"]
+  def testShowStandardStreams = false
+  def testExceptionFormat = 'full'
+  // Gradle built-in logging only supports sending test output to stdout, which generates a lot
+  // of noise, especially for passing tests. We really only want output for failed tests. This
+  // hooks into the output and logs it (so we don't have to buffer it all in memory) and only
+  // saves the output for failing tests. Directory and filenames are such that you can, e.g.,
+  // create a Jenkins rule to collect failed test output.
+  def logTestStdout = {
+    def testId = { TestDescriptor descriptor ->
+      "${descriptor.className}.${descriptor.name}".toString()
+    }
+
+    def logFiles = new HashMap<String, File>()
+    def logStreams = new HashMap<String, FileOutputStream>()
+    beforeTest { TestDescriptor td ->
+      def tid = testId(td)
+      // truncate the file name if it's too long
+      def logFile = new File(
+              "${projectDir}/build/reports/testOutput/${tid.substring(0, Math.min(tid.size(),240))}.test.stdout"
+      )
+      logFile.parentFile.mkdirs()
+      logFiles.put(tid, logFile)
+      logStreams.put(tid, new FileOutputStream(logFile))
+    }
+    onOutput { TestDescriptor td, TestOutputEvent toe ->
+      def tid = testId(td)
+      // Some output can happen outside the context of a specific test (e.g. at the class level)
+      // and beforeTest/afterTest seems to not be invoked for these cases (and similarly, there's
+      // a TestDescriptor hierarchy that includes the thread executing the test, Gradle tasks,
+      // etc). We see some of these in practice and it seems like something buggy in the Gradle
+      // test runner since we see it *before* any tests and it is frequently not related to any
+      // code in the test (best guess is that it is tail output from last test). We won't have
+      // an output file for these, so simply ignore them. If they become critical for debugging,
+      // they can be seen with showStandardStreams.
+      if (td.name == td.className || td.className == null) {
+        // silently ignore output unrelated to specific test methods
+        return
+      } else if (logStreams.get(tid) == null) {
+        println "WARNING: unexpectedly got output for a test [${tid}]" +
+                " that we didn't previously see in the beforeTest hook." +
+                " Message for debugging: [" + toe.message + "]."
+        return
+      }
+      try {
+        logStreams.get(tid).write(toe.message.getBytes(StandardCharsets.UTF_8))
+      } catch (Exception e) {
+        println "ERROR: Failed to write output for test ${tid}"
+        e.printStackTrace()
+      }
+    }
+    afterTest { TestDescriptor td, TestResult tr ->
+      def tid = testId(td)
+      try {
+        logStreams.get(tid).close()
+        if (tr.resultType != TestResult.ResultType.FAILURE) {
+          logFiles.get(tid).delete()
+        } else {
+          def file = logFiles.get(tid)
+          println "${tid} failed, log available in ${file}"
+        }
+      } catch (Exception e) {
+        println "ERROR: Failed to close stdout file for ${tid}"
+        e.printStackTrace()
+      } finally {
+        logFiles.remove(tid)
+        logStreams.remove(tid)
+      }
+    }
+  }
+
+  // The suites are for running sets of tests in IDEs.
+  // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+  def testsToExclude = ['**/*Suite.class']
+
+
+  // This task will copy JUnit XML files out of the sub-project's build directory and into
+  // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
+  // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
+  def copyTestXml = tasks.register('copyTestXml') {
+    onlyIf("Environment GITHUB_ACTIONS is set") { isGithubActions }
+    onlyIf("Project '${project.name}:test' has sources") { ! test.state.noSource }
+    onlyIf("Task '${project.name}:test' did work") { test.state.didWork }
+
+    ext {
+      output = project.findProperty("kafka.test.xml.output.dir")
+    }
+
+    // Never cache this task
+    outputs.cacheIf { false }
+    outputs.upToDateWhen { false }
+
+    doLast {
+      def moduleDirPath = projectToJUnitXmlPath(project)
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/${output}").get().asFile
+      println "Copy JUnit XML for ${project.name} to $dest"
+      ant.copy(todir: "$dest") {
+	ant.fileset(dir: "${test.reports.junitXml.entryPoint}") {
+	  ant.include(name: "**/*.xml")
+	}
+      }
+    }
+  }
+
+  test {
+    maxParallelForks = maxTestForks
+    ignoreFailures = userIgnoreFailures
+
+    maxHeapSize = "3g"
+    jvmArgs = defaultJvmArgs
+
+    // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
+    systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
+    systemProperty("kafka.test.catalog.file", project.findProperty("kafka.test.catalog.file"))
+    systemProperty("kafka.test.run.new", project.findProperty("kafka.test.run.new"))
+    systemProperty("kafka.test.run.flaky", project.findProperty("kafka.test.run.flaky"))
+    systemProperty("kafka.test.verbose", project.findProperty("kafka.test.verbose"))
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+      displayGranularity = 0
+    }
+    logTestStdout.rehydrate(delegate, owner, this)()
+
+    exclude testsToExclude
+
+    useJUnitPlatform {
+      includeEngines 'junit-jupiter'
+    }
+
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
+    }
+    
+    finalizedBy("copyTestXml")
+  }
+
+  task integrationTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = maxTestForks
+    ignoreFailures = userIgnoreFailures
+
+    // Increase heap size for integration tests
+    maxHeapSize = "2560m"
+    jvmArgs = defaultJvmArgs
+
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+      displayGranularity = 0
+    }
+    logTestStdout.rehydrate(delegate, owner, this)()
+
+    exclude testsToExclude
+
+    useJUnitPlatform {
+      includeTags "integration"
+      includeEngines 'junit-jupiter'
+    }
+
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
+    }
+  }
+
+  task unitTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = maxTestForks
+    ignoreFailures = userIgnoreFailures
+
+    maxHeapSize = defaultMaxHeapSize
+    jvmArgs = defaultJvmArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+      displayGranularity = 0
+    }
+    logTestStdout.rehydrate(delegate, owner, this)()
+
+    exclude testsToExclude
+
+    useJUnitPlatform {
+      excludeTags "integration"
+      includeEngines 'junit-jupiter'
+    }
+
+    develocity {
+      testRetry {
+        maxRetries = userMaxTestRetries
+        maxFailures = userMaxTestRetryFailures
+      }
+    }
+  }
+
+  // remove test output from all test types
+  tasks.withType(Test).all { t ->
+    cleanTest {
+      delete t.reports.junitXml.outputLocation
+      delete t.reports.html.outputLocation
+    }
+  }
+
+  jar {
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
+  }
+
+  task srcJar(type: Jar) {
+    archiveClassifier = 'sources'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
+    from sourceSets.main.allSource
+  }
+
+  task javadocJar(type: Jar, dependsOn: javadoc) {
+    archiveClassifier = 'javadoc'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
+    from javadoc.destinationDir
+  }
+
+  task docsJar(dependsOn: javadocJar)
+
+  check.dependsOn('javadoc')
+
+  task systemTestLibs(dependsOn: jar)
+
+  if (!sourceSets.test.allSource.isEmpty()) {
+    task testJar(type: Jar) {
+      archiveClassifier = 'test'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
+      from sourceSets.test.output
+      // The junit-platform.properties file is used for configuring and customizing the behavior of the JUnit platform.
+      // It should only apply to Kafka's own JUnit tests, and should not exist in the test JAR.
+      // If we include it in the test JAR, it could lead to conflicts with user configurations.
+      exclude 'junit-platform.properties'
+    }
+
+    task testSrcJar(type: Jar, dependsOn: testJar) {
+      archiveClassifier = 'test-sources'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
+      from sourceSets.test.allSource
+    }
+
+  }
+
+  plugins.withType(ScalaPlugin) {
+
+    scala {
+      zincVersion = versions.zinc
+    }
+
+    task scaladocJar(type:Jar, dependsOn: scaladoc) {
+      archiveClassifier = 'scaladoc'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
+      from scaladoc.destinationDir
+    }
+
+    //documentation task should also trigger building scala doc jar
+    docsJar.dependsOn scaladocJar
+
+  }
+
+  tasks.withType(ScalaCompile) {
+    def releaseVersion = modulesNeedingJava11.any { project.path == it } ? minClientJavaVersion : minNonClientJavaVersion
+    scalaCompileOptions.keepAliveMode = userKeepAliveMode
+
+    scalaCompileOptions.additionalParameters = [
+      "-deprecation:false",
+      "-unchecked",
+      "-encoding", "utf8",
+      "-Xlog-reflective-calls",
+      "-feature",
+      "-language:postfixOps",
+      "-language:implicitConversions",
+      "-language:existentials",
+      "-Ybackend-parallelism", maxScalacThreads.toString(),
+      "-Xlint:constant",
+      "-Xlint:delayedinit-select",
+      "-Xlint:doc-detached",
+      "-Xlint:missing-interpolator",
+      "-Xlint:nullary-unit",
+      "-Xlint:option-implicit",
+      "-Xlint:package-object-classes",
+      "-Xlint:poly-implicit-overload",
+      "-Xlint:private-shadow",
+      "-Xlint:stars-align",
+      "-Xlint:type-parameter-shadow",
+      "-Xlint:unused"
+    ]
+
+    // See README.md for details on this option and the meaning of each value
+    if (userScalaOptimizerMode.equals("method"))
+      scalaCompileOptions.additionalParameters += ["-opt:l:method"]
+    else if (userScalaOptimizerMode.startsWith("inline-")) {
+      List<String> inlineFrom = ["-opt-inline-from:org.apache.kafka.**"]
+      if (project.name.equals('core'))
+        inlineFrom.add("-opt-inline-from:kafka.**")
+      if (userScalaOptimizerMode.equals("inline-scala"))
+        inlineFrom.add("-opt-inline-from:scala.**")
+
+      scalaCompileOptions.additionalParameters += ["-opt:l:inline"]
+      scalaCompileOptions.additionalParameters += inlineFrom
+    }
+
+    scalaCompileOptions.additionalParameters += ["-opt-warnings", "-Xlint:strict-unsealed-patmat"]
+    // Scala 2.13.2 introduces compiler warnings suppression, which is a pre-requisite for -Xfatal-warnings
+    scalaCompileOptions.additionalParameters += ["-Xfatal-warnings"]
+    scalaCompileOptions.additionalParameters += ["--release", String.valueOf(releaseVersion)]
+
+    // Gradle does not support the `release` configuration when performing joint Java-Scala compilation.
+    // For more details, refer to https://github.com/gradle/gradle/issues/13762.
+    // As a result, we need to explicitly configure the Scala compiler with this setting.
+    options.compilerArgs += ["--release", String.valueOf(releaseVersion)]
+
+    configureJavaCompiler(name, options, project.path)
+
+    configure(scalaCompileOptions.forkOptions) {
+      memoryMaximumSize = defaultMaxHeapSize
+      jvmArgs = defaultJvmArgs
+    }
+  }
+
+  //tasks.withType(SpotBugsTask).configureEach { // move to spotbugs.gradle
+  //  reports.configure {
+  //    // Continue supporting `xmlFindBugsReport` for compatibility
+  //    xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
+  //    html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
+  //  }
+  //  maxHeapSize = defaultMaxHeapSize
+  //  jvmArgs = defaultJvmArgs
+  //}
+
+  // Ignore core since its a scala project
+  if (it.path != ':core') {
+    if (userEnableTestCoverage) {
+      apply plugin: "jacoco"
+
+      jacoco {
+        toolVersion = versions.jacoco
+      }
+
+      jacocoTestReport {
+        dependsOn tasks.test
+        sourceSets sourceSets.main
+        reports {
+          html.required = true
+          xml.required = true
+          csv.required = false
+        }
+      }
+
+    }
+  }
+
+  if (userEnableTestCoverage) {
+    def coverageGen = it.path == ':core' ? 'reportTestScoverage' : 'jacocoTestReport'
+    tasks.register('reportCoverage').configure { dependsOn(coverageGen) }
+  }
+
+  dependencyCheck {
+    suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
+    skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
+    skipConfigurations = [ "zinc" ]
+  }
+}

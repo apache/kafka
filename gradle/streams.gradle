@@ -1,0 +1,710 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+project(':streams') {
+  base {
+    archivesName = "kafka-streams"
+  }
+
+  ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
+
+  configurations {
+    generator
+  }
+
+  dependencies {
+    api project(path: ':clients', configuration: 'shadow')
+    // `org.rocksdb.Options` is part of Kafka Streams public api via `RocksDBConfigSetter`
+    api libs.rocksDBJni
+
+    implementation libs.jacksonAnnotations
+    implementation libs.jacksonDatabind
+    implementation libs.slf4jApi
+
+    // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
+    testCompileOnly project(':streams:test-utils')
+    testCompileOnly libs.bndlib
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.junitJupiter
+    testImplementation libs.bcpkix
+    testImplementation libs.hamcrest
+    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+    testImplementation libs.junitPlatformSuiteEngine // supports suite test
+    testImplementation testLog4j2Libs
+
+    testRuntimeOnly project(':streams:test-utils')
+    testRuntimeOnly runtimeTestLibs
+
+    generator project(':generator')
+  }
+
+  task processMessages(type:JavaExec) {
+    mainClass = "org.apache.kafka.message.MessageGenerator"
+    classpath = configurations.generator
+    args = [ "-p", "org.apache.kafka.streams.internals.generated",
+             "-o", "${projectDir}/build/generated/main/java/org/apache/kafka/streams/internals/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator"
+           ]
+    inputs.dir("src/main/resources/common/message")
+        .withPropertyName("messages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.cacheIf { true }
+    outputs.dir("${projectDir}/build/generated/main/java/org/apache/kafka/streams/internals/generated")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java", "${projectDir}/build/generated/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  compileJava.dependsOn 'processMessages'
+  srcJar.dependsOn 'processMessages'
+
+  javadoc {
+    include "**/org/apache/kafka/streams/**"
+    exclude "**/org/apache/kafka/streams/internals/**", "**/org/apache/kafka/streams/**/internals/**"
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtimeClasspath) {
+      exclude('kafka-clients*')
+    }
+    into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
+
+  task createStreamsVersionFile() {
+    def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildStreamsVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  jar {
+    dependsOn 'createStreamsVersionFile'
+    from("${layout.buildDirectory.get().asFile.path}") {
+      include "kafka/$buildStreamsVersionFileName"
+    }
+    dependsOn 'copyDependantLibs'
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+
+  task genStreamsConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.apache.kafka.streams.StreamsConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
+  }
+
+  task testAll(
+    dependsOn: [
+            ':streams:test',
+            ':streams:integration-tests:test',
+            ':streams:test-utils:test',
+            ':streams:streams-scala:test',
+            ':streams:upgrade-system-tests-0110:test',
+            ':streams:upgrade-system-tests-10:test',
+            ':streams:upgrade-system-tests-11:test',
+            ':streams:upgrade-system-tests-20:test',
+            ':streams:upgrade-system-tests-21:test',
+            ':streams:upgrade-system-tests-22:test',
+            ':streams:upgrade-system-tests-23:test',
+            ':streams:upgrade-system-tests-24:test',
+            ':streams:upgrade-system-tests-25:test',
+            ':streams:upgrade-system-tests-26:test',
+            ':streams:upgrade-system-tests-27:test',
+            ':streams:upgrade-system-tests-28:test',
+            ':streams:upgrade-system-tests-30:test',
+            ':streams:upgrade-system-tests-31:test',
+            ':streams:upgrade-system-tests-32:test',
+            ':streams:upgrade-system-tests-33:test',
+            ':streams:upgrade-system-tests-34:test',
+            ':streams:upgrade-system-tests-35:test',
+            ':streams:upgrade-system-tests-36:test',
+            ':streams:upgrade-system-tests-37:test',
+            ':streams:upgrade-system-tests-38:test',
+            ':streams:upgrade-system-tests-39:test',
+            ':streams:upgrade-system-tests-40:test',
+            ':streams:examples:test'
+    ]
+  )
+}
+
+project(':streams:streams-scala') {
+  apply plugin: 'scala'
+
+  base {
+    archivesName = "kafka-streams-scala_${versions.baseScala}"
+  }
+
+  dependencies {
+    api project(':streams')
+
+    api libs.scalaLibrary
+    testImplementation project(':streams').sourceSets.test.output
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':streams:test-utils')
+
+    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+    testImplementation testLog4j2Libs
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/streams/scala/**"
+  }
+
+  scaladoc {
+    scalaDocOptions.additionalParameters = ["-no-link-warnings"]
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtimeClasspath) {
+      exclude('kafka-streams*')
+    }
+    into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
+
+}
+
+project(':streams:integration-tests') {
+  apply plugin: 'scala'
+
+  base {
+    archivesName = "kafka-streams-integration-tests"
+  }
+
+  dependencies {
+    implementation libs.slf4jApi
+    implementation libs.scalaLibrary
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':group-coordinator')
+    testImplementation project(':server')
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':storage')
+    testImplementation project(':streams').sourceSets.test.output
+    testImplementation project(':streams:streams-scala')
+    testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':tools')
+    testImplementation project(':transaction-coordinator')
+    testImplementation libs.bcpkix
+    testImplementation libs.hamcrest
+    testImplementation libs.junitJupiter
+    testImplementation libs.junitPlatformSuiteEngine // supports suite test
+    testImplementation libs.mockitoCore
+    testImplementation testLog4j2Libs
+    testImplementation project(':streams:test-utils')
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  sourceSets {
+    // Set java/scala source folders in the `scala` block to enable joint compilation
+    main {
+      java {
+        srcDirs = []
+      }
+      scala {
+        srcDirs = []
+      }
+    }
+    test {
+      java {
+        srcDirs = []
+      }
+      scala {
+        srcDirs = ["src/test/java", "src/test/scala"]
+      }
+    }
+  }
+}
+
+project(':streams:test-utils') {
+  base {
+    archivesName = "kafka-streams-test-utils"
+  }
+
+  dependencies {
+    api project(':streams')
+    api project(':clients')
+
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+    testImplementation libs.hamcrest
+    testImplementation testLog4j2Libs
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtimeClasspath) {
+      exclude('kafka-streams*')
+    }
+    into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
+
+}
+
+project(':streams:examples') {
+  base {
+    archivesName = "kafka-streams-examples"
+  }
+
+  dependencies {
+    implementation project(':streams')
+    implementation libs.slf4jApi
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonAnnotations
+
+    testImplementation project(':streams:test-utils')
+    testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
+    testImplementation libs.junitJupiter
+    testImplementation libs.hamcrest
+    testImplementation testLog4j2Libs
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  javadoc {
+    enabled = false
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.runtimeClasspath) {
+      exclude('kafka-streams*')
+    }
+    into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
+  }
+}
+
+project(':streams:upgrade-system-tests-0110') {
+  base{
+    archivesName = "kafka-streams-upgrade-system-tests-0110"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_0110
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-10') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-10"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_10
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-11') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-11"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_11
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-20') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-20"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_20
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-21') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-21"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_21
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-22') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-22"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_22
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-23') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-23"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_23
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-24') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-24"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_24
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-25') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-25"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_25
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-26') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-26"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_26
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-27') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-27"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_27
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-28') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-28"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_28
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-30') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-30"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_30
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-31') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-31"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_31
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-32') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-32"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_32
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-33') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-33"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_33
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-34') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-34"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_34
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-35') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-35"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_35
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-36') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-36"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_36
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-37') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-37"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_37
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-38') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-38"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_38
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-39') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-39"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_39
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-40') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-40"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_40
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
