@@ -68,7 +68,6 @@ import scala.collection.Seq
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
 import scala.util.{Random, Using}
 
 /**
@@ -2852,29 +2851,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-   * Waits until the metadata for the given partition has fully propagated
-   * and become consistent across all brokers.
+   * Waits until the metadata for the given partition has fully propagated and become consistent across all brokers.
    *
-   * This method repeatedly checks the leader information for the specified
-   * TopicPartition in each broker's metadata cache. It compares all brokers'
-   * views against the leader reported by the head broker. The loop continues
-   * until all brokers agree on the same leader, ensuring metadata consistency.
-   *
-   * This is useful in integration tests where operations such as
-   * preferred leader election or other metadata updates require
-   * propagation time before assertions can be made reliably.
+   * @param partition The partition whose leader metadata should be verified across all brokers.
    */
-  def sleepMillisToPropagateMetadata(partition: TopicPartition): Unit = {
-    var allSynced: Boolean = false
-
-    while (!allSynced) {
-      val prior = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).get.id()
-
-      allSynced = brokers.forall { broker =>
-        val leaderIdOpt = broker.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).map(_.id())
-        val leaderId = leaderIdOpt.toScala
-        leaderId.contains(prior)
-      }
+  def waitForBrokerMetadataPropagation(partition: TopicPartition): Unit = {
+    while (true) {
+      val headBrokerLeaderId = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).get.id()
+      if (brokers.forall { broker =>
+        val leaderId = broker.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).get.id()
+        leaderId == headBrokerLeaderId
+      }) return
     }
   }
 
@@ -2937,7 +2924,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 0)
 
     // Now change the preferred leader to 1
-    sleepMillisToPropagateMetadata(partition1);
+    waitForBrokerMetadataPropagation(partition1);
     changePreferredLeader(prefer1)
 
     // meaningful election
@@ -2976,8 +2963,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 1)
 
     // Now change the preferred leader to 2
-    sleepMillisToPropagateMetadata(partition1)
-    sleepMillisToPropagateMetadata(partition2)
+    waitForBrokerMetadataPropagation(partition1)
+    waitForBrokerMetadataPropagation(partition2)
     changePreferredLeader(prefer2)
 
     // mixed results
@@ -2994,12 +2981,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 2)
 
     // Now change the preferred leader to 1
-    sleepMillisToPropagateMetadata(partition1)
-    sleepMillisToPropagateMetadata(partition2)
+    waitForBrokerMetadataPropagation(partition1)
+    waitForBrokerMetadataPropagation(partition2)
     changePreferredLeader(prefer1)
     // but shut it down...
     killBroker(1)
-    sleepMillisToPropagateMetadata(partition1)
+    waitForBrokerMetadataPropagation(partition1)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     def assertPreferredLeaderNotAvailable(
