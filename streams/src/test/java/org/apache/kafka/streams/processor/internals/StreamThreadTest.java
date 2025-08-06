@@ -4211,10 +4211,13 @@ public class StreamThreadTest {
                         .setStatusDetail("Different missing topics")
         ));
         
-        // Advance time to near timeout to verify the timer was actually reset
-        mockTime.sleep(200000); // Advance by 200 seconds (total 350 seconds from start)
+        // Advance time by 250 seconds to test if timer was reset
+        // Total time from beginning: 150000 + 250000 = 400000ms (400s)
+        // If timer was NOT reset: elapsed time = 400s > 300s → should throw
+        // If timer WAS reset: elapsed time = 250s < 300s → should NOT throw
+        mockTime.sleep(250000); // Advance by 250 seconds
         
-        // Should not throw even after advancing time, because timeout was reset
+        // Should not throw because timer was reset - only 250s elapsed from reset point
         assertDoesNotThrow(() -> thread.runOnceWithoutProcessingThreads());
     }
 
