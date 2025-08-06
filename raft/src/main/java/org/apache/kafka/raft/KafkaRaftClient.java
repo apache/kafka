@@ -1514,7 +1514,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             fetchPartition.replicaDirectoryId()
         );
         if (quorum.isLeader()) {
-            System.err.println("ZZZ update " + replicaKey + " time: " + currentTimeMs);
             quorum.leaderStateOrThrow().updateLastReceivedFetchRequest(replicaKey, currentTimeMs);
         }
         FetchResponseData response = tryCompleteFetchRequest(
