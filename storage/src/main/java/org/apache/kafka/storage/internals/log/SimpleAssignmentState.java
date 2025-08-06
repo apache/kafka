@@ -19,8 +19,8 @@ package org.apache.kafka.storage.internals.log;
 import java.util.List;
 
 public record SimpleAssignmentState(List<Integer> replicas) implements AssignmentState {
-    public SimpleAssignmentState(List<Integer> replicas) {
-        this.replicas = List.copyOf(replicas);
+    public SimpleAssignmentState {
+        replicas = List.copyOf(replicas);
     }
 
     @Override
