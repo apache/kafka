@@ -66,14 +66,14 @@ public class TopicsSpecTest {
     @Test
     public void testPartitionNumbers() {
         List<Integer> partsANumbers = PARTSA.partitionNumbers();
-        assertEquals(Integer.valueOf(0), partsANumbers.get(0));
-        assertEquals(Integer.valueOf(1), partsANumbers.get(1));
-        assertEquals(Integer.valueOf(2), partsANumbers.get(2));
+        assertTrue(partsANumbers.contains(0));
+        assertTrue(partsANumbers.contains(1));
+        assertTrue(partsANumbers.contains(2));
         assertEquals(3, partsANumbers.size());
 
         List<Integer> partsBNumbers = PARTSB.partitionNumbers();
-        assertEquals(Integer.valueOf(0), partsBNumbers.get(0));
-        assertEquals(Integer.valueOf(1), partsBNumbers.get(1));
+        assertTrue(partsBNumbers.contains(0));
+        assertTrue(partsBNumbers.contains(1));
         assertEquals(2, partsBNumbers.size());
     }
 

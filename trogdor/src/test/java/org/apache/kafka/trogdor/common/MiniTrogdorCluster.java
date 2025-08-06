@@ -160,8 +160,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
                     config.put(Platform.Config.TROGDOR_COORDINATOR_PORT,
                         Integer.toString(node.coordinatorPort));
                 }
-                node.node = new BasicNode(entry.getKey(), node.hostname, config,
-                    Set.of());
+                node.node = new BasicNode(entry.getKey(), node.hostname, config, Set.of());
             }
             TreeMap<String, Node> topologyNodes = new TreeMap<>();
             for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {

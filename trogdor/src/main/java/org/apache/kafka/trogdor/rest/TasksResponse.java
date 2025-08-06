@@ -31,7 +31,7 @@ public class TasksResponse extends Message {
 
     @JsonCreator
     public TasksResponse(@JsonProperty("tasks") TreeMap<String, TaskState> tasks) {
-        this.tasks = Map.copyOf((tasks == null) ? new TreeMap<>() : tasks);
+        this.tasks = tasks == null ? Map.of() : Map.copyOf(tasks);
     }
 
     @JsonProperty

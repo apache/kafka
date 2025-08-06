@@ -470,8 +470,7 @@ public class CoordinatorClient {
             return "No matching tasks found.";
         }
         List<List<String>> lines = new ArrayList<>();
-        List<String> header = List.of("ID", "TYPE", "STATE", "INFO");
-        lines.add(header);
+        lines.add(List.of("ID", "TYPE", "STATE", "INFO"));
         for (Map.Entry<String, TaskState> entry : response.tasks().entrySet()) {
             String taskId = entry.getKey();
             TaskState taskState = entry.getValue();

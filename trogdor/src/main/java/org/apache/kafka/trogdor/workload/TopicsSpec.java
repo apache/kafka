@@ -67,8 +67,7 @@ public class TopicsSpec extends Message {
     }
 
     public TopicsSpec immutableCopy() {
-        HashMap<String, PartitionsSpec> mapCopy = new HashMap<>(map);
-        return new TopicsSpec(Map.copyOf(mapCopy));
+        return new TopicsSpec(Map.copyOf(map));
     }
 
     /**

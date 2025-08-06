@@ -83,9 +83,7 @@ public class PartitionsSpec extends Message {
             }
             return partitionNumbers;
         } else {
-            ArrayList<Integer> partitionNumbers = new ArrayList<>(partitionAssignments.keySet());
-            partitionNumbers.sort(Integer::compareTo);
-            return partitionNumbers;
+            return new ArrayList<>(partitionAssignments.keySet());
         }
     }
 

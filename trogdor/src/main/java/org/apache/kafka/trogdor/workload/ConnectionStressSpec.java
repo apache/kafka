@@ -55,8 +55,7 @@ public final class ConnectionStressSpec extends TaskSpec {
             @JsonProperty("numThreads") int numThreads,
             @JsonProperty("action") ConnectionStressAction action) {
         super(startMs, durationMs);
-        this.clientNodes = (clientNodes == null) ? List.of() :
-            List.copyOf(clientNodes);
+        this.clientNodes = clientNodes == null ? List.of() : List.copyOf(clientNodes);
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.targetConnectionsPerSec = targetConnectionsPerSec;

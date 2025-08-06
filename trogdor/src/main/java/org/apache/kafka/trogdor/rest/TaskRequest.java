@@ -28,8 +28,4 @@ public record TaskRequest(String taskId) {
     public TaskRequest(@JsonProperty("taskId") String taskId) {
         this.taskId = taskId == null ? "" : taskId;
     }
-
-    public String taskId() {
-        return taskId;
-    }
 }

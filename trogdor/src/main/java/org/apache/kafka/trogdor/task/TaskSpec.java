@@ -111,6 +111,6 @@ public abstract class TaskSpec {
     }
 
     protected static Map<String, String> configOrEmptyMap(Map<String, String> config) {
-        return (config == null) ? Map.of() : config;
+        return config == null ? Map.of() : config;
     }
 }

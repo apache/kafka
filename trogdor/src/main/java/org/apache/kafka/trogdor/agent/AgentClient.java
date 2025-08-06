@@ -274,8 +274,7 @@ public class AgentClient {
                     System.out.printf("\tStart time: %s%n",
                         dateString(status.serverStartMs(), localOffset));
                     List<List<String>> lines = new ArrayList<>();
-                    List<String> header = List.of("WORKER_ID", "TASK_ID", "STATE", "TASK_TYPE");
-                    lines.add(header);
+                    lines.add(List.of("WORKER_ID", "TASK_ID", "STATE", "TASK_TYPE"));
                     for (Map.Entry<Long, WorkerState> entry : status.workers().entrySet()) {
                         List<String> cols = new ArrayList<>();
                         cols.add(Long.toString(entry.getKey()));

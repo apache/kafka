@@ -31,16 +31,4 @@ public record RandomComponent(int percent, PayloadGenerator component) {
         this.percent = percent;
         this.component = component;
     }
-
-    @Override
-    @JsonProperty
-    public int percent() {
-        return percent;
-    }
-
-    @Override
-    @JsonProperty
-    public PayloadGenerator component() {
-        return component;
-    }
 }
