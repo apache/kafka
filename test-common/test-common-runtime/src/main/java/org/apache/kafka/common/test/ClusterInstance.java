@@ -448,9 +448,9 @@ public interface ClusterInstance {
                 " ms since a leader was not elected for partition " + topicPartition);
     }
   
-    default void restartDeadBrokers() throws InterruptedException {
+    default void restartDeadBrokers() throws ExecutionException {
         if (brokers().isEmpty()) {
-            throw new IllegalArgumentException("Must supply at least one server config.");
+            throw new RuntimeException("Must supply at least one server config.");
         }
         brokers().entrySet().forEach(entry -> {
             if (entry.getValue().isShutdown()) {
