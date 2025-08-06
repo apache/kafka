@@ -87,13 +87,16 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DefaultStatePersister;
@@ -3152,7 +3155,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
 
-        service.onNewMetadataImage(image, new MetadataDelta(image));
+        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(new MetadataDelta(image)));
 
         when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-partition-deleted"),
@@ -3210,7 +3213,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
 
-        service.onNewMetadataImage(image, new MetadataDelta(image));
+        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(new MetadataDelta(image)));
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(
@@ -3257,10 +3260,10 @@ public class GroupCoordinatorServiceTest {
             .build();
         service.startup(() -> 3);
 
-        MetadataImage image = new MetadataImageBuilder()
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "bar", 1)
-            .build();
-        service.onNewMetadataImage(image, new MetadataDelta(image));
+            .buildCoordinatorMetadataImage();
+        service.onNewMetadataImage(image, image.emptyDelta());
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(
@@ -3307,8 +3310,8 @@ public class GroupCoordinatorServiceTest {
             .build();
         service.startup(() -> 3);
 
-        MetadataImage image = MetadataImage.EMPTY;
-        service.onNewMetadataImage(image, new MetadataDelta(image));
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
+        service.onNewMetadataImage(image, image.emptyDelta());
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(
@@ -3971,7 +3974,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onNewMetadataImage(image, null);
+        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         int partition = 1;
 
@@ -4040,7 +4043,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onNewMetadataImage(image, null);
+        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         int partition = 1;
 
@@ -4076,7 +4079,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onNewMetadataImage(image, null);
+        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         int partition = 1;
 
@@ -5204,7 +5207,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(topicId, "topic-name", 3)
             .build();
 
-        service.onNewMetadataImage(image, null);
+        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
@@ -5379,7 +5382,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(topicId, "topic-name", 3)
             .build();
 
-        service.onNewMetadataImage(image, null);
+        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
@@ -5597,7 +5600,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(topicId, "topic-name", 1)
             .build();
 
-        service.onNewMetadataImage(image, null);
+        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
 
         when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
@@ -5646,7 +5649,7 @@ public class GroupCoordinatorServiceTest {
         private CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime;
         private GroupCoordinatorMetrics metrics = new GroupCoordinatorMetrics();
         private Persister persister = new NoOpStatePersister();
-        private MetadataImage metadataImage = null;
+        private CoordinatorMetadataImage metadataImage = null;
 
         GroupCoordinatorService build() {
             return build(false);
@@ -5654,7 +5657,7 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorService build(boolean serviceStartup) {
             if (metadataImage == null) {
-                metadataImage = mock(MetadataImage.class);
+                metadataImage = mock(CoordinatorMetadataImage.class);
             }
 
             GroupCoordinatorService service = new GroupCoordinatorService(
@@ -5671,9 +5674,12 @@ public class GroupCoordinatorServiceTest {
                 service.startup(() -> 1);
                 service.onNewMetadataImage(metadataImage, null);
             }
-            when(metadataImage.topics()).thenReturn(mock(TopicsImage.class));
-            when(metadataImage.topics().topicIdToNameView()).thenReturn(Map.of(TOPIC_ID, TOPIC_NAME));
-            when(metadataImage.topics().topicNameToIdView()).thenReturn(Map.of(TOPIC_NAME, TOPIC_ID));
+            when(metadataImage.topicNames()).thenReturn(Set.of(TOPIC_NAME));
+            var topicMetadata = mock(CoordinatorMetadataImage.TopicMetadata.class);
+            when(topicMetadata.name()).thenReturn(TOPIC_NAME);
+            when(topicMetadata.id()).thenReturn(TOPIC_ID);
+            when(metadataImage.topicMetadata(TOPIC_ID)).thenReturn(Optional.of(topicMetadata));
+            when(metadataImage.topicMetadata(TOPIC_NAME)).thenReturn(Optional.of(topicMetadata));
 
             return service;
         }

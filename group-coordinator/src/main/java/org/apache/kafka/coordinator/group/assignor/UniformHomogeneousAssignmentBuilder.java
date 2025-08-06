@@ -272,16 +272,6 @@ public class UniformHomogeneousAssignmentBuilder {
         }
     }
 
-    private static class MemberWithRemainingQuota {
-        final String memberId;
-        final int remainingQuota;
-
-        MemberWithRemainingQuota(
-            String memberId,
-            int remainingQuota
-        ) {
-            this.memberId = memberId;
-            this.remainingQuota = remainingQuota;
-        }
+    private record MemberWithRemainingQuota(String memberId, int remainingQuota) {
     }
 }
