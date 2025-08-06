@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.LogReadResult;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperation;
@@ -372,8 +373,10 @@ public class DelayedShareFetch extends DelayedOperation {
             // DelayedShareFetchPartitionKeys corresponding to partitions, whose leader has been changed to a different broker.
             // In that case, such partitions would not be able to get acquired, and the tryComplete will keep on returning false.
             // Eventually the operation will get timed out and completed, but it might not get removed from the purgatory.
-            // This has been eventually left it like this because the purge interval will make sure that the remaining operations
-            // in the purgatory do not grow indefinitely and are purged time to time.
+            // This has been eventually left it like this because the purging mechanism will trigger whenever the number of completed
+            // but still being watched operations is larger than the purge interval. This purge interval is defined by the config
+            // share.fetch.purgatory.purge.interval.requests and is 1000 by default, thereby ensuring that such stale operations do not
+            // grow indefinitely.
             return false;
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
@@ -773,7 +776,7 @@ public class DelayedShareFetch extends DelayedOperation {
             try {
                 Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
                 if (!partition.isLeader()) {
-                    throw new NotLeaderOrFollowerException("Broker is no longer the leader of topicPartition: " + topicIdPartition);
+                    throw new NotLeaderException("Broker is no longer the leader of topicPartition: " + topicIdPartition);
                 }
             } catch (KafkaStorageException e) { // Case a
                 log.debug("TopicPartition {} is in an offline log directory, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
