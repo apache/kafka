@@ -61,13 +61,13 @@ public class QuotaFactory {
                                 Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin) {
 
         public void shutdown() {
-                fetch.shutdown();
-                produce.shutdown();
-                request.shutdown();
-                controllerMutation.shutdown();
-                clientQuotaCallbackPlugin.ifPresent(plugin -> Utils.closeQuietly(plugin, "client quota callback plugin"));
-            }
+            fetch.shutdown();
+            produce.shutdown();
+            request.shutdown();
+            controllerMutation.shutdown();
+            clientQuotaCallbackPlugin.ifPresent(plugin -> Utils.closeQuietly(plugin, "client quota callback plugin"));
         }
+    }
 
     public static QuotaManagers instantiate(
         KafkaConfig cfg,
