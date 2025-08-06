@@ -803,7 +803,7 @@ public class SharePartition {
                 }
 
                 InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE, maxDeliveryCount, memberId);
-                if (updateResult == null) {
+                if (updateResult == null || updateResult.state() != RecordState.ACQUIRED) {
                     log.info("Unable to acquire records for the batch: {} in share partition: {}-{}",
                         inFlightBatch, groupId, topicIdPartition);
                     continue;
@@ -1009,12 +1009,7 @@ public class SharePartition {
                 updatedStates.add(updateResult);
                 stateBatches.add(new PersisterStateBatch(offsetState.getKey(), offsetState.getKey(),
                         updateResult.state().id(), (short) updateResult.deliveryCount()));
-
-                // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
-                // This should not change the next fetch offset because the record is not available for acquisition
-                if (updateResult.state() != RecordState.ARCHIVED) {
-                    updateFindNextFetchOffset(true);
-                }
+                // Do not update the next fetch offset as the offset has not completed the transition yet.
             }
         }
         return Optional.empty();
@@ -1054,12 +1049,7 @@ public class SharePartition {
             updatedStates.add(updateResult);
             stateBatches.add(new PersisterStateBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset(),
                     updateResult.state().id(), (short) updateResult.deliveryCount()));
-
-            // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
-            // This should not change the next fetch offset because the record is not available for acquisition
-            if (updateResult.state() != RecordState.ARCHIVED) {
-                updateFindNextFetchOffset(true);
-            }
+            // Do not update the next fetch offset as the batch has not completed the transition yet.
         }
         return Optional.empty();
     }
@@ -1641,7 +1631,7 @@ public class SharePartition {
 
                 InFlightState updateResult =  offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
                     maxDeliveryCount, memberId);
-                if (updateResult == null) {
+                if (updateResult == null || updateResult.state() != RecordState.ACQUIRED) {
                     log.trace("Unable to acquire records for the offset: {} in batch: {}"
                             + " for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
                         groupId, topicIdPartition);
@@ -1941,12 +1931,7 @@ public class SharePartition {
                 updatedStates.add(updateResult);
                 stateBatches.add(new PersisterStateBatch(offsetState.getKey(), offsetState.getKey(),
                     updateResult.state().id(), (short) updateResult.deliveryCount()));
-                // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
-                // This should not change the next fetch offset because the record is not available for acquisition
-                if (recordState == RecordState.AVAILABLE
-                    && updateResult.state() != RecordState.ARCHIVED) {
-                    updateFindNextFetchOffset(true);
-                }
+                // Do not update the nextFetchOffset as the offset has not completed the transition yet.
             }
         } finally {
             lock.writeLock().unlock();
@@ -1996,13 +1981,7 @@ public class SharePartition {
             stateBatches.add(
                 new PersisterStateBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset(),
                     updateResult.state().id(), (short) updateResult.deliveryCount()));
-
-            // If the maxDeliveryCount limit has been exceeded, the record will be transitioned to ARCHIVED state.
-            // This should not change the nextFetchOffset because the record is not available for acquisition
-            if (recordState == RecordState.AVAILABLE
-                && updateResult.state() != RecordState.ARCHIVED) {
-                updateFindNextFetchOffset(true);
-            }
+            // Do not update the next fetch offset as the batch has not completed the transition yet.
         } finally {
             lock.writeLock().unlock();
         }
