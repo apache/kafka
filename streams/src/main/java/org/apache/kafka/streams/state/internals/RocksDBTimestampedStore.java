@@ -404,7 +404,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
     }
 
-    private class RocksDBDualCFRangeIterator extends RocksDBDualCFIterator {
+    private static class RocksDBDualCFRangeIterator extends RocksDBDualCFIterator {
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.

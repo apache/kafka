@@ -15,19 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.common;
+package org.apache.kafka.tiered.storage.specs;
 
-import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-public class MetadataVersionValidatorTest {
-
-    @Test
-    public void testMetadataVersionValidator() {
-        String str = new MetadataVersionValidator().toString();
-        String[] apiVersions = str.substring(1).split(",");
-        assertEquals(MetadataVersion.VERSIONS.length, apiVersions.length);
+public record FetchCountAndOp(
+    int count,
+    RemoteFetchCount.OperationType operationType
+) {
+    public FetchCountAndOp(int count) {
+        this(count, RemoteFetchCount.OperationType.EQUALS_TO);
     }
 
+    @Override
+    public String toString() {
+        return "FetchCountAndOp{" +
+            "count=" + count +
+            ", operationType=" + operationType +
+            '}';
+    }
 }

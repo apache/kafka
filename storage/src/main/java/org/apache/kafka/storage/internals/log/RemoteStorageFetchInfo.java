@@ -20,22 +20,8 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 
-public class RemoteStorageFetchInfo {
-
-    public final int fetchMaxBytes;
-    public final boolean minOneMessage;
-    public final TopicIdPartition topicIdPartition;
-    public final FetchRequest.PartitionData fetchInfo;
-    public final FetchIsolation fetchIsolation;
-
-    public RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
-                                  FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
-        this.fetchMaxBytes = fetchMaxBytes;
-        this.minOneMessage = minOneMessage;
-        this.topicIdPartition = topicIdPartition;
-        this.fetchInfo = fetchInfo;
-        this.fetchIsolation = fetchIsolation;
-    }
+public record RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicIdPartition topicIdPartition,
+                                     FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
 
     @Override
     public String toString() {
