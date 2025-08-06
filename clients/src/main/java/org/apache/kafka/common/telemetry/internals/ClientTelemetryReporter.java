@@ -733,7 +733,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
             } catch (Throwable e) { 
                 if (e instanceof IOException || e instanceof NoClassDefFoundError || 
-                        e.getCause() instanceof NoClassDefFoundError) {
+                        e.getCause() instanceof NoClassDefFoundError ||
+                        e.getCause() instanceof IOException) {
                     log.debug("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
                     unsupportedCompressionTypes.add(compressionType);
                     compressedPayload = ByteBuffer.wrap(payload.toByteArray());
