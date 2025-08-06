@@ -4050,7 +4050,7 @@ public class GroupMetadataManagerTest {
 
         // Execute the scheduled revocation timeout captured earlier to simulate a
         // stale timeout. This should be a no-op.
-        assertEquals(List.of(), scheduledTimeout.operation.generateRecords().records());
+        assertEquals(List.of(), scheduledTimeout.operation().generateRecords().records());
     }
 
     @Test
@@ -4693,7 +4693,7 @@ public class GroupMetadataManagerTest {
                 classicGroupHeartbeatKey("group-id", "member-1"));
 
             assertNotNull(timeout);
-            assertEquals(context.time.milliseconds() + 4000, timeout.deadlineMs);
+            assertEquals(context.time.milliseconds() + 4000, timeout.deadlineMs());
         });
     }
 
@@ -5579,10 +5579,10 @@ public class GroupMetadataManagerTest {
 
         assertEquals(1, timeouts.size());
         timeouts.forEach(timeout -> {
-            assertEquals(classicGroupHeartbeatKey("group-id", memberId), timeout.key);
+            assertEquals(classicGroupHeartbeatKey("group-id", memberId), timeout.key());
             assertEquals(
                 List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment())),
-                timeout.result.records()
+                timeout.result().records()
             );
         });
 
@@ -5983,9 +5983,9 @@ public class GroupMetadataManagerTest {
         // Advance clock by rebalance timeout to complete join phase. As long as both members have not
         // rejoined, we extend the join phase.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(10000));
-        assertEquals(10000, context.timer.timeout("join-group-id").deadlineMs - context.time.milliseconds());
+        assertEquals(10000, context.timer.timeout("join-group-id").deadlineMs() - context.time.milliseconds());
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(10000));
-        assertEquals(10000, context.timer.timeout("join-group-id").deadlineMs - context.time.milliseconds());
+        assertEquals(10000, context.timer.timeout("join-group-id").deadlineMs() - context.time.milliseconds());
 
         assertTrue(group.isInState(PREPARING_REBALANCE));
         assertEquals(2, group.numMembers());
@@ -6341,7 +6341,7 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.UNKNOWN_SERVER_ERROR, appendGroupMetadataErrorToResponseError(Errors.RECORD_LIST_TOO_LARGE));
         assertEquals(Errors.UNKNOWN_SERVER_ERROR, appendGroupMetadataErrorToResponseError(Errors.INVALID_FETCH_SIZE));
 
-        assertEquals(Errors.LEADER_NOT_AVAILABLE, Errors.LEADER_NOT_AVAILABLE);
+        assertEquals(Errors.LEADER_NOT_AVAILABLE, appendGroupMetadataErrorToResponseError(Errors.LEADER_NOT_AVAILABLE));
     }
 
     @Test
@@ -6407,8 +6407,8 @@ public class GroupMetadataManagerTest {
         assertEquals(1, timeouts.size());
         String memberId = joinResult.joinFuture.get().memberId();
         timeouts.forEach(timeout -> {
-            assertEquals(classicGroupHeartbeatKey("group-id", memberId), timeout.key);
-            assertEquals(expectedRecords, timeout.result.records());
+            assertEquals(classicGroupHeartbeatKey("group-id", memberId), timeout.key());
+            assertEquals(expectedRecords, timeout.result().records());
         });
 
         assertEquals(0, group.numMembers());
@@ -6643,7 +6643,7 @@ public class GroupMetadataManagerTest {
         // Both heartbeats will expire but only the leader is kicked out.
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(10000);
         assertEquals(2, timeouts.size());
-        timeouts.forEach(timeout -> assertEquals(timeout.result, EMPTY_RESULT));
+        timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result()));
 
         assertTrue(duplicateFollowerJoinResult.joinFuture.isDone());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
@@ -8275,7 +8275,7 @@ public class GroupMetadataManagerTest {
         // the follower out because it is awaiting sync.
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(10000);
         assertTrue(timeouts.size() <= 2);
-        timeouts.forEach(timeout -> assertTrue(timeout.result.records().isEmpty()));
+        timeouts.forEach(timeout -> assertTrue(timeout.result().records().isEmpty()));
 
         assertTrue(followerSyncResult.syncFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), followerSyncResult.syncFuture.get().errorCode());
@@ -9108,14 +9108,14 @@ public class GroupMetadataManagerTest {
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(rebalanceTimeoutMs / 2);
         assertEquals(1, timeouts.size());
         ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
-        assertEquals(classicGroupSyncKey("group-id"), timeout.key);
+        assertEquals(classicGroupSyncKey("group-id"), timeout.key());
         assertEquals(
             List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(group, group.groupAssignment())),
-            timeout.result.records()
+            timeout.result().records()
         );
 
         // Simulate a successful write to the log.
-        timeout.result.appendFuture().complete(null);
+        timeout.result().appendFuture().complete(null);
 
         // Heartbeats fail because none of the members have sent the sync request
         joinResponses.forEach(response -> context.verifyHeartbeat(group.groupId(), response, Errors.UNKNOWN_MEMBER_ID));
@@ -9162,8 +9162,8 @@ public class GroupMetadataManagerTest {
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(rebalanceTimeoutMs / 2);
         assertEquals(1, timeouts.size());
         ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
-        assertEquals(classicGroupSyncKey("group-id"), timeout.key);
-        assertTrue(timeout.result.records().isEmpty());
+        assertEquals(classicGroupSyncKey("group-id"), timeout.key());
+        assertTrue(timeout.result().records().isEmpty());
 
         // Leader should be able to heartbeat
         joinResponses.subList(0, 1).forEach(response -> context.verifyHeartbeat(group.groupId(), response, Errors.REBALANCE_IN_PROGRESS));
@@ -9213,8 +9213,8 @@ public class GroupMetadataManagerTest {
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(rebalanceTimeoutMs / 2);
         assertEquals(1, timeouts.size());
         ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
-        assertEquals(classicGroupSyncKey("group-id"), timeout.key);
-        assertTrue(timeout.result.records().isEmpty());
+        assertEquals(classicGroupSyncKey("group-id"), timeout.key());
+        assertTrue(timeout.result().records().isEmpty());
 
         // Follower sync responses should fail.
         followerSyncFutures.forEach(future -> {
@@ -12181,7 +12181,7 @@ public class GroupMetadataManagerTest {
         // Advance time past the session timeout.
         // Member 2 should be fenced from the group, thus triggering the downgrade.
         ExpiredTimeout<Void, CoordinatorRecord> timeout = context.sleep(45000 + 1).get(0);
-        assertEquals(groupSessionTimeoutKey(groupId, memberId2), timeout.key);
+        assertEquals(groupSessionTimeoutKey(groupId, memberId2), timeout.key());
 
         byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
             new TopicPartition(fooTopicName, 0),
@@ -12236,7 +12236,7 @@ public class GroupMetadataManagerTest {
                 List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId)),
                 List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments))
             ),
-            timeout.result.records()
+            timeout.result().records()
         );
 
         // The new classic member 1 has a heartbeat timeout.
@@ -12383,7 +12383,7 @@ public class GroupMetadataManagerTest {
         // Advance time past the session timeout.
         // Member 2 should be fenced from the group, thus triggering the downgrade.
         ExpiredTimeout<Void, CoordinatorRecord> timeout = context.sleep(30000 + 1).get(0);
-        assertEquals(groupRebalanceTimeoutKey(groupId, memberId2), timeout.key);
+        assertEquals(groupRebalanceTimeoutKey(groupId, memberId2), timeout.key());
 
         byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
             new TopicPartition(fooTopicName, 0),
@@ -12438,7 +12438,7 @@ public class GroupMetadataManagerTest {
                 List.of(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId)),
                 List.of(GroupCoordinatorRecordHelpers.newGroupMetadataRecord(expectedClassicGroup, assignments))
             ),
-            timeout.result.records()
+            timeout.result().records()
         );
 
         // The new classic member 1 has a heartbeat timeout.
@@ -14554,7 +14554,7 @@ public class GroupMetadataManagerTest {
         // The member is fenced from the group.
         assertEquals(1, timeouts.size());
         ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
-        assertEquals(groupSessionTimeoutKey(groupId, memberId), timeout.key);
+        assertEquals(groupSessionTimeoutKey(groupId, memberId), timeout.key());
         assertRecordsEquals(
             List.of(
                 // The member is removed.
@@ -14565,7 +14565,7 @@ public class GroupMetadataManagerTest {
                 // The group epoch is bumped.
                 GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, 0)
             ),
-            timeout.result.records()
+            timeout.result().records()
         );
     }
 
@@ -14619,7 +14619,7 @@ public class GroupMetadataManagerTest {
         // The member is fenced from the group.
         assertEquals(1, timeouts.size());
         ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
-        assertEquals(consumerGroupJoinKey(groupId, memberId), timeout.key);
+        assertEquals(consumerGroupJoinKey(groupId, memberId), timeout.key());
         assertRecordsEquals(
             List.of(
                 // The member is removed.
@@ -14630,7 +14630,7 @@ public class GroupMetadataManagerTest {
                 // The group epoch is bumped.
                 GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11, 0)
             ),
-            timeout.result.records()
+            timeout.result().records()
         );
     }
 
@@ -15632,7 +15632,7 @@ public class GroupMetadataManagerTest {
             topicId,
             Map.entry(topicName, new LinkedHashSet<>(partitions))
         );
-    };
+    }
 
     @Test
     public void testShareGroupLeavingMemberBumpsGroupEpoch() {
@@ -16062,7 +16062,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())));
-        assertEquals(e1.getMessage(), "Subtopology subtopologyMissing does not exist in the topology.");
+        assertEquals("Subtopology subtopologyMissing does not exist in the topology.", e1.getMessage());
 
         InvalidRequestException e2 = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
             new StreamsGroupHeartbeatRequestData()
@@ -16076,7 +16076,7 @@ public class GroupMetadataManagerTest {
                 ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())));
-        assertEquals(e2.getMessage(), "Task 3 for subtopology subtopology1 is invalid. Number of tasks for this subtopology: 3");
+        assertEquals("Task 3 for subtopology subtopology1 is invalid. Number of tasks for this subtopology: 3", e2.getMessage());
     }
 
     @Test
@@ -18298,7 +18298,7 @@ public class GroupMetadataManagerTest {
 
         // Execute the scheduled revocation timeout captured earlier to simulate a
         // stale timeout. This should be a no-op.
-        assertEquals(List.of(), scheduledTimeout.operation.generateRecords().records());
+        assertEquals(List.of(), scheduledTimeout.operation().generateRecords().records());
     }
 
     @Test
@@ -20424,7 +20424,7 @@ public class GroupMetadataManagerTest {
         assertEquals(1, tasks.size());
 
         MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> task = tasks.get(0);
-        assertEquals(groupId + "-regex", task.key);
+        assertEquals(groupId + "-regex", task.key());
         assertRecordsEquals(
             List.of(
                 // The resolution of the new regex is persisted.
@@ -20443,7 +20443,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, metadataImage)
                 )))
             ),
-            task.result.records()
+            task.result().records()
         );
     }
 
@@ -20564,8 +20564,8 @@ public class GroupMetadataManagerTest {
 
         // The pending task was a no-op.
         MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> task = tasks.get(0);
-        assertEquals(groupId + "-regex", task.key);
-        assertRecordsEquals(List.of(), task.result.records());
+        assertEquals(groupId + "-regex", task.key());
+        assertRecordsEquals(List.of(), task.result().records());
 
         // The member heartbeats again. It triggers a new resolution.
         result = context.consumerGroupHeartbeat(
@@ -20591,7 +20591,7 @@ public class GroupMetadataManagerTest {
         assertEquals(1, tasks.size());
 
         task = tasks.get(0);
-        assertEquals(groupId + "-regex", task.key);
+        assertEquals(groupId + "-regex", task.key());
         assertRecordsEquals(
             List.of(
                 // The resolution of the new regex is persisted.
@@ -20610,7 +20610,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, metadataImage)
                 )))
             ),
-            task.result.records()
+            task.result().records()
         );
     }
 
@@ -20721,7 +20721,7 @@ public class GroupMetadataManagerTest {
 
         // Execute pending tasks.
         MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> task = tasks.get(0);
-        assertEquals(groupId + "-regex", task.key);
+        assertEquals(groupId + "-regex", task.key());
 
         assertUnorderedRecordsEquals(
             List.of(
@@ -20751,7 +20751,7 @@ public class GroupMetadataManagerTest {
                     foooTopicName, computeTopicHash(foooTopicName, new KRaftCoordinatorMetadataImage(newImage))
                 ))))
             ),
-            task.result.records()
+            task.result().records()
         );
     }
 
@@ -20979,7 +20979,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, barTopicHash
                 )))
             ),
-            context.processTasks().get(0).result.records()
+            context.processTasks().get(0).result().records()
         );
     }
 
@@ -21206,7 +21206,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, barTopicHash
                 )))
             ),
-            context.processTasks().get(0).result.records()
+            context.processTasks().get(0).result().records()
         );
     }
 

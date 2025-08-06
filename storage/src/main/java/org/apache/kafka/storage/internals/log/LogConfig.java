@@ -339,28 +339,20 @@ public class LogConfig extends AbstractConfig {
     }
 
     private Optional<Compression> getCompression() {
-        switch (compressionType) {
-            case GZIP:
-                return Optional.of(Compression.gzip()
-                        .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
-                        .build());
-            case LZ4:
-                return Optional.of(Compression.lz4()
-                        .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
-                        .build());
-            case ZSTD:
-                return Optional.of(Compression.zstd()
-                        .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
-                        .build());
-            case SNAPPY:
-                return Optional.of(Compression.snappy().build());
-            case UNCOMPRESSED:
-                return Optional.of(Compression.NONE);
-            case PRODUCER:
-                return Optional.empty();
-            default:
-                throw new IllegalArgumentException("Invalid value for " + TopicConfig.COMPRESSION_TYPE_CONFIG);
-        }
+        return switch (compressionType) {
+            case GZIP -> Optional.of(Compression.gzip()
+                    .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                    .build());
+            case LZ4 -> Optional.of(Compression.lz4()
+                    .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
+                    .build());
+            case ZSTD -> Optional.of(Compression.zstd()
+                    .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                    .build());
+            case SNAPPY -> Optional.of(Compression.snappy().build());
+            case UNCOMPRESSED -> Optional.of(Compression.NONE);
+            case PRODUCER -> Optional.empty();
+        };
     }
 
     public int segmentSize() {

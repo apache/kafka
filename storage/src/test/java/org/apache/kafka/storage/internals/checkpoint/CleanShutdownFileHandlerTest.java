@@ -45,7 +45,7 @@ class CleanShutdownFileHandlerTest {
         assertDoesNotThrow(() -> cleanShutdownFileHandler.write(10L));
         assertTrue(cleanShutdownFileHandler.exists());
         assertEquals(OptionalLong.of(10L), cleanShutdownFileHandler.read());
-        assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
+        assertDoesNotThrow(cleanShutdownFileHandler::delete);
         assertFalse(cleanShutdownFileHandler.exists());
     }
 
@@ -56,7 +56,7 @@ class CleanShutdownFileHandlerTest {
         CleanShutdownFileHandler cleanShutdownFileHandler = new CleanShutdownFileHandler(logDir.getPath());
         assertDoesNotThrow(() -> cleanShutdownFileHandler.write(10L, 0));
         assertTrue(cleanShutdownFileHandler.exists());
-        assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
+        assertDoesNotThrow(cleanShutdownFileHandler::delete);
         assertFalse(cleanShutdownFileHandler.exists());
         assertEquals(OptionalLong.empty(), cleanShutdownFileHandler.read());
     }
@@ -75,7 +75,7 @@ class CleanShutdownFileHandlerTest {
 
         assertTrue(cleanShutdownFileHandler.exists());
         assertEquals(OptionalLong.of(10L), cleanShutdownFileHandler.read());
-        assertDoesNotThrow(() -> cleanShutdownFileHandler.delete());
+        assertDoesNotThrow(cleanShutdownFileHandler::delete);
         assertFalse(cleanShutdownFileHandler.exists());
     }
 }

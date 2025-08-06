@@ -560,7 +560,7 @@ public class GroupCoordinatorConfig {
                     }
                 } else if (object instanceof Class<?> klass) {
                     Object o = Utils.newInstance((Class<?>) klass);
-                    if (!ConsumerGroupPartitionAssignor.class.isInstance(o)) {
+                    if (!(o instanceof ConsumerGroupPartitionAssignor)) {
                         throw new KafkaException(klass + " is not an instance of " + ConsumerGroupPartitionAssignor.class.getName());
                     }
                     assignor = (ConsumerGroupPartitionAssignor) o;
