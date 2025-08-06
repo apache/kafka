@@ -1594,9 +1594,6 @@ public class StreamThread extends Thread implements ProcessingThread {
                 missingTopicsDetail, elapsedTime);
             log.error(errorMsg);
             
-            // Reset timer for next timeout cycle
-            topicsReadyTimer.updateAndReset(maxPollTimeMs);
-            
             throw new MissingSourceTopicException(errorMsg);
         } else {
             log.debug("Missing source topics: {}. Elapsed time: {}ms, timeout in: {}ms", 

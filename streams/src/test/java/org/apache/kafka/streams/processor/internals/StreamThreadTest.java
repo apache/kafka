@@ -70,6 +70,7 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -3945,6 +3946,67 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void testStreamsProtocolIncorrectlyPartitionedTopics() {
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                UUID.randomUUID(),
+                Optional.empty(),
+                Map.of(),
+                Map.of()
+        );
+        final Runnable shutdownErrorHook = mock(Runnable.class);
+
+        final Properties props = configProps(false, false, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final StreamsConfig config = new StreamsConfig(props);
+        final MockTime mockTime = new MockTime(1);
+        thread = new StreamThread(
+                mockTime,
+                config,
+                null,
+                mainConsumer,
+                consumer,
+                changelogReader,
+                null,
+                mock(TaskManager.class),
+                null,
+                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+                new TopologyMetadata(internalTopologyBuilder, config),
+                PROCESS_ID,
+                CLIENT_ID,
+                new LogContext(""),
+                null,
+                new AtomicLong(Long.MAX_VALUE),
+                new LinkedList<>(),
+                shutdownErrorHook,
+                HANDLER,
+                null,
+                Optional.of(streamsRebalanceData),
+                streamsMetadataState
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(State.STARTING);
+
+        streamsRebalanceData.setStatuses(List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.INCORRECTLY_PARTITIONED_TOPICS.code())
+                        .setStatusDetail("Topics are incorrectly partitioned")
+        ));
+
+        // Should immediately throw TopologyException (no timeout like MISSING_SOURCE_TOPICS)
+        final TopologyException exception = assertThrows(TopologyException.class, 
+            () -> thread.runOnceWithoutProcessingThreads());
+        assertTrue(exception.getMessage().contains("Topics are incorrectly partitioned"));
+    }
+
+    @Test
     public void testStreamsProtocolRunOnceWithProcessingThreads() {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
@@ -4149,7 +4211,10 @@ public class StreamThreadTest {
                         .setStatusDetail("Different missing topics")
         ));
         
-        // Should not throw immediately (timeout reset)
+        // Advance time to near timeout to verify the timer was actually reset
+        mockTime.sleep(200000); // Advance by 200 seconds (total 350 seconds from start)
+        
+        // Should not throw even after advancing time, because timeout was reset
         assertDoesNotThrow(() -> thread.runOnceWithoutProcessingThreads());
     }
 
