@@ -131,6 +131,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -361,7 +362,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
-    private boolean cachedSubscriptionHasAllFetchPositions;
+    private final AtomicBoolean cachedSubscriptionHasAllFetchPositions = new AtomicBoolean();
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
@@ -492,7 +493,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metrics,
                     offsetCommitCallbackInvoker,
                     memberStateListener,
-                    streamsRebalanceData
+                    streamsRebalanceData,
+                    cachedSubscriptionHasAllFetchPositions
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -678,7 +680,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             metrics,
             offsetCommitCallbackInvoker,
             memberStateListener,
-            Optional.empty()
+            Optional.empty(),
+            cachedSubscriptionHasAllFetchPositions
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -1792,7 +1795,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         // NOTE: the use of cachedSubscriptionHasAllFetchPositions means we MUST call
         // updateAssignmentMetadataIfNeeded before this method.
-        if (!cachedSubscriptionHasAllFetchPositions && pollTimeout > retryBackoffMs) {
+        if (!cachedSubscriptionHasAllFetchPositions.get() && pollTimeout > retryBackoffMs) {
             pollTimeout = retryBackoffMs;
         }
 
@@ -1847,11 +1850,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                                       defined
      */
     private boolean updateFetchPositions(final Timer timer) {
-        cachedSubscriptionHasAllFetchPositions = false;
+        if (cachedSubscriptionHasAllFetchPositions.get())
+            return true;
+
         try {
             CheckAndUpdatePositionsEvent checkAndUpdatePositionsEvent = new CheckAndUpdatePositionsEvent(calculateDeadlineMs(timer));
             wakeupTrigger.setActiveTask(checkAndUpdatePositionsEvent.future());
-            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(checkAndUpdatePositionsEvent);
+            applicationEventHandler.addAndGet(checkAndUpdatePositionsEvent);
         } catch (TimeoutException e) {
             return false;
         } finally {

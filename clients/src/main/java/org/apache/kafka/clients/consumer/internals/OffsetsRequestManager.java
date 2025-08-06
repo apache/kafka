@@ -53,6 +53,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -92,6 +93,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
+    private final AtomicBoolean cachedSubscriptionHasAllFetchPositions;
     private final long defaultApiTimeoutMs;
 
     /**
@@ -119,6 +121,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final CommitRequestManager commitRequestManager,
+                                 final AtomicBoolean cachedSubscriptionHasAllFetchPositions,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
@@ -146,6 +149,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
         this.commitRequestManager = commitRequestManager;
+        this.cachedSubscriptionHasAllFetchPositions = cachedSubscriptionHasAllFetchPositions;
     }
 
     private static class PendingFetchCommittedRequest {
@@ -243,8 +247,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             if (subscriptionState.hasAllFetchPositions()) {
                 // All positions are already available
+                cachedSubscriptionHasAllFetchPositions.set(true);
                 result.complete(true);
                 return result;
+            } else {
+                cachedSubscriptionHasAllFetchPositions.set(false);
             }
 
             // Some positions are missing, so trigger requests to fetch offsets and update them.

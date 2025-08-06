@@ -1355,6 +1355,7 @@ public class AsyncKafkaConsumerTest {
             any(),
             any(),
             applicationThreadMemberStateListener.capture(),
+            any(),
             any()
         ));
         return applicationThreadMemberStateListener.getValue();
@@ -1426,7 +1427,8 @@ public class AsyncKafkaConsumerTest {
             any(),
             any(),
             any(),
-            streamRebalanceData.capture()
+            streamRebalanceData.capture(),
+            any()
         ));
         return streamRebalanceData.getValue();
     }

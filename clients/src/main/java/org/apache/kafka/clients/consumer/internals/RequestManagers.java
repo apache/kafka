@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
@@ -167,7 +168,8 @@ public class RequestManagers implements Closeable {
                                                      final Metrics metrics,
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener,
-                                                     final Optional<StreamsRebalanceData> streamsRebalanceData
+                                                     final Optional<StreamsRebalanceData> streamsRebalanceData,
+                                                     final AtomicBoolean cachedSubscriptionHasAllFetchPositions
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -292,6 +294,7 @@ public class RequestManagers implements Closeable {
                     apiVersions,
                     networkClientDelegate,
                     commitRequestManager,
+                    cachedSubscriptionHasAllFetchPositions,
                     logContext);
 
                 return new RequestManagers(
