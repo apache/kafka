@@ -2445,20 +2445,20 @@ public class SharePartition {
                         releaseAcquisitionLockOnTimeoutForPerOffsetBatch(inFlightBatch, stateBatches, memberId, firstOffset, lastOffset);
                     }
                 }
-
-                if (!stateBatches.isEmpty()) {
-                    writeShareGroupState(stateBatches).whenComplete((result, exception) -> {
-                        if (exception != null) {
-                            log.debug("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId: {}",
-                                groupId, topicIdPartition, memberId, exception);
-                        }
-                        // Even if write share group state RPC call fails, we will still go ahead with the state transition.
-                        // Update the cached state and start and end offsets after releasing the acquisition lock on timeout.
-                        maybeUpdateCachedStateAndOffsets();
-                    });
-                }
             } finally {
                 lock.writeLock().unlock();
+            }
+
+            if (!stateBatches.isEmpty()) {
+                writeShareGroupState(stateBatches).whenComplete((result, exception) -> {
+                    if (exception != null) {
+                        log.debug("Failed to write the share group state on acquisition lock timeout for share partition: {}-{} memberId: {}",
+                            groupId, topicIdPartition, memberId, exception);
+                    }
+                    // Even if write share group state RPC call fails, we will still go ahead with the state transition.
+                    // Update the cached state and start and end offsets after releasing the acquisition lock on timeout.
+                    maybeUpdateCachedStateAndOffsets();
+                });
             }
 
             // If we have an acquisition lock timeout for a share-partition, then we should check if
