@@ -32,18 +32,36 @@
       "max_attempts": 60
     },
     "security_group_id": "{{user `security_group_id`}}",
+    "run_tags": {
+      "Owner": "ce-kafka",
+      "Service": "ce-kafka",
+      "CreatedBy": "kafka-system-test",
+      "distro": "{{user `linux_distro`}}",
+      "cflt_managed_by": "iac",
+      "cflt_managed_id": "kafka",
+      "cflt_service": "kafka-system-test",
+      "Name": "{{user `instance_name`}}"
+    },
     "tags": {
       "Owner": "ce-kafka",
       "Service": "ce-kafka",
       "Type": "Worker",
       "role": "kafka-worker",
       "CreatedBy": "kafka-system-test",
+      "cflt_managed_by": "iac",
+      "cflt_managed_id": "kafka",
+      "cflt_service": "kafka-system-test",
       "Name": "{{user `instance_name`}}",
       "ResourceUrl": "{{user `resource_url`}}",
       "NightlyRun": "{{user `nightly_run`}}",
       "Distro": "{{user `linux_distro`}}",
       "JdkVersion": "{{user `jdk_version`}}",
       "Arch": "{{user `jdk_arch`}}"
+    },
+    "run_volume_tags": {
+      "cflt_managed_by": "iac",
+      "cflt_managed_id": "kafka",
+      "cflt_service": "kafka-system-test"
     },
     "launch_block_device_mappings": [{
       "device_name": "/dev/sda1",
