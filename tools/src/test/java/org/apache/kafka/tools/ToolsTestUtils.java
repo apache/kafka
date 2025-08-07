@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -146,7 +145,7 @@ public class ToolsTestUtils {
     public static void removePartitionReplicaThrottles(Admin adminClient, Set<TopicPartition> partitions) throws ExecutionException, InterruptedException {
         Map<ConfigResource, Collection<AlterConfigOp>> throttles = partitions.stream().collect(Collectors.toMap(
             tp -> new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()),
-            tp -> Arrays.asList(
+            tp -> List.of(
                     new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
                         AlterConfigOp.OpType.DELETE),
                     new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
