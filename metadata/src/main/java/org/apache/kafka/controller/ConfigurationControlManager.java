@@ -611,7 +611,7 @@ public class ConfigurationControlManager {
 
     /**
      * Generate any configuration records that are needed to make it safe to enable ELR.
-     * Specifically, we need to remove all cluster-level configurations for min.insync.replicas,
+     * Specifically, we need to remove all broker-level configurations for min.insync.replicas,
      * and create a cluster-level configuration for min.insync.replicas. It is always safe to call
      * this function if ELR is already enabled; it will simply do nothing if the necessary
      * configurations already exist.
