@@ -9,11 +9,15 @@ FROM ibm-semeru-runtimes:open-21-jdk as builder
 LABEL maintainer="Your Name <youremail@example.com>"
 LABEL description="Builder stage for Apache Kafka on IBM Semeru JDK"
 
+# Set an environment variable to increase Gradle's heap size.
+# This gives the main Gradle process 2GB of heap memory, which is
+# necessary for compiling a large project like Kafka.
+ENV GRADLE_OPTS="-Xmx2g"
+
 # Set the working directory for the build.
 WORKDIR /app
 
 # Grant execution permissions to the Gradle wrapper script before copying.
-# This avoids issues with file permissions in the build context.
 COPY gradlew .
 COPY gradle ./gradle
 RUN chmod +x ./gradlew
@@ -22,14 +26,12 @@ RUN chmod +x ./gradlew
 COPY . .
 
 # Execute the build to create the final distribution tarball.
-# We use releaseTarGz to get the complete package.
 RUN ./gradlew releaseTarGz -x test -x integrationTest --no-build-cache --no-configuration-cache --no-daemon
 
 # =============================================================================
 # STAGE 2: Runtime Stage
 #
-# This stage creates the final, lean Docker image.
-# It uses the full JDK as requested for access to diagnostic tools.
+# This stage creates the final, lean Docker image using the full JDK.
 # =============================================================================
 FROM ibm-semeru-runtimes:open-21-jdk
 
@@ -48,7 +50,6 @@ RUN mkdir -p /opt/kafka && chown -R kafka:kafka /opt/kafka
 WORKDIR /opt/kafka
 
 # Copy ONLY the final distribution tarball from the builder stage.
-# The path is corrected to where releaseTarGz places the artifact.
 COPY --from=builder /app/core/build/distributions/kafka_*.tgz .
 
 # Unpack the distribution archive, strip the top-level directory,
