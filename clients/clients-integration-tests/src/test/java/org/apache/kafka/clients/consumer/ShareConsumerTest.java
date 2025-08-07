@@ -362,7 +362,7 @@ public class ShareConsumerTest {
                 return partitionOffsetsMap.containsKey(tp);
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive call to callback");
 
-            // We expect no exception as the acknowledgment error code is null.
+            // We expect no exception as the acknowledgement error code is null.
             assertFalse(partitionExceptionMap.containsKey(tp));
             verifyShareGroupStateTopicRecordsProduced();
         }
@@ -391,7 +391,7 @@ public class ShareConsumerTest {
             shareConsumer.poll(Duration.ofMillis(1000));
             shareConsumer.close();
 
-            // We expect no exception as the acknowledgment error code is null.
+            // We expect no exception as the acknowledgement error code is null.
             assertFalse(partitionExceptionMap.containsKey(tp));
             verifyShareGroupStateTopicRecordsProduced();
         }
@@ -1500,7 +1500,7 @@ public class ShareConsumerTest {
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackWithShareConsumer<>(shareConsumer));
             shareConsumer.subscribe(Set.of(tp.topic()));
 
-            // The acknowledgment commit callback will try to call a method of ShareConsumer
+            // The acknowledgement commit callback will try to call a method of ShareConsumer
             shareConsumer.poll(Duration.ofMillis(5000));
             // The second poll sends the acknowledgements implicitly.
             // The acknowledgement commit callback will be called and the exception is thrown.
@@ -1540,14 +1540,14 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
 
-            // The acknowledgment commit callback will try to call a method of ShareConsumer
+            // The acknowledgement commit callback will try to call a method of ShareConsumer
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackWakeup<>(shareConsumer));
             shareConsumer.subscribe(Set.of(tp.topic()));
 
             TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
                 DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
 
-            // The second poll sends the acknowledgments implicitly.
+            // The second poll sends the acknowledgements implicitly.
             shareConsumer.poll(Duration.ofMillis(2000));
 
             // Till now acknowledgement commit callback has not been called, so no exception thrown yet.

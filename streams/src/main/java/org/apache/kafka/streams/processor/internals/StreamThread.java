@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -58,6 +59,7 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ConsumerWrapper;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
@@ -376,6 +378,8 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile KafkaFutureImpl<Uuid> restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> producerInstanceIdFuture = new KafkaFutureImpl<>();
 
+    private Timer topicsReadyTimer;
+
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -653,7 +657,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
             return new DefaultStateUpdater(
                 name,
-                streamsMetrics.metricsRegistry(),
+                streamsMetrics,
                 streamsConfig,
                 restoreConsumer,
                 changelogReader,
@@ -1540,14 +1544,27 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public void handleStreamsRebalanceData() {
         if (streamsRebalanceData.isPresent()) {
+            boolean hasMissingSourceTopics = false;
+            String missingTopicsDetail = null;
+            
             for (final StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
                 if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
                     shutdownErrorHook.run();
                 } else if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code()) {
-                    final String errorMsg = String.format("Missing source topics: %s", status.statusDetail());
+                    hasMissingSourceTopics = true;
+                    missingTopicsDetail = status.statusDetail();
+                } else if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.INCORRECTLY_PARTITIONED_TOPICS.code()) {
+                    final String errorMsg = status.statusDetail();
                     log.error(errorMsg);
-                    throw new MissingSourceTopicException(errorMsg);
+                    throw new TopologyException(errorMsg);
                 }
+            }
+            
+            if (hasMissingSourceTopics) {
+                handleMissingSourceTopicsWithTimeout(missingTopicsDetail);
+            } else {
+                // Reset timeout tracking when no missing source topics are reported
+                topicsReadyTimer = null;
             }
 
             final Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> partitionsByEndpoint =
@@ -1566,6 +1583,30 @@ public class StreamThread extends Thread implements ProcessingThread {
             );
         }
     }
+
+    private void handleMissingSourceTopicsWithTimeout(final String missingTopicsDetail) {
+        // Start timeout tracking on first encounter with missing topics
+        if (topicsReadyTimer == null) {
+            topicsReadyTimer = time.timer(maxPollTimeMs);
+            log.info("Missing source topics detected: {}. Will wait up to {}ms before failing.", 
+                missingTopicsDetail, maxPollTimeMs);
+        } else {
+            topicsReadyTimer.update();
+        }
+        
+        if (topicsReadyTimer.isExpired()) {
+            final long elapsedTime = topicsReadyTimer.elapsedMs();
+            final String errorMsg = String.format("Missing source topics: %s. Timeout exceeded after %dms.", 
+                missingTopicsDetail, elapsedTime);
+            log.error(errorMsg);
+            
+            throw new MissingSourceTopicException(errorMsg);
+        } else {
+            log.debug("Missing source topics: {}. Elapsed time: {}ms, timeout in: {}ms", 
+                missingTopicsDetail, topicsReadyTimer.elapsedMs(), topicsReadyTimer.remainingMs());
+        }
+    }
+    
 
     static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();

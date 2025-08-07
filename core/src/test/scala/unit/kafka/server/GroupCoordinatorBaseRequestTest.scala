@@ -954,7 +954,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def connectAny(): Socket = {
-    val socket: Socket = IntegrationTestUtils.connect(cluster.boundPorts().get(0))
+    val socket: Socket = IntegrationTestUtils.connect(cluster.brokerBoundPorts().get(0))
     openSockets += socket
     socket
   }
@@ -968,7 +968,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
   ): T = {
-    IntegrationTestUtils.connectAndReceive[T](request, cluster.boundPorts().get(0))
+    IntegrationTestUtils.connectAndReceive[T](request, cluster.brokerBoundPorts().get(0))
   }
 
   protected def connectAndReceive[T <: AbstractResponse](

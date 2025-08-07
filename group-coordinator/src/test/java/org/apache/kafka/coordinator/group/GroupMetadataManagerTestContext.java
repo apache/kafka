@@ -200,7 +200,7 @@ public class GroupMetadataManagerTestContext {
 
     public static void assertNoOrEmptyResult(List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts) {
         assertTrue(timeouts.size() <= 1);
-        timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result));
+        timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result()));
     }
 
     public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toProtocols(String... protocolNames) {
@@ -764,8 +764,8 @@ public class GroupMetadataManagerTestContext {
         time.sleep(ms);
         List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = timer.poll();
         timeouts.forEach(timeout -> {
-            if (timeout.result.replayRecords()) {
-                timeout.result.records().forEach(this::replay);
+            if (timeout.result().replayRecords()) {
+                timeout.result().records().forEach(this::replay);
             }
         });
         return timeouts;
@@ -774,8 +774,8 @@ public class GroupMetadataManagerTestContext {
     public List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> processTasks() {
         List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> results = executor.poll();
         results.forEach(taskResult -> {
-            if (taskResult.result.replayRecords()) {
-                taskResult.result.records().forEach(this::replay);
+            if (taskResult.result().replayRecords()) {
+                taskResult.result().records().forEach(this::replay);
             }
         });
         return results;
@@ -789,7 +789,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(groupSessionTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
     }
 
     public void assertNoSessionTimeout(
@@ -809,7 +809,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(groupRebalanceTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
         return timeout;
     }
 
@@ -830,7 +830,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(consumerGroupJoinKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
         return timeout;
     }
 
@@ -851,7 +851,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(consumerGroupSyncKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
         return timeout;
     }
 
@@ -1324,12 +1324,12 @@ public class GroupMetadataManagerTestContext {
         ));
 
 
-        Set<String> heartbeatKeys = timeouts.stream().map(timeout -> timeout.key).collect(Collectors.toSet());
+        Set<String> heartbeatKeys = timeouts.stream().map(timeout -> timeout.key()).collect(Collectors.toSet());
         assertEquals(expectedHeartbeatKeys, heartbeatKeys);
 
         // Only the last member leaving the group should result in the empty group metadata record.
         int timeoutsSize = timeouts.size();
-        assertEquals(expectedRecords, timeouts.get(timeoutsSize - 1).result.records());
+        assertEquals(expectedRecords, timeouts.get(timeoutsSize - 1).result().records());
         assertNoOrEmptyResult(timeouts.subList(0, timeoutsSize - 1));
         assertTrue(group.isInState(EMPTY));
         assertEquals(0, group.numMembers());
