@@ -59,13 +59,15 @@ task bootstrapWrapper() {
       done
       """.stripIndent()
 
+        String putBootstrapStringAbove = "# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script."
+
         def wrapperScript = wrapper.scriptFile
         def wrapperLines = wrapperScript.readLines()
         wrapperScript.withPrintWriter { out ->
             def bootstrapWritten = false
             wrapperLines.each { line ->
                 // Print the wrapper bootstrap before the first usage of the wrapper jar.
-                if (!bootstrapWritten && line.contains("gradle-wrapper.jar")) {
+                if (!bootstrapWritten && line.contains(putBootstrapStringAbove)) {
                     out.println(bootstrapString)
                     bootstrapWritten = true
                 }
