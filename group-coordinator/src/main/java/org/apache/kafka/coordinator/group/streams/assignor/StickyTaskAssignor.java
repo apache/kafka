@@ -326,7 +326,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
         return tasksPerMember;
     }
-
+    
     static class Member {
         private final String processId;
         private final String memberId;
