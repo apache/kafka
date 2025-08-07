@@ -447,15 +447,4 @@ public interface ClusterInstance {
         throw new AssertionError("Timing out after " + timeoutMs +
                 " ms since a leader was not elected for partition " + topicPartition);
     }
-  
-    default void restartDeadBrokers() throws ExecutionException {
-        if (brokers().isEmpty()) {
-            throw new RuntimeException("Must supply at least one server config.");
-        }
-        brokers().entrySet().forEach(entry -> {
-            if (entry.getValue().isShutdown()) {
-                startBroker(entry.getKey());
-            }
-        });
-    }
 }

@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -162,7 +163,7 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             // Now the partition is under min ISR. HWM should not advance.
             producer.send(new ProducerRecord<>(testTopicName, "1", "1")).get();
-            Thread.sleep(100);
+            TimeUnit.MILLISECONDS.sleep(100);
             assertEquals(0, consumer.poll(Duration.ofSeconds(1L)).count());
 
             // Restore the min ISR and the previous log should be visible.
@@ -172,7 +173,7 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             waitUntilOneMessageIsConsumed(consumer);
         } finally {
-            clusterInstance.restartDeadBrokers();
+            restartDeadBrokers();
             if (consumer != null) consumer.close();
             if (producer != null) producer.close();
         }
@@ -256,7 +257,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             assertEquals(0, topicPartitionInfo.lastKnownElr().size(), topicPartitionInfo.toString());
             assertEquals(expectLeader, topicPartitionInfo.leader().id(), topicPartitionInfo.toString());
         } finally {
-            clusterInstance.restartDeadBrokers();
+            restartDeadBrokers();
         }
     }
 
@@ -309,7 +310,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             assertNull(topicPartitionInfo.leader());
             assertEquals(1, topicPartitionInfo.lastKnownElr().size());
         } finally {
-            clusterInstance.restartDeadBrokers();
+            restartDeadBrokers();
         }
     }
 
@@ -387,7 +388,7 @@ public class EligibleLeaderReplicasIntegrationTest {
                 () -> String.format("Partition metadata for %s is not correct", testTopicName)
             );
         } finally {
-            clusterInstance.restartDeadBrokers();
+            restartDeadBrokers();
         }
     }
 
@@ -406,5 +407,14 @@ public class EligibleLeaderReplicasIntegrationTest {
             DEFAULT_MAX_WAIT_MS,
             () -> String.format("Partition metadata for %s is not propagated", testTopicName)
         );
+    }
+
+    void restartDeadBrokers() {
+        if (clusterInstance.brokers().isEmpty()) {
+            throw new RuntimeException("Must supply at least one server config.");
+        }
+        clusterInstance.brokers().forEach((key, value) -> {
+            if (value.isShutdown()) value.startup();
+        });
     }
 }
