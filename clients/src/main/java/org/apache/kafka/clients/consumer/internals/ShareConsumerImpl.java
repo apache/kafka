@@ -895,14 +895,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         closeTimer.update();
 
         // Prepare shutting down the network thread
-        if (applicationEventHandler != null && backgroundEventReaper != null && backgroundEventQueue != null) {
-            swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
-                    () -> sendAcknowledgementsAndLeaveGroup(closeTimer, firstException), firstException);
-            swallow(log, Level.ERROR, "Failed to stop finding coordinator",
-                    this::stopFindCoordinatorOnClose, firstException);
-            swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
-                    () -> handleCompletedAcknowledgements(true), firstException);
-        }
+        swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
+                () -> sendAcknowledgementsAndLeaveGroup(closeTimer, firstException), firstException);
+        swallow(log, Level.ERROR, "Failed to stop finding coordinator",
+                this::stopFindCoordinatorOnClose, firstException);
+        swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
+                () -> handleCompletedAcknowledgements(true), firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
@@ -930,6 +928,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     private void stopFindCoordinatorOnClose() {
+        if (applicationEventHandler == null) {
+            return;
+        }
         log.debug("Stop finding coordinator during consumer close");
         applicationEventHandler.add(new StopFindCoordinatorOnCloseEvent());
     }
@@ -946,6 +947,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * 2. leave the group
      */
     private void sendAcknowledgementsAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
+        if (applicationEventHandler == null) {
+            return;
+        }
         completeQuietly(
                 () -> applicationEventHandler.addAndGet(new ShareAcknowledgeOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer))),
                 "Failed to send pending acknowledgements with a timeout(ms)=" + timer.timeoutMs(), firstException);
@@ -1037,6 +1041,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * If the acknowledgement commit callback throws an exception, this method will throw an exception.
      */
     private void handleCompletedAcknowledgements(boolean onClose) {
+        if (backgroundEventQueue == null || backgroundEventReaper == null || backgroundEventProcessor == null) {
+            return;
+        }
         // If the user gets any fatal errors, they will get these exceptions in the background queue.
         // While closing, we ignore these exceptions so that the consumers close successfully.
         processBackgroundEvents(onClose ? e -> (e instanceof GroupAuthorizationException
