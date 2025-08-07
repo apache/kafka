@@ -4,15 +4,15 @@
 # This stage uses the full IBM Semeru OpenJ9 JDK to compile the Kafka source
 # code and create the final distribution tarball.
 # =============================================================================
-FROM ibm-semeru-runtimes:open-21-jdk as builder
+FROM ibm-semeru-runtimes:open-21-jdk AS builder
 
-LABEL maintainer="Your Name <youremail@example.com>"
+LABEL maintainer="JTSweet jtsweet1980@gmail.com"
 LABEL description="Builder stage for Apache Kafka on IBM Semeru JDK"
 
 # Set an environment variable to increase Gradle's heap size.
 # This gives the main Gradle process 2GB of heap memory, which is
 # necessary for compiling a large project like Kafka.
-ENV GRADLE_OPTS="-Xmx2g"
+ENV GRADLE_OPTS="-Xmx3g"
 
 # Set the working directory for the build.
 WORKDIR /app
@@ -35,7 +35,7 @@ RUN ./gradlew releaseTarGz -x test -x integrationTest --no-build-cache --no-conf
 # =============================================================================
 FROM ibm-semeru-runtimes:open-21-jdk
 
-LABEL maintainer="Your Name <youremail@example.com>"
+LABEL maintainer="JTSweet jtsweet1980@gmail.com"
 LABEL description="Apache Kafka running on IBM Semeru (OpenJ9) JDK 21"
 
 # Set environment variables for Kafka home and add Kafka's bin to the PATH.
