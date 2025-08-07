@@ -85,35 +85,4 @@ public class RemoteFetchCount {
         GREATER_THAN_OR_EQUALS_TO,
         LESS_THAN_OR_EQUALS_TO
     }
-
-    public static class FetchCountAndOp {
-        private final int count;
-        private final OperationType operationType;
-
-        public FetchCountAndOp(int count) {
-            this.count = count;
-            this.operationType = OperationType.EQUALS_TO;
-        }
-
-        public FetchCountAndOp(int count, OperationType operationType) {
-            this.count = count;
-            this.operationType = operationType;
-        }
-
-        public int getCount() {
-            return count;
-        }
-
-        public OperationType getOperationType() {
-            return operationType;
-        }
-
-        @Override
-        public String toString() {
-            return "FetchCountAndOp{" +
-                    "count=" + count +
-                    ", operationType=" + operationType +
-                    '}';
-        }
-    }
 }
