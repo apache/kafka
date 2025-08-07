@@ -3322,9 +3322,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
+    private boolean shouldSendAddOrRemoveVoterRequest(FollowerState state, long currentTimeMs) {
+        return partitionState.lastKraftVersion().isReconfigSupported() && canBecomeVoter &&
+            quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs);
+    }
+
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
-        if (partitionState.lastKraftVersion().isReconfigSupported() && canBecomeVoter &&
-            quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs)) {
+        final long backoffMs;
+        if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
             /* Only replicas that can become a voter and are configured to auto join should
              * attempt to automatically join the voter set for the configured topic partition.
              */
@@ -3344,19 +3349,20 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             }
+            backoffMs = sendResult.timeToWaitMs();
             if (sendResult.requestSent()) {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
-            return Math.min(
-                sendResult.timeToWaitMs(),
-                Math.min(
-                    state.remainingFetchTimeMs(currentTimeMs),
-                    state.remainingUpdateVoterSetPeriodMs(currentTimeMs)
-                )
-            );
         } else {
-            return maybeSendFetchToBestNode(state, currentTimeMs);
+            backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
         }
+        return Math.min(
+            backoffMs,
+            Math.min(
+                state.remainingFetchTimeMs(currentTimeMs),
+                state.remainingUpdateVoterSetPeriodMs(currentTimeMs)
+            )
+        );
     }
 
     private long maybeSendFetchToBestNode(FollowerState state, long currentTimeMs) {
