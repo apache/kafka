@@ -12,7 +12,7 @@ LABEL description="Builder stage for Apache Kafka on IBM Semeru JDK"
 # Set an environment variable to increase Gradle's heap size.
 # This gives the main Gradle process 2GB of heap memory, which is
 # necessary for compiling a large project like Kafka.
-ENV GRADLE_OPTS="-Xmx4g"
+ENV GRADLE_OPTS="-Xmx5g"
 
 # Set the working directory for the build.
 WORKDIR /app
