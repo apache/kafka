@@ -7911,8 +7911,6 @@ public class SharePartitionTest {
                 PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
 
         future1.complete(writeShareGroupStateResult);
-        // The completion of future1 with exception should not impact the cached state since those records have already
-        // been archived.
         assertEquals(12, sharePartition.nextFetchOffset());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).offsetState().get(3L).state());
         assertEquals(1, sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount());
