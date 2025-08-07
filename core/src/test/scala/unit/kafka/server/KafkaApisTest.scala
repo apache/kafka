@@ -7979,12 +7979,12 @@ class KafkaApisTest extends Logging {
 
   private def compareAcknowledgementBatches(baseOffset: Long,
                                             endOffset: Long,
-                                            acknowledgementType: Byte,
+                                            acknowledgeType: Byte,
                                             acknowledgementBatch: ShareAcknowledgementBatch
                                            ): Boolean = {
     if (baseOffset == acknowledgementBatch.firstOffset()
       && endOffset == acknowledgementBatch.lastOffset()
-      && acknowledgementType == acknowledgementBatch.acknowledgeTypes().get(0)) {
+      && acknowledgeType == acknowledgementBatch.acknowledgeTypes().get(0)) {
       return true
     }
     false

@@ -43,8 +43,7 @@ import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.UnknownHostException;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -186,41 +185,41 @@ public class PushHttpMetricsReporterTest {
         verifyConfigure();
         KafkaMetric metric1 = new KafkaMetric(
                 new Object(),
-                new MetricName("name1", "group1", "desc1", Collections.singletonMap("key1", "value1")),
+                new MetricName("name1", "group1", "desc1", Map.of("key1", "value1")),
                 new ImmutableValue<>(1.0),
                 null,
                 time
         );
         KafkaMetric newMetric1 = new KafkaMetric(
                 new Object(),
-                new MetricName("name1", "group1", "desc1", Collections.singletonMap("key1", "value1")),
+                new MetricName("name1", "group1", "desc1", Map.of("key1", "value1")),
                 new ImmutableValue<>(-1.0),
                 null,
                 time
         );
         KafkaMetric metric2 = new KafkaMetric(
                 new Object(),
-                new MetricName("name2", "group2", "desc2", Collections.singletonMap("key2", "value2")),
+                new MetricName("name2", "group2", "desc2", Map.of("key2", "value2")),
                 new ImmutableValue<>(2.0),
                 null,
                 time
         );
         KafkaMetric metric3 = new KafkaMetric(
                 new Object(),
-                new MetricName("name3", "group3", "desc3", Collections.singletonMap("key3", "value3")),
+                new MetricName("name3", "group3", "desc3", Map.of("key3", "value3")),
                 new ImmutableValue<>(3.0),
                 null,
                 time
         );
         KafkaMetric metric4 = new KafkaMetric(
             new Object(),
-            new MetricName("name4", "group4", "desc4", Collections.singletonMap("key4", "value4")),
+            new MetricName("name4", "group4", "desc4", Map.of("key4", "value4")),
             new ImmutableValue<>("value4"),
             null,
             time
         );
 
-        reporter.init(Arrays.asList(metric1, metric2, metric4));
+        reporter.init(List.of(metric1, metric2, metric4));
         reporter.metricChange(newMetric1); // added in init, modified
         reporter.metricChange(metric3); // added by change
         reporter.metricRemoval(metric2); // added in init, deleted by removal
@@ -236,7 +235,7 @@ public class PushHttpMetricsReporterTest {
         JsonNode metrics = payload.get("metrics");
         assertTrue(metrics.isArray());
         assertEquals(3, metrics.size());
-        List<JsonNode> metricsList = Arrays.asList(metrics.get(0), metrics.get(1), metrics.get(2));
+        List<JsonNode> metricsList = new ArrayList<>(List.of(metrics.get(0), metrics.get(1), metrics.get(2)));
         // Sort metrics based on name so that we can verify the value for each metric below
         metricsList.sort(Comparator.comparing(m -> m.get("name").textValue()));
 

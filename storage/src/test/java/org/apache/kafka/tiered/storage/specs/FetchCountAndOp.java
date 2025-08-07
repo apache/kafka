@@ -14,20 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.api;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+package org.apache.kafka.tiered.storage.specs;
 
-import java.util.Map;
+public record FetchCountAndOp(
+    int count,
+    RemoteFetchCount.OperationType operationType
+) {
+    public FetchCountAndOp(int count) {
+        this(count, RemoteFetchCount.OperationType.EQUALS_TO);
+    }
 
-public class RecordReaderTest {
-
-    @Test
-    void testDefaultCloseAndConfigure() {
-        RecordReader reader = inputStream -> null;
-        // `configure` and `close` should have default empty body
-        Assertions.assertDoesNotThrow(() -> reader.configure(Map.of()));
-        Assertions.assertDoesNotThrow(reader::close);
+    @Override
+    public String toString() {
+        return "FetchCountAndOp{" +
+            "count=" + count +
+            ", operationType=" + operationType +
+            '}';
     }
 }
