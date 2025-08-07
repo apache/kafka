@@ -947,7 +947,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * 2. leave the group
      */
     private void sendAcknowledgementsAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
-        if (applicationEventHandler == null) {
+        if (applicationEventHandler == null || backgroundEventProcessor == null ||
+            backgroundEventReaper == null || backgroundEventQueue == null) {
             return;
         }
         completeQuietly(
