@@ -53,9 +53,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -83,7 +81,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final ConsumerMetadata metadata;
     private final IsolationLevel isolationLevel;
     private final Logger log;
-    private final OffsetFetcherUtils offsetFetcherUtils;
     private final SubscriptionState subscriptionState;
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
@@ -93,14 +90,8 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
-    private final AtomicBoolean cachedSubscriptionHasAllFetchPositions;
     private final long defaultApiTimeoutMs;
-
-    /**
-     * Exception that occurred while updating positions after the triggering event had already
-     * expired. It will be propagated and cleared on the next call to update fetch positions.
-     */
-    private final AtomicReference<Throwable> cachedUpdatePositionsException = new AtomicReference<>();
+    private final SharedOffsetsState sharedOffsetsState;
 
     /**
      * This holds the last OffsetFetch request triggered to retrieve committed offsets to update
@@ -115,13 +106,12 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final ConsumerMetadata metadata,
                                  final IsolationLevel isolationLevel,
                                  final Time time,
-                                 final long retryBackoffMs,
                                  final int requestTimeoutMs,
                                  final long defaultApiTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final CommitRequestManager commitRequestManager,
-                                 final AtomicBoolean cachedSubscriptionHasAllFetchPositions,
+                                 final SharedOffsetsState sharedOffsetsState,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
@@ -142,14 +132,12 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
-        this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
-                time, retryBackoffMs, apiVersions);
         // Register the cluster metadata update callback. Note this only relies on the
         // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
         this.commitRequestManager = commitRequestManager;
-        this.cachedSubscriptionHasAllFetchPositions = cachedSubscriptionHasAllFetchPositions;
+        this.sharedOffsetsState = sharedOffsetsState;
     }
 
     private static class PendingFetchCommittedRequest {
@@ -198,7 +186,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
                 timestampsToSearch,
                 requireTimestamps,
-                offsetFetcherUtils,
+                sharedOffsetsState.offsetFetcherUtils(),
                 isolationLevel);
         listOffsetsRequestState.globalResult.whenComplete((result, error) -> {
             metadata.clearTransientTopics();
@@ -247,11 +235,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             if (subscriptionState.hasAllFetchPositions()) {
                 // All positions are already available
-                cachedSubscriptionHasAllFetchPositions.set(true);
+                sharedOffsetsState.setSubscriptionHasAllFetchPositions(true);
                 result.complete(true);
                 return result;
             } else {
-                cachedSubscriptionHasAllFetchPositions.set(false);
+                sharedOffsetsState.setSubscriptionHasAllFetchPositions(false);
             }
 
             // Some positions are missing, so trigger requests to fetch offsets and update them.
@@ -270,9 +258,9 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     }
 
     private boolean maybeCompleteWithPreviousException(CompletableFuture<Boolean> result) {
-        Throwable cachedException = cachedUpdatePositionsException.getAndSet(null);
-        if (cachedException != null) {
-            result.completeExceptionally(cachedException);
+        Optional<Throwable> cachedException = sharedOffsetsState.getAndClearCachedUpdatePositionsException();
+        if (cachedException.isPresent()) {
+            result.completeExceptionally(cachedException.get());
             return true;
         }
         return false;
@@ -325,7 +313,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         result.whenComplete((__, error) -> {
             boolean updatePositionsExpired = time.milliseconds() >= deadlineMs;
             if (error != null && updatePositionsExpired) {
-                cachedUpdatePositionsException.set(error);
+                sharedOffsetsState.setCachedUpdatePositionsException(error);
             }
         });
     }
@@ -482,7 +470,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap;
 
         try {
-            partitionAutoOffsetResetStrategyMap = offsetFetcherUtils.getOffsetResetStrategyForPartitions();
+            partitionAutoOffsetResetStrategyMap = sharedOffsetsState.offsetFetcherUtils().getOffsetResetStrategyForPartitions();
         } catch (Exception e) {
             CompletableFuture<Void> result = new CompletableFuture<>();
             result.completeExceptionally(e);
@@ -508,7 +496,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * next call to this function.
      */
     void validatePositionsIfNeeded() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = offsetFetcherUtils.getPartitionsToValidate();
+        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = sharedOffsetsState.getPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
             return;
         }
@@ -575,7 +563,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             if (error == null) {
                 listOffsetsRequestState.fetchedOffsets.putAll(multiNodeResult.fetchedOffsets);
                 listOffsetsRequestState.addPartitionsToRetry(multiNodeResult.partitionsToRetry);
-                offsetFetcherUtils.updateSubscriptionState(multiNodeResult.fetchedOffsets,
+                sharedOffsetsState.offsetFetcherUtils().updateSubscriptionState(multiNodeResult.fetchedOffsets,
                         isolationLevel);
 
                 if (listOffsetsRequestState.remainingToSearch.isEmpty()) {
@@ -645,7 +633,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 ListOffsetsResponse lor = (ListOffsetsResponse) response.responseBody();
                 log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
                 try {
-                    ListOffsetResult listOffsetResult = offsetFetcherUtils.handleListOffsetResponse(lor);
+                    ListOffsetResult listOffsetResult = sharedOffsetsState.offsetFetcherUtils().handleListOffsetResponse(lor);
                     result.complete(listOffsetResult);
                 } catch (RuntimeException e) {
                     result.completeExceptionally(e);
@@ -687,7 +675,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             partialResult.whenComplete((result, error) -> {
                 if (error == null) {
-                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(result,
+                    sharedOffsetsState.offsetFetcherUtils().onSuccessfulResponseForResettingPositions(result,
                             partitionAutoOffsetResetStrategyMap);
                 } else {
                     RuntimeException e;
@@ -697,7 +685,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                         e = new RuntimeException("Unexpected failure in ListOffsets request for " +
                                 "resetting positions", error);
                     }
-                    offsetFetcherUtils.onFailedResponseForResettingPositions(resetTimestamps, e);
+                    sharedOffsetsState.offsetFetcherUtils().onFailedResponseForResettingPositions(resetTimestamps, e);
                 }
                 if (expectedResponses.decrementAndGet() == 0) {
                     globalResult.complete(null);
@@ -763,7 +751,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             partialResult.whenComplete((offsetsResult, error) -> {
                 if (error == null) {
-                    offsetFetcherUtils.onSuccessfulResponseForValidatingPositions(fetchPositions,
+                    sharedOffsetsState.offsetFetcherUtils().onSuccessfulResponseForValidatingPositions(fetchPositions,
                             offsetsResult);
                 } else {
                     RuntimeException e;
@@ -773,7 +761,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                         e = new RuntimeException("Unexpected failure in OffsetsForLeaderEpoch " +
                                 "request for validating positions", error);
                     }
-                    offsetFetcherUtils.onFailedResponseForValidatingPositions(fetchPositions, e);
+                    sharedOffsetsState.offsetFetcherUtils().onFailedResponseForValidatingPositions(fetchPositions, e);
                 }
             });
         });
@@ -916,7 +904,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                         .setCurrentLeaderEpoch(currentLeaderEpoch));
             }
         }
-        return offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap);
+        return sharedOffsetsState.offsetFetcherUtils().regroupPartitionMapByNode(partitionDataMap);
     }
 
     // Visible for testing

@@ -62,7 +62,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -92,7 +91,6 @@ public class OffsetsRequestManagerTest {
     private final Time time = mock(Time.class);
     private ApiVersions apiVersions;
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
-    private final AtomicBoolean cachedSubscriptionHasAllFetchPositions = new AtomicBoolean();
     private static final String TEST_TOPIC = "t1";
     private static final TopicPartition TEST_PARTITION_1 = new TopicPartition(TEST_TOPIC, 1);
     private static final TopicPartition TEST_PARTITION_2 = new TopicPartition(TEST_TOPIC, 2);
@@ -114,13 +112,12 @@ public class OffsetsRequestManagerTest {
                 metadata,
                 DEFAULT_ISOLATION_LEVEL,
                 time,
-                RETRY_BACKOFF_MS,
                 REQUEST_TIMEOUT_MS,
                 DEFAULT_API_TIMEOUT_MS,
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
-                cachedSubscriptionHasAllFetchPositions,
+                new SharedOffsetsState(logContext, metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions),
                 logContext
         );
     }
@@ -804,13 +801,12 @@ public class OffsetsRequestManagerTest {
                 metadata,
                 DEFAULT_ISOLATION_LEVEL,
                 time,
-                RETRY_BACKOFF_MS,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
-                cachedSubscriptionHasAllFetchPositions,
+                new SharedOffsetsState(new LogContext(), metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions),
                 new LogContext()
         );
 
