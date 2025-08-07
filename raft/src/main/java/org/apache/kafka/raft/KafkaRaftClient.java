@@ -3328,8 +3328,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
+        GracefulShutdown shutdown = this.shutdown.get();
         final long backoffMs;
-        if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
+        if (shutdown != null) {
+            // If we are an observer, then we can shutdown immediately. We want to
+            // skip potentially sending any add or remove voter RPCs.
+            backoffMs = 0;
+        } else if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
             /* Only replicas that can become a voter and are configured to auto join should
              * attempt to automatically join the voter set for the configured topic partition.
              */
