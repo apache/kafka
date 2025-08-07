@@ -304,50 +304,7 @@ println("Starting build with version $version (commit id ${commitId == null ? "n
 println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
-    // Apply the shared script to control Scala compiler concurrency.
-    // This script defines a global semaphore to limit the number of parallel ScalaCompile tasks,
-    // preventing thread exhaustion errors without disabling overall build parallelism.
-    project.tasks.withType(ScalaCompile).configureEach {
-        def numThreads = project.findProperty('maxScalacThreads')
-        String numThreadsAsString = numThreads.toString()
-
-        // Forking must be enabled on the task's main options to set JVM args and other fork options.
-        options.fork = true
-        options.forkOptions.jvmArgs += [
-                "-Xss512k",
-                "-Xgcpolicy:gencon",
-                "-XcompilationThreads2",
-                "-Xgcthreads1",
-                "-XX:+DisableExplicitGC",
-                "-Xtune:virtualized",
-                "-XX:ActiveProcessorCount=2",
-                "-Djava.util.concurrent.ForkJoinPool.common.parallelism=1",
-                "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
-                "-Xmx2G"
-        ]
-
-    }
-
-    project.tasks.withType(JavaCompile).configureEach {
-        def numThreads = project.findProperty('maxScalacThreads')
-        String numThreadsAsString = numThreads.toString()
-
-        options.fork = true
-        options.forkOptions.jvmArgs += [
-                "-Xss512k",
-                "-Xgcpolicy:gencon",
-                "-XcompilationThreads2",
-                "-Xgcthreads1",
-                "-XX:+DisableExplicitGC",
-                "-Xtune:virtualized",
-                "-XX:ActiveProcessorCount=2",
-                "-Djava.util.concurrent.ForkJoinPool.common.parallelism=1",
-                "-Dscala.concurrent.context.numThreads=" + numThreadsAsString,
-                "-Xmx2G"
-        ]
-    }
-
-        // enable running :dependencies task recursively on all subprojects
+    // enable running :dependencies task recursively on all subprojects
     // eg: ./gradlew allDeps
     task allDeps(type: DependencyReportTask) {}
     // enable running :dependencyInsight task recursively on all subprojects

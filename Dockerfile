@@ -1,88 +1,65 @@
-# Use a stable, well-supported base image like Ubuntu 20.04 (Focal Fossa)
-# This provides a consistent foundation for both the build and final runtime environments.
-ARG BASE_IMAGE=ubuntu:focal
-FROM ${BASE_IMAGE} as base
+# =============================================================================
+# STAGE 1: Build Stage
+#
+# This stage uses the full IBM Semeru OpenJ9 JDK to compile the Kafka source
+# code and create the final distribution tarball.
+# =============================================================================
+FROM ibm-semeru-runtimes:open-21-jdk as builder
 
-# Accept the JDK download URL as a build-time argument.
-# This makes the Dockerfile flexible for both Open and Certified editions.
-ARG JDK_URL
-ARG JDK_SHA256
+LABEL maintainer="Your Name <youremail@example.com>"
+LABEL description="Builder stage for Apache Kafka on IBM Semeru JDK"
 
-# Install necessary tools for downloading and extracting the JDK
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    tar \
-    gzip \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /opt
-
-# Download, verify, and extract the specified JDK from the provided URL
-RUN wget -O jdk.tar.gz "${JDK_URL}" && \
-    echo "${JDK_SHA256} *jdk.tar.gz" | sha256sum -c - && \
-    mkdir -p /opt/java && \
-    tar -zxf jdk.tar.gz -C /opt/java --strip-components=1 && \
-    rm jdk.tar.gz
-
-# Set JAVA_HOME and add it to the system PATH
-ENV JAVA_HOME=/opt/java
-ENV PATH="${JAVA_HOME}/bin:${PATH}"
-
-# Stage 1: The Builder
-# This stage inherits the base with the correct JDK already installed.
-FROM base as builder
-
-# Install build dependencies (Gradle)
-ARG GRADLE_VERSION=8.5
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    unzip \
-    && wget https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -P /tmp \
-    && unzip -d /opt/gradle /tmp/gradle-${GRADLE_VERSION}-bin.zip \
-    && rm /tmp/gradle-${GRADLE_VERSION}-bin.zip \
-    && rm -rf /var/lib/apt/lists/*
-ENV PATH="/opt/gradle/gradle-${GRADLE_VERSION}/bin:${PATH}"
-
-# Copy the application source code
+# Set the working directory for the build.
 WORKDIR /app
-COPY..
 
-# Grant execution permissions to the Gradle wrapper
-RUN chmod +x./gradlew
+# Grant execution permissions to the Gradle wrapper script before copying.
+# This avoids issues with file permissions in the build context.
+COPY gradlew .
+COPY gradle ./gradle
+RUN chmod +x ./gradlew
 
-# Build the classic distributable artifact
-RUN./gradlew releaseTarGz -x test
+# Copy the rest of the project source code.
+COPY . .
 
-# Unpack the artifact for easy copying in the next stage
-RUN mkdir -p /app/dist && \
-    tar -xzf./core/build/distributions/kafka_*.tgz -C /app/dist --strip-components=1
+# Execute the build to create the final distribution tarball.
+# We use releaseTarGz to get the complete package.
+RUN ./gradlew releaseTarGz -x test -x integrationTest --no-build-cache --no-configuration-cache --no-daemon
 
-# Stage 2: The Final Production Image
-# This stage also inherits the base with the full JDK for diagnostics.
-FROM base
+# =============================================================================
+# STAGE 2: Runtime Stage
+#
+# This stage creates the final, lean Docker image.
+# It uses the full JDK as requested for access to diagnostic tools.
+# =============================================================================
+FROM ibm-semeru-runtimes:open-21-jdk
 
-# Define environment variables for Kafka configuration
+LABEL maintainer="Your Name <youremail@example.com>"
+LABEL description="Apache Kafka running on IBM Semeru (OpenJ9) JDK 21"
+
+# Set environment variables for Kafka home and add Kafka's bin to the PATH.
 ENV KAFKA_HOME=/opt/kafka
 ENV PATH="${KAFKA_HOME}/bin:${PATH}"
 
-# Create a non-root user and group for security
-RUN groupadd -r kafka && useradd -r -g kafka -d ${KAFKA_HOME} kafka
+# Create a non-root user and group for better security.
+RUN groupadd -r kafka && useradd -r -g kafka kafka
+RUN mkdir -p /opt/kafka && chown -R kafka:kafka /opt/kafka
 
-# Create Kafka directories and set permissions
-RUN mkdir -p ${KAFKA_HOME} /var/lib/kafka/data /var/log/kafka && \
-    chown -R kafka:kafka ${KAFKA_HOME} /var/lib/kafka /var/log/kafka
+# Set the working directory for the running Kafka application.
+WORKDIR /opt/kafka
 
-# Set the working directory
-WORKDIR ${KAFKA_HOME}
+# Copy ONLY the final distribution tarball from the builder stage.
+# The path is corrected to where releaseTarGz places the artifact.
+COPY --from=builder /app/core/build/distributions/kafka_*.tgz .
 
-# Copy the built Kafka distribution from the builder stage
-COPY --from=builder --chown=kafka:kafka /app/dist .
+# Unpack the distribution archive, strip the top-level directory,
+# and remove the .tgz file to save space.
+RUN tar -xzf kafka_*.tgz --strip-components=1 && rm kafka_*.tgz
 
-# Switch to the non-root user
+# Switch to the non-root user.
 USER kafka
 
-# Expose the default Kafka port
-EXPOSE 9092
+# Expose the default Kafka ports for client and KRaft connections.
+EXPOSE 9092 9093
 
-# Define the default command to run when the container starts
+# Define the command to run when the container starts.
 CMD ["kafka-server-start.sh", "config/kraft/server.properties"]
