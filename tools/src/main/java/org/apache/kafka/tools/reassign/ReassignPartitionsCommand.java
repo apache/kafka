@@ -566,10 +566,12 @@ public class ReassignPartitionsCommand {
         List<String> topicsToReassign = t0.getValue();
 
         Map<TopicPartition, List<Integer>> currentAssignments = getReplicaAssignmentForTopics(adminClient, topicsToReassign);
+        List<TopicPartitionReplica> currentReplicas = getTopicPartitionReplicas(currentAssignments);
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentReplicas);
         List<UsableBroker> usableBrokers = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
         Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentAssignments, usableBrokers);
         System.out.printf("Current partition replica assignment%n%s%n%n",
-            formatAsReassignmentJson(currentAssignments, Map.of()));
+            formatAsReassignmentJson(currentAssignments, currentReplicaLogDirs));
         System.out.printf("Proposed partition reassignment configuration%n%s%n",
             formatAsReassignmentJson(proposedAssignments, Map.of()));
         return Map.entry(proposedAssignments, currentAssignments);
@@ -775,7 +777,7 @@ public class ReassignPartitionsCommand {
 
         verifyBrokerIds(adminClient, brokers);
         Map<TopicPartition, List<Integer>> currentParts = getReplicaAssignmentForPartitions(adminClient, proposedParts.keySet());
-        System.out.println(currentPartitionReplicaAssignmentToString(proposedParts, currentParts));
+        System.out.println(currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts));
 
         if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
             System.out.println(YOU_MUST_RUN_VERIFY_PERIODICALLY_MESSAGE);
@@ -922,14 +924,17 @@ public class ReassignPartitionsCommand {
      * @return                            The string to print.  We will only print information about
      *                                    partitions that appear in the proposed partition assignment.
      */
-    static String currentPartitionReplicaAssignmentToString(Map<TopicPartition, List<Integer>> proposedParts,
+    static String currentPartitionReplicaAssignmentToString(Admin adminClient,
+                                                            Map<TopicPartition, List<Integer>> proposedParts,
                                                             Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException {
         Map<TopicPartition, List<Integer>> partitionsToBeReassigned = currentParts.entrySet().stream()
             .filter(e -> proposedParts.containsKey(e.getKey()))
             .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        List<TopicPartitionReplica> currentReplicas = getTopicPartitionReplicas(partitionsToBeReassigned);
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentReplicas);
 
         return String.format("Current partition replica assignment%n%n%s%n%nSave this to use as the %s",
-            formatAsReassignmentJson(partitionsToBeReassigned, Map.of()),
+            formatAsReassignmentJson(partitionsToBeReassigned, currentReplicaLogDirs),
             "--reassignment-json-file option during rollback");
     }
 
@@ -1513,5 +1518,31 @@ public class ReassignPartitionsCommand {
             }
         }
         return results;
+    }
+
+    static Map<TopicPartitionReplica, String> getReplicaToLogDir(Admin adminClient, List<TopicPartitionReplica> replicas) {
+        try {
+            return adminClient.describeReplicaLogDirs(replicas).all().get()
+                    .entrySet()
+                    .stream()
+                    .filter(entry -> entry.getValue() != null && entry.getValue().getCurrentReplicaLogDir() != null)
+                    .collect(Collectors.toMap(
+                        Entry::getKey,
+                        entry -> entry.getValue().getCurrentReplicaLogDir()
+                    ));
+        } catch (InterruptedException | ExecutionException e) {
+            throw new AdminOperationException(e.getCause());
+        }
+    }
+
+    private static List<TopicPartitionReplica> getTopicPartitionReplicas(Map<TopicPartition, List<Integer>> partitionsToBeReassigned) {
+        return partitionsToBeReassigned.entrySet().stream()
+                .flatMap(entry -> {
+                    TopicPartition tp = entry.getKey();
+                    List<Integer> brokerIds = entry.getValue();
+                    return brokerIds.stream()
+                            .map(brokerId -> new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId));
+                })
+                .toList();
     }
 }
