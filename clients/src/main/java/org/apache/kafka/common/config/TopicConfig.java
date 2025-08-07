@@ -181,7 +181,8 @@ public class TopicConfig {
         "When used together, <code>min.insync.replicas</code> and <code>acks</code> allow you to enforce greater durability guarantees. " +
         "A typical scenario would be to create a topic with a replication factor of 3, " +
         "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
-        "This will ensure that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers.";
+        "This ensures that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers." +
+        "<p>Note that when the Eligible Leader Replicas feature is enabled, the semantics of this config changes. Please refer to <a href=\"#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
