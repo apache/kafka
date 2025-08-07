@@ -23,10 +23,11 @@ import org.apache.kafka.common.utils.Time;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-class SharedOffsetsState {
+class SharedOffsetsState implements MemberStateListener {
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private final AtomicBoolean cachedSubscriptionHasAllFetchPositions = new AtomicBoolean();
@@ -84,5 +85,15 @@ class SharedOffsetsState {
 
     OffsetFetcherUtils offsetFetcherUtils() {
         return offsetFetcherUtils;
+    }
+
+    @Override
+    public void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId) {
+        // Ignore...
+    }
+
+    @Override
+    public void onGroupAssignmentUpdated(Set<TopicPartition> partitions) {
+        setSubscriptionHasAllFetchPositions(false);
     }
 }
