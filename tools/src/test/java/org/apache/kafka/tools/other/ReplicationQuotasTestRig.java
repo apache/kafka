@@ -59,11 +59,11 @@ import java.nio.file.Files;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -106,7 +106,7 @@ public class ReplicationQuotasTestRig {
         boolean displayChartsOnScreen = args.length > 0 && Objects.equals(args[0], "show-gui");
         Journal journal = new Journal();
 
-        List<ExperimentDef> experiments = Arrays.asList(
+        List<ExperimentDef> experiments = List.of(
             //1GB total data written, will take 210s
             new ExperimentDef("Experiment1", 5, 20, 1 * K, 500, 100 * 1000),
             //5GB total data written, will take 110s
@@ -209,11 +209,11 @@ public class ReplicationQuotasTestRig {
 
             Map<Integer, List<Integer>> replicas = IntStream.rangeClosed(0, config.partitions - 1).boxed().collect(Collectors.toMap(
                 Function.identity(),
-                partition -> Collections.singletonList(nextReplicaRoundRobin.getAsInt())
+                partition -> List.of(nextReplicaRoundRobin.getAsInt())
             ));
 
             startBrokers(config.brokers);
-            adminClient.createTopics(Collections.singleton(new NewTopic(TOPIC_NAME, replicas))).all().get();
+            adminClient.createTopics(Set.of(new NewTopic(TOPIC_NAME, replicas))).all().get();
 
             TestUtils.waitUntilTrue(
                     () -> cluster.brokers().values().stream().allMatch(server -> {
@@ -248,7 +248,7 @@ public class ReplicationQuotasTestRig {
             long start = System.currentTimeMillis();
 
             ReassignPartitionsCommand.executeAssignment(adminClient, false,
-                ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Collections.emptyMap()),
+                ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.of()),
                 config.throttle, -1L, 10000L, Time.SYSTEM, false);
 
             //Await completion
@@ -282,12 +282,12 @@ public class ReplicationQuotasTestRig {
         }
 
         void logOutput(ExperimentDef config, Map<Integer, List<Integer>> replicas, Map<TopicPartition, List<Integer>> newAssignment) throws Exception {
-            List<TopicPartitionInfo> actual = adminClient.describeTopics(Collections.singleton(TOPIC_NAME))
+            List<TopicPartitionInfo> actual = adminClient.describeTopics(Set.of(TOPIC_NAME))
                 .allTopicNames().get().get(TOPIC_NAME).partitions();
 
             Map<Integer, List<Integer>> curAssignment = actual.stream().collect(Collectors.toMap(
                 TopicPartitionInfo::partition,
-                p -> p.replicas().stream().map(Node::id).collect(Collectors.toList())
+                p -> p.replicas().stream().map(Node::id).toList()
             ));
 
             //Long stats

@@ -560,8 +560,8 @@ public class ClassicGroupTest {
         int newSessionTimeoutMs = 20000;
         group.updateMember(member, newProtocols, newRebalanceTimeoutMs, newSessionTimeoutMs, null);
 
-        assertEquals(group.rebalanceTimeoutMs(), newRebalanceTimeoutMs);
-        assertEquals(member.sessionTimeoutMs(), newSessionTimeoutMs);
+        assertEquals(newRebalanceTimeoutMs, group.rebalanceTimeoutMs());
+        assertEquals(newSessionTimeoutMs, member.sessionTimeoutMs());
         assertEquals(newProtocols, member.supportedProtocols());
     }
 

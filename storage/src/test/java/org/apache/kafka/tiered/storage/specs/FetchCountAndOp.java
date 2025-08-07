@@ -14,17 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.tiered.storage.specs;
 
-import java.util.List;
-import java.util.Map;
-
-public record ExpandPartitionCountSpec(String topicName, int partitionCount, Map<Integer, List<Integer>> assignment) {
+public record FetchCountAndOp(
+    int count,
+    RemoteFetchCount.OperationType operationType
+) {
+    public FetchCountAndOp(int count) {
+        this(count, RemoteFetchCount.OperationType.EQUALS_TO);
+    }
 
     @Override
     public String toString() {
-        return String.format("ExpandPartitionCountSpec[topicName=%s, partitionCount=%d, assignment=%s]",
-                topicName, partitionCount, assignment);
+        return "FetchCountAndOp{" +
+            "count=" + count +
+            ", operationType=" + operationType +
+            '}';
     }
-
 }
