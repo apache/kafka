@@ -72,6 +72,8 @@ public class DescribeStreamsGroupTest {
     private static final String OUTPUT_TOPIC = "customOutputTopic";
     private static final String INPUT_TOPIC_2 = "customInputTopic2";
     private static final String OUTPUT_TOPIC_2 = "customOutputTopic2";
+    private static final String INPUT_TOPIC_3 = "customInputTopic3";
+    private static final String OUTPUT_TOPIC_3 = "customOutputTopic3";
     private static String bootstrapServers;
     @BeforeAll
     public static void setup() throws Exception {
@@ -92,6 +94,7 @@ public class DescribeStreamsGroupTest {
 
     @AfterAll
     public static void closeCluster() {
+        cluster.deleteTopics(INPUT_TOPIC, OUTPUT_TOPIC, INPUT_TOPIC_2, OUTPUT_TOPIC_2, INPUT_TOPIC_3, OUTPUT_TOPIC_3);
         streams.close();
         cluster.stop();
         cluster = null;
@@ -252,10 +255,17 @@ public class DescribeStreamsGroupTest {
     }
 
     @Test
-    public void testDescribeStreamsGroupWithShortTimeout() {
+    public void testDescribeStreamsGroupWithShortTimeout() throws Exception {
+        cluster.createTopic(INPUT_TOPIC_2, 1, 1);
+        KafkaStreams streams2 = new KafkaStreams(topology(INPUT_TOPIC_2, OUTPUT_TOPIC_2), streamsProp(APP_ID_2));
+        startApplicationAndWaitUntilRunning(streams2);
+
         List<String> args = List.of("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--timeout", "1");
         Throwable e = assertThrows(ExecutionException.class, () -> getStreamsGroupService(args.toArray(new String[0])).describeGroups());
         assertEquals(TimeoutException.class, e.getCause().getClass());
+
+        streams2.close();
+        streams2.cleanUp();
     }
 
     private static Topology topology(String inputTopic, String outputTopic) {
