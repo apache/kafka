@@ -24,9 +24,8 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 
 import org.junit.jupiter.params.provider.Arguments;
 
+import java.util.List;
 import java.util.stream.Stream;
-
-import static java.util.Collections.singletonList;
 
 public class GroupMetadataMessageFormatterTest extends CoordinatorRecordMessageFormatterTest {
 
@@ -56,7 +55,7 @@ public class GroupMetadataMessageFormatterTest extends CoordinatorRecordMessageF
         .setGeneration(1)
         .setProtocol("range")
         .setLeader("leader")
-        .setMembers(singletonList(MEMBER_METADATA))
+        .setMembers(List.of(MEMBER_METADATA))
         .setCurrentStateTimestamp(1234L);
 
     @Override
