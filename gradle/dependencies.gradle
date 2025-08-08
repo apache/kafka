@@ -123,7 +123,10 @@ versions += [
   scoverage: "2.0.11",
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
-  spotbugs: "4.8.6",
+  // While Spotbugs 4.9.3 exists at the time of writing,
+  // Spotbugs 4.9.1 is the latest version not affected by https://github.com/spotbugs/spotbugs/pull/3311,
+  // which breaks the build, so we're sticking with that version until 4.9.4 is released.
+  spotbugs: "4.9.1",
   mockOAuth2Server: "2.2.1",
   zinc: "1.9.2",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json

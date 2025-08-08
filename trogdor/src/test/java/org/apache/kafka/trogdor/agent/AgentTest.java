@@ -61,11 +61,12 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
-import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -80,7 +81,7 @@ public class AgentTest {
         HashMap<String, String> config = new HashMap<>();
         config.put(Platform.Config.TROGDOR_AGENT_PORT, Integer.toString(Agent.DEFAULT_PORT));
         nodes.put("node01", new BasicNode("node01", "localhost",
-            config, Collections.emptySet()));
+            config, Set.of()));
         BasicTopology topology = new BasicTopology(nodes);
         return new BasicPlatform("node01", topology,
             scheduler, new BasicPlatform.ShellCommandRunner());
@@ -153,7 +154,7 @@ public class AgentTest {
             maxTries(10).target("localhost", agent.port()).build();
         AgentStatusResponse status = client.status();
 
-        assertEquals(Collections.emptyMap(), status.workers());
+        assertEquals(Map.of(), status.workers());
         new ExpectedTasks().waitFor(client);
 
         final NoOpTaskSpec fooSpec = new NoOpTaskSpec(10, 10);
@@ -191,7 +192,7 @@ public class AgentTest {
         AgentClient client = new AgentClient.Builder().
             maxTries(10).target("localhost", agent.port()).build();
         AgentStatusResponse status = client.status();
-        assertEquals(Collections.emptyMap(), status.workers());
+        assertEquals(Map.of(), status.workers());
         new ExpectedTasks().waitFor(client);
 
         final NoOpTaskSpec fooSpec = new NoOpTaskSpec(1000, 600000);
@@ -304,7 +305,7 @@ public class AgentTest {
         new ExpectedTasks().waitFor(client);
 
         SampleTaskSpec fooSpec = new SampleTaskSpec(0, 900000,
-            Collections.singletonMap("node01", 1L), "");
+            Map.of("node01", 1L), "");
         client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
@@ -313,7 +314,7 @@ public class AgentTest {
             waitFor(client);
 
         SampleTaskSpec barSpec = new SampleTaskSpec(0, 900000,
-            Collections.singletonMap("node01", 2L), "baz");
+            Map.of("node01", 2L), "baz");
         client.createWorker(new CreateWorkerRequest(1, "bar", barSpec));
 
         time.sleep(1);
@@ -373,17 +374,17 @@ public class AgentTest {
         try (MockKibosh mockKibosh = new MockKibosh()) {
             assertEquals(KiboshControlFile.EMPTY, mockKibosh.read());
             FilesUnreadableFaultSpec fooSpec = new FilesUnreadableFaultSpec(0, 900000,
-                Collections.singleton("myAgent"), mockKibosh.tempDir.getPath(), "/foo", 123);
+                Set.of("myAgent"), mockKibosh.tempDir.getPath(), "/foo", 123);
             client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
                     workerState(new WorkerRunning("foo", fooSpec, 0, new TextNode("Added fault foo"))).
                     build()).
                 waitFor(client);
-            assertEquals(new KiboshControlFile(Collections.singletonList(
+            assertEquals(new KiboshControlFile(List.of(
                 new KiboshFilesUnreadableFaultSpec("/foo", 123))), mockKibosh.read());
             FilesUnreadableFaultSpec barSpec = new FilesUnreadableFaultSpec(0, 900000,
-                Collections.singleton("myAgent"), mockKibosh.tempDir.getPath(), "/bar", 456);
+                Set.of("myAgent"), mockKibosh.tempDir.getPath(), "/bar", 456);
             client.createWorker(new CreateWorkerRequest(1, "bar", barSpec));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
@@ -391,7 +392,7 @@ public class AgentTest {
                 addTask(new ExpectedTaskBuilder("bar").
                     workerState(new WorkerRunning("bar", barSpec, 0, new TextNode("Added fault bar"))).build()).
                 waitFor(client);
-            assertEquals(new KiboshControlFile(asList(
+            assertEquals(new KiboshControlFile(List.of(
                 new KiboshFilesUnreadableFaultSpec("/foo", 123),
                 new KiboshFilesUnreadableFaultSpec("/bar", 456))
             ), mockKibosh.read());
@@ -403,7 +404,7 @@ public class AgentTest {
                 addTask(new ExpectedTaskBuilder("bar").
                     workerState(new WorkerRunning("bar", barSpec, 0, new TextNode("Added fault bar"))).build()).
                 waitFor(client);
-            assertEquals(new KiboshControlFile(Collections.singletonList(
+            assertEquals(new KiboshControlFile(List.of(
                 new KiboshFilesUnreadableFaultSpec("/bar", 456))), mockKibosh.read());
         }
     }
@@ -476,7 +477,7 @@ public class AgentTest {
     public void testAgentExecWithNormalExit() throws Exception {
         Agent agent = createAgent(Scheduler.SYSTEM);
         SampleTaskSpec spec = new SampleTaskSpec(0, 120000,
-            Collections.singletonMap("node01", 1L), "");
+            Map.of("node01", 1L), "");
         TaskSpec rebasedSpec = agent.rebaseTaskSpecTime(spec);
         testExec(agent,
             String.format("Waiting for completion of task:%s%n",
