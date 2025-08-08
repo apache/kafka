@@ -766,7 +766,8 @@ public class DelayedShareFetch extends DelayedOperation {
      * Case a: The partition is in an offline log directory on this broker
      * Case b: This broker does not know the partition it tries to fetch
      * Case c: This broker is no longer the leader of the partition it tries to fetch
-     * Case d: All remote storage read requests completed
+     * Case d: This broker is no longer the leader or follower of the partition it tries to fetch
+     * Case e: All remote storage read requests completed
      * @return boolean representing whether the remote fetch is completed or not.
      */
     private boolean maybeCompletePendingRemoteFetch() {
@@ -784,15 +785,18 @@ public class DelayedShareFetch extends DelayedOperation {
             } catch (UnknownTopicOrPartitionException e) { // Case b
                 log.debug("Broker no longer knows of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
-            } catch (NotLeaderOrFollowerException e) { // Case c
+            } catch (NotLeaderException e) { // Case c
                 log.debug("Broker is no longer the leader or follower of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
+                canComplete = true;
+            } catch (NotLeaderOrFollowerException e) { // Case d
+                log.debug("Broker is no longer the leader of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
             }
             if (canComplete)
                 break;
         }
 
-        if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case d
+        if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case e
             return forceComplete();
         } else
             return false;

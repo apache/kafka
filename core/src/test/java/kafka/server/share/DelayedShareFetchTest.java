@@ -1403,8 +1403,16 @@ public class DelayedShareFetchTest {
         // All the topic partitions are acquirable.
         when(sp0.maybeAcquireFetchLock(fetchId)).thenReturn(true);
 
+        // Mock the behaviour of replica manager such that remote storage fetch completion timer task completes on adding it to the watch queue.
+        doAnswer(invocationOnMock -> {
+            TimerTask timerTask = invocationOnMock.getArgument(0);
+            timerTask.run();
+            return null;
+        }).when(replicaManager).addShareFetchTimerRequest(any());
+
         assertFalse(delayedShareFetch.isCompleted());
         assertTrue(delayedShareFetch.tryComplete());
+        assertTrue(delayedShareFetch.isCompleted());
         // Remote fetch object gets created for delayed share fetch object.
         assertNotNull(delayedShareFetch.pendingRemoteFetches());
         // Verify the locks are released for local log read topic partitions tp0.
