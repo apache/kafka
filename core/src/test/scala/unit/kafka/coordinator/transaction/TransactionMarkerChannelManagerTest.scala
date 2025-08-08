@@ -144,33 +144,33 @@ class TransactionMarkerChannelManagerTest {
 
     var addMarkerFuture: Future[Try[Unit]] = null
     val executor = Executors.newFixedThreadPool(1)
-    txnMetadata2.lock.lock()
     try {
-      addMarkerFuture = executor.submit((() => {
-        Try(channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult,
+      txnMetadata2.inLock(() => {
+        addMarkerFuture = executor.submit((() => {
+          Try(channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult,
             txnMetadata2, expectedTransition))
-      }): Callable[Try[Unit]])
+        }): Callable[Try[Unit]])
 
-      val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
-      val response = new WriteTxnMarkersResponse(
-        util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
-      val clientResponse = new ClientResponse(header, null, null,
-        time.milliseconds(), time.milliseconds(), false, null, null,
-        response)
+        val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
+        val response = new WriteTxnMarkersResponse(
+          util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
+        val clientResponse = new ClientResponse(header, null, null,
+          time.milliseconds(), time.milliseconds(), false, null, null,
+          response)
 
-      TestUtils.waitUntilTrue(() => {
-        val requests = channelManager.generateRequests().asScala
-        if (requests.nonEmpty) {
-          assertEquals(1, requests.size)
-          val request = requests.head
-          request.handler.onComplete(clientResponse)
-          true
-        } else {
-          false
-        }
-      }, "Timed out waiting for expected WriteTxnMarkers request")
+        TestUtils.waitUntilTrue(() => {
+          val requests = channelManager.generateRequests().asScala
+          if (requests.nonEmpty) {
+            assertEquals(1, requests.size)
+            val request = requests.head
+            request.handler.onComplete(clientResponse)
+            true
+          } else {
+            false
+          }
+        }, "Timed out waiting for expected WriteTxnMarkers request")
+      })
     } finally {
-      txnMetadata2.lock.unlock()
       executor.shutdown()
     }
 
