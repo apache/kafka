@@ -19,12 +19,11 @@ package org.apache.kafka.common.telemetry.internals;
 import org.apache.kafka.common.MetricName;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * This class encapsulates naming and mapping conventions defined as part of
@@ -37,6 +36,7 @@ public class TelemetryMetricNamingConvention {
 
     // remove metrics as it is redundant for telemetry metrics naming convention
     private static final Pattern GROUP_PATTERN = Pattern.compile("\\.(metrics)");
+    private static final Pattern DASH_PATTERN = Pattern.compile("-");
 
     public static MetricNamingStrategy<MetricName> getClientTelemetryMetricNamingStrategy(String prefix) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
@@ -46,14 +46,17 @@ public class TelemetryMetricNamingConvention {
             public MetricKey metricKey(MetricName metricName) {
                 Objects.requireNonNull(metricName, "metric name cannot be null");
 
-                return new MetricKey(fullMetricName(prefix, metricName.group(), metricName.name()),
+                return new MetricKey(
+                    fullMetricName(prefix, metricName.group(), metricName.name()).intern(),
                     Collections.unmodifiableMap(cleanTags(metricName.tags())));
             }
 
             @Override
             public MetricKey derivedMetricKey(MetricKey key, String derivedComponent) {
                 Objects.requireNonNull(derivedComponent, "derived component cannot be null");
-                return new MetricKey(key.name() + NAME_JOINER + derivedComponent, key.tags());
+                return new MetricKey(
+                    (key.name() + NAME_JOINER + derivedComponent).intern(),
+                    key.tags());
             }
         };
     }
@@ -111,14 +114,16 @@ public class TelemetryMetricNamingConvention {
      * @return the new map with keys replaced by snake_case representations.
      */
     private static Map<String, String> cleanTags(Map<String, String> raw) {
-        return raw.entrySet()
-            .stream()
-            .collect(Collectors.toMap(s -> clean(s.getKey(), TAG_JOINER), Entry::getValue));
+        Map<String, String> result = new HashMap<>();
+        raw.forEach((k, v) -> {
+            result.put(clean(k, TAG_JOINER).intern(), v.intern());
+        });
+        return result;
     }
 
     private static String clean(String raw, String joiner) {
         Objects.requireNonNull(raw, "metric data cannot be null");
         String lowerCase = raw.toLowerCase(Locale.ROOT);
-        return lowerCase.replaceAll("-", joiner);
+        return DASH_PATTERN.matcher(lowerCase).replaceAll(joiner);
     }
 }
