@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.image.node.ProducerIdsImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Objects;
 
@@ -45,7 +46,7 @@ public final class ProducerIdsImage {
         return nextProducerId;
     }
 
-    public void write(ImageWriter writer) {
+    public void write(ImageWriter writer, ImageWriterOptions options) {
         if (nextProducerId >= 0) {
             writer.write(0, new ProducerIdsRecord().
                     setBrokerId(-1).

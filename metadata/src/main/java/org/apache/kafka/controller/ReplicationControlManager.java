@@ -1109,6 +1109,7 @@ public class ReplicationControlManager {
                     topic,
                     partitionId,
                     partition,
+                    context.requestHeader().requestApiVersion(),
                     partitionData);
 
                 if (validationError != Errors.NONE) {
@@ -1238,6 +1239,7 @@ public class ReplicationControlManager {
         TopicControlInfo topic,
         int partitionId,
         PartitionRegistration partition,
+        short requestApiVersion,
         AlterPartitionRequestData.PartitionData partitionData
     ) {
         if (partition == null) {

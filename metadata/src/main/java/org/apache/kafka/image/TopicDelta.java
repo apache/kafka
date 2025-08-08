@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -39,8 +40,8 @@ import java.util.stream.Collectors;
 public final class TopicDelta {
     private final TopicImage image;
     private final Map<Integer, PartitionRegistration> partitionChanges = new HashMap<>();
-    private final Map<Integer, Integer> partitionToUncleanLeaderElectionCount = new HashMap<>();
-    private final Map<Integer, Integer> partitionToElrElectionCount = new HashMap<>();
+    private Map<Integer, Integer> partitionToUncleanLeaderElectionCount = new HashMap<>();
+    private Map<Integer, Integer> partitionToElrElectionCount = new HashMap<>();
 
     public TopicDelta(TopicImage image) {
         this.image = image;
@@ -112,9 +113,11 @@ public final class TopicDelta {
         }
     }
 
-    public void replay() {
+    public void replay(ClearElrRecord record) {
         // Some partitions are not added to the image yet, let's check the partitionChanges first.
-        partitionChanges.forEach(this::maybeClearElr);
+        partitionChanges.forEach((partitionId, partition) -> {
+            maybeClearElr(partitionId, partition);
+        });
 
         image.partitions().forEach((partitionId, partition) -> {
             if (!partitionChanges.containsKey(partitionId)) {
