@@ -467,8 +467,8 @@ class AutoTopicCreationManagerTest {
     cacheField.setAccessible(true)
     val cache = cacheField.get(autoTopicCreationManager).asInstanceOf[java.util.concurrent.ConcurrentHashMap[String, CachedTopicCreationError]]
     
-    // Add an entry with old timestamp (expired)
-    val expiredTimestamp = System.currentTimeMillis() - (6 * 60 * 1000) // 6 minutes ago
+    // Add an entry with old timestamp (expired) - use 2 minutes which is > 3*requestTimeout (3*100ms = 300ms)
+    val expiredTimestamp = System.currentTimeMillis() - (2 * 60 * 1000) // 2 minutes ago
     cache.put("expired-topic", CachedTopicCreationError("Some error", expiredTimestamp))
     
     // Add an entry with fresh timestamp (not expired)

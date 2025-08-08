@@ -78,7 +78,7 @@ class DefaultAutoTopicCreationManager(
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
   private val topicCreationErrorCache = new ConcurrentHashMap[String, CachedTopicCreationError]()
-  private val errorCacheTtlMs = 5.minutes.toMillis
+  private val errorCacheTtlMs = config.requestTimeoutMs.toLong * 3 // 3x request timeout
   private val maxCacheSize = 1000
 
   /**
