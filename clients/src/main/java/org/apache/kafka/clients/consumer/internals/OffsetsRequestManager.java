@@ -81,6 +81,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final ConsumerMetadata metadata;
     private final IsolationLevel isolationLevel;
     private final Logger log;
+    private final OffsetFetcherUtils offsetFetcherUtils;
     private final SubscriptionState subscriptionState;
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
@@ -132,6 +133,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
+        this.offsetFetcherUtils = sharedOffsetsState.offsetFetcherUtils();
         // Register the cluster metadata update callback. Note this only relies on the
         // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.
@@ -186,7 +188,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
                 timestampsToSearch,
                 requireTimestamps,
-                sharedOffsetsState.offsetFetcherUtils(),
+                offsetFetcherUtils,
                 isolationLevel);
         listOffsetsRequestState.globalResult.whenComplete((result, error) -> {
             metadata.clearTransientTopics();
@@ -470,7 +472,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap;
 
         try {
-            partitionAutoOffsetResetStrategyMap = sharedOffsetsState.offsetFetcherUtils().getOffsetResetStrategyForPartitions();
+            partitionAutoOffsetResetStrategyMap = offsetFetcherUtils.getOffsetResetStrategyForPartitions();
         } catch (Exception e) {
             CompletableFuture<Void> result = new CompletableFuture<>();
             result.completeExceptionally(e);
@@ -563,7 +565,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             if (error == null) {
                 listOffsetsRequestState.fetchedOffsets.putAll(multiNodeResult.fetchedOffsets);
                 listOffsetsRequestState.addPartitionsToRetry(multiNodeResult.partitionsToRetry);
-                sharedOffsetsState.offsetFetcherUtils().updateSubscriptionState(multiNodeResult.fetchedOffsets,
+                offsetFetcherUtils.updateSubscriptionState(multiNodeResult.fetchedOffsets,
                         isolationLevel);
 
                 if (listOffsetsRequestState.remainingToSearch.isEmpty()) {
@@ -633,7 +635,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 ListOffsetsResponse lor = (ListOffsetsResponse) response.responseBody();
                 log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
                 try {
-                    ListOffsetResult listOffsetResult = sharedOffsetsState.offsetFetcherUtils().handleListOffsetResponse(lor);
+                    ListOffsetResult listOffsetResult = offsetFetcherUtils.handleListOffsetResponse(lor);
                     result.complete(listOffsetResult);
                 } catch (RuntimeException e) {
                     result.completeExceptionally(e);
@@ -675,7 +677,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             partialResult.whenComplete((result, error) -> {
                 if (error == null) {
-                    sharedOffsetsState.offsetFetcherUtils().onSuccessfulResponseForResettingPositions(result,
+                    offsetFetcherUtils.onSuccessfulResponseForResettingPositions(result,
                             partitionAutoOffsetResetStrategyMap);
                 } else {
                     RuntimeException e;
@@ -685,7 +687,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                         e = new RuntimeException("Unexpected failure in ListOffsets request for " +
                                 "resetting positions", error);
                     }
-                    sharedOffsetsState.offsetFetcherUtils().onFailedResponseForResettingPositions(resetTimestamps, e);
+                    offsetFetcherUtils.onFailedResponseForResettingPositions(resetTimestamps, e);
                 }
                 if (expectedResponses.decrementAndGet() == 0) {
                     globalResult.complete(null);
@@ -751,7 +753,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             partialResult.whenComplete((offsetsResult, error) -> {
                 if (error == null) {
-                    sharedOffsetsState.offsetFetcherUtils().onSuccessfulResponseForValidatingPositions(fetchPositions,
+                    offsetFetcherUtils.onSuccessfulResponseForValidatingPositions(fetchPositions,
                             offsetsResult);
                 } else {
                     RuntimeException e;
@@ -761,7 +763,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                         e = new RuntimeException("Unexpected failure in OffsetsForLeaderEpoch " +
                                 "request for validating positions", error);
                     }
-                    sharedOffsetsState.offsetFetcherUtils().onFailedResponseForValidatingPositions(fetchPositions, e);
+                    offsetFetcherUtils.onFailedResponseForValidatingPositions(fetchPositions, e);
                 }
             });
         });
@@ -904,7 +906,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                         .setCurrentLeaderEpoch(currentLeaderEpoch));
             }
         }
-        return sharedOffsetsState.offsetFetcherUtils().regroupPartitionMapByNode(partitionDataMap);
+        return offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap);
     }
 
     // Visible for testing
