@@ -117,7 +117,7 @@ public class OffsetsRequestManagerTest {
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
-                new SharedOffsetsState(logContext, metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions),
+                new CommitOffsetsSharedState(logContext, metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions),
                 logContext
         );
     }
@@ -806,7 +806,7 @@ public class OffsetsRequestManagerTest {
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
-                new SharedOffsetsState(new LogContext(), metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions),
+                new CommitOffsetsSharedState(new LogContext(), metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions),
                 new LogContext()
         );
 

@@ -278,7 +278,7 @@ public class AsyncKafkaConsumerTest {
             defaultApiTimeoutMs,
             groupId,
             autoCommitEnabled,
-            new SharedOffsetsState(new LogContext(), metadata, subscriptions, time, retryBackoffMs, new ApiVersions()));
+            new CommitOffsetsSharedState(new LogContext(), metadata, subscriptions, time, retryBackoffMs, new ApiVersions()));
     }
 
     @Test

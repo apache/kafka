@@ -168,7 +168,7 @@ public class RequestManagers implements Closeable {
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener,
                                                      final Optional<StreamsRebalanceData> streamsRebalanceData,
-                                                     final SharedOffsetsState sharedOffsetsState
+                                                     final CommitOffsetsSharedState commitOffsetsSharedState
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -269,7 +269,7 @@ public class RequestManagers implements Closeable {
                                 .updateMetricsLabels(Map.of(ClientTelemetryProvider.GROUP_MEMBER_ID, membershipManager.memberId()));
                         }
 
-                        membershipManager.registerStateListener(sharedOffsetsState);
+                        membershipManager.registerStateListener(commitOffsetsSharedState);
                         membershipManager.registerStateListener(commitRequestManager);
                         membershipManager.registerStateListener(applicationThreadMemberStateListener);
                         heartbeatRequestManager = new ConsumerHeartbeatRequestManager(
@@ -293,7 +293,7 @@ public class RequestManagers implements Closeable {
                     apiVersions,
                     networkClientDelegate,
                     commitRequestManager,
-                    sharedOffsetsState,
+                    commitOffsetsSharedState,
                     logContext);
 
                 return new RequestManagers(

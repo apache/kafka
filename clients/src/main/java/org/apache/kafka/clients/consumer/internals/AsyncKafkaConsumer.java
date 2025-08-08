@@ -360,7 +360,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
-    private final SharedOffsetsState sharedOffsetsState;
+    private final CommitOffsetsSharedState commitOffsetsSharedState;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
@@ -476,7 +476,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
-            this.sharedOffsetsState = new SharedOffsetsState(
+            this.commitOffsetsSharedState = new CommitOffsetsSharedState(
                 logContext,
                 metadata,
                 subscriptions,
@@ -500,7 +500,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker,
                     memberStateListener,
                     streamsRebalanceData,
-                    sharedOffsetsState
+                    commitOffsetsSharedState
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -572,7 +572,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        int defaultApiTimeoutMs,
                        String groupId,
                        boolean autoCommitEnabled,
-                       SharedOffsetsState sharedOffsetsState) {
+                       CommitOffsetsSharedState commitOffsetsSharedState) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -602,7 +602,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             time,
             kafkaConsumerMetrics
         );
-        this.sharedOffsetsState = sharedOffsetsState;
+        this.commitOffsetsSharedState = commitOffsetsSharedState;
     }
 
     AsyncKafkaConsumer(LogContext logContext,
@@ -672,7 +672,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             kafkaConsumerMetrics
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
-        this.sharedOffsetsState = new SharedOffsetsState(
+        this.commitOffsetsSharedState = new CommitOffsetsSharedState(
             logContext,
             metadata,
             subscriptions,
@@ -697,7 +697,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetCommitCallbackInvoker,
             memberStateListener,
             Optional.empty(),
-            sharedOffsetsState
+            commitOffsetsSharedState
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -1811,7 +1811,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         // NOTE: the use of cachedSubscriptionHasAllFetchPositions means we MUST call
         // updateAssignmentMetadataIfNeeded before this method.
-        if (!sharedOffsetsState.subscriptionHasAllFetchPositions() && pollTimeout > retryBackoffMs) {
+        if (!commitOffsetsSharedState.subscriptionHasAllFetchPositions() && pollTimeout > retryBackoffMs) {
             pollTimeout = retryBackoffMs;
         }
 
@@ -1866,7 +1866,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                                       defined
      */
     private boolean updateFetchPositions(final Timer timer) {
-        if (sharedOffsetsState.canSkipUpdateFetchPositions())
+        if (commitOffsetsSharedState.canSkipUpdateFetchPositions())
             return true;
 
         try {

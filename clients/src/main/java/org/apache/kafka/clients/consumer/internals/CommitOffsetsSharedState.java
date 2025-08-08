@@ -27,10 +27,16 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-class SharedOffsetsState implements MemberStateListener {
+/**
+ *
+ */
+public class CommitOffsetsSharedState implements MemberStateListener {
 
-    // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
+    /**
+     * To keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates.
+     */
     private final AtomicBoolean cachedSubscriptionHasAllFetchPositions = new AtomicBoolean();
+
     /**
      * Exception that occurred while updating positions after the triggering event had already
      * expired. It will be propagated and cleared on the next call to update fetch positions.
@@ -38,12 +44,12 @@ class SharedOffsetsState implements MemberStateListener {
     private final AtomicReference<Throwable> cachedUpdatePositionsException = new AtomicReference<>();
     private final OffsetFetcherUtils offsetFetcherUtils;
 
-    SharedOffsetsState(LogContext logContext,
-                              ConsumerMetadata metadata,
-                              SubscriptionState subscriptions,
-                              Time time,
-                              long retryBackoffMs,
-                              ApiVersions apiVersions) {
+    CommitOffsetsSharedState(LogContext logContext,
+                             ConsumerMetadata metadata,
+                             SubscriptionState subscriptions,
+                             Time time,
+                             long retryBackoffMs,
+                             ApiVersions apiVersions) {
         this.offsetFetcherUtils = new OffsetFetcherUtils(
             logContext,
             metadata,
@@ -54,12 +60,12 @@ class SharedOffsetsState implements MemberStateListener {
         );
     }
 
-    Optional<Throwable> getAndClearCachedUpdatePositionsException() {
-        return Optional.ofNullable(cachedUpdatePositionsException.getAndSet(null));
+    Throwable getAndClearCachedUpdatePositionsException() {
+        return cachedUpdatePositionsException.getAndSet(null);
     }
 
-    void setCachedUpdatePositionsException(Throwable t) {
-        cachedUpdatePositionsException.set(t);
+    void setCachedUpdatePositionsException(Throwable exception) {
+        cachedUpdatePositionsException.set(exception);
     }
 
     boolean subscriptionHasAllFetchPositions() {
@@ -75,10 +81,10 @@ class SharedOffsetsState implements MemberStateListener {
     }
 
     boolean canSkipUpdateFetchPositions() {
-        Optional<Throwable> error = getAndClearCachedUpdatePositionsException();
+        Throwable exception = getAndClearCachedUpdatePositionsException();
 
-        if (error.isPresent())
-            throw ConsumerUtils.maybeWrapAsKafkaException(error.get());
+        if (exception != null)
+            throw ConsumerUtils.maybeWrapAsKafkaException(exception);
 
         return getPartitionsToValidate().isEmpty() && subscriptionHasAllFetchPositions();
     }

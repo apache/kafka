@@ -92,7 +92,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
-    private final SharedOffsetsState sharedOffsetsState;
+    private final CommitOffsetsSharedState commitOffsetsSharedState;
 
     /**
      * This holds the last OffsetFetch request triggered to retrieve committed offsets to update
@@ -112,7 +112,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final CommitRequestManager commitRequestManager,
-                                 final SharedOffsetsState sharedOffsetsState,
+                                 final CommitOffsetsSharedState commitOffsetsSharedState,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
@@ -133,13 +133,13 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
-        this.offsetFetcherUtils = sharedOffsetsState.offsetFetcherUtils();
+        this.offsetFetcherUtils = commitOffsetsSharedState.offsetFetcherUtils();
         // Register the cluster metadata update callback. Note this only relies on the
         // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
         this.commitRequestManager = commitRequestManager;
-        this.sharedOffsetsState = sharedOffsetsState;
+        this.commitOffsetsSharedState = commitOffsetsSharedState;
     }
 
     private static class PendingFetchCommittedRequest {
@@ -237,11 +237,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             if (subscriptionState.hasAllFetchPositions()) {
                 // All positions are already available
-                sharedOffsetsState.setSubscriptionHasAllFetchPositions(true);
+                commitOffsetsSharedState.setSubscriptionHasAllFetchPositions(true);
                 result.complete(true);
                 return result;
             } else {
-                sharedOffsetsState.setSubscriptionHasAllFetchPositions(false);
+                commitOffsetsSharedState.setSubscriptionHasAllFetchPositions(false);
             }
 
             // Some positions are missing, so trigger requests to fetch offsets and update them.
@@ -260,9 +260,9 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     }
 
     private boolean maybeCompleteWithPreviousException(CompletableFuture<Boolean> result) {
-        Optional<Throwable> cachedException = sharedOffsetsState.getAndClearCachedUpdatePositionsException();
-        if (cachedException.isPresent()) {
-            result.completeExceptionally(cachedException.get());
+        Throwable cachedException = commitOffsetsSharedState.getAndClearCachedUpdatePositionsException();
+        if (cachedException != null) {
+            result.completeExceptionally(cachedException);
             return true;
         }
         return false;
@@ -315,7 +315,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         result.whenComplete((__, error) -> {
             boolean updatePositionsExpired = time.milliseconds() >= deadlineMs;
             if (error != null && updatePositionsExpired) {
-                sharedOffsetsState.setCachedUpdatePositionsException(error);
+                commitOffsetsSharedState.setCachedUpdatePositionsException(error);
             }
         });
     }
@@ -498,7 +498,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * next call to this function.
      */
     void validatePositionsIfNeeded() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = sharedOffsetsState.getPartitionsToValidate();
+        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = commitOffsetsSharedState.getPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
             return;
         }
