@@ -19,10 +19,12 @@ package kafka.server
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.{Collections, Properties}
+import scala.concurrent.duration._
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.requests.CreateTopicsResponse
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.CreateTopicsRequestData
@@ -53,7 +55,18 @@ trait AutoTopicCreationManager {
     requestContext: RequestContext
   ): Unit
 
+  def getTopicCreationErrors(
+    topicNames: Set[String]
+  ): Map[String, String]
+
+  def close(): Unit = {}
+
 }
+
+case class CachedTopicCreationError(
+  errorMessage: String,
+  timestamp: Long
+)
 
 class DefaultAutoTopicCreationManager(
   config: KafkaConfig,
@@ -64,6 +77,9 @@ class DefaultAutoTopicCreationManager(
 ) extends AutoTopicCreationManager with Logging {
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
+  private val topicCreationErrorCache = new ConcurrentHashMap[String, CachedTopicCreationError]()
+  private val errorCacheTtlMs = 5.minutes.toMillis
+  private val maxCacheSize = 1000
 
   /**
    * Initiate auto topic creation for the given topics.
@@ -100,6 +116,45 @@ class DefaultAutoTopicCreationManager(
     }
   }
 
+  override def getTopicCreationErrors(
+    topicNames: Set[String]
+  ): Map[String, String] = {
+    val currentTime = System.currentTimeMillis()
+    val errors = mutable.Map.empty[String, String]
+    val expiredKeys = mutable.Set.empty[String]
+    
+    // Check requested topics and collect expired keys
+    topicNames.foreach { topicName =>
+      Option(topicCreationErrorCache.get(topicName)) match {
+        case Some(cachedError) if (currentTime - cachedError.timestamp) <= errorCacheTtlMs =>
+          errors.put(topicName, cachedError.errorMessage)
+        case Some(_) =>
+          expiredKeys += topicName
+        case None =>
+      }
+    }
+    
+    // Remove expired entries
+    expiredKeys.foreach { key =>
+      topicCreationErrorCache.remove(key)
+      debug(s"Removed expired topic creation error cache entry for $key")
+    }
+    
+    // If cache is too large, remove oldest entries
+    if (topicCreationErrorCache.size() > maxCacheSize) {
+      val entriesToRemove = topicCreationErrorCache.size() - maxCacheSize
+      val oldestEntries = topicCreationErrorCache.entrySet().asScala
+        .toSeq.sortBy(_.getValue.timestamp).take(entriesToRemove)
+      oldestEntries.foreach { entry =>
+        topicCreationErrorCache.remove(entry.getKey)
+        debug(s"Removed oldest topic creation error cache entry for ${entry.getKey} due to cache size limit")
+      }
+      debug(s"Removed $entriesToRemove oldest entries from topic creation error cache due to size limit")
+    }
+    
+    errors.toMap
+  }
+
   private def sendCreateTopicRequest(
     creatableTopics: Map[String, CreatableTopic],
     requestContext: Option[RequestContext]
@@ -123,23 +178,17 @@ class DefaultAutoTopicCreationManager(
         clearInflightRequests(creatableTopics)
         if (response.authenticationException() != null) {
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception")
+          cacheTopicCreationErrors(creatableTopics.keys.toSet, "Authentication failed")
         } else if (response.versionMismatch() != null) {
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
+          cacheTopicCreationErrors(creatableTopics.keys.toSet, "Version mismatch")
         } else {
-          if (response.hasResponse) {
-            response.responseBody() match {
-              case createTopicsResponse: CreateTopicsResponse =>
-                createTopicsResponse.data().topics().forEach(topicResult => {
-                  val error = Errors.forCode(topicResult.errorCode)
-                  if (error != Errors.NONE) {
-                    warn(s"Auto topic creation failed for ${topicResult.name} with error '${error.name}': ${topicResult.errorMessage}")
-                  }
-                })
-              case other =>
-                warn(s"Auto topic creation request received unexpected response type: ${other.getClass.getSimpleName}")
-            }
+          response.responseBody() match {
+            case createTopicsResponse: CreateTopicsResponse =>
+              cacheTopicCreationErrorsFromResponse(createTopicsResponse)
+            case _ =>
+              debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
           }
-          debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
         }
       }
     }
@@ -263,5 +312,32 @@ class DefaultAutoTopicCreationManager(
     }
 
     (creatableTopics, uncreatableTopics)
+  }
+
+  private def cacheTopicCreationErrors(topicNames: Set[String], errorMessage: String): Unit = {
+    val timestamp = System.currentTimeMillis()
+    topicNames.foreach { topicName =>
+      topicCreationErrorCache.put(topicName, CachedTopicCreationError(errorMessage, timestamp))
+    }
+  }
+
+  private def cacheTopicCreationErrorsFromResponse(response: CreateTopicsResponse): Unit = {
+    val timestamp = System.currentTimeMillis()
+    response.data().topics().forEach { topicResult =>
+      if (topicResult.errorCode() != Errors.NONE.code()) {
+        val errorMessage = Option(topicResult.errorMessage())
+          .filter(_.nonEmpty)
+          .getOrElse(Errors.forCode(topicResult.errorCode()).message())
+        topicCreationErrorCache.put(
+          topicResult.name(),
+          CachedTopicCreationError(errorMessage, timestamp)
+        )
+        debug(s"Cached topic creation error for ${topicResult.name()}: $errorMessage")
+      }
+    }
+  }
+
+  override def close(): Unit = {
+    topicCreationErrorCache.clear()
   }
 }

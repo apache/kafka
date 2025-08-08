@@ -42,7 +42,7 @@ import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.quota.ControllerMutationQuota
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.never
@@ -355,5 +355,177 @@ class AutoTopicCreationManagerTest {
       .setName(topicName)
       .setNumPartitions(numPartitions)
       .setReplicationFactor(replicationFactor)
+  }
+
+  @Test
+  def testTopicCreationErrorCaching(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator)
+
+    val topics = Map(
+      "test-topic-1" -> new CreatableTopic().setName("test-topic-1").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Simulate a CreateTopicsResponse with errors
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+    val topicResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+      .setName("test-topic-1")
+      .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code())
+      .setErrorMessage("Topic 'test-topic-1' already exists.")
+    createTopicsResponseData.topics().add(topicResult)
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val header = new RequestHeader(ApiKeys.CREATE_TOPICS, 0, "client", 1)
+    val clientResponse = new ClientResponse(header, null, null,
+      0, 0, false, null, null, createTopicsResponse)
+
+    // Trigger the completion handler
+    argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
+
+    // Verify that the error was cached
+    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("test-topic-1"))
+    assertEquals(1, cachedErrors.size)
+    assertTrue(cachedErrors.contains("test-topic-1"))
+    assertEquals("Topic 'test-topic-1' already exists.", cachedErrors("test-topic-1"))
+  }
+
+  @Test
+  def testGetTopicCreationErrorsWithMultipleTopics(): Unit = {
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator)
+
+    val topics = Map(
+      "success-topic" -> new CreatableTopic().setName("success-topic").setNumPartitions(1).setReplicationFactor(1),
+      "failed-topic" -> new CreatableTopic().setName("failed-topic").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Simulate mixed response - one success, one failure
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+    createTopicsResponseData.topics().add(
+      new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+        .setName("success-topic")
+        .setErrorCode(Errors.NONE.code())
+    )
+    createTopicsResponseData.topics().add(
+      new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+        .setName("failed-topic")
+        .setErrorCode(Errors.POLICY_VIOLATION.code())
+        .setErrorMessage("Policy violation")
+    )
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val header = new RequestHeader(ApiKeys.CREATE_TOPICS, 0, "client", 1)
+    val clientResponse = new ClientResponse(header, null, null,
+      0, 0, false, null, null, createTopicsResponse)
+
+    argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
+
+    // Only the failed topic should be cached
+    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("success-topic", "failed-topic", "nonexistent-topic"))
+    assertEquals(1, cachedErrors.size)
+    assertTrue(cachedErrors.contains("failed-topic"))
+    assertEquals("Policy violation", cachedErrors("failed-topic"))
+  }
+
+  @Test
+  def testLazyCleanupOfExpiredCacheEntries(): Unit = {
+    // Test will verify that expired entries are cleaned up when accessed
+    // We'll simulate the passage of time by directly manipulating the cache
+    
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator)
+    
+    // Manually add an expired entry to the cache using reflection
+    val cacheField = classOf[DefaultAutoTopicCreationManager].getDeclaredField("topicCreationErrorCache")
+    cacheField.setAccessible(true)
+    val cache = cacheField.get(autoTopicCreationManager).asInstanceOf[java.util.concurrent.ConcurrentHashMap[String, CachedTopicCreationError]]
+    
+    // Add an entry with old timestamp (expired)
+    val expiredTimestamp = System.currentTimeMillis() - (6 * 60 * 1000) // 6 minutes ago
+    cache.put("expired-topic", CachedTopicCreationError("Some error", expiredTimestamp))
+    
+    // Add an entry with fresh timestamp (not expired)
+    val freshTimestamp = System.currentTimeMillis()
+    cache.put("fresh-topic", CachedTopicCreationError("Another error", freshTimestamp))
+    
+    // Query both topics - expired should be removed, fresh should remain
+    val result = autoTopicCreationManager.getTopicCreationErrors(Set("expired-topic", "fresh-topic"))
+    
+    // Only the fresh entry should remain
+    assertEquals(1, result.size)
+    assertTrue(result.contains("fresh-topic"))
+    assertFalse(result.contains("expired-topic"))
+    assertEquals("Another error", result("fresh-topic"))
+    
+    // Verify the expired entry was actually removed from the cache
+    assertFalse(cache.containsKey("expired-topic"))
+    assertTrue(cache.containsKey("fresh-topic"))
+  }
+
+  @Test
+  def testCacheSizeLimitCleanup(): Unit = {
+    // Test will verify that when cache exceeds size limit, oldest entries are removed
+    
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator)
+    
+    // Manually add entries to the cache using reflection
+    val cacheField = classOf[DefaultAutoTopicCreationManager].getDeclaredField("topicCreationErrorCache")
+    cacheField.setAccessible(true)
+    val cache = cacheField.get(autoTopicCreationManager).asInstanceOf[java.util.concurrent.ConcurrentHashMap[String, CachedTopicCreationError]]
+    
+    // Add entries with different timestamps to simulate creation order
+    val baseTime = System.currentTimeMillis()
+    cache.put("oldest-topic", CachedTopicCreationError("Error 1", baseTime - 3000)) // 3 seconds ago
+    cache.put("middle-topic", CachedTopicCreationError("Error 2", baseTime - 2000)) // 2 seconds ago
+    cache.put("newest-topic", CachedTopicCreationError("Error 3", baseTime - 1000)) // 1 second ago
+    
+    // Fill cache beyond the limit (1000) by adding many entries
+    for (i <- 1 to 1002) {
+      cache.put(s"topic-$i", CachedTopicCreationError(s"Error $i", baseTime))
+    }
+    
+    // Now query some topics to trigger cleanup
+    val result = autoTopicCreationManager.getTopicCreationErrors(Set("oldest-topic", "middle-topic", "newest-topic"))
+    
+    // All should still be found since they were queried before cleanup
+    assertEquals(3, result.size)
+    assertTrue(result.contains("oldest-topic"))
+    assertTrue(result.contains("middle-topic"))  
+    assertTrue(result.contains("newest-topic"))
+    
+    // Cache should be limited to maxCacheSize (1000) after cleanup
+    assertTrue(cache.size() <= 1000)
   }
 }

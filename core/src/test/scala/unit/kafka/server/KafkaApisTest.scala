@@ -169,7 +169,8 @@ class KafkaApisTest extends Logging {
     authorizer: Option[Authorizer] = None,
     configRepository: ConfigRepository = new MockConfigRepository(),
     overrideProperties: Map[String, String] = Map.empty,
-    featureVersions: Seq[FeatureVersion] = Seq.empty
+    featureVersions: Seq[FeatureVersion] = Seq.empty,
+    autoTopicCreationManager: Option[AutoTopicCreationManager] = None
   ): KafkaApis = {
 
     val properties = TestUtils.createBrokerConfig(brokerId)
@@ -195,7 +196,7 @@ class KafkaApisTest extends Logging {
       groupCoordinator = groupCoordinator,
       txnCoordinator = txnCoordinator,
       shareCoordinator = shareCoordinator,
-      autoTopicCreationManager = autoTopicCreationManager,
+      autoTopicCreationManager = autoTopicCreationManager.getOrElse(this.autoTopicCreationManager),
       brokerId = brokerId,
       config = config,
       configRepository = configRepository,
@@ -10947,6 +10948,59 @@ class KafkaApisTest extends Logging {
       ),
       response.data.status()
     )
+  }
+
+  @Test
+  def testStreamsGroupHeartbeatRequestWithCachedTopicCreationErrors(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+
+    val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
+    when(groupCoordinator.streamsGroupHeartbeat(
+      requestChannelRequest.context,
+      streamsGroupHeartbeatRequest
+    )).thenReturn(future)
+
+    // Mock AutoTopicCreationManager to return cached errors
+    val mockAutoTopicCreationManager = mock(classOf[AutoTopicCreationManager])
+    when(mockAutoTopicCreationManager.getTopicCreationErrors(Set("test-topic")))
+      .thenReturn(Map("test-topic" -> "INVALID_REPLICATION_FACTOR"))
+
+    kafkaApis = createKafkaApis(autoTopicCreationManager = Some(mockAutoTopicCreationManager))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    // Group coordinator returns MISSING_INTERNAL_TOPICS status and topics to create
+    val missingTopics = util.Map.of("test-topic", new CreatableTopic())
+    val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
+      .setMemberId("member")
+      .setStatus(util.List.of(
+        new StreamsGroupHeartbeatResponseData.Status()
+          .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+          .setStatusDetail("Internal topics are missing: [test-topic]")
+      ))
+
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics))
+    val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
+    
+    assertEquals(Errors.NONE.code, response.data.errorCode())
+    assertEquals(null, response.data.errorMessage())
+    
+    // Verify that the cached error was appended to the existing status detail
+    assertEquals(1, response.data.status().size())
+    val status = response.data.status().get(0)
+    assertEquals(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code(), status.statusCode())
+    assertTrue(status.statusDetail().contains("Internal topics are missing: [test-topic]"))
+    assertTrue(status.statusDetail().contains("Creation failed: test-topic (INVALID_REPLICATION_FACTOR)"))
+    
+    // Verify that createStreamsInternalTopics was called
+    verify(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any())
+    verify(mockAutoTopicCreationManager).getTopicCreationErrors(Set("test-topic"))
   }
 
   @ParameterizedTest

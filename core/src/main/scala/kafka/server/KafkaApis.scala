@@ -2889,6 +2889,24 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
             } else {
               autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext);
+              
+              // Check for cached topic creation errors only if there's already a MISSING_INTERNAL_TOPICS status
+              val hasMissingInternalTopicsStatus = responseData.status() != null && 
+                responseData.status().stream().anyMatch(s => s.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+              
+              if (hasMissingInternalTopicsStatus) {
+                val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(topicsToCreate.keys.toSet)
+                if (cachedErrors.nonEmpty) {
+                  val missingInternalTopicStatus =
+                    responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
+                  val creationErrorDetails = cachedErrors.map { case (topic, error) => s"$topic ($error)" }.mkString(", ")
+                  if (missingInternalTopicStatus.isPresent) {
+                    missingInternalTopicStatus.get().setStatusDetail(
+                      missingInternalTopicStatus.get().statusDetail() + s"; Creation failed: $creationErrorDetails."
+                    )
+                  }
+                }
+              }
             }
           }
 

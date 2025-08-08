@@ -781,6 +781,9 @@ class BrokerServer(
       if (shareCoordinator != null)
         CoreUtils.swallow(shareCoordinator.shutdown(), this)
 
+      if (autoTopicCreationManager != null)
+        CoreUtils.swallow(autoTopicCreationManager.close(), this)
+
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)
 
