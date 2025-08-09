@@ -918,6 +918,7 @@ public class ReassignPartitionsCommand {
     /**
      * Return the string which we want to print to describe the current partition assignment.
      *
+     * @param adminClient                 The admin client object to use.
      * @param proposedParts               The proposed partition assignment.
      * @param currentParts                The current partition assignment.
      *
@@ -1535,8 +1536,8 @@ public class ReassignPartitionsCommand {
         }
     }
 
-    private static List<TopicPartitionReplica> getTopicPartitionReplicas(Map<TopicPartition, List<Integer>> partitionsToBeReassigned) {
-        return partitionsToBeReassigned.entrySet().stream()
+    private static List<TopicPartitionReplica> getTopicPartitionReplicas(Map<TopicPartition, List<Integer>> topicPartitionToReplicas) {
+        return topicPartitionToReplicas.entrySet().stream()
                 .flatMap(entry -> {
                     TopicPartition tp = entry.getKey();
                     List<Integer> brokerIds = entry.getValue();
