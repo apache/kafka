@@ -39,6 +39,7 @@ import static org.apache.kafka.controller.BrokerControlState.CONTROLLED_SHUTDOWN
 import static org.apache.kafka.controller.BrokerControlState.FENCED;
 import static org.apache.kafka.controller.BrokerControlState.SHUTDOWN_NOW;
 import static org.apache.kafka.controller.BrokerControlState.UNFENCED;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
 /**
@@ -305,6 +306,24 @@ public class BrokerHeartbeatManager {
         }
         BrokerHeartbeatState first = iterator.next();
         return first.metadataOffset;
+    }
+    
+    /**
+     * Check if a broker should be considered for fencing based on extended timeout during metadata loading.
+     * This provides additional grace period during heavy metadata operations.
+     */
+    boolean shouldExtendHeartbeatTimeout(int brokerId) {
+        BrokerHeartbeatState broker = brokers.get(brokerId);
+        if (broker == null) {
+            return false;
+        }
+        
+        // Extend timeout if broker is actively catching up with metadata
+        // This helps prevent fencing during rolling restarts with heavy metadata replication
+        long currentTime = tracker.time().nanoseconds();
+        return tracker.hasValidSession(new BrokerIdAndEpoch(brokerId, -1)) && 
+               !broker.fenced() && 
+               broker.metadataOffset < lowestActiveOffset();
     }
 
     /**

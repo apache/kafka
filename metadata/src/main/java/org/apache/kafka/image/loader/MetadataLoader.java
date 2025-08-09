@@ -340,15 +340,35 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         if (log.isDebugEnabled()) {
             log.debug("handleCommit: publishing new image with provenance {}.", image.provenance());
         }
+        
+        // Process publishers in smaller batches to prevent blocking heartbeats
+        final int BATCH_SIZE = kafka.server.HeartbeatConfig.DEFAULT_PUBLISHER_BATCH_SIZE;
+        final long MAX_PROCESSING_TIME_MS = kafka.server.HeartbeatConfig.DEFAULT_MAX_PUBLISHER_PROCESSING_TIME_MS;
+        long startTime = time.milliseconds();
+        int processedCount = 0;
+        
         for (MetadataPublisher publisher : publishers.values()) {
             try {
                 publisher.onMetadataUpdate(delta, image, manifest);
+                processedCount++;
+                
+                // Yield control periodically to prevent blocking heartbeats
+                if (processedCount % BATCH_SIZE == 0) {
+                    long elapsedTime = time.milliseconds() - startTime;
+                    if (elapsedTime > MAX_PROCESSING_TIME_MS) {
+                        // Schedule remaining publishers to be processed later
+                        log.debug("Yielding metadata processing after {}ms to prevent heartbeat blocking", elapsedTime);
+                        Thread.yield();
+                        startTime = time.milliseconds();
+                    }
+                }
             } catch (Throwable e) {
                 faultHandler.handleFault("Unhandled error publishing the new metadata " +
                     "image ending at " + manifest.provenance().lastContainedOffset() +
                     " with publisher " + publisher.name(), e);
             }
         }
+        
         metrics.updateLastAppliedImageProvenance(image.provenance());
         MetadataVersion metadataVersion = image.features().metadataVersionOrThrow();
         metrics.setCurrentMetadataVersion(metadataVersion);
@@ -377,12 +397,29 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
         eventQueue.append(() -> {
             try (reader) {
+                long startTime = time.milliseconds();
+                int batchCount = 0;
+                final int MAX_BATCHES_PER_ITERATION = kafka.server.HeartbeatConfig.DEFAULT_MAX_BATCHES_PER_ITERATION;
+                final long MAX_PROCESSING_TIME_MS = kafka.server.HeartbeatConfig.DEFAULT_MAX_PROCESSING_TIME_MS;
+                
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
                     loadControlRecords(batch);
                     long elapsedNs = batchLoader.loadBatch(batch, currentLeaderAndEpoch);
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
+                    batchCount++;
+                    
+                    // Yield control periodically to prevent blocking heartbeats
+                    if (batchCount % MAX_BATCHES_PER_ITERATION == 0) {
+                        long elapsedTime = time.milliseconds() - startTime;
+                        if (elapsedTime > MAX_PROCESSING_TIME_MS) {
+                            log.debug("Yielding batch processing after {}ms and {} batches to prevent heartbeat blocking", 
+                                     elapsedTime, batchCount);
+                            Thread.yield();
+                            startTime = time.milliseconds();
+                        }
+                    }
                 }
                 batchLoader.maybeFlushBatches(currentLeaderAndEpoch, true);
             } catch (Throwable e) {

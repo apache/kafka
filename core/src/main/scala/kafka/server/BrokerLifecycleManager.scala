@@ -579,9 +579,16 @@ class BrokerLifecycleManager(
     trace(s"Scheduling next communication at ${MILLISECONDS.convert(adjustedIntervalNs, NANOSECONDS)} " +
       "ms from now.")
     val deadlineNs = time.nanoseconds() + adjustedIntervalNs
-    eventQueue.scheduleDeferred("communication",
-      new DeadlineFunction(deadlineNs),
-      new CommunicationEvent())
+    
+    // Use prepend instead of scheduleDeferred for heartbeat communications to ensure they get priority
+    // over potentially long-running metadata operations
+    if (registered) {
+      eventQueue.prepend(new CommunicationEvent())
+    } else {
+      eventQueue.scheduleDeferred("communication",
+        new DeadlineFunction(deadlineNs),
+        new CommunicationEvent())
+    }
   }
 
   private class RegistrationTimeoutEvent extends EventQueue.Event {

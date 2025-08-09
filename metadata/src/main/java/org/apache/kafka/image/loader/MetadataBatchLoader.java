@@ -262,8 +262,14 @@ public class MetadataBatchLoader {
     }
 
     private void applyDeltaAndUpdate(MetadataDelta delta, LogDeltaManifest manifest) {
+        long startTime = time.nanoseconds();
         try {
             image = delta.apply(manifest.provenance());
+            long elapsedMs = NANOSECONDS.toMillis(time.nanoseconds() - startTime);
+            if (elapsedMs > 100) {
+                log.debug("Delta application took {}ms for offset range {} to {}", 
+                         elapsedMs, image.offset(), manifest.provenance().lastContainedOffset());
+            }
         } catch (Throwable e) {
             faultHandler.handleFault("Error generating new metadata image from " +
                 "metadata delta between offset " + image.offset() +
