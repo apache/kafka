@@ -57,7 +57,8 @@ class TransactionCoordinatorTest {
   private val txnTimeoutMs = 1
   private val producerId2 = 11L
 
-  private val partitions = util.Set.of[TopicPartition](new TopicPartition("topic1", 0))
+  private val partitions = new util.HashSet[TopicPartition]()
+  partitions.add(new TopicPartition("topic1", 0))
   private val scheduler = new MockScheduler(time)
 
   val coordinator = new TransactionCoordinator(
