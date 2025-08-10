@@ -136,13 +136,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     private LocalAssignment currentTargetAssignment;
 
     /**
-     * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile(boolean)} has been triggered
-     * after receiving a heartbeat response, or a metadata update.
-     */
-    private boolean reconciliationInProgress;
-
-    /**
      * True if a reconciliation is in progress and the member rejoined the group since the start
      * of the reconciliation. Used to know that the reconciliation in progress should be
      * interrupted and not be applied.
@@ -179,6 +172,13 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     private final Time time;
 
     /**
+     * If there is a reconciliation running (triggering commit, callbacks) for the
+     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile(boolean)} has been triggered
+     * after receiving a heartbeat response, or a metadata update.
+     */
+    private final AtomicBoolean reconciliationInProgress;
+
+    /**
      * AtomicBoolean to track whether the subscription is updated.
      * If it's true and subscription state is UNSUBSCRIBED, the next {@link #onConsumerPoll()} will change member state to JOINING.
      */
@@ -208,7 +208,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                               Logger log,
                               Time time,
                               RebalanceMetricsManager metricsManager,
-                              boolean autoCommitEnabled) {
+                              boolean autoCommitEnabled,
+                              AtomicBoolean reconciliationInProgress) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.subscriptions = subscriptions;
@@ -221,6 +222,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         this.time = time;
         this.metricsManager = metricsManager;
         this.autoCommitEnabled = autoCommitEnabled;
+        this.reconciliationInProgress = reconciliationInProgress;
     }
 
     /**
@@ -530,7 +532,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                     "the member is in FATAL state");
             return;
         }
-        if (reconciliationInProgress) {
+        if (reconciliationInProgress.get()) {
             rejoinedWhileReconciliationInProgress = true;
         }
         resetEpoch();
@@ -830,7 +832,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                     "current assignment.");
             return;
         }
-        if (reconciliationInProgress) {
+        if (reconciliationInProgress.get()) {
             log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. " +
                  "Assignment {} will be handled in the next reconciliation loop.", currentTargetAssignment);
             return;
@@ -963,7 +965,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 log.error("Reconciliation failed.", error);
                 markReconciliationCompleted();
             } else {
-                if (reconciliationInProgress && !maybeAbortReconciliation()) {
+                if (reconciliationInProgress.get() && !maybeAbortReconciliation()) {
                     currentAssignment = resolvedAssignment;
 
                     signalReconciliationCompleting();
@@ -1034,7 +1036,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  Visible for testing.
      */
     void markReconciliationInProgress() {
-        reconciliationInProgress = true;
+        reconciliationInProgress.set(true);
         rejoinedWhileReconciliationInProgress = false;
     }
 
@@ -1042,7 +1044,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  Visible for testing.
      */
     void markReconciliationCompleted() {
-        reconciliationInProgress = false;
+        reconciliationInProgress.set(false);
         rejoinedWhileReconciliationInProgress = false;
     }
 
@@ -1372,7 +1374,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * by a call to {@link #maybeReconcile(boolean)}. Visible for testing.
      */
     boolean reconciliationInProgress() {
-        return reconciliationInProgress;
+        return reconciliationInProgress.get();
     }
 
     /**

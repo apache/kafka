@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
@@ -151,7 +152,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      BackgroundEventHandler backgroundEventHandler,
                                      Time time,
                                      Metrics metrics,
-                                     boolean autoCommitEnabled) {
+                                     boolean autoCommitEnabled,
+                                     AtomicBoolean reconciliationInProgress) {
         this(groupId,
             groupInstanceId,
             rackId,
@@ -164,7 +166,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             backgroundEventHandler,
             time,
             new ConsumerRebalanceMetricsManager(metrics),
-            autoCommitEnabled);
+            autoCommitEnabled,
+            reconciliationInProgress);
     }
 
     // Visible for testing
@@ -180,14 +183,16 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                               BackgroundEventHandler backgroundEventHandler,
                               Time time,
                               RebalanceMetricsManager metricsManager,
-                              boolean autoCommitEnabled) {
+                              boolean autoCommitEnabled,
+                              AtomicBoolean reconciliationInProgress) {
         super(groupId,
             subscriptions,
             metadata,
             logContext.logger(ConsumerMembershipManager.class),
             time,
             metricsManager,
-            autoCommitEnabled);
+            autoCommitEnabled,
+            reconciliationInProgress);
         this.groupInstanceId = groupInstanceId;
         this.rackId = rackId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;

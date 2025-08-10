@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Group manager for a single consumer that has a group id defined in the config
@@ -107,7 +108,8 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                 logContext.logger(ShareMembershipManager.class),
                 time,
                 metricsManager,
-                false);
+                false,
+                new AtomicBoolean());
         this.rackId = rackId;
     }
 

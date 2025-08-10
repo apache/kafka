@@ -65,6 +65,7 @@ import java.util.OptionalDouble;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -115,7 +116,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final String groupId,
         final Optional<String> groupInstanceId,
         final Metrics metrics,
-        final ConsumerMetadata metadata) {
+        final ConsumerMetadata metadata,
+        final AtomicBoolean cachedHasInflightCommit) {
         this(time,
             logContext,
             subscriptions,
@@ -128,7 +130,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
             OptionalDouble.empty(),
             metrics,
-            metadata);
+            metadata,
+            cachedHasInflightCommit);
     }
 
     // Visible for testing
@@ -145,7 +148,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final long retryBackoffMaxMs,
         final OptionalDouble jitter,
         final Metrics metrics,
-        final ConsumerMetadata metadata) {
+        final ConsumerMetadata metadata,
+        final AtomicBoolean cachedHasInflightCommit) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.time = time;
         this.logContext = logContext;
@@ -154,7 +158,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             final long autoCommitInterval =
                 Integer.toUnsignedLong(config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-            this.autoCommitState = Optional.of(new AutoCommitState(time, autoCommitInterval, logContext));
+            this.autoCommitState = Optional.of(new AutoCommitState(time, autoCommitInterval, logContext, cachedHasInflightCommit));
         } else {
             this.autoCommitState = Optional.empty();
         }
@@ -1307,17 +1311,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private static class AutoCommitState {
         private final Timer timer;
         private final long autoCommitInterval;
-        private boolean hasInflightCommit;
-
+        private final AtomicBoolean cachedHasInflightCommit;
         private final Logger log;
 
         public AutoCommitState(
                 final Time time,
                 final long autoCommitInterval,
-                final LogContext logContext) {
+                final LogContext logContext,
+                final AtomicBoolean cachedHasInflightCommit) {
             this.autoCommitInterval = autoCommitInterval;
             this.timer = time.timer(autoCommitInterval);
-            this.hasInflightCommit = false;
+            this.cachedHasInflightCommit = cachedHasInflightCommit;
             this.log = logContext.logger(getClass());
         }
 
@@ -1325,7 +1329,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (!this.timer.isExpired()) {
                 return false;
             }
-            if (this.hasInflightCommit) {
+            if (this.cachedHasInflightCommit.get()) {
                 log.trace("Skipping auto-commit on the interval because a previous one is still in-flight.");
                 return false;
             }
@@ -1350,7 +1354,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public void setInflightCommitStatus(final boolean inflightCommitStatus) {
-            this.hasInflightCommit = inflightCommitStatus;
+            this.cachedHasInflightCommit.set(inflightCommitStatus);
         }
     }
 

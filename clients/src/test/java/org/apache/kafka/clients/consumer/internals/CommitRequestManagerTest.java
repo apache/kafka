@@ -71,6 +71,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -117,7 +118,7 @@ public class CommitRequestManagerTest {
     private OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final Metrics metrics = new Metrics();
     private Properties props;
-
+    private final AtomicBoolean cachedHasInflightCommit = new AtomicBoolean();
     private final int defaultApiTimeoutMs = 60000;
 
 
@@ -152,7 +153,8 @@ public class CommitRequestManagerTest {
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
                 metrics,
-                metadata);
+                metadata,
+                cachedHasInflightCommit);
 
         commitRequestManager.onMemberEpochUpdated(Optional.of(1), Uuid.randomUuid().toString());
         Set<TopicPartition> requestedPartitions = Collections.singleton(new TopicPartition("topic-1", 1));
@@ -1578,7 +1580,8 @@ public class CommitRequestManagerTest {
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
                 metrics,
-                metadata));
+                metadata,
+                cachedHasInflightCommit));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(
