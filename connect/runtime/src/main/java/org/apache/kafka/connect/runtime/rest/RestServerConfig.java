@@ -143,7 +143,8 @@ public abstract class RestServerConfig extends AbstractConfig {
                 .define(
                         REST_EXTENSION_CLASSES_CONFIG,
                         ConfigDef.Type.LIST,
-                        "",
+                        List.of(),
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         ConfigDef.Importance.LOW, REST_EXTENSION_CLASSES_DOC
                 ).define(ADMIN_LISTENERS_CONFIG,
                         ConfigDef.Type.LIST,
