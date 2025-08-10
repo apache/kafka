@@ -48,6 +48,7 @@ import org.apache.kafka.server.config.AbstractKafkaConfig.getMap
 import org.apache.kafka.server.config.{AbstractKafkaConfig, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
+import org.apache.kafka.server.util.Csv
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 
 import scala.jdk.CollectionConverters._
@@ -452,7 +453,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def effectiveAdvertisedControllerListeners: Seq[Endpoint] = {
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val controllerAdvertisedListeners = if (advertisedListenersProp != null) {
-      CoreUtils.listenerListToEndPoints(java.util.List.of(advertisedListenersProp), effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+      CoreUtils.listenerListToEndPoints(Csv.parseCsvList(advertisedListenersProp), effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
         .filter(l => controllerListenerNames.contains(l.listener))
     } else {
       Seq.empty
@@ -482,7 +483,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     // Use advertised listeners if defined, fallback to listeners otherwise
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val advertisedListeners = if (advertisedListenersProp != null) {
-      CoreUtils.listenerListToEndPoints(java.util.List.of(advertisedListenersProp), effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+      CoreUtils.listenerListToEndPoints(Csv.parseCsvList(advertisedListenersProp), effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
     } else {
       listeners
     }

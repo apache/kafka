@@ -39,6 +39,7 @@ import org.apache.kafka.server.util.Csv;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -79,7 +80,13 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public List<String> logDirs() {
-        return Csv.parseCsvList(Optional.ofNullable(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getString(ServerLogConfigs.LOG_DIR_CONFIG)));
+        return Optional.ofNullable(getList(ServerLogConfigs.LOG_DIRS_CONFIG))
+                .orElse(Arrays.stream(getString(ServerLogConfigs.LOG_DIR_CONFIG).split(","))
+                        .map(String::trim).filter(s -> !s.isEmpty()).toList()
+                )
+                .stream()
+                .map(String::trim)
+                .toList();
     }
 
     public int numIoThreads() {
@@ -137,7 +144,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             // 2. No SSL or SASL protocols are used in regular listeners (Note: controller listeners
             //    are not included in 'listeners' config when process.roles=broker)
             if (controllerListenerNames().stream().anyMatch(AbstractKafkaConfig::isSslOrSasl) ||
-                    Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).stream()
+                    getList(SocketServerConfigs.LISTENERS_CONFIG).stream()
+                            .map(String::trim)
                             .anyMatch(listenerName -> isSslOrSasl(parseListenerName(listenerName)))) {
                 return mapValue;
             } else {

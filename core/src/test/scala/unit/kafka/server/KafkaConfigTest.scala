@@ -245,8 +245,8 @@ class KafkaConfigTest {
     assertTrue(caught.getMessage.contains("If you have two listeners on the same port then one needs to be IPv4 and the other IPv6"))
 
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,PLAINTEXT://127.0.0.1:9092")
-    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
-    assertTrue(caught.getMessage.contains("Each listener must have a different name"))
+    val exception = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+    assertTrue(exception.getMessage.contains("values must not be duplicated."))
 
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9092,SASL_SSL://127.0.0.1:9092")
     caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
@@ -824,7 +824,7 @@ class KafkaConfigTest {
         case SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
 
         case ServerLogConfigs.NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ServerLogConfigs.LOG_DIRS_CONFIG => // ignore string
+        case ServerLogConfigs.LOG_DIRS_CONFIG => // ignore list
         case ServerLogConfigs.LOG_DIR_CONFIG => // ignore string
         case ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", Records.LOG_OVERHEAD - 1)
 
