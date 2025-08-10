@@ -1006,26 +1006,58 @@ public class ConfigDef {
     public static class ValidList implements Validator {
 
         final ValidString validString;
+        final boolean isEmptyAllowed;
+        final boolean isNullAllowed;
 
-        private ValidList(List<String> validStrings) {
+        private ValidList(List<String> validStrings, boolean isEmptyAllowed, boolean isNullAllowed) {
             this.validString = new ValidString(validStrings);
+            this.isEmptyAllowed = isEmptyAllowed;
+            this.isNullAllowed = isNullAllowed;
+        }
+
+        public static ValidList anyNonDuplicateValues(boolean isEmptyAllowed, boolean isNullAllowed) {
+            return new ValidList(List.of(), isEmptyAllowed, isNullAllowed);
         }
 
         public static ValidList in(String... validStrings) {
-            return new ValidList(Arrays.asList(validStrings));
+            return new ValidList(List.of(validStrings), true, false);
+        }
+
+        public static ValidList in(boolean isEmptyAllowed, String... validStrings) {
+            if (validStrings.length == 0) {
+                throw new IllegalArgumentException("Valid strings list cannot be empty for inNonEmpty validator");
+            }
+            return new ValidList(List.of(validStrings), isEmptyAllowed, false);
         }
 
         @Override
         public void ensureValid(final String name, final Object value) {
+            if (value == null && isNullAllowed) {
+                return;
+            } else if (value == null) {
+                throw new ConfigException("Configuration '" + name + "' values must not be null.");
+            }
+
             @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
+            if (!isEmptyAllowed && values.isEmpty()) {
+                String validString = this.validString.validStrings.isEmpty() ? "any non-empty value" : this.validString.toString();
+                throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validString);
+            }
+            if (Set.copyOf(values).size() != values.size()) {
+                throw new ConfigException("Configuration '" + name + "' values must not be duplicated.");
+            }
+            if (validString.validStrings.isEmpty()) {
+                return;
+            }
             for (String string : values) {
                 validString.ensureValid(name, string);
             }
         }
 
         public String toString() {
-            return validString.toString();
+            return validString + (isEmptyAllowed ? " (empty config allowed)" : " (empty not allowed)") +
+                    (isNullAllowed ? " (null config allowed)" : " (null not allowed)");
         }
     }
 
