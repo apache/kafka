@@ -467,8 +467,8 @@ public class ReassignPartitionsCommand {
                 bld.add("Partition " + replica.topic() + "-" + replica.partition() + " cannot be found " +
                     "in any live log directory on broker " + replica.brokerId() + ".");
             } else if (state instanceof ActiveMoveState) {
-                String targetLogDir = ((ActiveMoveState) state).targetLogDir;
-                String futureLogDir = ((ActiveMoveState) state).futureLogDir;
+                String targetLogDir = ((ActiveMoveState) state).targetLogDir();
+                String futureLogDir = ((ActiveMoveState) state).futureLogDir();
                 if (targetLogDir.equals(futureLogDir)) {
                     bld.add("Reassignment of replica " + replica + " is still in progress.");
                 } else {
@@ -477,8 +477,8 @@ public class ReassignPartitionsCommand {
                         "instead of " + targetLogDir + ".");
                 }
             } else if (state instanceof CancelledMoveState) {
-                String targetLogDir = ((CancelledMoveState) state).targetLogDir;
-                String currentLogDir = ((CancelledMoveState) state).currentLogDir;
+                String targetLogDir = ((CancelledMoveState) state).targetLogDir();
+                String currentLogDir = ((CancelledMoveState) state).currentLogDir();
                 bld.add("Partition " + replica.topic() + "-" + replica.partition() + " on broker " +
                     replica.brokerId() + " is not being moved from log dir " + currentLogDir + " to " +
                     targetLogDir + ".");
@@ -1292,7 +1292,7 @@ public class ReassignPartitionsCommand {
         Map<TopicPartitionReplica, String> curMovingParts = new HashMap<>();
         findLogDirMoveStates(adminClient, targetReplicas).forEach((part, moveState) -> {
             if (moveState instanceof ActiveMoveState)
-                curMovingParts.put(part, ((ActiveMoveState) moveState).currentLogDir);
+                curMovingParts.put(part, ((ActiveMoveState) moveState).currentLogDir());
         });
         if (curMovingParts.isEmpty()) {
             System.out.print("None of the specified partition moves are active.");

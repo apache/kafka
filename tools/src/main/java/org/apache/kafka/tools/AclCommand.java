@@ -102,13 +102,7 @@ public class AclCommand {
         return props;
     }
 
-    private static class AdminClientService {
-
-        private final AclCommandOptions opts;
-
-        AdminClientService(AclCommandOptions opts) {
-            this.opts = opts;
-        }
+    private record AdminClientService(AclCommandOptions opts) {
 
         void addAcls(Admin admin) throws ExecutionException, InterruptedException {
             Map<ResourcePattern, Set<AccessControlEntry>> resourceToAcl = getResourceToAcls(opts);
