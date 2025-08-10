@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 
 /**
  * Configuration required for {@link MirrorClient} to talk to a given target cluster.
@@ -133,7 +134,8 @@ public class MirrorClientConfig extends AbstractConfig {
     static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
             Type.STRING,
-            null,
+            NO_DEFAULT_VALUE,
+            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
             Importance.HIGH,
             CommonClientConfigs.BOOTSTRAP_SERVERS_DOC) 
         .define(
