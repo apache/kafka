@@ -30,6 +30,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
+import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.Requirements;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -61,7 +62,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELDS_FIELD, ConfigDef.Type.LIST,
                     NO_DEFAULT_VALUE,
-                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
+                    new NonEmptyListValidator(),
                     ConfigDef.Importance.HIGH,
                     "Field names in the record whose values are to be copied or moved to headers.")
             .define(HEADERS_FIELD, ConfigDef.Type.LIST,
