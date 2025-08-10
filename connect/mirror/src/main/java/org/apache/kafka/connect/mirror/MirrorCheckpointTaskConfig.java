@@ -33,7 +33,7 @@ public class MirrorCheckpointTaskConfig extends MirrorCheckpointConfig {
 
     Set<String> taskConsumerGroups() {
         List<String> fields = getList(TASK_CONSUMER_GROUPS);
-        if (fields == null || fields.isEmpty()) {
+        if (fields.isEmpty()) {
             return Set.of();
         }
         return new HashSet<>(fields);
@@ -54,7 +54,8 @@ public class MirrorCheckpointTaskConfig extends MirrorCheckpointConfig {
             .define(
                     TASK_CONSUMER_GROUPS,
                     ConfigDef.Type.LIST,
-                    null,
+                    ConfigDef.NO_DEFAULT_VALUE,
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     ConfigDef.Importance.LOW,
                     TASK_CONSUMER_GROUPS_DOC)
             .define(TASK_INDEX,
