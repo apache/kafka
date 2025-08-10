@@ -604,7 +604,7 @@ class KafkaConfigTest {
     assertEquals(expected.securityProtocol(), actual.securityProtocol(), "Security protocol mismatch")
   }
 
-  private def listenerListToEndPoints(listenerList: String,
+  private def listenerListToEndPoints(listenerList: java.util.List[String],
                               securityProtocolMap: util.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO) =
     CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
@@ -618,9 +618,9 @@ class KafkaConfigTest {
 
     // configuration with no listeners
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(listenerListToEndPoints("PLAINTEXT://:9092"), conf.listeners)
+    assertEquals(listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")), conf.listeners)
     assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
-    assertEquals(conf.effectiveAdvertisedBrokerListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
+    assertEquals(conf.effectiveAdvertisedBrokerListeners, listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")))
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {

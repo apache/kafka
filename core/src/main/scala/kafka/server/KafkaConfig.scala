@@ -435,7 +435,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def listeners: Seq[Endpoint] =
-    CoreUtils.listenerListToEndPoints(getString(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap)
+    CoreUtils.listenerListToEndPoints(getList(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap)
 
   def controllerListeners: Seq[Endpoint] =
     listeners.filter(l => controllerListenerNames.contains(l.listener))
@@ -452,7 +452,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def effectiveAdvertisedControllerListeners: Seq[Endpoint] = {
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val controllerAdvertisedListeners = if (advertisedListenersProp != null) {
-      CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+      CoreUtils.listenerListToEndPoints(java.util.List.of(advertisedListenersProp), effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
         .filter(l => controllerListenerNames.contains(l.listener))
     } else {
       Seq.empty
@@ -482,7 +482,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     // Use advertised listeners if defined, fallback to listeners otherwise
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val advertisedListeners = if (advertisedListenersProp != null) {
-      CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+      CoreUtils.listenerListToEndPoints(java.util.List.of(advertisedListenersProp), effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
     } else {
       listeners
     }

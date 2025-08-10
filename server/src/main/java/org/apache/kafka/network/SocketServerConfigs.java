@@ -21,7 +21,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.server.util.Csv;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,6 +38,7 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
@@ -63,7 +63,7 @@ public class SocketServerConfigs {
             "is assumed if no explicit mapping is provided and no other security protocol is in use.";
 
     public static final String LISTENERS_CONFIG = "listeners";
-    public static final String LISTENERS_DEFAULT = "PLAINTEXT://:9092";
+    public static final List<String> LISTENERS_DEFAULT = List.of("PLAINTEXT://:9092");
     public static final String LISTENERS_DOC = String.format("Listener List - Comma-separated list of URIs we will listen on and the listener names." +
                     " If the listener name is not a security protocol, <code>%s</code> must also be set.%n" +
                     " Listener names and port numbers must be unique unless one listener is an IPv4 address and the other listener is an IPv6 address (for the same port).%n" +
@@ -155,7 +155,7 @@ public class SocketServerConfigs {
     public static final String NUM_NETWORK_THREADS_DOC = "The number of threads that the server uses for receiving requests from the network and sending responses to the network. Noted: each listener (except for controller listener) creates its own thread pool.";
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
-            .define(LISTENERS_CONFIG, STRING, LISTENERS_DEFAULT, HIGH, LISTENERS_DOC)
+            .define(LISTENERS_CONFIG, LIST, LISTENERS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), HIGH, LISTENERS_DOC)
             .define(ADVERTISED_LISTENERS_CONFIG, STRING, null, HIGH, ADVERTISED_LISTENERS_DOC)
             .define(LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, STRING, LISTENER_SECURITY_PROTOCOL_MAP_DEFAULT, LOW, LISTENER_SECURITY_PROTOCOL_MAP_DOC)
             .define(SOCKET_SEND_BUFFER_BYTES_CONFIG, INT, SOCKET_SEND_BUFFER_BYTES_DEFAULT, HIGH, SOCKET_SEND_BUFFER_BYTES_DOC)
@@ -186,7 +186,7 @@ public class SocketServerConfigs {
     }
 
     public static List<Endpoint> listenerListToEndPoints(
-        String input,
+        List<String> input,
         Map<ListenerName, SecurityProtocol> nameToSecurityProto
     ) {
         return listenerListToEndPoints(input, n -> {
@@ -199,14 +199,18 @@ public class SocketServerConfigs {
     }
 
     public static List<Endpoint> listenerListToEndPoints(
-        String input,
+        List<String> input,
         Function<ListenerName, SecurityProtocol> nameToSecurityProto
     ) {
         List<Endpoint> results = new ArrayList<>();
-        for (String entry : Csv.parseCsvList(input.trim())) {
-            Matcher matcher = URI_PARSE_REGEXP.matcher(entry);
+        for (String entry : input) {
+            String trimEntry = entry.trim();
+            if (trimEntry.isEmpty()) {
+                continue;
+            }
+            Matcher matcher = URI_PARSE_REGEXP.matcher(trimEntry);
             if (!matcher.matches()) {
-                throw new KafkaException("Unable to parse " + entry + " to a broker endpoint");
+                throw new KafkaException("Unable to parse " + trimEntry + " to a broker endpoint");
             }
             ListenerName listenerName = ListenerName.normalised(matcher.group(1));
             String host = matcher.group(2);

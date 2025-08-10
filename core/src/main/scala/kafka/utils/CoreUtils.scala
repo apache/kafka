@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.slf4j.event.Level
 
+import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 
 /**
@@ -121,16 +122,16 @@ object CoreUtils {
 
   def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.writeLock)(fun)
 
-  def listenerListToEndPoints(listeners: String, securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol]): Seq[Endpoint] = {
+  def listenerListToEndPoints(listeners: java.util.List[String], securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol]): Seq[Endpoint] = {
     listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
 
-  private def checkDuplicateListenerPorts(endpoints: Seq[Endpoint], listeners: String): Unit = {
+  private def checkDuplicateListenerPorts(endpoints: Seq[Endpoint], listeners: java.util.List[String]): Unit = {
     val distinctPorts = endpoints.map(_.port).distinct
-    require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
+    require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: ${listeners.stream().collect(Collectors.joining(","))}")
   }
 
-  def listenerListToEndPoints(listeners: String, securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[Endpoint] = {
+  def listenerListToEndPoints(listeners: java.util.List[String], securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[Endpoint] = {
     def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean =
       (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
         (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
