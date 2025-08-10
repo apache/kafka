@@ -725,7 +725,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.1.
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.4.
         These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
          -->
         <Or>
