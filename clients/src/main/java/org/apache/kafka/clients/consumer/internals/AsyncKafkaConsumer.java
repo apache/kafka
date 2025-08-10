@@ -866,19 +866,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
+            PollEvent event = new PollEvent(timer.currentTimeMs());
+            // Make sure to let the background thread know that we are still polling.
+            // This will trigger async auto-commits of consumed positions when hitting
+            // the interval time or reconciling new assignments
+            applicationEventHandler.add(event);
+
+            if (cachedIsReconciliationInProgress.get() || cachedHasInflightCommit.get()) {
+                // Wait for reconciliation and auto-commit to be triggered, to ensure all commit requests
+                // retrieve the positions to commit before proceeding with fetching new records
+                ConsumerUtils.getResult(event.reconcileAndAutoCommit(), defaultApiTimeoutMs.toMillis());
+            }
+
             do {
-                if (cachedIsReconciliationInProgress.get() || cachedHasInflightCommit.get()) {
-                    PollEvent event = new PollEvent(timer.currentTimeMs());
-                    // Make sure to let the background thread know that we are still polling.
-                    // This will trigger async auto-commits of consumed positions when hitting
-                    // the interval time or reconciling new assignments
-                    applicationEventHandler.add(event);
-
-                    // Wait for reconciliation and auto-commit to be triggered, to ensure all commit requests
-                    // retrieve the positions to commit before proceeding with fetching new records
-                    ConsumerUtils.getResult(event.reconcileAndAutoCommit(), defaultApiTimeoutMs.toMillis());
-                }
-
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling
                 // of the fetches. A wakeup between returned fetches and returning records would lead to never
@@ -1908,7 +1908,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private void sendFetches(Timer timer) {
         try {
-            applicationEventHandler.addAndGet(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
+            applicationEventHandler.add(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
         } catch (TimeoutException swallow) {
             // Can be ignored, per above comments.
         }
