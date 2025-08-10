@@ -133,8 +133,7 @@ public class SSLUtils {
         ssl.setProtocol((String) getOrDefault(sslConfigValues, SslConfigs.SSL_PROTOCOL_CONFIG, SslConfigs.DEFAULT_SSL_PROTOCOL));
 
         List<String> sslCipherSuites = (List<String>) sslConfigValues.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
-        if (sslCipherSuites != null)
-            ssl.setIncludeCipherSuites(sslCipherSuites.toArray(new String[0]));
+        ssl.setIncludeCipherSuites(sslCipherSuites.toArray(new String[0]));
 
         ssl.setKeyManagerFactoryAlgorithm((String) getOrDefault(sslConfigValues, SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM));
 
