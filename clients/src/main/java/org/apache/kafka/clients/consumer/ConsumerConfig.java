@@ -415,8 +415,8 @@ public class ConsumerConfig extends AbstractConfig {
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
-                                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
+                                        ConfigDef.NO_DEFAULT_VALUE,
+                                        null,
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
