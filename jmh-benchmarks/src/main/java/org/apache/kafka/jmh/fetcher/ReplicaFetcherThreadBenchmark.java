@@ -167,14 +167,14 @@ public class ReplicaFetcherThreadBenchmark {
 
             int[] replicas = {0, 1, 2};
             PartitionRegistration partitionRegistration = new PartitionRegistration.Builder()
-                    .setLeader(0)
-                    .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
-                    .setLeaderEpoch(0)
-                    .setIsr(replicas)
-                    .setPartitionEpoch(1)
-                    .setReplicas(replicas)
-                    .setDirectories(DirectoryId.unassignedArray(replicas.length))
-                    .build();
+                .setLeader(0)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+                .setLeaderEpoch(0)
+                .setIsr(replicas)
+                .setPartitionEpoch(1)
+                .setReplicas(replicas)
+                .setDirectories(DirectoryId.unassignedArray(replicas.length))
+                .build();
 
             OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Optional.of(0L);
             Partition partition = replicaManager.createPartition(tp);

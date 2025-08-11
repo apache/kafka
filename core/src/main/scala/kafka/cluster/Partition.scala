@@ -800,7 +800,7 @@ class Partition(val topicPartition: TopicPartition,
             currentTimeMs,
             leaderEpochStartOffset,
             isNewLeader,
-            partitionRegistration.isr.contains(replica.brokerId)
+            isr.contains(replica.brokerId)
           )
         }
 
@@ -845,7 +845,7 @@ class Partition(val topicPartition: TopicPartition,
     inWriteLock(leaderIsrUpdateLock) {
       if (partitionRegistration.partitionEpoch < partitionEpoch) {
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
-          s"and partition registration $partitionRegistration since the follower is already at a newer partition epoch $partitionEpoch.")
+          s", partition registration $partitionRegistration and isNew=$isNew since the follower is already at a newer partition epoch $partitionEpoch.")
         return false
       }
 
@@ -877,7 +877,7 @@ class Partition(val topicPartition: TopicPartition,
           s"Previous leader $leaderReplicaIdOpt and previous leader epoch was $leaderEpoch.")
       } else {
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
-          s"and partition state $partitionRegistration since it is already a follower with leader epoch $leaderEpoch.")
+          s", partition registration $partitionRegistration and isNew=$isNew since it is already a follower with leader epoch $leaderEpoch.")
       }
 
       // We must restart the fetchers when the leader epoch changed regardless of
