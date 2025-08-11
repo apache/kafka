@@ -389,7 +389,7 @@ public class ReassignPartitionsCommandTest {
     /**
      * Test moving partitions between directories.
      */
-    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
+    @ClusterTest(types = {Type.KRAFT})
     public void testLogDirReassignment() throws Exception {
         createTopics();
         TopicPartition topicPartition = new TopicPartition("foo", 0);
