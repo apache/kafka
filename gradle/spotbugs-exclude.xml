@@ -551,7 +551,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.1.
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.4.
         These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
          -->
         <Or>
@@ -586,7 +586,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.1.
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.4.
         These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
          -->
         <Or>
@@ -617,12 +617,16 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="kafka.coordinator.transaction.TransactionStateManager"/>
             <Class name="kafka.log.LogManager"/>
             <Class name="kafka.server.ReplicaManager"/>
+            <Class name="org.apache.kafka.streams.state.internals.AbstractDualSchemaRocksDBSegmentedBytesStore"/>
+            <Class name="org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore"/>
+            <Class name="org.apache.kafka.streams.state.internals.InMemorySessionStore"/>
+            <Class name="org.apache.kafka.streams.state.internals.InMemoryWindowStore"/>
         </Or>
         <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
     </Match>
 
     <Match>
-        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.1.
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.4.
         These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
          -->
         <Or>
@@ -687,12 +691,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="kafka.server.ReplicaManager"/>
             <Class name="org.apache.kafka.trogdor.coordinator.NodeManager$NodeHeartbeat"/>
             <Class name="org.apache.kafka.connect.runtime.distributed.DistributedHerder$RebalanceListener"/>
+            <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
         </Or>
         <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
     </Match>
 
     <Match>
-        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.1.
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.4.
         These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
          -->
         <Or>
@@ -717,6 +722,17 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.connect.runtime.SourceConnectorConfig"/>
         </Or>
         <Bug pattern="HSM_HIDING_METHOD"/>
+    </Match>
+
+    <Match>
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.4.
+        These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
+         -->
+        <Or>
+            <Class name="org.apache.kafka.common.security.ssl.SslFactory$SslEngineValidator"/>
+            <Class name="org.apache.kafka.server.authorizer.Authorizer"/>
+        </Or>
+        <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
     </Match>
 
 </FindBugsFilter>
