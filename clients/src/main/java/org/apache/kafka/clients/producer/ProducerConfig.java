@@ -373,11 +373,11 @@ public class ProducerConfig extends AbstractConfig {
     private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     static {
-        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, 
-                                        Type.LIST, 
+        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
+                                        Type.LIST,
                                         Collections.emptyList(),
-                                        ConfigDef.ValidList.anyNonDuplicateValues(false, false), 
-                                        Importance.HIGH, 
+                                        new ConfigDef.NonNullValidator(),
+                                        Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
@@ -558,11 +558,11 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(CONFIG_PROVIDERS_CONFIG, 
+                                .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        ConfigDef.Importance.LOW, 
+                                        ConfigDef.Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }
 
