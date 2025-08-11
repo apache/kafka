@@ -57,7 +57,7 @@ final class PartitionReassignmentState {
 
     @Override
     public String toString() {
-        return "{currentReplicas=" + currentReplicas + ", "
+        return "currentReplicas=" + currentReplicas + ", "
                 + "targetReplicas=" + targetReplicas + ", "
                 + "done=" + done;
     }
