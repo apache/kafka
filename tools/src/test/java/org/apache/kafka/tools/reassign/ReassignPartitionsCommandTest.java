@@ -427,7 +427,7 @@ public class ReassignPartitionsCommandTest {
                             new CompletedMoveState(reassignment.targetDir)
                     ), false));
 
-            BrokerDirs info1 = new BrokerDirs(admin.describeLogDirs(IntStream.range(0, 4).boxed().collect(Collectors.toList())), 0);
+            BrokerDirs info1 = new BrokerDirs(admin.describeLogDirs(IntStream.range(0, 4).boxed().toList()), 0);
             assertEquals(reassignment.targetDir, info1.curLogDirs.getOrDefault(topicPartition, ""));
         }
     }
@@ -486,19 +486,19 @@ public class ReassignPartitionsCommandTest {
             fooReplicasAssignments.put(0, List.of(0, 1, 2));
             fooReplicasAssignments.put(1, List.of(1, 2, 3));
             Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic("foo", fooReplicasAssignments))).topicId("foo").get());
-            Assertions.assertDoesNotThrow(() -> clusterInstance.waitForTopic("foo", fooReplicasAssignments.size()));
+            Assertions.assertDoesNotThrow(() -> clusterInstance.waitTopicCreation("foo", fooReplicasAssignments.size()));
 
             Map<Integer, List<Integer>> barReplicasAssignments = new HashMap<>();
             barReplicasAssignments.put(0, List.of(3, 2, 1));
             Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic("bar", barReplicasAssignments))).topicId("bar").get());
-            Assertions.assertDoesNotThrow(() -> clusterInstance.waitForTopic("bar", barReplicasAssignments.size()));
+            Assertions.assertDoesNotThrow(() -> clusterInstance.waitTopicCreation("bar", barReplicasAssignments.size()));
 
             Map<Integer, List<Integer>> bazReplicasAssignments = new HashMap<>();
             bazReplicasAssignments.put(0, List.of(1, 0, 2));
             bazReplicasAssignments.put(1, List.of(2, 0, 1));
             bazReplicasAssignments.put(2, List.of(0, 2, 1));
             Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic("baz", bazReplicasAssignments))).topicId("baz").get());
-            Assertions.assertDoesNotThrow(() -> clusterInstance.waitForTopic("baz", bazReplicasAssignments.size()));
+            Assertions.assertDoesNotThrow(() -> clusterInstance.waitTopicCreation("baz", bazReplicasAssignments.size()));
         }
     }
 
@@ -640,8 +640,7 @@ public class ReassignPartitionsCommandTest {
                                                        int brokerId,
                                                        List<Integer> replicas) throws ExecutionException, InterruptedException {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            DescribeLogDirsResult describeLogDirsResult = admin.describeLogDirs(
-                    IntStream.range(0, 4).boxed().collect(Collectors.toList()));
+            DescribeLogDirsResult describeLogDirsResult = admin.describeLogDirs(IntStream.range(0, 4).boxed().toList());
 
             BrokerDirs logDirInfo = new BrokerDirs(describeLogDirsResult, brokerId);
             assertTrue(logDirInfo.futureLogDirs.isEmpty());
@@ -654,7 +653,7 @@ public class ReassignPartitionsCommandTest {
                     return "\"" + newDir + "\"";
                 else
                     return "\"any\"";
-            }).collect(Collectors.toList());
+            }).toList();
 
             String reassignmentJson =
                     " { \"version\": 1," +

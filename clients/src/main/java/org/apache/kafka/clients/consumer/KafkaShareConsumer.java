@@ -195,7 +195,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * </pre>
  *
  * <h4>Per-record acknowledgement (explicit acknowledgement)</h4>
- * This example demonstrates using different acknowledgement types depending on the outcome of processing the records.
+ * This example demonstrates using different acknowledge types depending on the outcome of processing the records.
  * Here the {@code share.acknowledgement.mode} property is set to "explicit" so the consumer must explicitly acknowledge each record.
  * <pre>
  *     Properties props = new Properties();
@@ -239,8 +239,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * In <code>read_uncommitted</code> isolation level, the share group consumes all non-transactional and transactional
  * records. The consumption is bounded by the high-water mark.
  * <p>
- * In <code>read_committed</code> isolation level (not yet supported), the share group only consumes non-transactional
- * records and committed transactional records. The set of records which are eligible to become in-flight records are
+ * In <code>read_committed</code> isolation level, the share group only consumes non-transactional records and
+ * committed transactional records. The set of records which are eligible to become in-flight records are
  * non-transactional records and committed transactional records only. The consumption is bounded by the last stable
  * offset, so an open transaction blocks the progress of the share group with read_committed isolation level.
  *
@@ -497,7 +497,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * <p>This method can only be used if the consumer is using <b>explicit acknowledgement</b>.
      *
      * @param record The record to acknowledge
-     * @param type The acknowledgement type which indicates whether it was processed successfully
+     * @param type The acknowledge type which indicates whether it was processed successfully
      *
      * @throws IllegalStateException if the record is not waiting to be acknowledged, or the consumer is not using
      *                               explicit acknowledgement
@@ -505,6 +505,28 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public void acknowledge(ConsumerRecord<K, V> record, AcknowledgeType type) {
         delegate.acknowledge(record, type);
+    }
+
+    /**
+     * Acknowledge delivery of a record returned on the last {@link #poll(Duration)} call indicating whether
+     * it was processed successfully. The acknowledgement is committed on the next {@link #commitSync()},
+     * {@link #commitAsync()} or {@link #poll(Duration)} call.
+     * <p>This method can only be used if the consumer is using <b>explicit acknowledgement</b>.
+     * <p>It provides an alternative to {@link #acknowledge(ConsumerRecord, AcknowledgeType)} for
+     * situations where the {@link ConsumerRecord} is not available, such as when the record could not be deserialized.
+     *
+     * @param topic The topic of the record to acknowledge
+     * @param partition The partition of the record to acknowledge
+     * @param offset The offset of the record to acknowledge
+     * @param type The acknowledge type which indicates whether it was processed successfully
+     *
+     * @throws IllegalStateException if the record is not waiting to be acknowledged, or the consumer is not using
+     *                               explicit acknowledgement
+     */
+
+    @Override
+    public void acknowledge(String topic, int partition, long offset, AcknowledgeType type) {
+        delegate.acknowledge(topic, partition, offset, type);
     }
 
     /**
