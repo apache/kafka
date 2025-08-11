@@ -136,7 +136,7 @@ class AbstractPartitionTest {
       val partitionRegistration = partitionRegistrationBuilder.setLeader(remoteReplicaId).build()
       assertTrue(partition.makeFollower(partitionRegistration, isNew = true, offsetCheckpoints, None), "Expected become follower transition to succeed")
       assertEquals(leaderEpoch, partition.getLeaderEpoch)
-      assert(partition.leaderLogIfLocal.isEmpty)
+      assertTrue(partition.leaderLogIfLocal.isEmpty)
     }
 
     partition

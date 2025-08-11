@@ -742,8 +742,8 @@ class Partition(val topicPartition: TopicPartition,
       // before a partitionRegistration is received or before an update is received via
       // the metadata log.
       if (partitionRegistration.partitionEpoch < partitionEpoch) {
-        stateChangeLogger.info(s"Skipped the become-leader state change for $topicPartition with topic id $topicId " +
-          s"and partition state $partitionRegistration since the leader is already at a newer partition epoch $partitionEpoch.")
+        stateChangeLogger.info(s"Skipped the become-leader state change for $topicPartition with topic id $topicId, " +
+          s"partition registration $partitionRegistration and isNew=$isNew since the leader is already at a newer partition epoch $partitionEpoch.")
         return false
       }
 
@@ -809,8 +809,8 @@ class Partition(val topicPartition: TopicPartition,
         leaderEpoch = partitionRegistration.leaderEpoch
         leaderEpochStartOffsetOpt = Some(leaderEpochStartOffset)
       } else {
-        stateChangeLogger.info(s"Skipped the become-leader state change for $topicPartition with topic id $topicId " +
-          s"and partition state $partitionRegistration since it is already the leader with leader epoch $leaderEpoch. " +
+        stateChangeLogger.info(s"Skipped the become-leader state change for $topicPartition with topic id $topicId, " +
+          s"partition registration $partitionRegistration and isNew=$isNew since it is already the leader with leader epoch $leaderEpoch. " +
           s"Current high watermark ${leaderLog.highWatermark}, ISR ${isr.mkString("[", ",", "]")}, " +
           s"adding replicas ${addingReplicas.mkString("[", ",", "]")} and " +
           s"removing replicas ${removingReplicas.mkString("[", ",", "]")}.")
@@ -844,8 +844,8 @@ class Partition(val topicPartition: TopicPartition,
                    targetLogDirectoryId: Option[Uuid] = None): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
       if (partitionRegistration.partitionEpoch < partitionEpoch) {
-        stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
-          s", partition registration $partitionRegistration and isNew=$isNew since the follower is already at a newer partition epoch $partitionEpoch.")
+        stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId, " +
+          s"partition registration $partitionRegistration and isNew=$isNew since the follower is already at a newer partition epoch $partitionEpoch.")
         return false
       }
 
@@ -876,8 +876,8 @@ class Partition(val topicPartition: TopicPartition,
           s"high watermark ${followerLog.highWatermark}. Current leader is ${partitionRegistration.leader}. " +
           s"Previous leader $leaderReplicaIdOpt and previous leader epoch was $leaderEpoch.")
       } else {
-        stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
-          s", partition registration $partitionRegistration and isNew=$isNew since it is already a follower with leader epoch $leaderEpoch.")
+        stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId, " +
+          s"partition registration $partitionRegistration and isNew=$isNew since it is already a follower with leader epoch $leaderEpoch.")
       }
 
       // We must restart the fetchers when the leader epoch changed regardless of

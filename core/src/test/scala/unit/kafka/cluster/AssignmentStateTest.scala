@@ -99,10 +99,8 @@ class AssignmentStateTest extends AbstractPartitionTest {
       .setDirectories(DirectoryId.unassignedArray(replicas.length))
     if (adding.nonEmpty)
       partitionRegistrationBuilder.setAddingReplicas(adding)
-//      leaderState.setAddingReplicas(adding)
     if (removing.nonEmpty)
       partitionRegistrationBuilder.setRemovingReplicas(removing)
-//      leaderState.setRemovingReplicas(removing)
 
     val partitionRegistration = partitionRegistrationBuilder.build()
     val isReassigning = !adding.isEmpty || !removing.isEmpty
