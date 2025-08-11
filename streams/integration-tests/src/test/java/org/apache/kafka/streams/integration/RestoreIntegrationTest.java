@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -82,6 +85,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -120,14 +124,23 @@ public class RestoreIntegrationTest {
     private static final int NUM_BROKERS = 2;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    
+    private static Admin admin;
 
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
+        
+        final Properties adminConfig = new Properties();
+        adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        admin = Admin.create(adminConfig);
     }
 
     @AfterAll
     public static void closeCluster() {
+        if (admin != null) {
+            admin.close();
+        }
         CLUSTER.stop();
     }
 
@@ -815,28 +828,28 @@ public class RestoreIntegrationTest {
     }
 
     private void setCommittedOffset(final String topic, final int limitDelta) {
-        final Properties consumerConfig = new Properties();
-        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, appId);
-        consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, "commit-consumer");
-        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
-        consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
+        try {
+            final List<TopicPartition> partitions = asList(
+                    new TopicPartition(topic, 0),
+                    new TopicPartition(topic, 1));
 
-        final Consumer<Integer, Integer> consumer = new KafkaConsumer<>(consumerConfig);
-        final List<TopicPartition> partitions = asList(
-                new TopicPartition(topic, 0),
-                new TopicPartition(topic, 1));
+            final Map<TopicPartition, OffsetSpec> offsetSpecs = partitions.stream()
+                    .collect(Collectors.toMap(tp -> tp, tp -> OffsetSpec.latest()));
+            
+            final Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets = 
+                    admin.listOffsets(offsetSpecs).all().get();
 
-        consumer.assign(partitions);
-        consumer.seekToEnd(partitions);
+            final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+            for (final TopicPartition partition : partitions) {
+                final long endOffset = endOffsets.get(partition).offset();
+                final long targetOffset = endOffset - limitDelta;
+                offsetsToCommit.put(partition, new OffsetAndMetadata(targetOffset));
+            }
 
-        for (final TopicPartition partition : partitions) {
-            final long position = consumer.position(partition);
-            consumer.seek(partition, position - limitDelta);
+            admin.alterConsumerGroupOffsets(appId, offsetsToCommit).all().get();
+        } catch (final Exception e) {
+            throw new RuntimeException("Failed to set committed offsets", e);
         }
-
-        consumer.commitSync();
-        consumer.close();
     }
 
     private void waitForTransitionTo(final Set<KafkaStreams.State> observed, final KafkaStreams.State state, final Duration timeout) throws Exception {
