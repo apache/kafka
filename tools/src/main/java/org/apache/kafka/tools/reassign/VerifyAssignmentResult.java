@@ -66,4 +66,12 @@ public final class VerifyAssignmentResult {
     public int hashCode() {
         return Objects.hash(partStates, partsOngoing, moveStates, movesOngoing);
     }
+
+    @Override
+    public String toString() {
+        return "partStates=" + partStates + ", "
+                + "partsOngoing=" + partsOngoing + ", "
+                + "moveStates=" + moveStates + ", "
+                + "movesOngoing=" + movesOngoing;
+    }
 }

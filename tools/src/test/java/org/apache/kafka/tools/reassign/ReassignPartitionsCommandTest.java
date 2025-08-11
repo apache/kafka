@@ -153,13 +153,18 @@ public class ReassignPartitionsCommandTest {
         produceMessages(foo0.topic(), foo0.partition(), 100);
 
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            String assignment = "{\"version\":1,\"partitions\":" +
-                    "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[3,1,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                    "]}";
-            generateAssignment(admin, assignment, "1,2,3", false);
+            String topicsToMoveJson = "{\"topics\":\n\t[{\"topic\": \"foo\"}],\n\"version\":1\n}";
+            var assignment = generateAssignment(admin, topicsToMoveJson, "1,2,3", false);
+            Map<TopicPartition, List<Integer>> proposedAssignments = assignment.getKey();
+            String assignmentJson = String.format("{\"version\":1,\"partitions\":" +
+                    "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":%s,\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+                    "]}", proposedAssignments.get(foo0));
+
+            runExecuteAssignment(false, assignmentJson, -1L, -1L);
+
             Map<TopicPartition, PartitionReassignmentState> finalAssignment = Map.of(foo0,
-                    new PartitionReassignmentState(List.of(0, 1, 2), List.of(3, 1, 2), true));
-            waitForVerifyAssignment(admin, assignment, false,
+                    new PartitionReassignmentState(proposedAssignments.get(foo0), proposedAssignments.get(foo0), true));
+            waitForVerifyAssignment(admin, assignmentJson, false,
                     new VerifyAssignmentResult(finalAssignment));
         }
     }

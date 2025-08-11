@@ -54,4 +54,11 @@ final class PartitionReassignmentState {
     public int hashCode() {
         return Objects.hash(currentReplicas, targetReplicas, done);
     }
+
+    @Override
+    public String toString() {
+        return "{currentReplicas=" + currentReplicas + ", "
+                + "targetReplicas=" + targetReplicas + ", "
+                + "done=" + done;
+    }
 }
