@@ -242,15 +242,15 @@ public class ReassignPartitionsCommandTest {
                 // Check the reassignment status.
                 VerifyAssignmentResult result = runVerifyAssignment(admin, assignment, true);
 
-                if (!result.partsOngoing) {
+                if (!result.partsOngoing()) {
                     return true;
                 } else {
                     assertFalse(
-                            result.partStates.values().stream().allMatch(state -> state.done),
+                            result.partStates().values().stream().allMatch(PartitionReassignmentState::done),
                             "Expected at least one partition reassignment to be ongoing when result = " + result
                     );
-                    assertEquals(List.of(0, 3, 2), result.partStates.get(new TopicPartition("foo", 0)).targetReplicas);
-                    assertEquals(List.of(3, 2, 1), result.partStates.get(new TopicPartition("baz", 2)).targetReplicas);
+                    assertEquals(List.of(0, 3, 2), result.partStates().get(new TopicPartition("foo", 0)).targetReplicas());
+                    assertEquals(List.of(3, 2, 1), result.partStates().get(new TopicPartition("baz", 2)).targetReplicas());
                     waitForInterBrokerThrottle(admin, List.of(0, 1, 2, 3), interBrokerThrottle);
                     return false;
                 }
@@ -389,7 +389,7 @@ public class ReassignPartitionsCommandTest {
     /**
      * Test moving partitions between directories.
      */
-    @ClusterTest(types = {Type.KRAFT})
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
     public void testLogDirReassignment() throws Exception {
         createTopics();
         TopicPartition topicPartition = new TopicPartition("foo", 0);
@@ -545,7 +545,7 @@ public class ReassignPartitionsCommandTest {
             finalAssignment.put(bar0, new PartitionReassignmentState(List.of(3, 2, 0), List.of(3, 2, 0), true));
 
             VerifyAssignmentResult verifyAssignmentResult = runVerifyAssignment(admin, assignment, false);
-            assertFalse(verifyAssignmentResult.movesOngoing);
+            assertFalse(verifyAssignmentResult.movesOngoing());
 
             // Wait for the assignment to complete
             waitForVerifyAssignment(admin, assignment, false,
@@ -791,7 +791,7 @@ public class ReassignPartitionsCommandTest {
             // This time, the broker throttles were removed.
             waitForBrokerLevelThrottles(admin, unthrottledBrokerConfigs);
             // Verify that there are no ongoing reassignments.
-            assertFalse(runVerifyAssignment(admin, assignment, false).partsOngoing);
+            assertFalse(runVerifyAssignment(admin, assignment, false).partsOngoing());
         }
         // Verify that the partition is removed from cancelled replicas
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 3));
