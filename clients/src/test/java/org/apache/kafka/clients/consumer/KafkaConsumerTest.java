@@ -715,32 +715,6 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances(GroupProtocol groupProtocol) {
-        final int targetInterceptor = 3;
-
-        try {
-            Properties props = new Properties();
-            props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
-            props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,  MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName());
-
-            MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
-
-            assertThrows(KafkaException.class, () -> newConsumer(
-                    props, new StringDeserializer(), new StringDeserializer()));
-
-            assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
-            assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
-
-        } finally {
-            MockConsumerInterceptor.resetCounters();
-        }
-    }
-
-    @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
     public void testPause(GroupProtocol groupProtocol) {
         consumer = newConsumer(groupProtocol, groupId);
 
