@@ -127,7 +127,7 @@ public class AdminClientWithPoliciesIntegrationTest {
         validations.clear();
 
         // Verify that the second resource was updated and the others were not
-        clusterInstance.ensureConsistentKRaftMetadata();
+        clusterInstance.ensureConsistentMetadata();
         DescribeConfigsResult describeResult = adminClient.describeConfigs(List.of(topicResource1, topicResource2, topicResource3, brokerResource));
         var configs = describeResult.all().get();
         assertEquals(4, configs.size());
@@ -152,7 +152,7 @@ public class AdminClientWithPoliciesIntegrationTest {
         validations.clear();
 
         // Verify that no resources are updated since validate_only = true
-        clusterInstance.ensureConsistentKRaftMetadata();
+        clusterInstance.ensureConsistentMetadata();
         describeResult = adminClient.describeConfigs(List.of(topicResource1, topicResource2, topicResource3, brokerResource));
         configs = describeResult.all().get();
         assertEquals(4, configs.size());
