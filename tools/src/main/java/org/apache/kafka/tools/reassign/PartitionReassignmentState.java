@@ -22,6 +22,10 @@ import java.util.List;
 /**
  * The state of a partition reassignment.  The current replicas and target replicas
  * may overlap.
+ *
+ * @param currentReplicas The current replicas.
+ * @param targetReplicas  The target replicas.
+ * @param done            True if the reassignment is done.
  */
 record PartitionReassignmentState(
         List<Integer> currentReplicas,
