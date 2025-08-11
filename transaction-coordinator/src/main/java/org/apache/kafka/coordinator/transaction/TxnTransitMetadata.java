@@ -33,7 +33,7 @@ public record TxnTransitMetadata(
         int txnTimeoutMs,
         TransactionState txnState,
         // The TransactionMetadata#topicPartitions field is mutable.
-        // To avoid deepcopy when assigning value from TxnTransitMetadata to TransactionMetadata, use HashSet here.
+        // To avoid deep copy when assigning value from TxnTransitMetadata to TransactionMetadata, use HashSet here.
         HashSet<TopicPartition> topicPartitions,
         long txnStartTimestamp,
         long txnLastUpdateTimestamp,

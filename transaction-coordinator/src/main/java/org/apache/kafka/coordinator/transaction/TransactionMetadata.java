@@ -325,7 +325,7 @@ public class TransactionMetadata {
         if (data.state.validPreviousStates().contains(this.state)) {
             TxnTransitMetadata transitMetadata = new TxnTransitMetadata(
                 data.producerId, this.producerId, data.nextProducerId, data.producerEpoch, data.lastProducerEpoch,
-                data.txnTimeoutMs, data.state, new HashSet<>(data.topicPartitions),
+                data.txnTimeoutMs, data.state, data.topicPartitions,
                 data.txnStartTimestamp, data.txnLastUpdateTimestamp, data.clientTransactionVersion
             );
 
