@@ -23,7 +23,7 @@ import java.util.List;
  * The state of a partition reassignment.  The current replicas and target replicas
  * may overlap.
  */
-public record PartitionReassignmentState(
+record PartitionReassignmentState(
         List<Integer> currentReplicas,
         List<Integer> targetReplicas,
         boolean done
