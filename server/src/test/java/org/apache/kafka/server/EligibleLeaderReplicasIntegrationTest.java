@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -27,9 +26,6 @@ import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Node;
@@ -49,17 +45,12 @@ import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
-
 import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -77,57 +68,50 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     serverProperties = {
         @ClusterConfigProperty(key = ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, value = "true"),
         @ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
-        @ClusterConfigProperty(key = ServerConfigs.BROKER_RACK_DOC, value = "new HashMap<>()"),
-        @ClusterConfigProperty(key = ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, value = "4"),
+        @ClusterConfigProperty(key = ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, value = "4")
     }
 )
 public class EligibleLeaderReplicasIntegrationTest {
-    private String bootstrapServer;
-    private String testTopicName;
-    private Admin adminClient;
-
     private final ClusterInstance clusterInstance;
+    private String testTopicName;
 
     EligibleLeaderReplicasIntegrationTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 
-    @BeforeEach
-    public void setUp(TestInfo info) {
-        // create adminClient
-        Properties props = new Properties();
-        bootstrapServer = clusterInstance.bootstrapServers();
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-        adminClient = Admin.create(props);
-        adminClient.updateFeatures(
-            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
-                new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-            new UpdateFeaturesOptions()
-        );
-        testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(), "ELR-test");
-    }
-
-    @AfterEach
-    public void close() throws Exception {
-        if (adminClient != null) adminClient.close();
-    }
-
     @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr() throws ExecutionException, InterruptedException {
-        adminClient.createTopics(
-            List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        clusterInstance.waitTopicCreation(testTopicName, 1);
+        try (var admin = clusterInstance.admin();
+            var producer = clusterInstance.producer(Map.of(
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+                ProducerConfig.ACKS_CONFIG, "1"));
+            var consumer = clusterInstance.consumer(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG, "test",
+                ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "10",
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()))) {
+            testTopicName = String.format("%s-%s", "testHighWatermarkShouldNotAdvanceIfUnderMinIsr", "ELR-test");
+            admin.updateFeatures(
+                Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
+                new UpdateFeaturesOptions()
+            );
 
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Collection<AlterConfigOp> ops = new ArrayList<>();
-        ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
-        // alter configs on target cluster
-        adminClient.incrementalAlterConfigs(configOps).all().get();
-        Producer producer = null;
-        Consumer consumer = null;
-        try {
-            TopicDescription testTopicDescription = adminClient.describeTopics(List.of(testTopicName))
+            admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
+            clusterInstance.waitTopicCreation(testTopicName, 1);
+
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
+            Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
+            // alter configs on target cluster
+            admin.incrementalAlterConfigs(configOps).all().get();
+
+            TopicDescription testTopicDescription = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
             List<Node> initialReplicas = topicPartitionInfo.replicas();
@@ -135,31 +119,14 @@ public class EligibleLeaderReplicasIntegrationTest {
             assertEquals(0, topicPartitionInfo.elr().size());
             assertEquals(0, topicPartitionInfo.lastKnownElr().size());
 
-            Properties producerProps = new Properties();
-            producerProps.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            producerProps.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-            // Use Ack=1 for the producer.
-            producerProps.put(ProducerConfig.ACKS_CONFIG, "1");
-            producer = new KafkaProducer(producerProps);
-
-            Properties consumerProps = new Properties();
-            consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-            consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test");
-            consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "10");
-            consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-            consumerProps.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-            consumerProps.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-            consumer = new KafkaConsumer<>(consumerProps);
             consumer.subscribe(Set.of(testTopicName));
-
             producer.send(new ProducerRecord<>(testTopicName, "0", "0")).get();
             waitUntilOneMessageIsConsumed(consumer);
 
             clusterInstance.shutdownBroker(initialReplicas.get(0).id());
             clusterInstance.shutdownBroker(initialReplicas.get(1).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 2 && elrSize == 1);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 2 && elrSize == 1, admin);
 
             // Now the partition is under min ISR. HWM should not advance.
             producer.send(new ProducerRecord<>(testTopicName, "1", "1")).get();
@@ -169,17 +136,13 @@ public class EligibleLeaderReplicasIntegrationTest {
             // Restore the min ISR and the previous log should be visible.
             clusterInstance.startBroker(initialReplicas.get(1).id());
             clusterInstance.startBroker(initialReplicas.get(0).id());
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 4 && elrSize == 0);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 4 && elrSize == 0, admin);
 
             waitUntilOneMessageIsConsumed(consumer);
-        } finally {
-            restartDeadBrokers();
-            if (consumer != null) consumer.close();
-            if (producer != null) producer.close();
         }
     }
 
-    void waitUntilOneMessageIsConsumed(Consumer consumer) throws InterruptedException {
+    void waitUntilOneMessageIsConsumed(Consumer<?, ?> consumer) throws InterruptedException {
         TestUtils.waitForCondition(
             () -> {
                 try {
@@ -196,19 +159,25 @@ public class EligibleLeaderReplicasIntegrationTest {
 
     @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testElrMemberCanBeElected() throws ExecutionException, InterruptedException {
-        adminClient.createTopics(
-            List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        clusterInstance.waitTopicCreation(testTopicName, 1);
+        try (var admin = clusterInstance.admin()) {
+            testTopicName = String.format("%s-%s", "testElrMemberCanBeElected", "ELR-test");
 
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Collection<AlterConfigOp> ops = new ArrayList<>();
-        ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
-        // alter configs on target cluster
-        adminClient.incrementalAlterConfigs(configOps).all().get();
+            admin.updateFeatures(
+                Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
+                new UpdateFeaturesOptions()
+            );
+            admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
+            clusterInstance.waitTopicCreation(testTopicName, 1);
 
-        try {
-            TopicDescription testTopicDescription = adminClient.describeTopics(List.of(testTopicName))
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
+            Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
+            // alter configs on target cluster
+            admin.incrementalAlterConfigs(configOps).all().get();
+
+            TopicDescription testTopicDescription = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
             List<Node> initialReplicas = topicPartitionInfo.replicas();
@@ -220,13 +189,13 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(1).id());
             clusterInstance.shutdownBroker(initialReplicas.get(2).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2, admin);
 
             clusterInstance.shutdownBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3, admin);
 
-            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
+            topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertEquals(1, topicPartitionInfo.lastKnownElr().size(), topicPartitionInfo.toString());
             int expectLastKnownLeader = initialReplicas.get(3).id();
@@ -239,9 +208,9 @@ public class EligibleLeaderReplicasIntegrationTest {
                 .filter(node -> node.id() != expectLastKnownLeader).toList().get(0).id();
 
             clusterInstance.startBroker(expectLeader);
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2, admin);
 
-            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
+            topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertEquals(0, topicPartitionInfo.lastKnownElr().size(), topicPartitionInfo.toString());
             assertEquals(expectLeader, topicPartitionInfo.leader().id(), topicPartitionInfo.toString());
@@ -250,32 +219,36 @@ public class EligibleLeaderReplicasIntegrationTest {
             topicPartitionInfo.replicas().stream().filter(node -> node.id() != expectLeader).limit(2)
                 .forEach(node -> clusterInstance.startBroker(node.id()));
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 3 && elrSize == 0);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 3 && elrSize == 0, admin);
 
-            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
+            topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertEquals(0, topicPartitionInfo.lastKnownElr().size(), topicPartitionInfo.toString());
             assertEquals(expectLeader, topicPartitionInfo.leader().id(), topicPartitionInfo.toString());
-        } finally {
-            restartDeadBrokers();
         }
     }
 
     @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testElrMemberShouldBeKickOutWhenUncleanShutdown() throws ExecutionException, InterruptedException {
-        adminClient.createTopics(
-            List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        clusterInstance.waitTopicCreation(testTopicName, 1);
+        try (var admin = clusterInstance.admin()) {
+            testTopicName = String.format("%s-%s", "testElrMemberShouldBeKickOutWhenUncleanShutdown", "ELR-test");
 
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Collection<AlterConfigOp> ops = new ArrayList<>();
-        ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
-        // alter configs on target cluster
-        adminClient.incrementalAlterConfigs(configOps).all().get();
+            admin.updateFeatures(
+                Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
+                new UpdateFeaturesOptions()
+            );
+            admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
+            clusterInstance.waitTopicCreation(testTopicName, 1);
 
-        try {
-            TopicDescription testTopicDescription = adminClient.describeTopics(List.of(testTopicName))
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
+            Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
+            // alter configs on target cluster
+            admin.incrementalAlterConfigs(configOps).all().get();
+
+            TopicDescription testTopicDescription = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
             List<Node> initialReplicas = topicPartitionInfo.replicas();
@@ -288,8 +261,8 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(2).id());
             clusterInstance.shutdownBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3);
-            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3, admin);
+            topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
 
             int brokerToBeUncleanShutdown = topicPartitionInfo.elr().get(0).id();
@@ -304,13 +277,11 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             // After remove the clean shutdown file, the broker should report unclean shutdown during restart.
             clusterInstance.startBroker(brokerToBeUncleanShutdown);
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 2);
-            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 2, admin);
+            topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertNull(topicPartitionInfo.leader());
             assertEquals(1, topicPartitionInfo.lastKnownElr().size());
-        } finally {
-            restartDeadBrokers();
         }
     }
 
@@ -319,19 +290,26 @@ public class EligibleLeaderReplicasIntegrationTest {
      */
     @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testLastKnownLeaderShouldBeElectedIfEmptyElr() throws ExecutionException, InterruptedException {
-        adminClient.createTopics(
-            List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
-        clusterInstance.waitTopicCreation(testTopicName, 1);
+        try (var admin = clusterInstance.admin()) {
+            testTopicName = String.format("%s-%s", "testLastKnownLeaderShouldBeElectedIfEmptyElr", "ELR-test");
 
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Collection<AlterConfigOp> ops = new ArrayList<>();
-        ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
-        // alter configs on target cluster
-        adminClient.incrementalAlterConfigs(configOps).all().get();
+            admin.updateFeatures(
+                Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
+                new UpdateFeaturesOptions()
+            );
+            admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
+            clusterInstance.waitTopicCreation(testTopicName, 1);
 
-        try {
-            TopicDescription testTopicDescription = adminClient.describeTopics(List.of(testTopicName))
+            ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
+            Collection<AlterConfigOp> ops = new ArrayList<>();
+            ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
+            Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
+            // alter configs on target cluster
+            admin.incrementalAlterConfigs(configOps).all().get();
+
+
+            TopicDescription testTopicDescription = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
             List<Node> initialReplicas = topicPartitionInfo.replicas();
@@ -344,8 +322,8 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(2).id());
             clusterInstance.shutdownBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3);
-            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3, admin);
+            topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             int lastKnownLeader = topicPartitionInfo.lastKnownElr().get(0).id();
 
@@ -364,19 +342,19 @@ public class EligibleLeaderReplicasIntegrationTest {
             topicPartitionInfo.replicas().forEach(replica -> {
                 if (replica.id() != lastKnownLeader) clusterInstance.startBroker(replica.id());
             });
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 1);
-            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 1, admin);
+            topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertNull(topicPartitionInfo.leader());
             assertEquals(1, topicPartitionInfo.lastKnownElr().size());
 
             // Now if the last known leader goes through unclean shutdown, it will still be elected.
             clusterInstance.startBroker(lastKnownLeader);
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize > 0 && elrSize == 0);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize > 0 && elrSize == 0, admin);
             TestUtils.waitForCondition(
                 () -> {
                     try {
-                        TopicPartitionInfo partition = adminClient.describeTopics(List.of(testTopicName))
+                        TopicPartitionInfo partition = admin.describeTopics(List.of(testTopicName))
                             .allTopicNames().get().get(testTopicName).partitions().get(0);
                         if (partition.leader() == null) return false;
                         return partition.lastKnownElr().isEmpty() && partition.elr().isEmpty() && partition.leader().id() == lastKnownLeader;
@@ -387,16 +365,14 @@ public class EligibleLeaderReplicasIntegrationTest {
                 DEFAULT_MAX_WAIT_MS,
                 () -> String.format("Partition metadata for %s is not correct", testTopicName)
             );
-        } finally {
-            restartDeadBrokers();
         }
     }
 
-    void waitForIsrAndElr(BiFunction<Integer, Integer, Boolean> isIsrAndElrSizeSatisfied) throws InterruptedException {
+    void waitForIsrAndElr(BiFunction<Integer, Integer, Boolean> isIsrAndElrSizeSatisfied, Admin admin) throws InterruptedException {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    TopicDescription topicDescription = adminClient.describeTopics(List.of(testTopicName))
+                    TopicDescription topicDescription = admin.describeTopics(List.of(testTopicName))
                         .allTopicNames().get().get(testTopicName);
                     TopicPartitionInfo partition = topicDescription.partitions().get(0);
                     return isIsrAndElrSizeSatisfied.apply(partition.isr().size(), partition.elr().size());
@@ -407,14 +383,5 @@ public class EligibleLeaderReplicasIntegrationTest {
             DEFAULT_MAX_WAIT_MS,
             () -> String.format("Partition metadata for %s is not propagated", testTopicName)
         );
-    }
-
-    void restartDeadBrokers() {
-        if (clusterInstance.brokers().isEmpty()) {
-            throw new RuntimeException("Must supply at least one server config.");
-        }
-        clusterInstance.brokers().forEach((key, value) -> {
-            if (value.isShutdown()) value.startup();
-        });
     }
 }
