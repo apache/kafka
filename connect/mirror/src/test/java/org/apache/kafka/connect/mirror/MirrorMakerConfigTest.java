@@ -316,7 +316,10 @@ public class MirrorMakerConfigTest {
     @Test
     public void testClientInvalidSecurityProtocol() {
         ConfigException ce = assertThrows(ConfigException.class,
-                () -> new MirrorClientConfig(makeProps(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
+                () -> new MirrorClientConfig(makeProps(
+                        CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc",
+                        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
+                )));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
@@ -324,7 +327,9 @@ public class MirrorMakerConfigTest {
     public void testCaseInsensitiveSecurityProtocol() {
         final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
         final MirrorClientConfig config = new MirrorClientConfig(makeProps(
-                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase));
+                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase,
+                CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
+        ));
         assertEquals(saslSslLowerCase, config.originalsStrings().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
