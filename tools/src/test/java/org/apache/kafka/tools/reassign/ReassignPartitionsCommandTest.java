@@ -153,12 +153,29 @@ public class ReassignPartitionsCommandTest {
         produceMessages(foo0.topic(), foo0.partition(), 100);
 
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            String topicsToMoveJson = "{\"topics\":\n\t[{\"topic\": \"foo\"}],\n\"version\":1\n}";
+            String topicsToMoveJson = """
+                {
+                    "topics": [
+                        { "topic": "foo" }
+                    ],
+                    "version": 1
+                }
+                """;
             var assignment = generateAssignment(admin, topicsToMoveJson, "1,2,3", false);
             Map<TopicPartition, List<Integer>> proposedAssignments = assignment.getKey();
-            String assignmentJson = String.format("{\"version\":1,\"partitions\":" +
-                    "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":%s,\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                    "]}", proposedAssignments.get(foo0));
+            String assignmentJson = String.format("""
+                {
+                    "version": 1,
+                    "partitions": [
+                        {
+                            "topic": "foo",
+                            "partition": 0,
+                            "replicas": %s,
+                            "log_dirs": ["any", "any", "any"]
+                        }
+                    ]
+                }
+                """, proposedAssignments.get(foo0));
 
             runExecuteAssignment(false, assignmentJson, -1L, -1L);
 
