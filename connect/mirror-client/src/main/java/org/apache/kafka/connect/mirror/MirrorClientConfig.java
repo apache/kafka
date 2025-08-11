@@ -29,10 +29,10 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 
 /**
  * Configuration required for {@link MirrorClient} to talk to a given target cluster.
@@ -134,7 +134,7 @@ public class MirrorClientConfig extends AbstractConfig {
     static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
             Type.STRING,
-            List.of(),
+            NO_DEFAULT_VALUE,
             new ConfigDef.NonNullValidator(),
             Importance.HIGH,
             CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
