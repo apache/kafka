@@ -32,7 +32,6 @@ import org.apache.kafka.connect.runtime.isolation.PluginDiscoveryMode;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 
-import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
