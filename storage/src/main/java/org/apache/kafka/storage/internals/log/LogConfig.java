@@ -561,8 +561,7 @@ public class LogConfig extends AbstractConfig {
     @SuppressWarnings("unchecked")
     private static void validateRemoteStorageRequiresDeleteCleanupPolicy(Map<?, ?> props) {
         List<String> cleanupPolicy = (List<String>) props.get(TopicConfig.CLEANUP_POLICY_CONFIG);
-        Set<String> policySet = cleanupPolicy.stream().map(policy -> policy.toLowerCase(Locale.getDefault())).collect(Collectors.toSet());
-        if (!Set.of(TopicConfig.CLEANUP_POLICY_DELETE).equals(policySet)) {
+        if (cleanupPolicy.size() != 1 || !TopicConfig.CLEANUP_POLICY_DELETE.equals(cleanupPolicy.get(0))) {
             throw new ConfigException("Remote log storage only supports topics with cleanup.policy=delete");
         }
     }

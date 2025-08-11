@@ -295,7 +295,7 @@ class LogConfigTest {
     assertThrows(classOf[ConfigException], () => validateCleanupPolicy())
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact,delete")
     assertThrows(classOf[ConfigException], () => validateCleanupPolicy())
-    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "delete,delete,delete")
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "delete")
     validateCleanupPolicy()
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "")
     assertThrows(classOf[ConfigException], () => validateCleanupPolicy())
