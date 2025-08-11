@@ -903,7 +903,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(BOOTSTRAP_SERVERS_CONFIG, // required with no default value
                     Type.LIST,
                     NO_DEFAULT_VALUE,
-                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
+                    new ConfigDef.NonNullValidator(),
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
             .define(NUM_STANDBY_REPLICAS_CONFIG,
@@ -1103,7 +1103,7 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LIST,
                     List.of(),
                     ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                    Importance.LOW, 
+                    Importance.LOW,
                     CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,
                     Type.BOOLEAN,
