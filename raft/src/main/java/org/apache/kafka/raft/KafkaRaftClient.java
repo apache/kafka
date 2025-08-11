@@ -3343,7 +3343,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             final var voters = partitionState.lastVoterSet();
             final RequestSendResult sendResult;
             if (voters.voterIds().contains(localReplicaKey.id())) {
-                /* Replica id is in the voter set but replica is not voter. Remove old voter.
+                /* The replica's id is in the voter set but the replica is not a voter because
+                 * the directory id of the voter set entry is different. Remove the old voter.
                  * Local replica is not in the voter set because the replica is an observer.
                  */
                 final var oldVoter = voters.voterKeys()

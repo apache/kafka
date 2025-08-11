@@ -499,7 +499,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 } else if (initialVoterSet.isPresent()) {
                     for (final var controllerNode : initialVoterSet.get().entrySet()) {
                         final var voterId = controllerNode.getKey();
-                        final var voterDirectoryid = controllerNode.getValue();
+                        final var voterDirectoryId = controllerNode.getValue();
                         dynamicVotersBuilder.append(prefix);
                         prefix = ",";
                         dynamicVotersBuilder.append(
@@ -508,7 +508,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 voterId,
                                 socketFactoryManager.
                                     getOrCreatePortForListener(voterId, controllerListenerName),
-                                voterDirectoryid
+                                voterDirectoryId
                             )
                         );
                     }
