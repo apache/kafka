@@ -63,9 +63,9 @@ public class ConsumerConfig extends AbstractConfig {
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
     // This is to help optimize ConsumerCoordinator#performAssignment method
     public static final List<String> ASSIGN_FROM_SUBSCRIBED_ASSIGNORS = List.of(
-            RANGE_ASSIGNOR_NAME, 
-            ROUNDROBIN_ASSIGNOR_NAME, 
-            STICKY_ASSIGNOR_NAME, 
+            RANGE_ASSIGNOR_NAME,
+            ROUNDROBIN_ASSIGNOR_NAME,
+            STICKY_ASSIGNOR_NAME,
             COOPERATIVE_STICKY_ASSIGNOR_NAME
     );
 
@@ -406,17 +406,17 @@ public class ConsumerConfig extends AbstractConfig {
      * A list of configuration keys not supported for CONSUMER protocol.
      */
     private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
-            PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
-            HEARTBEAT_INTERVAL_MS_CONFIG, 
+            PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            HEARTBEAT_INTERVAL_MS_CONFIG,
             SESSION_TIMEOUT_MS_CONFIG,
             SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
-    
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
-                                        ConfigDef.NO_DEFAULT_VALUE,
-                                        null,
+                                        Collections.emptyList(),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
