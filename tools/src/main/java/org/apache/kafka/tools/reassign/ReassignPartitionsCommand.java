@@ -279,12 +279,12 @@ public class ReassignPartitionsCommand {
         bld.add("Status of partition reassignment:");
         states.keySet().stream().sorted(ReassignPartitionsCommand::compareTopicPartitions).forEach(topicPartition -> {
             PartitionReassignmentState state = states.get(topicPartition);
-            if (state.done) {
-                if (state.currentReplicas.equals(state.targetReplicas)) {
+            if (state.done()) {
+                if (state.currentReplicas().equals(state.targetReplicas())) {
                     bld.add(String.format("Reassignment of partition %s is completed.", topicPartition));
                 } else {
-                    String currentReplicaStr = state.currentReplicas.stream().map(String::valueOf).collect(Collectors.joining(","));
-                    String targetReplicaStr = state.targetReplicas.stream().map(String::valueOf).collect(Collectors.joining(","));
+                    String currentReplicaStr = state.currentReplicas().stream().map(String::valueOf).collect(Collectors.joining(","));
+                    String targetReplicaStr = state.targetReplicas().stream().map(String::valueOf).collect(Collectors.joining(","));
 
                     bld.add("There is no active reassignment of partition " + topicPartition + ", " +
                         "but replica set is " + currentReplicaStr + " rather than " +
