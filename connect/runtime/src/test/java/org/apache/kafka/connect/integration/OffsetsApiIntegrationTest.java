@@ -303,8 +303,7 @@ public class OffsetsApiIntegrationTest {
         // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsets.add(
-                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i),
-                            Map.of("saved", 5))
+                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i), Map.of("saved", 5))
             );
         }
 
@@ -601,8 +600,7 @@ public class OffsetsApiIntegrationTest {
         // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsetsToAlter.add(
-                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i),
-                            Map.of("saved", 5))
+                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i), Map.of("saved", 5))
             );
         }
 
@@ -622,8 +620,7 @@ public class OffsetsApiIntegrationTest {
         // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsetsToAlter.add(
-                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i),
-                            Map.of("saved", 7))
+                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i), Map.of("saved", 7))
             );
         }
 
