@@ -789,7 +789,7 @@ public class ReassignPartitionsUnitTest {
     }
 
     @Test
-    public void testGetReplicaToLogDir() {
+    public void testGetReplicaToLogDir() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder()
                 .numBrokers(4)
                 .brokerLogDirs(List.of(

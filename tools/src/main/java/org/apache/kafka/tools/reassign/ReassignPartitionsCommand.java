@@ -927,7 +927,7 @@ public class ReassignPartitionsCommand {
      */
     static String currentPartitionReplicaAssignmentToString(Admin adminClient,
                                                             Map<TopicPartition, List<Integer>> proposedParts,
-                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException {
+                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException, ExecutionException, InterruptedException {
         Map<TopicPartition, List<Integer>> partitionsToBeReassigned = currentParts.entrySet().stream()
             .filter(e -> proposedParts.containsKey(e.getKey()))
             .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
@@ -1521,19 +1521,15 @@ public class ReassignPartitionsCommand {
         return results;
     }
 
-    static Map<TopicPartitionReplica, String> getReplicaToLogDir(Admin adminClient, List<TopicPartitionReplica> replicas) {
-        try {
-            return adminClient.describeReplicaLogDirs(replicas).all().get()
-                    .entrySet()
-                    .stream()
-                    .filter(entry -> entry.getValue() != null && entry.getValue().getCurrentReplicaLogDir() != null)
-                    .collect(Collectors.toMap(
-                        Entry::getKey,
-                        entry -> entry.getValue().getCurrentReplicaLogDir()
-                    ));
-        } catch (InterruptedException | ExecutionException e) {
-            throw new AdminOperationException(e.getCause());
-        }
+    static Map<TopicPartitionReplica, String> getReplicaToLogDir(Admin adminClient, List<TopicPartitionReplica> replicas) throws InterruptedException, ExecutionException {
+        return adminClient.describeReplicaLogDirs(replicas).all().get()
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() != null && entry.getValue().getCurrentReplicaLogDir() != null)
+                .collect(Collectors.toMap(
+                    Entry::getKey,
+                    entry -> entry.getValue().getCurrentReplicaLogDir()
+                ));
     }
 
     private static List<TopicPartitionReplica> getTopicPartitionReplicas(Map<TopicPartition, List<Integer>> topicPartitionToReplicas) {
