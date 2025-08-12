@@ -842,7 +842,7 @@ public class RestoreIntegrationTest {
             final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
             for (final TopicPartition partition : partitions) {
                 final long endOffset = endOffsets.get(partition).offset();
-                final long targetOffset = endOffset - limitDelta;
+                final long targetOffset = Math.max(0, endOffset - limitDelta);
                 offsetsToCommit.put(partition, new OffsetAndMetadata(targetOffset));
             }
 
