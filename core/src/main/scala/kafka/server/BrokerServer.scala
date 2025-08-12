@@ -387,7 +387,7 @@ class BrokerServer(
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, clientToControllerChannelManager, groupCoordinator,
-        transactionCoordinator, shareCoordinator)
+        transactionCoordinator, shareCoordinator, time)
 
       dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),

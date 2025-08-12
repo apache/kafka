@@ -10971,6 +10971,8 @@ class KafkaApisTest extends Logging {
     val mockAutoTopicCreationManager = mock(classOf[AutoTopicCreationManager])
     when(mockAutoTopicCreationManager.getTopicCreationErrors(Set("test-topic")))
       .thenReturn(Map("test-topic" -> "INVALID_REPLICATION_FACTOR"))
+    // Mock the createStreamsInternalTopics method to do nothing (simulate topic creation attempt)
+    doNothing().when(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any())
 
     kafkaApis = createKafkaApis(autoTopicCreationManager = Some(mockAutoTopicCreationManager))
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
