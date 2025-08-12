@@ -47,8 +47,7 @@
           "about": "The high water mark."},
         { "name": "CurrentVoters", "type": "[]ReplicaState", "versions": "0+",
           "about": "The current voters of the partition."},
-        { "name": "CommittedVoters", "type": "[]ReplicaState", "versions": "3+",
-          "nullableVersions": "3+", "ignorable": true, "default" : "null",
+        { "name": "CommittedVoters", "type": "[]ReplicaState", "versions": "3+", "ignorable": true,
           "about":  "The voters has been committed."},
         { "name": "Observers", "type": "[]ReplicaState", "versions": "0+",
           "about": "The observers of the partition."}

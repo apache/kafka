@@ -45,7 +45,7 @@ public class QuorumInfo {
         Map<Integer, Node> nodes
     ) {
         this.leaderId = leaderId;
-        this.leaderEpoch = leaderEpoch; 
+        this.leaderEpoch = leaderEpoch;
         this.highWatermark = highWatermark;
         this.voters = voters;
         this.committedVoters = committedVoters;
