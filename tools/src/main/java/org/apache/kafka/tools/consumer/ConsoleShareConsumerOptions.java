@@ -50,6 +50,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
     private final OptionSpec<String> groupIdOpt;
     private final Properties consumerProps;
     private final MessageFormatter formatter;
+    private final OptionSpec<?> enableSystestEventsLoggingOpt;
 
     public ConsoleShareConsumerOptions(String[] args) throws IOException {
         super(args);
@@ -123,6 +124,8 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                 .withRequiredArg()
                 .describedAs("share group id")
                 .ofType(String.class);
+        enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
+            "Log lifecycle events of the share consumer in addition to logging consumed messages. (This is specific for system tests.)");
 
         try {
             options = parser.parse(args);
@@ -182,7 +185,8 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
     }
 
     private Properties buildConsumerProps(Properties consumerPropsFromFile, Properties extraConsumerProps, Set<String> groupIdsProvided) {
-        Properties consumerProps = new Properties(consumerPropsFromFile);
+        Properties consumerProps = new Properties();
+        consumerProps.putAll(consumerPropsFromFile);
         consumerProps.putAll(extraConsumerProps);
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer());
         if (consumerProps.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null) {
@@ -266,5 +270,9 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
 
     MessageFormatter formatter() {
         return formatter;
+    }
+
+    boolean enableSystestEventsLogging() {
+        return options.has(enableSystestEventsLoggingOpt);
     }
 }

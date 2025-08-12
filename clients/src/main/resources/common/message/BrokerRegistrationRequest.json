@@ -36,7 +36,7 @@
     { "name": "IncarnationId", "type": "uuid", "versions": "0+",
       "about": "The incarnation id of the broker process." },
     { "name": "Listeners", "type": "[]Listener",
-      "about": "The listeners of this broker", "versions": "0+", "fields": [
+      "about": "The listeners of this broker.", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
         "about": "The name of the endpoint." },
       { "name": "Host", "type": "string", "versions": "0+",
@@ -60,7 +60,7 @@
     { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The rack which this broker is in." },
     { "name": "IsMigratingZkBroker", "type": "bool", "versions": "1+", "default": "false",
-      "about": "If the required configurations for ZK migration are present, this value is set to true" },
+      "about": "If the required configurations for ZK migration are present, this value is set to true." },
     { "name": "LogDirs", "type":  "[]uuid", "versions":  "2+",
       "about": "Log directories configured in this broker which are available.", "ignorable": true },
     { "name": "PreviousBrokerEpoch", "type": "int64", "versions": "3+", "default": "-1", "ignorable": true,

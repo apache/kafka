@@ -76,6 +76,17 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
     );
 
     /**
+     * Sets the coordinator executor.
+     *
+     * @param executor The coordinator executor.
+     *
+     * @return The builder.
+     */
+    CoordinatorShardBuilder<S, U> withExecutor(
+        CoordinatorExecutor<U> executor
+    );
+
+    /**
      * Sets the coordinator metrics.
      *
      * @param coordinatorMetrics The coordinator metrics.

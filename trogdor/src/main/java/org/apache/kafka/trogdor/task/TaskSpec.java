@@ -22,7 +22,6 @@ import org.apache.kafka.trogdor.common.JsonUtil;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
@@ -111,7 +110,7 @@ public abstract class TaskSpec {
         return JsonUtil.toJsonString(this);
     }
 
-    protected Map<String, String> configOrEmptyMap(Map<String, String> config) {
-        return (config == null) ? Collections.emptyMap() : config;
+    protected static Map<String, String> configOrEmptyMap(Map<String, String> config) {
+        return config == null ? Map.of() : config;
     }
 }

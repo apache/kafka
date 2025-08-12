@@ -24,9 +24,9 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The specification for a benchmark that produces messages to a set of topics.
@@ -59,7 +59,7 @@ import java.util.Optional;
  *   }
  * }
  */
-public class ProduceBenchSpec extends TaskSpec {
+public final class ProduceBenchSpec extends TaskSpec {
     private final String producerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
@@ -75,7 +75,6 @@ public class ProduceBenchSpec extends TaskSpec {
     private final boolean useConfiguredPartitioner;
     private final boolean skipFlush;
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
                          @JsonProperty("durationMs") long durationMs,
@@ -186,7 +185,7 @@ public class ProduceBenchSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(producerNode);
+        return topology -> Set.of(producerNode);
     }
 
     @Override

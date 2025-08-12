@@ -32,18 +32,18 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.ChoiceCallback;
-import javax.ws.rs.HttpMethod;
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.SecurityContext;
-import javax.ws.rs.core.UriInfo;
+
+import jakarta.ws.rs.HttpMethod;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.SecurityContext;
+import jakarta.ws.rs.core.UriInfo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -260,8 +260,8 @@ public class JaasBasicAuthFilterTest {
     private JaasBasicAuthFilter setupJaasFilter(String name, String credentialFilePath) {
         TestJaasConfig configuration = new TestJaasConfig();
         Map<String, Object> moduleOptions = credentialFilePath != null
-            ? Collections.singletonMap("file", credentialFilePath)
-            : Collections.emptyMap();
+            ? Map.of("file", credentialFilePath)
+            : Map.of();
         configuration.addEntry(name, LOGIN_MODULE, moduleOptions);
         return new JaasBasicAuthFilter(configuration);
     }

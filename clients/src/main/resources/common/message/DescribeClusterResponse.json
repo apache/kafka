@@ -20,14 +20,15 @@
   //
   // Version 1 adds the EndpointType field, and makes MISMATCHED_ENDPOINT_TYPE and
   // UNSUPPORTED_ENDPOINT_TYPE valid top-level response error codes.
+  // Version 2 adds IsFenced field to Brokers for KIP-1073 support.
   //
-  "validVersions": "0-1",
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The top-level error code, or 0 if there was no error" },
+      "about": "The top-level error code, or 0 if there was no error." },
     { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The top-level error message, or null if there was no error." },
     { "name": "EndpointType", "type": "int8", "versions": "1+", "default": "1",
@@ -45,7 +46,9 @@
       { "name": "Port", "type": "int32", "versions": "0+",
         "about": "The broker port." },
       { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
-        "about": "The rack of the broker, or null if it has not been assigned to a rack." }
+        "about": "The rack of the broker, or null if it has not been assigned to a rack." },
+      { "name": "IsFenced", "type": "bool", "versions": "2+",
+        "about": "Whether the broker is fenced" }
     ]},
     { "name": "ClusterAuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
       "about": "32-bit bitfield to represent authorized operations for this cluster." }

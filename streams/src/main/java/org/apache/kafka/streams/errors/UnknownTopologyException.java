@@ -27,6 +27,7 @@ public class UnknownTopologyException extends StreamsException {
         super(message + " due to being unable to locate a Topology named " + namedTopology);
     }
 
+    @SuppressWarnings("unused")
     public UnknownTopologyException(final String message, final Throwable throwable, final String namedTopology) {
         super(message + " due to being unable to locate a Topology named " + namedTopology, throwable);
     }

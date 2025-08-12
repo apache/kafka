@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
@@ -31,7 +32,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -43,7 +43,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
-import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -54,12 +53,9 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.event.Level;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
@@ -74,15 +70,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
-import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
+import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
 import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.DELETE_RETENTION_MS_CONFIG;
 import static org.apache.kafka.common.config.TopicConfig.SEGMENT_MS_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_STOP;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG;
@@ -247,8 +244,6 @@ public class ConnectWorkerIntegrationTest {
         ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
         workerProps.put(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, String.valueOf(5000));
 
-        useFixedBrokerPort();
-
         // start the clusters
         connect = connectBuilder.build();
         connect.start();
@@ -331,7 +326,7 @@ public class ConnectWorkerIntegrationTest {
 
         // base connector props
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
 
         // start the connector with only one task
         int initialNumTasks = 1;
@@ -566,35 +561,6 @@ public class ConnectWorkerIntegrationTest {
         );
     }
 
-    /**
-     * The <strong><em>GET /connectors/{connector}/tasks-config</em></strong> endpoint was deprecated in
-     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-970%3A+Deprecate+and+remove+Connect%27s+redundant+task+configurations+endpoint">KIP-970</a>
-     * and is slated for removal in the next major release. This test verifies that the deprecation warning log is emitted on trying to use the
-     * deprecated endpoint.
-     */
-    @Test
-    public void testTasksConfigDeprecation() throws Exception {
-        connect = connectBuilder.build();
-        // start the clusters
-        connect.start();
-
-        connect.configureConnector(CONNECTOR_NAME, defaultSourceConnectorProps(TOPIC_NAME));
-        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME,
-            NUM_TASKS,
-            "Connector tasks did not start in time"
-        );
-
-        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(ConnectorsResource.class)) {
-            connect.requestGet(connect.endpointForResource("connectors/" + CONNECTOR_NAME + "/tasks-config"));
-            List<LogCaptureAppender.Event> logEvents = logCaptureAppender.getEvents();
-            assertEquals(1, logEvents.size());
-            assertEquals(Level.WARN.toString(), logEvents.get(0).getLevel());
-            assertTrue(logEvents.get(0).getMessage().contains("deprecated"));
-        }
-
-    }
-
     @Test
     public void testCreateConnectorWithPausedInitialState() throws Exception {
         connect = connectBuilder.build();
@@ -826,7 +792,7 @@ public class ConnectWorkerIntegrationTest {
     private Map<String, String> defaultSinkConnectorProps(String topics) {
         // setup props for the sink connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, topics);
 
@@ -840,8 +806,7 @@ public class ConnectWorkerIntegrationTest {
         // Workaround for KAFKA-15676, which can cause the scheduled rebalance delay to
         // be spuriously triggered after the group coordinator for a Connect cluster is bounced
         workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "0");
-
-        useFixedBrokerPort();
+        workerProps.put(METADATA_RECOVERY_STRATEGY_CONFIG, MetadataRecoveryStrategy.NONE.name);
 
         connect = connectBuilder
                 .numWorkers(1)
@@ -1022,7 +987,7 @@ public class ConnectWorkerIntegrationTest {
         int maxTasks = 1;
         connectorProps.put(TASKS_MAX_CONFIG, Integer.toString(maxTasks));
         int numTasks = 2;
-        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connectorProps.put(TestableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
 
         // A connector that generates excessive tasks will be failed with an expected error message
@@ -1054,7 +1019,7 @@ public class ConnectWorkerIntegrationTest {
             );
 
             for (int i = 0; i < numTasks; i++) {
-                Map<String, String> taskConfig = MonitorableSourceConnector.taskConfig(
+                Map<String, String> taskConfig = TestableSourceConnector.taskConfig(
                         connectorProps,
                         CONNECTOR_NAME,
                         i
@@ -1105,7 +1070,7 @@ public class ConnectWorkerIntegrationTest {
         );
 
         numTasks++;
-        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connectorProps.put(TestableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
 
         // A connector will be allowed to generate excessive tasks when tasks.max.enforce is set to false
@@ -1116,7 +1081,7 @@ public class ConnectWorkerIntegrationTest {
         );
 
         numTasks = maxTasks;
-        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connectorProps.put(TestableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
         connectorProps.put(TASKS_MAX_ENFORCE_CONFIG, "true");
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
 
@@ -1127,7 +1092,7 @@ public class ConnectWorkerIntegrationTest {
         );
 
         numTasks = maxTasks + 1;
-        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connectorProps.put(TestableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
         connect.configureConnector(CONNECTOR_NAME, connectorProps);
 
         // A connector that generates excessive tasks after being reconfigured will be failed, but its existing tasks will continue running
@@ -1421,7 +1386,7 @@ public class ConnectWorkerIntegrationTest {
         final String sourceConnectorName = "plugins-alias-test-source";
         Map<String, String> sourceConnectorConfig = new HashMap<>(baseConnectorConfig);
         // Aliased source connector class
-        sourceConnectorConfig.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        sourceConnectorConfig.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         // Connector-specific properties
         sourceConnectorConfig.put(TOPIC_CONFIG, topic);
         sourceConnectorConfig.put("throughput", "10");
@@ -1435,7 +1400,7 @@ public class ConnectWorkerIntegrationTest {
         final String sinkConnectorName = "plugins-alias-test-sink";
         Map<String, String> sinkConnectorConfig = new HashMap<>(baseConnectorConfig);
         // Aliased sink connector class
-        sinkConnectorConfig.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        sinkConnectorConfig.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         // Connector-specific properties
         sinkConnectorConfig.put(TOPICS_CONFIG, topic);
         // Create the connector and ensure it and its tasks can start
@@ -1447,7 +1412,7 @@ public class ConnectWorkerIntegrationTest {
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup props for the source connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
         props.put("throughput", "10");
@@ -1457,23 +1422,6 @@ public class ConnectWorkerIntegrationTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
-    }
-
-    private void useFixedBrokerPort() throws IOException {
-        // Find a free port and use it in the Kafka broker's listeners config. We can't use port 0 in the listeners
-        // config to get a random free port because in this test we want to stop the Kafka broker and then bring it
-        // back up and listening on the same port in order to verify that the Connect cluster can re-connect to Kafka
-        // and continue functioning normally. If we were to use port 0 here, the Kafka broker would most likely listen
-        // on a different random free port the second time it is started. Note that we can only use the static port
-        // because we have a single broker setup in this test.
-        int listenerPort;
-        try (ServerSocket s = new ServerSocket(0)) {
-            listenerPort = s.getLocalPort();
-        }
-        brokerProps.put(SocketServerConfigs.LISTENERS_CONFIG, String.format("EXTERNAL://localhost:%d,CONTROLLER://localhost:0", listenerPort));
-        connectBuilder
-                .numBrokers(1)
-                .brokerProps(brokerProps);
     }
 
     public static class EmptyTaskConfigsConnector extends SinkConnector {

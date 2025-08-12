@@ -89,7 +89,7 @@ public class ClientMetricsTest {
     public void shouldAddStateMetric() {
         final String name = "state";
         final String description = "The state of the Kafka Streams client";
-        final Gauge<State> stateProvider = (config, now) -> State.RUNNING;
+        final Gauge<String> stateProvider = (config, now) -> State.RUNNING.name();
         setUpAndVerifyMutableMetric(
             name,
             description,
@@ -108,6 +108,32 @@ public class ClientMetricsTest {
             description,
             valueProvider,
             () -> ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, valueProvider)
+        );
+    }
+
+    @Test
+    public void shouldAddClientStateTelemetryMetric() {
+        final String name = "client-state";
+        final String description = "The state of the Kafka Streams client";
+        final Gauge<Integer> stateProvider = (config, now) -> State.RUNNING.ordinal();
+        setUpAndVerifyMutableMetric(
+                name,
+                description,
+                stateProvider,
+                () -> ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, stateProvider)
+        );
+    }
+
+    @Test
+    public void shouldAddRecordingLevelMetric() {
+        final String name = "recording-level";
+        final String description = "The metrics recording level of the Kafka Streams client";
+        final int recordingLevel = 1;
+        setUpAndVerifyImmutableMetric(
+                name,
+                description,
+                recordingLevel,
+                () -> ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, recordingLevel)
         );
     }
 
@@ -148,6 +174,21 @@ public class ClientMetricsTest {
     private void setUpAndVerifyImmutableMetric(final String name,
                                                final String description,
                                                final String value,
+                                               final Runnable metricAdder) {
+
+        metricAdder.run();
+
+        verify(streamsMetrics).addClientLevelImmutableMetric(
+                eq(name),
+                eq(description),
+                eq(RecordingLevel.INFO),
+                eq(value)
+        );
+    }
+
+    private void setUpAndVerifyImmutableMetric(final String name,
+                                               final String description,
+                                               final int value,
                                                final Runnable metricAdder) {
 
         metricAdder.run();

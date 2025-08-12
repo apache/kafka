@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -27,9 +28,16 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +53,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * The Connect metrics with configurable {@link MetricsReporter}s.
@@ -81,8 +90,7 @@ public class ConnectMetrics {
                 .timeWindow(sampleWindowMs, TimeUnit.MILLISECONDS).recordLevel(
                         Sensor.RecordingLevel.forName(metricsRecordingLevel));
 
-        Map<String, Object> contextLabels = new HashMap<>();
-        contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+        Map<String, Object> contextLabels = new HashMap<>(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
         if (groupId != null) {
@@ -167,6 +175,74 @@ public class ConnectMetrics {
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, workerId, metrics);
     }
 
+    public PluginMetricsImpl connectorPluginMetrics(String connectorId) {
+        return new PluginMetricsImpl(metrics, connectorPluginTags(connectorId));
+    }
+
+    private static Map<String, String> connectorPluginTags(String connectorId) {
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("connector", connectorId);
+        return tags;
+    }
+
+    PluginMetricsImpl taskPluginMetrics(ConnectorTaskId connectorTaskId) {
+        return new PluginMetricsImpl(metrics, taskPluginTags(connectorTaskId));
+    }
+
+    private static Map<String, String> taskPluginTags(ConnectorTaskId connectorTaskId) {
+        Map<String, String> tags = connectorPluginTags(connectorTaskId.connector());
+        tags.put("task", String.valueOf(connectorTaskId.task()));
+        return tags;
+    }
+
+    private static Supplier<Map<String, String>> converterPluginTags(ConnectorTaskId connectorTaskId, boolean isKey) {
+        return () -> {
+            Map<String, String> tags = taskPluginTags(connectorTaskId);
+            tags.put("converter", isKey ? "key" : "value");
+            return tags;
+        };
+    }
+
+    private static Supplier<Map<String, String>> headerConverterPluginTags(ConnectorTaskId connectorTaskId) {
+        return () -> {
+            Map<String, String> tags = taskPluginTags(connectorTaskId);
+            tags.put("converter", "header");
+            return tags;
+        };
+    }
+
+    private static Supplier<Map<String, String>> transformationPluginTags(ConnectorTaskId connectorTaskId, String transformationAlias) {
+        return () -> {
+            Map<String, String> tags = taskPluginTags(connectorTaskId);
+            tags.put("transformation", transformationAlias);
+            return tags;
+        };
+    }
+
+    private static Supplier<Map<String, String>> predicatePluginTags(ConnectorTaskId connectorTaskId, String predicateAlias) {
+        return () -> {
+            Map<String, String> tags = taskPluginTags(connectorTaskId);
+            tags.put("predicate", predicateAlias);
+            return tags;
+        };
+    }
+
+    public Plugin<HeaderConverter> wrap(HeaderConverter headerConverter, ConnectorTaskId connectorTaskId) {
+        return Plugin.wrapInstance(headerConverter, metrics, headerConverterPluginTags(connectorTaskId));
+    }
+
+    public Plugin<Converter> wrap(Converter converter, ConnectorTaskId connectorTaskId, boolean isKey) {
+        return Plugin.wrapInstance(converter, metrics, converterPluginTags(connectorTaskId, isKey));
+    }
+
+    public <R extends ConnectRecord<R>> Plugin<Transformation<R>> wrap(Transformation<R> transformation, ConnectorTaskId connectorTaskId, String alias) {
+        return Plugin.wrapInstance(transformation, metrics, transformationPluginTags(connectorTaskId, alias));
+    }
+
+    public <R extends ConnectRecord<R>> Plugin<Predicate<R>> wrap(Predicate<R> predicate, ConnectorTaskId connectorTaskId, String alias) {
+        return Plugin.wrapInstance(predicate, metrics, predicatePluginTags(connectorTaskId, alias));
+    }
+
     public static class MetricGroupId {
         private final String groupName;
         private final Map<String, String> tags;
@@ -223,8 +299,7 @@ public class ConnectMetrics {
         public boolean equals(Object obj) {
             if (obj == this)
                 return true;
-            if (obj instanceof MetricGroupId) {
-                MetricGroupId that = (MetricGroupId) obj;
+            if (obj instanceof MetricGroupId that) {
                 return this.groupName.equals(that.groupName) && this.tags.equals(that.tags);
             }
             return false;
@@ -391,8 +466,7 @@ public class ConnectMetrics {
         public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
             // We need to make sure that all sensor names are unique across all groups, so use the sensor prefix
             Sensor result = metrics.sensor(sensorPrefix + name, config, Long.MAX_VALUE, recordingLevel, parents);
-            if (result != null)
-                sensorNames.add(result.name());
+            sensorNames.add(result.name());
             return result;
         }
 

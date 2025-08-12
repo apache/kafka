@@ -17,9 +17,6 @@
 
 package org.apache.kafka.connect.mirror.clients.admin;
 
-import org.apache.kafka.clients.admin.AlterConfigsOptions;
-import org.apache.kafka.clients.admin.AlterConfigsResult;
-import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.CreateAclsOptions;
 import org.apache.kafka.clients.admin.CreateAclsResult;
 import org.apache.kafka.clients.admin.CreatePartitionsOptions;
@@ -30,7 +27,6 @@ import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.acl.AclBinding;
-import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TopicExistsException;
 
 import org.slf4j.Logger;
@@ -78,23 +74,6 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
         }));
         return createPartitionsResult;
     }
-
-    @Deprecated
-    @Override
-    public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
-        AlterConfigsResult alterConfigsResult = super.alterConfigs(configs, options);
-        configs.forEach((configResource, newConfigs) -> alterConfigsResult.values().get(configResource).whenComplete((ignored, error) -> {
-            if (error == null) {
-                if (configResource.type() == ConfigResource.Type.TOPIC) {
-                    FakeLocalMetadataStore.updateTopicConfig(configResource.name(), newConfigs);
-                }
-            } else {
-                log.error("Unable to intercept admin client operation", error);
-            }
-        }));
-        return alterConfigsResult;
-    }
-
 
     @Override
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {

@@ -18,7 +18,6 @@ package org.apache.kafka.server.util;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -34,21 +33,21 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class CommandLineUtilsTest {
     @Test
     public void testParseEmptyArg() {
-        List<String> argArray = Arrays.asList("my.empty.property=");
+        List<String> argArray = List.of("my.empty.property=");
 
         assertThrows(IllegalArgumentException.class, () -> CommandLineUtils.parseKeyValueArgs(argArray, false));
     }
 
     @Test
     public void testParseEmptyArgWithNoDelimiter() {
-        List<String> argArray = Arrays.asList("my.empty.property");
+        List<String> argArray = List.of("my.empty.property");
 
         assertThrows(IllegalArgumentException.class, () -> CommandLineUtils.parseKeyValueArgs(argArray, false));
     }
 
     @Test
     public void testParseEmptyArgAsValid() {
-        List<String> argArray = Arrays.asList("my.empty.property=", "my.empty.property1");
+        List<String> argArray = List.of("my.empty.property=", "my.empty.property1");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
         assertEquals(props.getProperty("my.empty.property"), "", "Value of a key with missing value should be an empty string");
@@ -57,7 +56,7 @@ public class CommandLineUtilsTest {
 
     @Test
     public void testParseSingleArg() {
-        List<String> argArray = Arrays.asList("my.property=value");
+        List<String> argArray = List.of("my.property=value");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
         assertEquals(props.getProperty("my.property"), "value", "Value of a single property should be 'value'");
@@ -65,7 +64,7 @@ public class CommandLineUtilsTest {
 
     @Test
     public void testParseArgs() {
-        List<String> argArray = Arrays.asList("first.property=first", "second.property=second");
+        List<String> argArray = List.of("first.property=first", "second.property=second");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
         assertEquals(props.getProperty("first.property"), "first", "Value of first property should be 'first'");
@@ -74,7 +73,7 @@ public class CommandLineUtilsTest {
 
     @Test
     public void testParseArgsWithMultipleDelimiters() {
-        List<String> argArray = Arrays.asList("first.property==first", "second.property=second=", "third.property=thi=rd");
+        List<String> argArray = List.of("first.property==first", "second.property=second=", "third.property=thi=rd");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
         assertEquals(props.getProperty("first.property"), "=first", "Value of first property should be '=first'");

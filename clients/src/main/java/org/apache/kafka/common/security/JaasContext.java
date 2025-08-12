@@ -23,9 +23,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,6 +33,7 @@ import java.util.stream.Collectors;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
 
+import static org.apache.kafka.common.security.JaasUtils.ALLOWED_LOGIN_MODULES_CONFIG;
 import static org.apache.kafka.common.security.JaasUtils.DISALLOWED_LOGIN_MODULES_CONFIG;
 import static org.apache.kafka.common.security.JaasUtils.DISALLOWED_LOGIN_MODULES_DEFAULT;
 
@@ -105,15 +104,37 @@ public class JaasContext {
             return defaultContext(contextType, listenerContextName, globalContextName);
     }
 
-    private static void throwIfLoginModuleIsNotAllowed(AppConfigurationEntry appConfigurationEntry) {
-        Set<String> disallowedLoginModuleList = Arrays.stream(
-                System.getProperty(DISALLOWED_LOGIN_MODULES_CONFIG, DISALLOWED_LOGIN_MODULES_DEFAULT).split(","))
+    @SuppressWarnings("deprecation")
+    // Visible for testing
+     static void throwIfLoginModuleIsNotAllowed(AppConfigurationEntry appConfigurationEntry) {
+        String disallowedProperty = System.getProperty(DISALLOWED_LOGIN_MODULES_CONFIG);
+        if (disallowedProperty != null) {
+            LOG.warn("System property '{}' is deprecated and will be removed in a future release. Use '{}' instead.",
+                    DISALLOWED_LOGIN_MODULES_CONFIG, ALLOWED_LOGIN_MODULES_CONFIG);
+        }
+        String loginModuleName = appConfigurationEntry.getLoginModuleName().trim();
+        String allowedProperty = System.getProperty(ALLOWED_LOGIN_MODULES_CONFIG);
+        if (allowedProperty != null) {
+            Set<String> allowedLoginModuleList = Arrays.stream(allowedProperty.split(","))
+                    .map(String::trim)
+                    .collect(Collectors.toSet());
+            if (!allowedLoginModuleList.contains(loginModuleName)) {
+                throw new IllegalArgumentException(loginModuleName + " is not allowed. Update System property '"
+                        + ALLOWED_LOGIN_MODULES_CONFIG + "' to allow " + loginModuleName);
+            }
+            return;
+        }
+        if (disallowedProperty == null) {
+            disallowedProperty = DISALLOWED_LOGIN_MODULES_DEFAULT;
+        }
+        Set<String> disallowedLoginModuleList = Arrays.stream(disallowedProperty.split(","))
                 .map(String::trim)
                 .collect(Collectors.toSet());
-        String loginModuleName = appConfigurationEntry.getLoginModuleName().trim();
         if (disallowedLoginModuleList.contains(loginModuleName)) {
-            throw new IllegalArgumentException(loginModuleName + " is not allowed. Update System property '"
-                    + DISALLOWED_LOGIN_MODULES_CONFIG + "' to allow " + loginModuleName);
+            throw new IllegalArgumentException(loginModuleName + " is not allowed. "
+                + "The system property '" + DISALLOWED_LOGIN_MODULES_CONFIG + "' is deprecated. "
+                + "Use the " + ALLOWED_LOGIN_MODULES_CONFIG + " to allow this module. e.g.,"
+                + "-D" + ALLOWED_LOGIN_MODULES_CONFIG + "=" + loginModuleName);
         }
     }
 
@@ -177,7 +198,7 @@ public class JaasContext {
         AppConfigurationEntry[] entries = configuration.getAppConfigurationEntry(name);
         if (entries == null)
             throw new IllegalArgumentException("Could not find a '" + name + "' entry in this JAAS configuration.");
-        this.configurationEntries = Collections.unmodifiableList(new ArrayList<>(Arrays.asList(entries)));
+        this.configurationEntries = List.of(entries);
         this.dynamicJaasConfig = dynamicJaasConfig;
     }
 

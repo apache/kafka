@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -33,7 +34,7 @@ import java.util.Set;
  * any other candidate in this epoch.
  *
  * A resigned leader may initiate a new election by sending `EndQuorumEpoch`
- * requests to all of the voters. This state tracks delivery of this request
+ * requests to all the voters. This state tracks delivery of this request
  * in order to prevent unnecessary retries.
  *
  * A voter will remain in the `Resigned` state until we either learn about
@@ -75,7 +76,7 @@ public class ResignedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, localId, voters);
+        return ElectionState.withElectedLeader(epoch, localId, Optional.empty(), voters);
     }
 
     @Override
@@ -140,11 +141,17 @@ public class ResignedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
+    public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
+        if (isPreVote && isLogUpToDate) {
+            return true;
+        }
         log.debug(
-            "Rejecting vote request from candidate ({}) since we have resigned as candidate/leader in epoch {}",
-            candidateKey,
-            epoch
+            "Rejecting Vote request (preVote={}) from replica ({}) since we are in ResignedState in epoch {} " +
+                "and the replica's log is up-to-date={}",
+            isPreVote,
+            replicaKey,
+            epoch,
+            isLogUpToDate
         );
 
         return false;

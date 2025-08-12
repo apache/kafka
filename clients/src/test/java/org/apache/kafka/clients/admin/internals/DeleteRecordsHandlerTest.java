@@ -61,7 +61,7 @@ public class DeleteRecordsHandlerTest {
     private final TopicPartition t0p3 = new TopicPartition("t0", 3);
     private final Node node1 = new Node(1, "host", 1234);
     private final Node node2 = new Node(2, "host", 1235);
-    private final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<TopicPartition, RecordsToDelete>() {
+    private final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>() {
         {
             put(t0p0, RecordsToDelete.beforeOffset(10L));
             put(t0p1, RecordsToDelete.beforeOffset(10L));

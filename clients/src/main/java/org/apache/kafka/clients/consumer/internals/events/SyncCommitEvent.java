@@ -20,14 +20,15 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Event to commit offsets waiting for a response and retrying on expected retriable errors until
- * the timer expires.
+ * the timer expires. If no offsets are provided, this event will commit all consumed offsets.
  */
 public class SyncCommitEvent extends CommitEvent {
 
-    public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final long deadlineMs) {
+    public SyncCommitEvent(final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets, final long deadlineMs) {
         super(Type.COMMIT_SYNC, offsets, deadlineMs);
     }
 }

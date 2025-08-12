@@ -26,7 +26,6 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 
-
 /**
  * This interface allows user code to inspect the context of a record that has failed during processing.
  *
@@ -48,7 +47,7 @@ public interface ErrorHandlerContext {
      * Additionally, when writing into a changelog topic, there is no associated input record,
      * and thus no topic name is available.
      *
-     * @return the topic name
+     * @return The topic name.
      */
     String topic();
 
@@ -66,7 +65,7 @@ public interface ErrorHandlerContext {
      * Additionally, when writing into a changelog topic, there is no associated input record,
      * and thus no partition is available.
      *
-     * @return the partition ID
+     * @return The partition ID.
      */
     int partition();
 
@@ -84,7 +83,7 @@ public interface ErrorHandlerContext {
      * Additionally, when writing into a changelog topic, there is no associated input record,
      * and thus no offset is available.
      *
-     * @return the offset
+     * @return The offset.
      */
     long offset();
 
@@ -102,21 +101,21 @@ public interface ErrorHandlerContext {
      * Additionally, when writing into a changelog topic, there is no associated input record,
      * and thus no headers are available.
      *
-     * @return the headers
+     * @return The headers.
      */
     Headers headers();
 
     /**
      * Return the current processor node ID.
      *
-     * @return the processor node ID
+     * @return The processor node ID.
      */
     String processorNodeId();
 
     /**
      * Return the task ID.
      *
-     * @return the task ID
+     * @return The task ID.
      */
     TaskId taskId();
 
@@ -138,14 +137,48 @@ public interface ErrorHandlerContext {
      * if this method is invoked from the punctuate call):
      * <ul>
      *   <li>In case of {@link PunctuationType#STREAM_TIME} timestamp is defined as the current task's stream time,
-     *   which is defined as the largest timestamp of any record processed by the task
-     *   <li>In case of {@link PunctuationType#WALL_CLOCK_TIME} timestamp is defined the current system time
+     *   which is defined as the largest timestamp of any record processed by the task</li>
+     *   <li>In case of {@link PunctuationType#WALL_CLOCK_TIME} timestamp is defined the current system time</li>
      * </ul>
      *
      * <p> If it is triggered from a deserialization failure, timestamp is defined as the timestamp of the
      * current rawRecord {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord}.
      *
-     * @return the timestamp
+     * @return The timestamp.
      */
     long timestamp();
+
+    /**
+     * Return the non-deserialized byte[] of the input message key if the context has been triggered by a message.
+     *
+     * <p> If this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, it will return null.
+     *
+     * <p> If this method is invoked in a sub-topology due to a repartition, the returned key would be one sent
+     * to the repartition topic.
+     *
+     * <p> Always returns null if this method is invoked within a
+     * ProductionExceptionHandler.handle(ErrorHandlerContext, ProducerRecord, Exception)
+     *
+     * @return the raw byte of the key of the source message
+     */
+    byte[] sourceRawKey();
+
+    /**
+     * Return the non-deserialized byte[] of the input message value if the context has been triggered by a message.
+     *
+     * <p> If this method is invoked within a {@link Punctuator#punctuate(long)
+     * punctuation callback}, or while processing a record that was forwarded by a punctuation
+     * callback, it will return {@code null}.
+     *
+     * <p> If this method is invoked in a sub-topology due to a repartition, the returned key would be one sent
+     * to the repartition topic.
+     *
+     * <p> Always returns null if this method is invoked within a
+     * ProductionExceptionHandler.handle(ErrorHandlerContext, ProducerRecord, Exception)
+     *
+     * @return the raw byte of the value of the source message
+     */
+    byte[] sourceRawValue();
 }

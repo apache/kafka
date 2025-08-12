@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
  * 3. Neither 1 or 2, i.e. it stays idle. This is possible if we do not have enough executors or because those tasks
  *    are not processable (e.g. because no records fetched) yet.
  */
-public class DefaultTaskManager implements TaskManager {
+public final class DefaultTaskManager implements TaskManager {
 
     private final Time time;
     private final Logger log;
@@ -73,7 +73,6 @@ public class DefaultTaskManager implements TaskManager {
         }
     }
 
-    @SuppressWarnings("this-escape")
     public DefaultTaskManager(final Time time,
                               final String clientId,
                               final TasksRegistry tasks,

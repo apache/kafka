@@ -294,7 +294,7 @@ public class Metadata implements Closeable {
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
         Optional<MetadataResponse.PartitionMetadata> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
-        if (!maybeMetadata.isPresent())
+        if (maybeMetadata.isEmpty())
             return new LeaderAndEpoch(Optional.empty(), Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition)));
 
         MetadataResponse.PartitionMetadata partitionMetadata = maybeMetadata.get();
@@ -381,7 +381,7 @@ public class Metadata implements Closeable {
     public synchronized Set<TopicPartition> updatePartitionLeadership(Map<TopicPartition, LeaderIdAndEpoch> partitionLeaders, List<Node> leaderNodes) {
         Map<Integer, Node> newNodes = leaderNodes.stream().collect(Collectors.toMap(Node::id, node -> node));
         // Insert non-overlapping nodes from existing-nodes into new-nodes.
-        this.metadataSnapshot.cluster().nodes().stream().forEach(node -> newNodes.putIfAbsent(node.id(), node));
+        this.metadataSnapshot.cluster().nodes().forEach(node -> newNodes.putIfAbsent(node.id(), node));
 
         // Create partition-metadata for all updated partitions. Exclude updates for partitions -
         // 1. for which the corresponding partition has newer leader in existing metadata.
@@ -392,7 +392,7 @@ public class Metadata implements Closeable {
             TopicPartition partition = partitionLeader.getKey();
             Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
             Metadata.LeaderIdAndEpoch newLeader = partitionLeader.getValue();
-            if (!newLeader.epoch.isPresent() || !newLeader.leaderId.isPresent()) {
+            if (newLeader.epoch.isEmpty() || newLeader.leaderId.isEmpty()) {
                 log.debug("For {}, incoming leader information is incomplete {}", partition, newLeader);
                 continue;
             }
@@ -404,7 +404,7 @@ public class Metadata implements Closeable {
                 log.debug("For {}, incoming leader({}), the corresponding node information for node-id {} is missing, so ignoring.", partition, newLeader, newLeader.leaderId.get());
                 continue;
             }
-            if (!this.metadataSnapshot.partitionMetadata(partition).isPresent()) {
+            if (this.metadataSnapshot.partitionMetadata(partition).isEmpty()) {
                 log.debug("For {}, incoming leader({}), partition metadata is no longer cached, ignoring.", partition, newLeader);
                 continue;
             }
@@ -508,7 +508,7 @@ public class Metadata implements Closeable {
                 topicId = null;
             }
 
-            if (!retainTopic(topicName, metadata.isInternal(), nowMs))
+            if (!retainTopic(topicName, topicId, metadata.isInternal(), nowMs))
                 continue;
 
             if (metadata.isInternal())
@@ -758,8 +758,18 @@ public class Metadata implements Closeable {
         return metadataSnapshot.topicNames();
     }
 
+    /**
+     * Based on the topic name, check if the topic metadata should be kept when received in a metadata response.
+     */
     protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         return true;
+    }
+
+    /**
+     * Based on the topic name and topic ID, check if the topic metadata should be kept when received in a metadata response.
+     */
+    protected boolean retainTopic(String topicName, Uuid topicId, boolean isInternal, long nowMs) {
+        return retainTopic(topicName, isInternal, nowMs);
     }
 
     public static class MetadataRequestAndVersion {

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 /**
  * Indicates that the state store directory lock could not be acquired because another thread holds the lock.
  *

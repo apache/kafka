@@ -1,0 +1,115 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+---
+name: "Run Tests with Gradle"
+description: "Run specified Gradle test tasks with configuration for timeout and test catalog."
+inputs:
+  # Composite actions do not support typed parameters. Everything is treated as a string
+  # See: https://github.com/actions/runner/issues/2238
+  test-task:
+    description: "The Gradle task name to run."
+    required: true
+  test-xml-output:
+    description: "Output directory for JUnit XML results"
+    required: true
+  timeout-minutes:
+    description: "The timeout for the tests, in minutes."
+    required: true
+  test-catalog-path:
+    description: "The file path of the test catalog file."
+    required: true
+  build-scan-artifact-name:
+    description: "The name to use for archiving the build scan."
+    required: true
+  test-retries:
+    description: "The number of retries for a given test should we allow"
+    required: true
+    default: "0"
+  test-repeat:
+    description: "The number of times to repeat the integration tests"
+    required: true
+    default: "1"
+  test-verbose:
+    description: "Enable additional logging by the JUnit infrastructure"
+    required: true
+    default: "false"
+  run-new-tests:
+    description: "Run tests not present in the given test catalog"
+    required: true
+    default: "false"
+  run-flaky-tests:
+    description: "Run tests marked as flaky"
+    required: true
+    default: "false"
+
+outputs:
+  gradle-exitcode:
+    description: "The result of the Gradle test task."
+    value: ${{ steps.run-tests.outputs.exitcode }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run JUnit Tests (${{ inputs.test-task }})
+      # Gradle flags
+      # --build-cache:  Let Gradle restore the build cache
+      # --no-scan:      Don't attempt to publish the scan yet. We want to archive it first.
+      # --continue:     Keep running even if a test fails
+      # -PcommitId      Prevent the Git SHA being written into the jar files (which breaks caching)
+      shell: bash
+      id: run-tests
+      env:
+        TIMEOUT_MINUTES: ${{ inputs.timeout-minutes}}
+        TEST_CATALOG: ${{ inputs.test-catalog-path }}
+        TEST_TASK: ${{ inputs.test-task }}
+        TEST_RETRIES: ${{ inputs.test-retries }}
+        TEST_REPEAT: ${{ inputs.test-repeat }}
+        RUN_NEW_TESTS: ${{ inputs.run-new-tests }}
+        RUN_FLAKY_TESTS: ${{ inputs.run-flaky-tests }}
+        TEST_XML_OUTPUT_DIR: ${{ inputs.test-xml-output }}
+        TEST_VERBOSE: ${{ inputs.test-verbose }}
+      # This build step is invoked by build.yml to run junit tests only,
+      # Spotbugs is being run by that workflow via the "check" task and does not need to also be run here,
+      # since that is redundant.
+      run: |
+        set +e
+        ./.github/scripts/thread-dump.sh &
+        timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
+        -PtestLoggingEvents=started,passed,skipped,failed \
+        -PmaxParallelForks=4 \
+        -PmaxTestRetries=$TEST_RETRIES -PmaxTestRetryFailures=10 \
+        -Pkafka.test.catalog.file=$TEST_CATALOG \
+        -Pkafka.test.run.new=$RUN_NEW_TESTS \
+        -Pkafka.test.run.flaky=$RUN_FLAKY_TESTS \
+        -Pkafka.test.xml.output.dir=$TEST_XML_OUTPUT_DIR \
+        -Pkafka.cluster.test.repeat=$TEST_REPEAT \
+        -Pkafka.test.verbose=$TEST_VERBOSE \
+        -PcommitId=xxxxxxxxxxxxxxxx \
+        -x spotbugsMain \
+        -x spotbugsTest \
+        $TEST_TASK
+        exitcode="$?"
+        echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+    - name: Archive build scan (${{ inputs.test-task }})
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.build-scan-artifact-name }}
+        path: ~/.gradle/build-scan-data
+        compression-level: 9
+        if-no-files-found: ignore

@@ -127,7 +127,7 @@ public class ReplicaVerificationTool {
 
                 List<TopicDescription> filteredTopicMetadata = topicsMetadata.stream().filter(
                     topicMetadata -> options.topicsIncludeFilter().isTopicAllowed(topicMetadata.name(), false)
-                ).collect(Collectors.toList());
+                ).toList();
 
                 if (filteredTopicMetadata.isEmpty()) {
                     LOG.error("No topics found. {} if specified, is either filtering out all topics or there is no topic.", options.topicsIncludeOpt);
@@ -196,7 +196,7 @@ public class ReplicaVerificationTool {
                             counter.incrementAndGet()
                         );
                     })
-                    .collect(Collectors.toList());
+                    .toList();
 
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                     LOG.info("Stopping all fetchers");
@@ -472,7 +472,7 @@ public class ReplicaVerificationTool {
                                 if (batch.lastOffset() >= fetchResponsePerReplica.get(replicaId).highWatermark()) {
                                     isMessageInAllReplicas = false;
                                 } else {
-                                    if (!messageInfoFromFirstReplicaOpt.isPresent()) {
+                                    if (messageInfoFromFirstReplicaOpt.isEmpty()) {
                                         messageInfoFromFirstReplicaOpt = Optional.of(
                                             new MessageInfo(replicaId, batch.lastOffset(), batch.nextOffset(), batch.checksum())
                                         );

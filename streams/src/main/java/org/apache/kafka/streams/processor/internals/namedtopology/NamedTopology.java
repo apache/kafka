@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.List;
 
+@Deprecated
 public class NamedTopology extends Topology {
 
     NamedTopology(final InternalTopologyBuilder internalTopologyBuilder) {

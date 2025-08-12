@@ -19,6 +19,7 @@ package org.apache.kafka.timeline;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A snapshot of some timeline data structures.
@@ -47,16 +48,19 @@ class Snapshot {
     }
 
     void setDelta(Revertable owner, Delta delta) {
+        Objects.requireNonNull(map, "Snapshot cannot be accessed after erase is called.");
         map.put(owner, delta);
     }
 
     void handleRevert() {
+        Objects.requireNonNull(map, "Snapshot cannot be accessed after erase is called.");
         for (Map.Entry<Revertable, Delta> entry : map.entrySet()) {
             entry.getKey().executeRevert(epoch, entry.getValue());
         }
     }
 
     void mergeFrom(Snapshot source) {
+        Objects.requireNonNull(map, "Snapshot cannot be accessed after erase is called.");
         // Merge the deltas from the source snapshot into this snapshot.
         for (Map.Entry<Revertable, Delta> entry : source.map.entrySet()) {
             // We first try to just copy over the object reference.  That will work if

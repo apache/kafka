@@ -24,11 +24,13 @@ import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -42,7 +44,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -58,6 +59,8 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 
 
 /**
@@ -151,6 +154,12 @@ public class StreamsResetter {
                 }
 
                 final HashMap<Object, Object> consumerConfig = new HashMap<>(config);
+                if (consumerConfig.containsKey(GROUP_PROTOCOL_CONFIG) &&
+                    !consumerConfig.get(GROUP_PROTOCOL_CONFIG).toString().equalsIgnoreCase(GroupProtocol.CLASSIC.name())
+                ) {
+                    System.out.println("WARNING: provided group protocol will be ignored. Using supported " + GroupProtocol.CLASSIC.name() + " protocol instead");
+                }
+                consumerConfig.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
                 consumerConfig.putAll(properties);
                 int exitCode = maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, options);
                 exitCode |= maybeDeleteInternalTopics(adminClient, options);
@@ -168,19 +177,26 @@ public class StreamsResetter {
                                             final StreamsResetterOptions options)
         throws ExecutionException, InterruptedException {
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
-            Collections.singleton(groupId),
+            Set.of(groupId),
             new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
-        final List<MemberDescription> members =
-            new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
-        if (!members.isEmpty()) {
-            if (options.hasForce()) {
-                System.out.println("Force deleting all active members in the group: " + groupId);
-                adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
-            } else {
-                throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+        try {
+            final List<MemberDescription> members =
+                new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
+            if (!members.isEmpty()) {
+                if (options.hasForce()) {
+                    System.out.println("Force deleting all active members in the group: " + groupId);
+                    adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
+                } else {
+                    throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
                         + "and has following members: " + members + ". "
                         + "Make sure to stop all running application instances before running the reset tool."
                         + " You can use option '--force' to remove active members from the group.");
+                }
+            }
+        } catch (ExecutionException ee) {
+            // If the group ID is not found, this is not an error case
+            if (!(ee.getCause() instanceof GroupIdNotFoundException)) {
+                throw ee;
             }
         }
     }
@@ -195,15 +211,15 @@ public class StreamsResetter {
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
 
-        if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
+        if (inputTopics.isEmpty() && intermediateTopics.isEmpty()) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
             return EXIT_CODE_SUCCESS;
         }
 
-        if (inputTopics.size() != 0) {
+        if (!inputTopics.isEmpty()) {
             System.out.println("Reset-offsets for input topics " + inputTopics);
         }
-        if (intermediateTopics.size() != 0) {
+        if (!intermediateTopics.isEmpty()) {
             System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
         }
 
@@ -296,7 +312,7 @@ public class StreamsResetter {
     public void maybeSeekToEnd(final String groupId,
                                final Consumer<byte[], byte[]> client,
                                final Set<TopicPartition> intermediateTopicPartitions) {
-        if (intermediateTopicPartitions.size() > 0) {
+        if (!intermediateTopicPartitions.isEmpty()) {
             System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
             for (final TopicPartition topicPartition : intermediateTopicPartitions) {
                 if (allTopics.contains(topicPartition.topic())) {
@@ -311,7 +327,7 @@ public class StreamsResetter {
                             final Set<TopicPartition> inputTopicPartitions,
                             final StreamsResetterOptions options)
         throws IOException, ParseException {
-        if (inputTopicPartitions.size() > 0) {
+        if (!inputTopicPartitions.isEmpty()) {
             System.out.println("Following input topics offsets will be reset to (for consumer group " + options.applicationId() + ")");
             if (options.hasToOffset()) {
                 resetOffsetsTo(client, inputTopicPartitions, options.toOffset());
@@ -388,7 +404,7 @@ public class StreamsResetter {
             if (partitionOffset.isPresent()) {
                 client.seek(topicPartition, partitionOffset.get());
             } else {
-                client.seekToEnd(Collections.singletonList(topicPartition));
+                client.seekToEnd(List.of(topicPartition));
                 System.out.println("Partition " + topicPartition.partition() + " from topic " + topicPartition.topic() +
                         " is empty, without a committed record. Falling back to latest known offset.");
             }
@@ -491,7 +507,7 @@ public class StreamsResetter {
         final List<String> topicsToDelete;
 
         if (!specifiedInternalTopics.isEmpty()) {
-            if (!inferredInternalTopics.containsAll(specifiedInternalTopics)) {
+            if (!new HashSet<>(inferredInternalTopics).containsAll(specifiedInternalTopics)) {
                 throw new IllegalArgumentException("Invalid topic specified in the "
                         + "--internal-topics option. "
                         + "Ensure that the topics specified are all internal topics. "
@@ -593,7 +609,7 @@ public class StreamsResetter {
             toOffsetOption = parser.accepts("to-offset", "Reset offsets to a specific offset.")
                 .withRequiredArg()
                 .ofType(Long.class);
-            toDatetimeOption = parser.accepts("to-datetime", "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'")
+            toDatetimeOption = parser.accepts("to-datetime", "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'")
                 .withRequiredArg()
                 .ofType(String.class);
             byDurationOption = parser.accepts("by-duration", "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'")
@@ -670,7 +686,9 @@ public class StreamsResetter {
         }
 
         public List<String> intermediateTopicsOption() {
-            System.out.println("intermediateTopicsOption is deprecated and will be removed in a future release");
+            if (options.has(intermediateTopicsOption)) {
+                System.out.println("WARN: `--intermediate-topics` is deprecated and will be removed in a future release");
+            }
             return options.valuesOf(intermediateTopicsOption);
         }
 

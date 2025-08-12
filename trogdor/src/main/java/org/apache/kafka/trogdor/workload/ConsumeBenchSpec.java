@@ -29,7 +29,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -89,7 +88,7 @@ import java.util.Set;
  *    }
  * }
  */
-public class ConsumeBenchSpec extends TaskSpec {
+public final class ConsumeBenchSpec extends TaskSpec {
 
     private static final String VALID_EXPANDED_TOPIC_NAME_PATTERN = "^[^:]+(:[\\d]+|[^:]*)$";
     private final String consumerNode;
@@ -104,7 +103,6 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final int threadsPerWorker;
     private final Optional<RecordProcessor> recordProcessor;
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public ConsumeBenchSpec(@JsonProperty("startMs") long startMs,
                             @JsonProperty("durationMs") long durationMs,
@@ -190,7 +188,7 @@ public class ConsumeBenchSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(consumerNode);
+        return topology -> Set.of(consumerNode);
     }
 
     @Override

@@ -26,7 +26,8 @@ import org.apache.kafka.common.requests.{EnvelopeRequest, RequestContext, Reques
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOptional
+
 
 object EnvelopeUtils {
   def handleEnvelopeRequest(
@@ -124,7 +125,7 @@ object EnvelopeUtils {
     envelopeContext: RequestContext,
     principalBytes: Array[Byte]
   ): KafkaPrincipal = {
-    envelopeContext.principalSerde.asScala match {
+    envelopeContext.principalSerde.toScala match {
       case Some(serde) =>
         try {
           serde.deserialize(principalBytes)

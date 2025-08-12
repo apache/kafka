@@ -24,8 +24,8 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The specification for a workload that sends messages to a broker and then
@@ -43,7 +43,6 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     private final Map<String, String> consumerConf;
     private final Map<String, String> adminClientConf;
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public RoundTripWorkloadSpec(@JsonProperty("startMs") long startMs,
              @JsonProperty("durationMs") long durationMs,
@@ -124,7 +123,7 @@ public class RoundTripWorkloadSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(clientNode);
+        return topology -> Set.of(clientNode);
     }
 
     @Override

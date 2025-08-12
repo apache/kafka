@@ -18,11 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 /**
@@ -35,6 +34,7 @@ import java.util.Map;
  * - {@link Errors#INVALID_REQUEST}
  * - {@link Errors#INVALID_GROUP_ID}
  * - {@link Errors#GROUP_ID_NOT_FOUND}
+ * - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  */
 public class ConsumerGroupDescribeResponse extends AbstractResponse {
 
@@ -52,7 +52,7 @@ public class ConsumerGroupDescribeResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        HashMap<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         data.groups().forEach(
             group -> updateErrorCounts(counts, Errors.forCode(group.errorCode()))
         );
@@ -69,9 +69,9 @@ public class ConsumerGroupDescribeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static ConsumerGroupDescribeResponse parse(ByteBuffer buffer, short version) {
+    public static ConsumerGroupDescribeResponse parse(Readable readable, short version) {
         return new ConsumerGroupDescribeResponse(
-            new ConsumerGroupDescribeResponseData(new ByteBufferAccessor(buffer), version)
+            new ConsumerGroupDescribeResponseData(readable, version)
         );
     }
 }

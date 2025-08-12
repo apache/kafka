@@ -17,9 +17,11 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -32,9 +34,13 @@ import org.apache.kafka.common.utils.Timer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 
 /**
  * This is the heartbeat request manager for consumer groups.
@@ -76,7 +82,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             final CoordinatorRequestManager coordinatorRequestManager,
             final ConsumerMembershipManager membershipManager,
             final HeartbeatState heartbeatState,
-            final AbstractHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
         super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
@@ -89,12 +95,43 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
      * {@inheritDoc}
      */
     @Override
-    public boolean handleSpecificError(final ConsumerGroupHeartbeatResponse response, final long currentTimeMs) {
+    public boolean handleSpecificFailure(Throwable exception) {
+        boolean errorHandled = false;
+        String errorMessage = exception.getMessage();
+        if (exception instanceof UnsupportedVersionException) {
+            String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
+            if (errorMessage.equals(REGEX_RESOLUTION_NOT_SUPPORTED_MSG)) {
+                message = REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
+                logger.error("{} regex resolution not supported: {}", heartbeatRequestName(), message);
+            } else {
+                logger.error("{} failed due to unsupported version while sending request: {}", heartbeatRequestName(), errorMessage);
+            }
+            handleFatalFailure(new UnsupportedVersionException(message, exception));
+            errorHandled = true;
+        }
+        return errorHandled;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean handleSpecificExceptionInResponse(final ConsumerGroupHeartbeatResponse response, final long currentTimeMs) {
         Errors error = errorForResponse(response);
         String errorMessage = errorMessageForResponse(response);
         boolean errorHandled;
 
         switch (error) {
+            // Broker responded with HB not supported, meaning the new protocol is not enabled, so propagate
+            // custom message for it. Note that the case where the protocol is not supported at all should fail
+            // on the client side when building the request and checking supporting APIs (handled on onFailure).
+            case UNSUPPORTED_VERSION:
+                logger.error("{} failed due to unsupported version response on broker side: {}",
+                    heartbeatRequestName(), CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG);
+                handleFatalFailure(error.exception(CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG));
+                errorHandled = true;
+                break;
+
             case UNRELEASED_INSTANCE_ID:
                 logger.error("{} failed due to unreleased instance id {}: {}",
                     heartbeatRequestName(), membershipManager.groupInstanceId().orElse("null"), errorMessage);
@@ -175,6 +212,15 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         return membershipManager;
     }
 
+    @Override
+    protected boolean shouldSendLeaveHeartbeatNow() {
+        // If the consumer has dynamic membership,
+        // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
+        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation())
+            return false;
+        return membershipManager().state() == MemberState.LEAVING;
+    }
+
     /**
      * Builds the heartbeat requests correctly, ensuring that all information is sent according to
      * the protocol, but subsequent requests do not send information which has not changed. This
@@ -201,13 +247,14 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             sentFields.reset();
         }
 
+        @SuppressWarnings("NPathComplexity")
         public ConsumerGroupHeartbeatRequestData buildRequestData() {
             ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
 
             // GroupId - always sent
             data.setGroupId(membershipManager.groupId());
 
-            // MemberId - always sent, empty until it has been received from the coordinator
+            // MemberId - always sent, it will be generated at Consumer startup.
             data.setMemberId(membershipManager.memberId());
 
             // MemberEpoch - always sent
@@ -231,6 +278,15 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                 sentFields.subscribedTopicNames = subscribedTopicNames;
             }
 
+            // SubscribedTopicRegex - only sent if it has changed since the last heartbeat.
+            // Send empty string to indicate that a subscribed pattern needs to be removed.
+            SubscriptionPattern pattern = subscriptions.subscriptionPattern();
+            boolean patternUpdated = !Objects.equals(pattern, sentFields.pattern);
+            if ((sendAllFields && pattern != null) || patternUpdated) {
+                data.setSubscribedTopicRegex((pattern != null) ? pattern.pattern() : "");
+                sentFields.pattern = pattern;
+            }
+
             // ServerAssignor - sent when joining or if it has changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
                 if (sendAllFields || !serverAssignor.equals(sentFields.serverAssignor)) {
@@ -238,8 +294,6 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                     sentFields.serverAssignor = serverAssignor;
                 }
             });
-
-            // ClientAssignors - not supported yet
 
             // TopicPartitions - sent when joining or with the first heartbeat after a new assignment from
             // the server was reconciled. This is ensured by resending the topic partitions whenever the
@@ -251,6 +305,12 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                         buildTopicPartitionsList(local.partitions);
                 data.setTopicPartitions(topicPartitions);
                 sentFields.localAssignment = local;
+            }
+
+            // RackId - sent when joining
+            String rackId = membershipManager.rackId().orElse(null);
+            if (sendAllFields) {
+                data.setRackId(rackId);
             }
 
             return data;
@@ -268,6 +328,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         static class SentFields {
             private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
+            private SubscriptionPattern pattern = null;
             private String serverAssignor = null;
             private AbstractMembershipManager.LocalAssignment localAssignment = null;
 
@@ -278,6 +339,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                 rebalanceTimeoutMs = -1;
                 serverAssignor = null;
                 localAssignment = null;
+                pattern = null;
             }
         }
     }

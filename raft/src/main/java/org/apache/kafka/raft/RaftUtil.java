@@ -42,10 +42,10 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -56,24 +56,16 @@ import java.util.stream.Collectors;
 public class RaftUtil {
 
     public static ApiMessage errorResponse(ApiKeys apiKey, Errors error) {
-        switch (apiKey) {
-            case VOTE:
-                return new VoteResponseData().setErrorCode(error.code());
-            case BEGIN_QUORUM_EPOCH:
-                return new BeginQuorumEpochResponseData().setErrorCode(error.code());
-            case END_QUORUM_EPOCH:
-                return new EndQuorumEpochResponseData().setErrorCode(error.code());
-            case FETCH:
-                return new FetchResponseData().setErrorCode(error.code());
-            case FETCH_SNAPSHOT:
-                return new FetchSnapshotResponseData().setErrorCode(error.code());
-            case API_VERSIONS:
-                return new ApiVersionsResponseData().setErrorCode(error.code());
-            case UPDATE_RAFT_VOTER:
-                return new UpdateRaftVoterResponseData().setErrorCode(error.code());
-            default:
-                throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
-        }
+        return switch (apiKey) {
+            case VOTE -> new VoteResponseData().setErrorCode(error.code());
+            case BEGIN_QUORUM_EPOCH -> new BeginQuorumEpochResponseData().setErrorCode(error.code());
+            case END_QUORUM_EPOCH -> new EndQuorumEpochResponseData().setErrorCode(error.code());
+            case FETCH -> new FetchResponseData().setErrorCode(error.code());
+            case FETCH_SNAPSHOT -> new FetchSnapshotResponseData().setErrorCode(error.code());
+            case API_VERSIONS -> new ApiVersionsResponseData().setErrorCode(error.code());
+            case UPDATE_RAFT_VOTER -> new UpdateRaftVoterResponseData().setErrorCode(error.code());
+            default -> throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
+        };
     }
 
     public static FetchRequestData singletonFetchRequest(
@@ -90,10 +82,10 @@ public class RaftUtil {
             new FetchRequestData.FetchTopic()
                 .setTopic(topicPartition.topic())
                 .setTopicId(topicId)
-                .setPartitions(Collections.singletonList(fetchPartition));
+                .setPartitions(List.of(fetchPartition));
 
         return new FetchRequestData()
-            .setTopics(Collections.singletonList(fetchTopic));
+            .setTopics(List.of(fetchTopic));
     }
 
     public static FetchResponseData singletonFetchResponse(
@@ -117,7 +109,7 @@ public class RaftUtil {
             new FetchResponseData.FetchableTopicResponse()
                 .setTopic(topicPartition.topic())
                 .setTopicId(topicId)
-                .setPartitions(Collections.singletonList(fetchablePartition));
+                .setPartitions(List.of(fetchablePartition));
 
         FetchResponseData response = new FetchResponseData();
 
@@ -138,33 +130,34 @@ public class RaftUtil {
 
         return response
             .setErrorCode(topLevelError.code())
-            .setResponses(Collections.singletonList(fetchableTopic));
+            .setResponses(List.of(fetchableTopic));
     }
 
     public static VoteRequestData singletonVoteRequest(
         TopicPartition topicPartition,
         String clusterId,
-        int candidateEpoch,
-        ReplicaKey candidateKey,
+        int replicaEpoch,
+        ReplicaKey replicaKey,
         ReplicaKey voterKey,
         int lastEpoch,
-        long lastEpochEndOffset
+        long lastEpochEndOffset,
+        boolean preVote
     ) {
         return new VoteRequestData()
             .setClusterId(clusterId)
             .setVoterId(voterKey.id())
             .setTopics(
-                Collections.singletonList(
+                List.of(
                     new VoteRequestData.TopicData()
                         .setTopicName(topicPartition.topic())
                         .setPartitions(
-                            Collections.singletonList(
+                            List.of(
                                 new VoteRequestData.PartitionData()
                                     .setPartitionIndex(topicPartition.partition())
-                                    .setCandidateEpoch(candidateEpoch)
-                                    .setCandidateId(candidateKey.id())
-                                    .setCandidateDirectoryId(
-                                        candidateKey
+                                    .setReplicaEpoch(replicaEpoch)
+                                    .setReplicaId(replicaKey.id())
+                                    .setReplicaDirectoryId(
+                                        replicaKey
                                             .directoryId()
                                             .orElse(ReplicaKey.NO_DIRECTORY_ID)
                                     )
@@ -175,6 +168,7 @@ public class RaftUtil {
                                     )
                                     .setLastOffsetEpoch(lastEpoch)
                                     .setLastOffset(lastEpochEndOffset)
+                                    .setPreVote(preVote)
                             )
                         )
                 )
@@ -192,17 +186,18 @@ public class RaftUtil {
         boolean voteGranted,
         Endpoints endpoints
     ) {
+        VoteResponseData.PartitionData partitionData = new VoteResponseData.PartitionData()
+            .setErrorCode(partitionLevelError.code())
+            .setLeaderId(leaderId)
+            .setLeaderEpoch(leaderEpoch)
+            .setVoteGranted(voteGranted);
+
         VoteResponseData response = new VoteResponseData()
             .setErrorCode(topLevelError.code())
-            .setTopics(Collections.singletonList(
+            .setTopics(List.of(
                 new VoteResponseData.TopicData()
                     .setTopicName(topicPartition.topic())
-                    .setPartitions(Collections.singletonList(
-                        new VoteResponseData.PartitionData()
-                            .setErrorCode(partitionLevelError.code())
-                            .setLeaderId(leaderId)
-                            .setLeaderEpoch(leaderEpoch)
-                            .setVoteGranted(voteGranted)))));
+                    .setPartitions(List.of(partitionData))));
 
         if (apiVersion >= 1) {
             Optional<InetSocketAddress> address = endpoints.address(listenerName);
@@ -247,10 +242,10 @@ public class RaftUtil {
             .setReplicaId(replicaKey.id())
             .setMaxBytes(maxBytes)
             .setTopics(
-                Collections.singletonList(
+                List.of(
                     new FetchSnapshotRequestData.TopicSnapshot()
                         .setName(topicPartition.topic())
-                        .setPartitions(Collections.singletonList(partitionSnapshot))
+                        .setPartitions(List.of(partitionSnapshot))
                 )
             );
     }
@@ -282,10 +277,10 @@ public class RaftUtil {
 
         FetchSnapshotResponseData response = new FetchSnapshotResponseData()
             .setTopics(
-                Collections.singletonList(
+                List.of(
                     new FetchSnapshotResponseData.TopicSnapshot()
                         .setName(topicPartition.topic())
-                        .setPartitions(Collections.singletonList(partitionSnapshot))
+                        .setPartitions(List.of(partitionSnapshot))
                 )
             );
 
@@ -320,11 +315,11 @@ public class RaftUtil {
             .setClusterId(clusterId)
             .setVoterId(voterKey.id())
             .setTopics(
-                Collections.singletonList(
+                List.of(
                     new BeginQuorumEpochRequestData.TopicData()
                         .setTopicName(topicPartition.topic())
                         .setPartitions(
-                            Collections.singletonList(
+                            List.of(
                                 new BeginQuorumEpochRequestData.PartitionData()
                                     .setPartitionIndex(topicPartition.partition())
                                     .setLeaderEpoch(leaderEpoch)
@@ -350,11 +345,11 @@ public class RaftUtil {
         BeginQuorumEpochResponseData response = new BeginQuorumEpochResponseData()
             .setErrorCode(topLevelError.code())
             .setTopics(
-                Collections.singletonList(
+                List.of(
                     new BeginQuorumEpochResponseData.TopicData()
                         .setTopicName(topicPartition.topic())
                         .setPartitions(
-                            Collections.singletonList(
+                            List.of(
                                 new BeginQuorumEpochResponseData.PartitionData()
                                     .setErrorCode(partitionLevelError.code())
                                     .setLeaderId(leaderId)
@@ -406,11 +401,11 @@ public class RaftUtil {
         return new EndQuorumEpochRequestData()
             .setClusterId(clusterId)
             .setTopics(
-                Collections.singletonList(
+                List.of(
                     new EndQuorumEpochRequestData.TopicData()
                         .setTopicName(topicPartition.topic())
                         .setPartitions(
-                            Collections.singletonList(
+                            List.of(
                                 new EndQuorumEpochRequestData.PartitionData()
                                     .setPartitionIndex(topicPartition.partition())
                                     .setLeaderEpoch(leaderEpoch)
@@ -436,10 +431,10 @@ public class RaftUtil {
     ) {
         EndQuorumEpochResponseData response = new EndQuorumEpochResponseData()
                    .setErrorCode(topLevelError.code())
-                   .setTopics(Collections.singletonList(
+                   .setTopics(List.of(
                        new EndQuorumEpochResponseData.TopicData()
                            .setTopicName(topicPartition.topic())
-                           .setPartitions(Collections.singletonList(
+                           .setPartitions(List.of(
                                new EndQuorumEpochResponseData.PartitionData()
                                    .setErrorCode(partitionLevelError.code())
                                    .setLeaderId(leaderId)
@@ -473,11 +468,11 @@ public class RaftUtil {
 
         return new DescribeQuorumRequestData()
             .setTopics(
-                Collections.singletonList(
+                List.of(
                     new DescribeQuorumRequestData.TopicData()
                         .setTopicName(topicPartition.topic())
                         .setPartitions(
-                            Collections.singletonList(
+                            List.of(
                                 new DescribeQuorumRequestData.PartitionData()
                                     .setPartitionIndex(topicPartition.partition())
                             )
@@ -503,11 +498,11 @@ public class RaftUtil {
 
         DescribeQuorumResponseData response = new DescribeQuorumResponseData()
             .setTopics(
-                Collections.singletonList(
+                List.of(
                     new DescribeQuorumResponseData.TopicData()
                         .setTopicName(topicPartition.topic())
                         .setPartitions(
-                            Collections.singletonList(
+                            List.of(
                                 new DescribeQuorumResponseData.PartitionData()
                                     .setPartitionIndex(topicPartition.partition())
                                     .setErrorCode(Errors.NONE.code())
@@ -612,11 +607,9 @@ public class RaftUtil {
             .setLeaderEpoch(leaderAndEpoch.epoch());
 
         Optional<InetSocketAddress> address = endpoints.address(listenerName);
-        if (address.isPresent()) {
-            response.currentLeader()
-                .setHost(address.get().getHostString())
-                .setPort(address.get().getPort());
-        }
+        address.ifPresent(inetSocketAddress -> response.currentLeader()
+            .setHost(inetSocketAddress.getHostString())
+            .setPort(inetSocketAddress.getPort()));
 
         return response;
     }

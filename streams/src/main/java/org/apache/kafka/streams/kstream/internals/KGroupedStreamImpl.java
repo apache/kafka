@@ -97,31 +97,33 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         }
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
+        final KeyValueStoreMaterializer<K, V> storeFactory = new KeyValueStoreMaterializer<>(materializedInternal);
+
         return doAggregate(
-            new KStreamReduce<>(materializedInternal.storeName(), reducer),
+            new KStreamReduce<>(storeFactory, reducer),
             name,
-            materializedInternal
+            storeFactory
         );
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                        final Aggregator<? super K, ? super V, VR> aggregator,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+    public <VOut> KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+                                            final Aggregator<? super K, ? super V, VOut> aggregator,
+                                            final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, aggregator, NamedInternal.empty(), materialized);
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                        final Aggregator<? super K, ? super V, VR> aggregator,
-                                        final Named named,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+    public <VOut> KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+                                            final Aggregator<? super K, ? super V, VOut> aggregator,
+                                            final Named named,
+                                            final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         Objects.requireNonNull(named, "named can't be null");
 
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+        final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
@@ -129,16 +131,18 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         }
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final KeyValueStoreMaterializer<K, VOut> storeFactory = new KeyValueStoreMaterializer<>(materializedInternal);
+
         return doAggregate(
-            new KStreamAggregate<>(materializedInternal.storeName(), initializer, aggregator),
+            new KStreamAggregate<>(storeFactory, initializer, aggregator),
             name,
-            materializedInternal
+            storeFactory
         );
     }
 
     @Override
-    public <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                        final Aggregator<? super K, ? super V, VR> aggregator) {
+    public <VOut> KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+                                            final Aggregator<? super K, ? super V, VOut> aggregator) {
         return aggregate(initializer, aggregator, Materialized.with(keySerde, null));
     }
 
@@ -183,10 +187,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         }
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final KeyValueStoreMaterializer<K, Long> storeFactory = new KeyValueStoreMaterializer<>(materializedInternal);
+
         return doAggregate(
-            new KStreamAggregate<>(materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
+            new KStreamAggregate<>(storeFactory, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
             name,
-            materializedInternal);
+            storeFactory);
     }
 
     @Override
@@ -236,15 +242,16 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
 
     private <T> KTable<K, T> doAggregate(final KStreamAggProcessorSupplier<K, V, K, T> aggregateSupplier,
                                          final String functionName,
-                                         final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materializedInternal) {
-        return aggregateBuilder.build(
+                                         final KeyValueStoreMaterializer<K, T> storeFactory) {
+
+        return aggregateBuilder.buildNonWindowed(
             new NamedInternal(functionName),
-            new KeyValueStoreMaterializer<>(materializedInternal),
+            storeFactory.storeName(),
             aggregateSupplier,
-            materializedInternal.queryableStoreName(),
-            materializedInternal.keySerde(),
-            materializedInternal.valueSerde(),
-            materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
+            storeFactory.queryableStoreName(),
+            storeFactory.keySerde(),
+            storeFactory.valueSerde(),
+            storeFactory.storeSupplier() instanceof VersionedBytesStoreSupplier);
     }
 
     @Override

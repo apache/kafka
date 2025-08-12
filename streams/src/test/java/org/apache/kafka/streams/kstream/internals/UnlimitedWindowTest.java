@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UnlimitedWindowTest {
 
-    private long start = 50;
+    private final long start = 50;
     private final UnlimitedWindow window = new UnlimitedWindow(start);
     private final SessionWindow sessionWindow = new SessionWindow(start, start);
 

@@ -17,63 +17,47 @@
 package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.RecordContext;
 
 final class TimeDefinitions {
     private TimeDefinitions() {}
-
-    enum TimeDefinitionType {
-        RECORD_TIME, WINDOW_END_TIME
-    }
 
     /**
      * This interface should never be instantiated outside of this class.
      */
     interface TimeDefinition<K> {
-        long time(final ProcessorContext context, final K key);
-
-        TimeDefinitionType type();
+        long time(final RecordContext context, final K key);
     }
 
-    public static class RecordTimeDefinition<K> implements TimeDefinition<K> {
-        private static final RecordTimeDefinition INSTANCE = new RecordTimeDefinition();
+    static class RecordTimeDefinition<K> implements TimeDefinition<K> {
+        private static final RecordTimeDefinition<?> INSTANCE = new RecordTimeDefinition<>();
 
         private RecordTimeDefinition() {}
 
         @SuppressWarnings("unchecked")
-        public static <K> RecordTimeDefinition<K> instance() {
-            return RecordTimeDefinition.INSTANCE;
+        static <K> RecordTimeDefinition<K> instance() {
+            return (RecordTimeDefinition<K>) RecordTimeDefinition.INSTANCE;
         }
 
         @Override
-        public long time(final ProcessorContext context, final K key) {
+        public long time(final RecordContext context, final K key) {
             return context.timestamp();
-        }
-
-        @Override
-        public TimeDefinitionType type() {
-            return TimeDefinitionType.RECORD_TIME;
         }
     }
 
-    public static class WindowEndTimeDefinition<K extends Windowed> implements TimeDefinition<K> {
-        private static final WindowEndTimeDefinition INSTANCE = new WindowEndTimeDefinition();
+    static class WindowEndTimeDefinition<K extends Windowed<?>> implements TimeDefinition<K> {
+        private static final WindowEndTimeDefinition<?> INSTANCE = new WindowEndTimeDefinition<>();
 
         private WindowEndTimeDefinition() {}
 
         @SuppressWarnings("unchecked")
-        public static <K extends Windowed> WindowEndTimeDefinition<K> instance() {
-            return WindowEndTimeDefinition.INSTANCE;
+        static <K extends Windowed<?>> WindowEndTimeDefinition<K> instance() {
+            return (WindowEndTimeDefinition<K>) WindowEndTimeDefinition.INSTANCE;
         }
 
         @Override
-        public long time(final ProcessorContext context, final K key) {
+        public long time(final RecordContext context, final K key) {
             return key.window().end();
-        }
-
-        @Override
-        public TimeDefinitionType type() {
-            return TimeDefinitionType.WINDOW_END_TIME;
         }
     }
 }

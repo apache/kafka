@@ -1501,7 +1501,7 @@ public class ConfigDef {
         b.append("``").append(key.name).append("``").append("\n");
         if (key.documentation != null) {
             for (String docLine : key.documentation.split("\n")) {
-                if (docLine.length() == 0) {
+                if (docLine.isEmpty()) {
                     continue;
                 }
                 b.append("  ").append(docLine).append("\n\n");
@@ -1532,7 +1532,7 @@ public class ConfigDef {
         }
 
         List<ConfigKey> configs = new ArrayList<>(configKeys.values());
-        Collections.sort(configs, (k1, k2) -> compare(k1, k2, groupOrd));
+        configs.sort((k1, k2) -> compare(k1, k2, groupOrd));
         return configs;
     }
 

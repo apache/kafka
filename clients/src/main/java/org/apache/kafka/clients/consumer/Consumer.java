@@ -74,6 +74,16 @@ public interface Consumer<K, V> extends Closeable {
     void subscribe(Pattern pattern);
 
     /**
+     * @see KafkaConsumer#subscribe(SubscriptionPattern, ConsumerRebalanceListener)
+     */
+    void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback);
+
+    /**
+     * @see KafkaConsumer#subscribe(SubscriptionPattern)
+     */
+    void subscribe(SubscriptionPattern pattern);
+
+    /**
      * @see KafkaConsumer#unsubscribe()
      */
     void unsubscribe();
@@ -269,11 +279,16 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#close(Duration)
      */
+    @Deprecated
     void close(Duration timeout);
+
+    /**
+     * @see KafkaConsumer#close(CloseOptions)
+     */
+    void close(final CloseOptions option);
 
     /**
      * @see KafkaConsumer#wakeup()
      */
     void wakeup();
-
 }

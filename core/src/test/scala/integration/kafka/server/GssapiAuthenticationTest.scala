@@ -20,11 +20,11 @@ package kafka.server
 
 import java.net.InetSocketAddress
 import java.time.Duration
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import javax.security.auth.login.LoginContext
-import kafka.api.{Both, IntegrationTestHarness, SaslSetup}
-import kafka.utils.TestUtils
+import kafka.api.{IntegrationTestHarness, SaslSetup}
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.SaslConfigs
@@ -39,8 +39,8 @@ import org.apache.kafka.common.utils.{LogContext, MockTime}
 import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
-
-import scala.jdk.CollectionConverters._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 
 class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 1
@@ -62,12 +62,12 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     TestableKerberosLogin.reset()
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism)))
     serverConfig.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
     serverConfig.put(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG, failedAuthenticationDelayMs.toString)
     super.setUp(testInfo)
     serverAddr = new InetSocketAddress("localhost",
-      servers.head.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)))
+      brokers.head.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)))
 
     clientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name)
     clientConfig.put(SaslConfigs.SASL_MECHANISM, kafkaClientSaslMechanism)
@@ -75,7 +75,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     clientConfig.put(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, "5000")
 
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 2, brokerCount)
+    createTopic(topic, 2, brokerCount, listenerName = listenerName, adminClientConfig = adminClientConfig)
   }
 
   @AfterEach
@@ -97,8 +97,8 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
       override def run(): Unit = verifyRetriableFailuresDuringAuthentication(successfulAuthsPerThread)
     }))
     futures.foreach(_.get(60, TimeUnit.SECONDS))
-    assertEquals(0, TestUtils.totalMetricValue(servers.head, "failed-authentication-total"))
-    val successfulAuths = TestUtils.totalMetricValue(servers.head, "successful-authentication-total")
+    assertEquals(0, TestUtils.totalMetricValue(brokers.head, "failed-authentication-total"))
+    val successfulAuths = TestUtils.totalMetricValue(brokers.head, "successful-authentication-total")
     assertTrue(successfulAuths > successfulAuthsPerThread * numThreads, "Too few authentications: " + successfulAuths)
   }
 
@@ -174,14 +174,15 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * Test that when client fails to verify authenticity of the server, the resulting failed authentication exception
    * is thrown immediately, and is not affected by <code>connection.failed.authentication.delay.ms</code>.
    */
-  @Test
-  def testServerAuthenticationFailure(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testServerAuthenticationFailure(groupProtocol: String): Unit = {
     // Setup client with a non-existent service principal, so that server authentication fails on the client
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism, Some("another-kafka-service"))
     val configOverrides = new Properties()
     configOverrides.setProperty(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     val consumer = createConsumer(configOverrides = configOverrides)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     val startMs = System.currentTimeMillis()
     assertThrows(classOf[SaslAuthenticationException], () => consumer.poll(Duration.ofMillis(50)))
@@ -253,18 +254,17 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
 
   private def createSelector(): Selector = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol,
-      JaasContext.Type.CLIENT, new TestSecurityConfig(clientConfig), null, kafkaClientSaslMechanism,
-      time, true, new LogContext())
+      JaasContext.Type.CLIENT, new TestSecurityConfig(clientConfig), null, kafkaClientSaslMechanism, time, new LogContext())
     NetworkTestUtils.createSelector(channelBuilder, time)
   }
 
   private def createSelectorWithRelogin(): Selector = {
     clientConfig.setProperty(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, "0")
     val config = new TestSecurityConfig(clientConfig)
-    val jaasContexts = Collections.singletonMap("GSSAPI", JaasContext.loadClientContext(config.values()))
+    val jaasContexts = java.util.Map.of("GSSAPI", JaasContext.loadClientContext(config.values()))
     val channelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol,
-      null, false, kafkaClientSaslMechanism, true, null, null, null, time, new LogContext(),
-      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.ZK_BROKER)) {
+      null, false, kafkaClientSaslMechanism, null, null, null, time, new LogContext(),
+      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.BROKER)) {
       override protected def defaultLoginClass(): Class[_ <: Login] = classOf[TestableKerberosLogin]
     }
     channelBuilder.configure(config.values())

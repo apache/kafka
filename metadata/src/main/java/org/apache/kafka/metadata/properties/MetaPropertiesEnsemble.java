@@ -63,9 +63,9 @@ public final class MetaPropertiesEnsemble {
     /**
      * A completely empty MetaPropertiesEnsemble object.
      */
-    public static final MetaPropertiesEnsemble EMPTY = new MetaPropertiesEnsemble(Collections.emptySet(),
-        Collections.emptySet(),
-        Collections.emptyMap(),
+    public static final MetaPropertiesEnsemble EMPTY = new MetaPropertiesEnsemble(Set.of(),
+        Set.of(),
+        Map.of(),
         Optional.empty());
 
     /**
@@ -418,7 +418,7 @@ public final class MetaPropertiesEnsemble {
      * @return An iterator that returns (logDir, metaProps) for all non-failed directories.
      */
     public Iterator<Entry<String, Optional<MetaProperties>>> nonFailedDirectoryProps() {
-        return new Iterator<Entry<String, Optional<MetaProperties>>>() {
+        return new Iterator<>() {
             private final Iterator<String> emptyLogDirsIterator = emptyLogDirs.iterator();
             private final Iterator<Entry<String, MetaProperties>> logDirsIterator =
                     logDirProps.entrySet().iterator();
@@ -491,22 +491,22 @@ public final class MetaPropertiesEnsemble {
                         "(which is implicit when the `version` field is missing).");
                 }
             }
-            if (!metaProps.clusterId().isPresent()) {
+            if (metaProps.clusterId().isEmpty()) {
                 if (metaProps.version().alwaysHasClusterId()) {
                     throw new RuntimeException("cluster.id was not specified in the v1 file: " +
                         path);
                 }
-            } else if (!expectedClusterId.isPresent()) {
+            } else if (expectedClusterId.isEmpty()) {
                 expectedClusterId = metaProps.clusterId();
             } else if (!metaProps.clusterId().get().equals(expectedClusterId.get())) {
                 throw new RuntimeException("Invalid cluster.id in: " + path + ". Expected " +
                     expectedClusterId.get() + ", but read " + metaProps.clusterId().get());
             }
-            if (!metaProps.nodeId().isPresent()) {
+            if (metaProps.nodeId().isEmpty()) {
                 if (metaProps.version().alwaysHasNodeId()) {
                     throw new RuntimeException("node.id was not specified in " + path);
                 }
-            } else if (!expectedNodeId.isPresent()) {
+            } else if (expectedNodeId.isEmpty()) {
                 expectedNodeId = metaProps.nodeId();
             } else if (metaProps.nodeId().getAsInt() != expectedNodeId.getAsInt()) {
                 throw new RuntimeException("Stored node id " + metaProps.nodeId().getAsInt() +
@@ -517,7 +517,7 @@ public final class MetaPropertiesEnsemble {
             }
             if (metaProps.directoryId().isPresent()) {
                 if (DirectoryId.reserved(metaProps.directoryId().get())) {
-                    throw new RuntimeException("Invalid resrved directory ID " +
+                    throw new RuntimeException("Invalid reserved directory ID " +
                         metaProps.directoryId().get() + " found in " + logDir);
                 }
                 String prevLogDir = seenUuids.put(metaProps.directoryId().get(), logDir);
@@ -529,7 +529,7 @@ public final class MetaPropertiesEnsemble {
             }
         }
         if (verificationFlags.contains(VerificationFlag.REQUIRE_METADATA_LOG_DIR)) {
-            if (!metadataLogDir.isPresent()) {
+            if (metadataLogDir.isEmpty()) {
                 throw new RuntimeException("No metadata log directory was specified.");
             }
         }

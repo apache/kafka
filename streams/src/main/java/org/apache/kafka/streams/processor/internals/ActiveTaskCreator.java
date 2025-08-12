@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -63,9 +62,9 @@ class ActiveTaskCreator {
     private final Logger log;
     private final Sensor createTaskSensor;
     private final StreamsProducer streamsProducer;
-    private final ProcessingMode processingMode;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
+    private boolean isClosed = false;
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
                       final StreamsConfig applicationConfig,
@@ -78,7 +77,7 @@ class ActiveTaskCreator {
                       final String threadId,
                       final int threadIdx,
                       final UUID processId,
-                      final Logger log,
+                      final LogContext logContext,
                       final boolean stateUpdaterEnabled,
                       final boolean processingThreadsEnabled) {
         this.topologyMetadata = topologyMetadata;
@@ -92,27 +91,23 @@ class ActiveTaskCreator {
         this.threadId = threadId;
         this.threadIdx = threadIdx;
         this.processId = processId;
-        this.log = log;
+        this.log = logContext.logger(getClass());
         this.stateUpdaterEnabled = stateUpdaterEnabled;
         this.processingThreadsEnabled = processingThreadsEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
-        processingMode = processingMode(applicationConfig);
-
-        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        final LogContext logContext = new LogContext(threadIdPrefix);
 
         streamsProducer = new StreamsProducer(
-            processingMode,
             producer(),
-            logContext,
-            time
+            processingMode(applicationConfig),
+            time,
+            logContext
         );
     }
 
     private Producer<byte[], byte[]> producer() {
         final Map<String, Object> producerConfig = applicationConfig.getProducerConfigs(producerClientId(threadId));
-        if (eosEnabled(processingMode)) {
+        if (eosEnabled(applicationConfig)) {
             producerConfig.put(
                 ProducerConfig.TRANSACTIONAL_ID_CONFIG,
                 applicationConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + processId + "-" + threadIdx
@@ -121,12 +116,25 @@ class ActiveTaskCreator {
         return clientSupplier.getProducer(producerConfig);
     }
 
+
+    /**
+     * When {@link org.apache.kafka.streams.processor.internals.StreamThread} is shutting down,
+     * subsequent calls to reInitializeProducer() will not recreate
+     * the producer instance, avoiding resource leak.
+     */
     public void reInitializeProducer() {
-        streamsProducer.resetProducer(producer());
+        if (!isClosed) {
+            streamsProducer.resetProducer(producer());
+        }
     }
 
     StreamsProducer streamsProducer() {
         return streamsProducer;
+    }
+
+    // visible for test
+    boolean isClosed() {
+        return isClosed;
     }
 
     // TODO: convert to StreamTask when we remove TaskManager#StateMachineTask with mocks
@@ -258,6 +266,7 @@ class ActiveTaskCreator {
 
     void close() {
         try {
+            isClosed = true;
             streamsProducer.close();
         } catch (final RuntimeException e) {
             throw new StreamsException("Thread producer encounter error trying to close.", e);

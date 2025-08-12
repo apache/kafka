@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 
 import org.slf4j.Logger;
@@ -45,10 +46,7 @@ public class AcknowledgementCommitCallbackHandler {
     void onComplete(List<Map<TopicIdPartition, Acknowledgements>> acknowledgementsMapList) {
         final ArrayList<Throwable> exceptions = new ArrayList<>();
         acknowledgementsMapList.forEach(acknowledgementsMap -> acknowledgementsMap.forEach((partition, acknowledgements) -> {
-            Exception exception = null;
-            if (acknowledgements.getAcknowledgeErrorCode() != null) {
-                exception = acknowledgements.getAcknowledgeErrorCode().exception();
-            }
+            KafkaException exception = acknowledgements.getAcknowledgeException();
             Set<Long> offsets = acknowledgements.getAcknowledgementsTypeMap().keySet();
             Set<Long> offsetsCopy = Collections.unmodifiableSet(offsets);
             enteredCallback = true;

@@ -21,7 +21,6 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 
-import org.apache.log4j.Level;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
@@ -29,20 +28,19 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-import javax.inject.Inject;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 /**
  * A set of endpoints to adjust the log levels of runtime loggers.
@@ -120,8 +118,7 @@ public class LoggingResource {
         }
 
         // Make sure that this is a valid level
-        Level level = Level.toLevel(levelString.toUpperCase(Locale.ROOT), null);
-        if (level == null) {
+        if (org.apache.logging.log4j.Level.getLevel(levelString) == null) {
             throw new NotFoundException("invalid log level '" + levelString + "'.");
         }
 

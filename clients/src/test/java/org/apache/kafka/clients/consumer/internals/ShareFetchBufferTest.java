@@ -33,8 +33,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -170,6 +168,7 @@ public class ShareFetchBufferTest {
         return new ShareCompletedFetch(
                 logContext,
                 BufferSupplier.create(),
+                0,
                 tp,
                 partitionData,
                 shareFetchMetricsAggregator,
@@ -180,6 +179,6 @@ public class ShareFetchBufferTest {
      * This is a handy utility method for returning a set from a varargs array.
      */
     private static Set<TopicIdPartition> partitions(TopicIdPartition... partitions) {
-        return new HashSet<>(Arrays.asList(partitions));
+        return Set.of(partitions);
     }
 }

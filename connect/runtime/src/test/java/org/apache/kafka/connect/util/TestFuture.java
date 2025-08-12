@@ -28,17 +28,9 @@ public class TestFuture<T> implements Future<T> {
     private Throwable exception;
     private final CountDownLatch getCalledLatch;
 
-    private volatile boolean resolveOnGet;
-    private T resolveOnGetResult;
-    private Throwable resolveOnGetException;
-
     public TestFuture() {
         resolved = false;
         getCalledLatch = new CountDownLatch(1);
-
-        resolveOnGet = false;
-        resolveOnGetResult = null;
-        resolveOnGetException = null;
     }
 
     public void resolve(T val) {
@@ -88,13 +80,6 @@ public class TestFuture<T> implements Future<T> {
     public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
         getCalledLatch.countDown();
 
-        if (resolveOnGet) {
-            if (resolveOnGetException != null)
-                resolve(resolveOnGetException);
-            else
-                resolve(resolveOnGetResult);
-        }
-
         synchronized (this) {
             while (!resolved) {
                 this.wait(TimeUnit.MILLISECONDS.convert(timeout, unit));
@@ -110,51 +95,5 @@ public class TestFuture<T> implements Future<T> {
                 throw new ExecutionException(exception);
         }
         return result;
-    }
-
-    /**
-     * Set a flag to resolve the future as soon as one of the get() methods has been called. Returns immediately.
-     * @param val the value to return from the future
-     */
-    public void resolveOnGet(T val) {
-        resolveOnGet = true;
-        resolveOnGetResult = val;
-    }
-
-    /**
-     * Set a flag to resolve the future as soon as one of the get() methods has been called. Returns immediately.
-     * @param t the exception to return from the future
-     */
-    public void resolveOnGet(Throwable t) {
-        resolveOnGet = true;
-        resolveOnGetException = t;
-    }
-
-    /**
-     * Block, waiting for another thread to call one of the get() methods, and then immediately resolve the future with
-     * the specified value.
-     * @param val the value to return from the future
-     */
-    public void waitForGetAndResolve(T val) {
-        waitForGet();
-        resolve(val);
-    }
-
-    /**
-     * Block, waiting for another thread to call one of the get() methods, and then immediately resolve the future with
-     * the specified value.
-     * @param t the exception to use to resolve the future
-     */
-    public void waitForGetAndResolve(Throwable t) {
-        waitForGet();
-        resolve(t);
-    }
-
-    private void waitForGet() {
-        try {
-            getCalledLatch.await();
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Unexpected interruption: ", e);
-        }
     }
 }

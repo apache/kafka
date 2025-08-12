@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Objects;
 
 /**
- * The task ID representation composed as subtopology (aka topicGroupId) plus the assigned partition ID.
+ * The task ID representation composed as subtopology plus the assigned partition ID.
  */
 public class TaskId implements Comparable<TaskId> {
 
@@ -32,20 +32,20 @@ public class TaskId implements Comparable<TaskId> {
 
     public static final String NAMED_TOPOLOGY_DELIMITER = "__";
 
-    /** The ID of the subtopology, aka topicGroupId. */
-    private final int topicGroupId;
+    /** The ID of the subtopology. */
+    private final int subtopology;
     /** The ID of the partition. */
     private final int partition;
 
     /** The namedTopology that this task belongs to, or null if it does not belong to one */
     private final String topologyName;
 
-    public TaskId(final int topicGroupId, final int partition) {
-        this(topicGroupId, partition, null);
+    public TaskId(final int subtopology, final int partition) {
+        this(subtopology, partition, null);
     }
 
-    public TaskId(final int topicGroupId, final int partition, final String topologyName) {
-        this.topicGroupId = topicGroupId;
+    public TaskId(final int subtopology, final int partition, final String topologyName) {
+        this.subtopology = subtopology;
         this.partition = partition;
         if (topologyName != null && topologyName.length() == 0) {
             LOG.warn("Empty string passed in for task's namedTopology, since NamedTopology name cannot be empty, we "
@@ -57,7 +57,7 @@ public class TaskId implements Comparable<TaskId> {
     }
 
     public int subtopology() {
-        return topicGroupId;
+        return subtopology;
     }
 
     public int partition() {
@@ -73,7 +73,7 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public String toString() {
-        return topologyName != null ? topologyName + NAMED_TOPOLOGY_DELIMITER + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
+        return topologyName != null ? topologyName + NAMED_TOPOLOGY_DELIMITER + subtopology + "_" + partition : subtopology + "_" + partition;
     }
 
     /**
@@ -115,7 +115,7 @@ public class TaskId implements Comparable<TaskId> {
         }
         final TaskId taskId = (TaskId) o;
 
-        if (topicGroupId != taskId.topicGroupId || partition != taskId.partition) {
+        if (subtopology != taskId.subtopology || partition != taskId.partition) {
             return false;
         }
 
@@ -128,7 +128,7 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicGroupId, partition, topologyName);
+        return Objects.hash(subtopology, partition, topologyName);
     }
 
     @Override
@@ -142,7 +142,7 @@ public class TaskId implements Comparable<TaskId> {
             LOG.error("Tried to compare this = {} with other = {}, but only one had a valid named topology", this, other);
             throw new IllegalStateException("Can't compare a TaskId with a namedTopology to one without");
         }
-        final int comparingTopicGroupId = Integer.compare(this.topicGroupId, other.topicGroupId);
+        final int comparingTopicGroupId = Integer.compare(this.subtopology, other.subtopology);
         return comparingTopicGroupId != 0 ? comparingTopicGroupId : Integer.compare(this.partition, other.partition);
     }
 }

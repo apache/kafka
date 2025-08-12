@@ -18,7 +18,6 @@
 package org.apache.kafka.server.telemetry;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.nio.ByteBuffer;
 
@@ -26,7 +25,6 @@ import java.nio.ByteBuffer;
  * A client telemetry payload as sent by the client to the telemetry receiver. The payload is
  * received by the broker's {@link ClientTelemetryReceiver} implementation.
  */
-@InterfaceStability.Evolving
 public interface ClientTelemetryPayload {
 
     /**

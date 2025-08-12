@@ -20,9 +20,7 @@ package kafka.server
 import java.nio.charset.StandardCharsets
 import java.util
 import kafka.utils.TestUtils
-import kafka.utils.TestInfoUtils
 import kafka.network.SocketServer
-import kafka.security.authorizer.AclAuthorizer
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -56,15 +54,11 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    if (TestInfoUtils.isKRaft(testInfo)) {
-      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
-      if (testInfo.getDisplayName.contains("quorum=kraft-IBP_3_4")) {
-        testMetadataVersion = MetadataVersion.IBP_3_4_IV0
-      }
-    } else {
-      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestAuthorizer].getName)
-
+    this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
+    if (testInfo.getDisplayName.contains("quorum=kraft-IBP_3_4")) {
+      testMetadataVersion = MetadataVersion.IBP_3_4_IV0
     }
+
     this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
     this.serverConfig.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
 
@@ -85,9 +79,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   private val user3 = "user3@user3.com"
   private val unknownUser = "unknownUser"
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAlterNothing(quorum: String): Unit = {
+  @Test
+  def testAlterNothing(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
@@ -98,9 +91,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(0, results.size)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAlterSameThingTwice(quorum: String): Unit = {
+  @Test
+  def testAlterSameThingTwice(): Unit = {
     val deletion1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
     val deletion2 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user2).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
     val upsertion1 = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -139,9 +131,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAlterEmptyUser(quorum: String): Unit = {
+  @Test
+  def testAlterEmptyUser(): Unit = {
     val deletionEmpty = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("").setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
     val upsertionEmpty = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("").setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
       .setIterations(4096).setSalt(saltBytes).setSaltedPassword(saltedPasswordBytes)
@@ -168,9 +159,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAlterUnknownMechanism(quorum: String): Unit = {
+  @Test
+  def testAlterUnknownMechanism(): Unit = {
     val deletionUnknown1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.UNKNOWN.`type`)
     val deletionValid1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
     val deletionUnknown2 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user2).setMechanism(10.toByte)
@@ -196,9 +186,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     results.asScala.foreach(result => assertEquals("Unknown SCRAM mechanism", result.errorMessage))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAlterTooFewIterations(quorum: String): Unit = {
+  @Test
+  def testAlterTooFewIterations(): Unit = {
     val upsertionTooFewIterations = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1)
       .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`).setIterations(1)
       .setSalt(saltBytes).setSaltedPassword(saltedPasswordBytes)
@@ -213,9 +202,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals("Too few iterations", results.get(0).errorMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAlterTooManyIterations(quorum: String): Unit = {
+  @Test
+  def testAlterTooManyIterations(): Unit = {
     val upsertionTooFewIterations = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1)
       .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`).setIterations(Integer.MAX_VALUE)
       .setSalt(saltBytes).setSaltedPassword(saltedPasswordBytes)
@@ -230,9 +218,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals("Too many iterations", results.get(0).errorMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testDeleteSomethingThatDoesNotExist(quorum: String): Unit = {
+  @Test
+  def testDeleteSomethingThatDoesNotExist(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
@@ -245,24 +232,13 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testAlterNotController(): Unit = {
-    val request = new AlterUserScramCredentialsRequest.Builder(
-      new AlterUserScramCredentialsRequestData()
-        .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
-        .setUpsertions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user2).setMechanism(ScramMechanism.SCRAM_SHA_512.`type`)))).build()
-    val response = sendAlterUserScramCredentialsRequest(request, notControllerSocketServer)
-
-    val results = response.data.results
-    assertEquals(2, results.size)
-    checkAllErrorsAlteringCredentials(results, Errors.NOT_CONTROLLER, "when routed incorrectly to a non-Controller broker")
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAlterAndDescribe(quorum: String): Unit = {
+  def testAlterAndDescribe(): Unit = {
     // create a bunch of credentials
     val request1_0 = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
+        .setDeletions(util.Arrays.asList(
+          new AlterUserScramCredentialsRequestData.ScramCredentialDeletion()
+            .setName(user2).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
         .setUpsertions(util.Arrays.asList(
           new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion()
             .setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -270,10 +246,15 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
             .setSalt(saltBytes)
             .setSaltedPassword(saltedPasswordBytes),
         ))).build()
+    assertEquals("AlterUserScramCredentialsRequestData(" +
+      "deletions=[ScramCredentialDeletion(name='" + user2 + "', mechanism=" + ScramMechanism.SCRAM_SHA_256.`type` + ")], " +
+      "upsertions=[ScramCredentialUpsertion(name='" + user1 + "', mechanism=" + ScramMechanism.SCRAM_SHA_256.`type` +
+      ", iterations=4096, salt=[], saltedPassword=[])])", request1_0.toString)
     val results1_0 = sendAlterUserScramCredentialsRequest(request1_0).data.results
-    assertEquals(1, results1_0.size)
-    checkNoErrorsAlteringCredentials(results1_0)
+    assertEquals(2, results1_0.size)
+    assertEquals(1, results1_0.asScala.count(_.errorCode == Errors.RESOURCE_NOT_FOUND.code()))
     checkUserAppearsInAlterResults(results1_0, user1)
+    checkUserAppearsInAlterResults(results1_0, user2)
 
     // When creating credentials, do not update the same user more than once per request
     val request1_1 = new AlterUserScramCredentialsRequest.Builder(
@@ -295,6 +276,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
             .setSalt(saltBytes)
             .setSaltedPassword(saltedPasswordBytes),
         ))).build()
+    assertFalse(request1_1.toString.contains(saltBytes))
+    assertFalse(request1_1.toString.contains(saltedPasswordBytes))
     val results1_1 = sendAlterUserScramCredentialsRequest(request1_1).data.results
     assertEquals(3, results1_1.size)
     checkNoErrorsAlteringCredentials(results1_1)
@@ -478,17 +461,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 object AlterCredentialsTest {
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   val AuthorizedPrincipal = KafkaPrincipal.ANONYMOUS
-
-  class TestAuthorizer extends AclAuthorizer {
-    override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
-      actions.asScala.map { _ =>
-        if (requestContext.requestType == ApiKeys.ALTER_USER_SCRAM_CREDENTIALS.id && requestContext.principal == UnauthorizedPrincipal)
-          AuthorizationResult.DENIED
-        else
-          AuthorizationResult.ALLOWED
-      }.asJava
-    }
-  }
 
   class TestStandardAuthorizer extends StandardAuthorizer {
     override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {

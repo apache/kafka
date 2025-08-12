@@ -64,7 +64,6 @@ public class StreamsStandByReplicaTest {
             Exit.exit(1);
         }
         
-        streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-standby-tasks");
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         streamsProperties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -86,11 +85,11 @@ public class StreamsStandByReplicaTest {
         final String sinkTopic2 = updated.remove("sinkTopic2");
 
         if (sourceTopic == null || sinkTopic1 == null || sinkTopic2 == null) {
-            System.err.println(String.format(
-                "one or more required topics null sourceTopic[%s], sinkTopic1[%s], sinkTopic2[%s]",
+            System.err.printf(
+                "one or more required topics null sourceTopic[%s], sinkTopic1[%s], sinkTopic2[%s]%n",
                 sourceTopic,
                 sinkTopic1,
-                sinkTopic2));
+                sinkTopic2);
             System.err.flush();
             Exit.exit(1);
         }
@@ -98,11 +97,13 @@ public class StreamsStandByReplicaTest {
         streamsProperties.putAll(updated);
 
         if (!confirmCorrectConfigs(streamsProperties)) {
-            System.err.println(String.format("ERROR: Did not have all required configs expected  to contain %s, %s,  %s,  %s",
-                                             StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
-                                             StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG),
-                                             StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                                             StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG)));
+            System.err.printf(
+                    "ERROR: Did not have all required configs expected  to contain %s, %s,  %s,  %s%n",
+                    StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
+                    StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG),
+                    StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                    StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG)
+            );
 
             Exit.exit(1);
         }

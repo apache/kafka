@@ -103,7 +103,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
         }
         final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = subSessionsMap.values().iterator();
         return new KeyValueIteratorStub<>(
-            new Iterator<KeyValue<Windowed<K>, V>>() {
+            new Iterator<>() {
 
                 Iterator<KeyValue<Windowed<K>, V>> it;
 
@@ -155,7 +155,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
 
         final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = subSessionsMap.descendingMap().values().iterator();
         return new KeyValueIteratorStub<>(
-            new Iterator<KeyValue<Windowed<K>, V>>() {
+            new Iterator<>() {
 
                 Iterator<KeyValue<Windowed<K>, V>> it;
 
@@ -184,7 +184,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public void init(StateStoreContext context, StateStore root) {}
+    public void init(StateStoreContext stateStoreContext, StateStore root) {}
 
     @Override
     public void flush() {

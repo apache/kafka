@@ -62,7 +62,7 @@ public class WindowedWordCountProcessorTest {
                   .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                   .withCachingDisabled() // Caching is not supported by MockProcessorContext.
                   .build();
-        final InternalProcessorContext internalProcessorContext = mockInternalProcessorContext(context);
+        final InternalProcessorContext<?, ?> internalProcessorContext = mockInternalProcessorContext(context);
         store.init(internalProcessorContext, store);
         internalProcessorContext.register(store, null);
 
@@ -119,7 +119,7 @@ public class WindowedWordCountProcessorTest {
                       .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                       .withCachingDisabled() // Caching is not supported by MockProcessorContext.
                       .build();
-            final InternalProcessorContext internalProcessorContext = mockInternalProcessorContext(context, stateDir);
+            final InternalProcessorContext<?, ?> internalProcessorContext = mockInternalProcessorContext(context, stateDir);
             store.init(internalProcessorContext, store);
             internalProcessorContext.register(store, null);
 
@@ -157,13 +157,13 @@ public class WindowedWordCountProcessorTest {
         }
     }
 
-    private InternalProcessorContext mockInternalProcessorContext(final MockProcessorContext<String, String> context) {
+    private InternalProcessorContext<?, ?> mockInternalProcessorContext(final MockProcessorContext<String, String> context) {
         return mockInternalProcessorContext(context, null);
     }
 
-    private InternalProcessorContext mockInternalProcessorContext(final MockProcessorContext<String, String> context,
+    private InternalProcessorContext<?, ?> mockInternalProcessorContext(final MockProcessorContext<String, String> context,
                                                                   final File stateDir) {
-        final InternalProcessorContext internalProcessorContext = mock(InternalProcessorContext.class);
+        final InternalProcessorContext<?, ?> internalProcessorContext = mock(InternalProcessorContext.class);
         when(internalProcessorContext.taskId()).thenReturn(context.taskId());
         when(internalProcessorContext.metrics()).thenReturn((StreamsMetricsImpl) context.metrics());
         when(internalProcessorContext.appConfigs()).thenReturn(context.appConfigs());

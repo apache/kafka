@@ -121,7 +121,7 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
             this.origTm = originalTrustManager;
             this.nrOfRememberedBadCerts = nrOfRememberedBadCerts;
             // Restrict maximal size of the LinkedHashMap to avoid security attacks causing OOM
-            this.previouslyRejectedClientCertChains = new LinkedHashMap<ByteBuffer, String>() {
+            this.previouslyRejectedClientCertChains = new LinkedHashMap<>() {
                 @Override
                 protected boolean removeEldestEntry(final Map.Entry<ByteBuffer, String> eldest) {
                     return size() > nrOfRememberedBadCerts;
@@ -238,7 +238,7 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
                 principalToCertMap.put(principal, cert);
             }
             // Thus, expect certificate chain to be broken, e.g. containing multiple enbd certificates
-            HashSet<X509Certificate> endCertificates = new HashSet<>();
+            Set<X509Certificate> endCertificates = new HashSet<>();
             for (X509Certificate cert: origChain) {
                 X500Principal subjectPrincipal = cert.getSubjectX500Principal();
                 if (!issuedbyPrincipalToCertificatesMap.containsKey(subjectPrincipal)) {

@@ -18,12 +18,11 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledForJreRange;
-import org.junit.jupiter.api.condition.JRE;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,7 +37,6 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@EnabledForJreRange(min = JRE.JAVA_11) // TLS 1.3 is only supported with Java 11 and newer
 public class Tls13SelectorTest extends SslSelectorTest {
 
     @Override
@@ -47,6 +45,13 @@ public class Tls13SelectorTest extends SslSelectorTest {
             trustStoreFile, "client");
         configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
         return configs;
+    }
+
+    @Flaky(value = "KAFKA-14249", comment = "Copied from base class. Remove this override once the flakiness has been resolved.")
+    @Test
+    @Override
+    public void testCloseOldestConnection() throws Exception {
+        super.testCloseOldestConnection();
     }
 
     /**

@@ -50,7 +50,7 @@
     },
     {
       "name": "DeltaTemporality", "type": "bool", "versions": "0+",
-      "about": "Flag to indicate monotonic/counter metrics are to be emitted as deltas or cumulative values"
+      "about": "Flag to indicate monotonic/counter metrics are to be emitted as deltas or cumulative values."
     },
     {
       "name": "RequestedMetrics", "type": "[]string", "versions": "0+",

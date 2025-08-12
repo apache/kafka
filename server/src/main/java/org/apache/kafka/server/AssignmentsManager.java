@@ -34,6 +34,8 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
+import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
@@ -44,7 +46,6 @@ import com.yammer.metrics.core.MetricsRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -179,7 +180,7 @@ public final class AssignmentsManager {
         this.directoryIdToDescription = directoryIdToDescription;
         this.metadataImageSupplier = metadataImageSupplier;
         this.ready = new ConcurrentHashMap<>();
-        this.inflight = Collections.emptyMap();
+        this.inflight = Map.of();
         this.metricsRegistry = metricsRegistry;
         this.metricsRegistry.newGauge(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
                 @Override
@@ -361,13 +362,13 @@ public final class AssignmentsManager {
         Map<TopicIdPartition, Assignment> sent,
         Optional<ClientResponse> assignmentResponse
     ) {
-        inflight = Collections.emptyMap();
+        inflight = Map.of();
         Optional<String> globalResponseError = globalResponseError(assignmentResponse);
         if (globalResponseError.isPresent()) {
             previousGlobalFailures++;
             log.error("handleResponse: {} assignments failed; global error: {}. Retrying.",
                 sent.size(), globalResponseError.get());
-            sent.entrySet().forEach(e -> ready.putIfAbsent(e.getKey(), e.getValue()));
+            sent.forEach(ready::putIfAbsent);
             return;
         }
         previousGlobalFailures = 0;
@@ -427,14 +428,14 @@ public final class AssignmentsManager {
     }
 
     static Optional<String> globalResponseError(Optional<ClientResponse> response) {
-        if (!response.isPresent()) {
+        if (response.isEmpty()) {
             return Optional.of("Timeout");
         }
         if (response.get().authenticationException() != null) {
             return Optional.of("AuthenticationException");
         }
         if (response.get().wasTimedOut()) {
-            return Optional.of("Disonnected[Timeout]");
+            return Optional.of("Disconnected[Timeout]");
         }
         if (response.get().wasDisconnected()) {
             return Optional.of("Disconnected");

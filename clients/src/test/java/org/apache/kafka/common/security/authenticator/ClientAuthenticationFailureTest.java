@@ -106,7 +106,7 @@ public class ClientAuthenticationFailureTest {
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props, serializer, serializer)) {
             ProducerRecord<String, String> record = new ProducerRecord<>(topic, "message");
             Future<RecordMetadata> future = producer.send(record);
-            TestUtils.assertFutureThrows(future, SaslAuthenticationException.class);
+            TestUtils.assertFutureThrows(SaslAuthenticationException.class, future);
         }
     }
 
@@ -116,7 +116,7 @@ public class ClientAuthenticationFailureTest {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
         try (Admin client = Admin.create(props)) {
             KafkaFuture<Map<String, TopicDescription>> future = client.describeTopics(Collections.singleton("test")).allTopicNames();
-            TestUtils.assertFutureThrows(future, SaslAuthenticationException.class);
+            TestUtils.assertFutureThrows(SaslAuthenticationException.class, future);
         }
     }
 

@@ -73,7 +73,6 @@ tools:
     - 'trogdor/**'
     - 'vagrant/**'
     - 'committer-tools/**'
-    - 'log4j-appender/**'
     - 'shell/**'
 
 docs:
@@ -92,6 +91,12 @@ transactions:
   - changed-files:
       - any-glob-to-any-file:
           - 'transaction-coordinator/**'
+
+group-coordinator:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'group-coordinator/**'
+          - 'coordinator-common/**'
 
 kip-932:
   - changed-files:
@@ -125,3 +130,15 @@ kraft:
     - any-glob-to-any-file:
       - 'metadata/**'
       - 'raft/**'
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - "grade/dependencies.gradle"
+      - "LICENSE-binary"
+
+tiered-storage:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '*/src/*/java/org/apache/kafka/server/log/remote/**'
+      - '*/src/*/java/kafka/log/remote/**'

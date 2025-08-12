@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.sink;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.PluginMetrics;
 
 import java.util.Map;
 import java.util.Set;
@@ -122,5 +123,27 @@ public interface SinkTaskContext {
     default ErrantRecordReporter errantRecordReporter() {
         return null;
     }
+
+    /**
+     * Get a {@link PluginMetrics} that can be used to define metrics
+     *
+     * <p>This method was added in Apache Kafka 4.1. Tasks that use this method but want to
+     * maintain backward compatibility so they can also be deployed to older Connect runtimes
+     * should guard the call to this method with a try-catch block, since calling this method will result in a
+     * {@link NoSuchMethodError} or {@link NoClassDefFoundError} when the connector is deployed to
+     * Connect runtimes older than Kafka 4.1. For example:
+     * <pre>
+     *     PluginMetrics pluginMetrics;
+     *     try {
+     *         pluginMetrics = context.pluginMetrics();
+     *     } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     *         pluginMetrics = null;
+     *     }
+     * </pre>
+     *
+     * @return the PluginMetrics instance
+     * @since 4.1
+     */
+    PluginMetrics pluginMetrics();
 
 }

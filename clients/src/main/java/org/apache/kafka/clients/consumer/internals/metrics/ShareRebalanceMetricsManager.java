@@ -28,14 +28,13 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class ShareRebalanceMetricsManager extends RebalanceMetricsManager {
+public final class ShareRebalanceMetricsManager extends RebalanceMetricsManager {
     private final Sensor rebalanceSensor;
     public final MetricName rebalanceTotal;
     public final MetricName rebalanceRatePerHour;
     private long lastRebalanceEndMs = -1L;
     private long lastRebalanceStartMs = -1L;
 
-    @SuppressWarnings("this-escape")
     public ShareRebalanceMetricsManager(Metrics metrics) {
         super(CONSUMER_SHARE_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 

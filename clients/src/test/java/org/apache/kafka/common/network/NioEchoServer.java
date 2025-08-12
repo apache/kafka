@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * with the configured security protocol.
  *
  */
-public class NioEchoServer extends Thread {
+public final class NioEchoServer extends Thread {
     private static final Logger LOG = LoggerFactory.getLogger(NioEchoServer.class);
 
     public enum MetricType {
@@ -103,7 +103,6 @@ public class NioEchoServer extends Thread {
                 new DelegationTokenCache(ScramMechanism.mechanismNames()));
     }
 
-    @SuppressWarnings("this-escape")
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
             String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
             int failedAuthenticationDelayMs, Time time, DelegationTokenCache tokenCache) throws Exception {
@@ -130,7 +129,7 @@ public class NioEchoServer extends Thread {
             if (channelBuilder == null)
                 channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
                         securityProtocol, config, credentialCache, tokenCache, time, logContext,
-                        version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+                        version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER));
             this.metrics = new Metrics();
             this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
                     "MetricGroup", channelBuilder, logContext);
@@ -182,11 +181,6 @@ public class NioEchoServer extends Thread {
             waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications),
                     EnumSet.of(MetricType.MAX, MetricType.AVG));
         }
-    }
-
-    public void verifyAuthenticationNoReauthMetric(int successfulAuthenticationNoReauths) throws InterruptedException {
-        waitForMetrics("successful-authentication-no-reauth", successfulAuthenticationNoReauths,
-                EnumSet.of(MetricType.TOTAL));
     }
 
     public void waitForMetric(String name, final double expectedValue) throws InterruptedException {
@@ -278,7 +272,7 @@ public class NioEchoServer extends Thread {
     }
 
     private String id(SocketChannel channel) {
-        String connectionId = Selector.generateConnectionId(channel.socket(), nextConnectionIndex);
+        String connectionId = ServerConnectionId.generateConnectionId(channel.socket(), 0, nextConnectionIndex);
         if (nextConnectionIndex == Integer.MAX_VALUE)
             nextConnectionIndex = 0;
         else

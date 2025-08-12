@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
@@ -35,9 +34,11 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     @Override
     public void configure(final StreamsConfig config) {
         if (dslStoreSuppliers == null) {
-            dslStoreSuppliers = Utils.newInstance(
-                    config.getClass(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG),
-                    DslStoreSuppliers.class);
+            dslStoreSuppliers = config.getConfiguredInstance(
+                StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
+                DslStoreSuppliers.class,
+                config.originals()
+            );
         }
     }
 

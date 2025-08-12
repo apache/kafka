@@ -25,7 +25,7 @@ import org.apache.kafka.common.record.UnalignedFileRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -105,7 +105,7 @@ public final class FileRawSnapshotTest {
             int countBatches = 0;
             int countRecords = 0;
 
-            Iterator<RecordBatch> batches = Utils.covariantCast(snapshot.records().batchIterator());
+            var batches = snapshot.records().batchIterator();
             while (batches.hasNext()) {
                 RecordBatch batch = batches.next();
                 countBatches += 1;
@@ -191,7 +191,7 @@ public final class FileRawSnapshotTest {
             int countBatches = 0;
             int countRecords = 0;
 
-            Iterator<RecordBatch> batches = Utils.covariantCast(snapshot.records().batchIterator());
+            var batches = snapshot.records().batchIterator();
             while (batches.hasNext()) {
                 RecordBatch batch = batches.next();
                 countBatches += 1;
@@ -245,7 +245,7 @@ public final class FileRawSnapshotTest {
             int countBatches = 0;
             int countRecords = 0;
 
-            Iterator<RecordBatch> batches = Utils.covariantCast(snapshot.records().batchIterator());
+            var batches = snapshot.records().batchIterator();
             while (batches.hasNext()) {
                 RecordBatch batch = batches.next();
                 countBatches += 1;

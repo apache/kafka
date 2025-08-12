@@ -26,6 +26,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
+@Deprecated
 public class RemoveNamedTopologyResult {
     private final KafkaFutureImpl<Void> removeTopologyFuture;
     private final KafkaFutureImpl<Void> resetOffsetsFuture;

@@ -25,9 +25,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.TestInfo
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{Test, TestInfo}
 
 import java.util
 import java.util.Properties
@@ -40,11 +38,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
-    if(isKRaftTest())
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
-    else {
-      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG,  classOf[AlterCredentialsTest.TestAuthorizer].getName)
-    }
+    properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestStandardAuthorizer].getName)
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
@@ -58,9 +52,8 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
   private val user1 = "user1"
   private val user2 = "user2"
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAlterNothingNotAuthorized(quorum: String): Unit = {
+  @Test
+  def testAlterNothingNotAuthorized(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
@@ -71,9 +64,8 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
     assertEquals(0, results.size)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testAlterSomethingNotAuthorized(quorum: String): Unit = {
+  @Test
+  def testAlterSomethingNotAuthorized(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))

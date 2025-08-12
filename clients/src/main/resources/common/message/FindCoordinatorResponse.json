@@ -43,7 +43,7 @@
       "about": "The host name." },
     { "name": "Port", "type": "int32", "versions": "0-3",
       "about": "The port." },
-    { "name": "Coordinators", "type": "[]Coordinator", "versions": "4+", "about": "Each coordinator result in the response", "fields": [
+    { "name": "Coordinators", "type": "[]Coordinator", "versions": "4+", "about": "Each coordinator result in the response.", "fields": [
       { "name": "Key", "type": "string", "versions": "4+", "about": "The coordinator key." },
       { "name": "NodeId", "type": "int32", "versions": "4+", "entityType": "brokerId",
         "about": "The node id." },

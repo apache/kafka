@@ -44,7 +44,7 @@ public final class OffsetsForLeaderEpochUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(OffsetsForLeaderEpochUtils.class);
 
-    private OffsetsForLeaderEpochUtils(){}
+    private OffsetsForLeaderEpochUtils() {}
 
     static AbstractRequest.Builder<OffsetsForLeaderEpochRequest> prepareRequest(
             Map<TopicPartition, SubscriptionState.FetchPosition> requestData) {

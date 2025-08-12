@@ -504,7 +504,7 @@ public interface FieldType {
     }
 
     default boolean isVariableLength() {
-        return !fixedLength().isPresent();
+        return fixedLength().isEmpty();
     }
 
     /**

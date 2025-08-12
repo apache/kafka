@@ -110,6 +110,13 @@ public class ProducerAppendInfo {
     }
 
     private void checkSequence(short producerEpoch, int appendFirstSeq, long offset) {
+        // For transactions v2 idempotent producers, reject non-zero sequences when there is no producer ID state
+        if (verificationStateEntry != null && verificationStateEntry.supportsEpochBump() &&
+            appendFirstSeq != 0 && currentEntry.isEmpty()) {
+            throw new OutOfOrderSequenceException("Invalid sequence number for producer " + producerId + " at " +
+                "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
+                " (incoming seq. number). Expected sequence 0 for transactions v2 idempotent producer with no existing state.");
+        }
         if (verificationStateEntry != null && appendFirstSeq > verificationStateEntry.lowestSequence()) {
             throw new OutOfOrderSequenceException("Out of order sequence number for producer " + producerId + " at " +
                     "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
@@ -181,7 +188,7 @@ public class ProducerAppendInfo {
             // Received a non-transactional message while a transaction is active
             throw new InvalidTxnStateException("Expected transactional write from producer " + producerId + " at " +
                     "offset " + firstOffsetMetadata + " in partition " + topicPartition);
-        } else if (!currentTxnFirstOffset.isPresent() && isTransactional) {
+        } else if (currentTxnFirstOffset.isEmpty() && isTransactional) {
             // Began a new transaction
             updatedEntry.setCurrentTxnFirstOffset(firstOffset);
             transactions.add(new TxnMetadata(producerId, firstOffsetMetadata));

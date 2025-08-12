@@ -35,13 +35,7 @@ public class ShellNodePrinter implements MetadataNodePrinter {
     }
 
     String indentationString() {
-        StringBuilder bld = new StringBuilder();
-        for (int i = 0; i < indentationLevel; i++) {
-            for (int j = 0; j < 2; j++) {
-                bld.append(" ");
-            }
-        }
-        return bld.toString();
+        return " ".repeat(2).repeat(Math.max(0, indentationLevel));
     }
 
     @Override

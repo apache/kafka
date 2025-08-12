@@ -24,7 +24,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,7 +43,7 @@ class ResignedStateTest {
     int localId = 0;
     int epoch = 5;
     Endpoints localEndpoints = Endpoints.fromInetSocketAddresses(
-        Collections.singletonMap(
+        Map.of(
             VoterSetTest.DEFAULT_LISTENER_NAME,
             InetSocketAddress.createUnresolved("localhost", 1234)
         )
@@ -54,7 +56,7 @@ class ResignedStateTest {
             epoch,
             voters,
             electionTimeoutMs,
-            Collections.emptyList(),
+            List.of(),
             localEndpoints,
             logContext
         );
@@ -67,12 +69,12 @@ class ResignedStateTest {
 
         ResignedState state = newResignedState(voters);
 
-        assertEquals(ElectionState.withElectedLeader(epoch, localId, voters), state.election());
+        assertEquals(ElectionState.withElectedLeader(epoch, localId, Optional.empty(), voters), state.election());
         assertEquals(epoch, state.epoch());
 
-        assertEquals(Collections.singleton(remoteId), state.unackedVoters());
+        assertEquals(Set.of(remoteId), state.unackedVoters());
         state.acknowledgeResignation(remoteId);
-        assertEquals(Collections.emptySet(), state.unackedVoters());
+        assertEquals(Set.of(), state.unackedVoters());
 
         assertEquals(electionTimeoutMs, state.remainingElectionTimeMs(time.milliseconds()));
         assertFalse(state.hasElectionTimeoutExpired(time.milliseconds()));
@@ -89,9 +91,22 @@ class ResignedStateTest {
     public void testGrantVote(boolean isLogUpToDate) {
         ResignedState state = newResignedState(Set.of(1, 2, 3));
 
-        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
-        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate));
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true)
+        );
+        assertEquals(
+            isLogUpToDate,
+            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true)
+        );
+
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
     }
 
     @Test
@@ -100,7 +115,7 @@ class ResignedStateTest {
 
         ResignedState state = newResignedState(voters);
 
-        assertEquals(ElectionState.withElectedLeader(epoch, 0, voters), state.election());
+        assertEquals(ElectionState.withElectedLeader(epoch, 0, Optional.empty(), voters), state.election());
         assertEquals(epoch, state.epoch());
 
         // try non-existed voter must throw an exception

@@ -23,9 +23,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
+import com.fasterxml.jackson.module.blackbird.BlackbirdModule;
 
-import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -39,7 +38,7 @@ public class JsonSerializer implements Serializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonSerializer() {
-        this(Collections.emptySet(), new JsonNodeFactory(true), true);
+        this(Set.of(), new JsonNodeFactory(true), true);
     }
 
     /**
@@ -52,12 +51,12 @@ public class JsonSerializer implements Serializer<JsonNode> {
     JsonSerializer(
         final Set<SerializationFeature> serializationFeatures,
         final JsonNodeFactory jsonNodeFactory,
-        final boolean enableAfterburner
+        final boolean enableBlackbird
     ) {
         serializationFeatures.forEach(objectMapper::enable);
         objectMapper.setNodeFactory(jsonNodeFactory);
-        if (enableAfterburner) {
-            objectMapper.registerModule(new AfterburnerModule());
+        if (enableBlackbird) {
+            objectMapper.registerModule(new BlackbirdModule());
         }
     }
 

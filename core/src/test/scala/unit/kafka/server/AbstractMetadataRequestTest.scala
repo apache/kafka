@@ -54,17 +54,9 @@ abstract class AbstractMetadataRequestTest extends BaseRequestTest {
   }
 
   protected def checkAutoCreatedTopic(autoCreatedTopic: String, response: MetadataResponse): Unit = {
-    if (isKRaftTest()) {
-      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors.get(autoCreatedTopic))
-      for (i <- 0 until brokers.head.config.numPartitions) {
-        TestUtils.waitForPartitionMetadata(brokers, autoCreatedTopic, i)
-      }
-    } else {
-      assertEquals(Errors.LEADER_NOT_AVAILABLE, response.errors.get(autoCreatedTopic))
-      assertEquals(Some(brokers.head.config.numPartitions), zkClient.getTopicPartitionCount(autoCreatedTopic))
-      for (i <- 0 until brokers.head.config.numPartitions) {
-        TestUtils.waitForPartitionMetadata(brokers, autoCreatedTopic, i)
-      }
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors.get(autoCreatedTopic))
+    for (i <- 0 until brokers.head.config.numPartitions) {
+      TestUtils.waitForPartitionMetadata(brokers, autoCreatedTopic, i)
     }
   }
 }

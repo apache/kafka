@@ -19,13 +19,13 @@ package org.apache.kafka.tools.consumer;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -101,8 +101,11 @@ public class ConsoleShareConsumerOptionsTest {
 
         ConsoleShareConsumerOptions config = new ConsoleShareConsumerOptions(args);
 
-        assertEquals("1000", config.consumerProps().getProperty("request.timeout.ms"));
-        assertEquals("group1", config.consumerProps().getProperty("group.id"));
+        // KafkaShareConsumer uses Utils.propsToMap to convert the properties to a map,
+        // so using the same method to check the map has the expected values
+        Map<String, Object> configMap = Utils.propsToMap(config.consumerProps());
+        assertEquals("1000", configMap.get("request.timeout.ms"));
+        assertEquals("group1", configMap.get("group.id"));
     }
 
     @Test
@@ -112,7 +115,7 @@ public class ConsoleShareConsumerOptionsTest {
         });
 
         // different in all three places
-        File propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
+        File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
         final String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -124,7 +127,7 @@ public class ConsoleShareConsumerOptionsTest {
         assertThrows(IllegalArgumentException.class, () -> new ConsoleShareConsumerOptions(args));
 
         // the same in all three places
-        propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "test-group"));
+        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "test-group"));
         final String[] args1 = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -138,7 +141,7 @@ public class ConsoleShareConsumerOptionsTest {
         assertEquals("test-group", props.getProperty("group.id"));
 
         // different via --consumer-property and --consumer-config
-        propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
+        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
         final String[] args2 = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -159,7 +162,7 @@ public class ConsoleShareConsumerOptionsTest {
         assertThrows(IllegalArgumentException.class, () -> new ConsoleShareConsumerOptions(args3));
 
         // different via --group and --consumer-config
-        propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
+        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
         final String[] args4 = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",

@@ -26,12 +26,12 @@ import org.apache.kafka.server.common.FinalizedFeatures;
 
 import org.slf4j.Logger;
 
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 
 
 public class FeaturesPublisher implements MetadataPublisher {
     private final Logger log;
-    private volatile FinalizedFeatures finalizedFeatures = FinalizedFeatures.fromKRaftVersion(MINIMUM_KRAFT_VERSION);
+    private volatile FinalizedFeatures finalizedFeatures = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION);
 
     public FeaturesPublisher(
         LogContext logContext
@@ -55,10 +55,10 @@ public class FeaturesPublisher implements MetadataPublisher {
         LoaderManifest manifest
     ) {
         if (delta.featuresDelta() != null) {
-            FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersion(),
+            FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersionOrThrow(),
                     newImage.features().finalizedVersions(),
-                    newImage.provenance().lastContainedOffset(),
-                    true);
+                    newImage.provenance().lastContainedOffset()
+            );
             if (!newFinalizedFeatures.equals(finalizedFeatures)) {
                 log.info("Loaded new metadata {}.", newFinalizedFeatures);
                 finalizedFeatures = newFinalizedFeatures;

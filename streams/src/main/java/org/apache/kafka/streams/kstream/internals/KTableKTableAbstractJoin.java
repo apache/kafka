@@ -17,6 +17,9 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.state.StoreBuilder;
+
+import java.util.Set;
 
 public abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
     KTableProcessorSupplier<K, V1, K, VOut> {
@@ -47,6 +50,11 @@ public abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
         table2.enableSendingOldValues(true);
         sendOldValues = true;
         return true;
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return null;
     }
 
     public void setUseVersionedSemantics(final boolean useVersionedSemantics) {

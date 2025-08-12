@@ -33,32 +33,6 @@ import static org.mockito.Mockito.verify;
 public class RequestHeaderTest {
 
     @Test
-    public void testSerdeControlledShutdownV0() {
-        // Verify that version 0 of controlled shutdown does not include the clientId field
-        short apiVersion = 0;
-        int correlationId = 2342;
-        ByteBuffer rawBuffer = ByteBuffer.allocate(32);
-        rawBuffer.putShort(ApiKeys.CONTROLLED_SHUTDOWN.id);
-        rawBuffer.putShort(apiVersion);
-        rawBuffer.putInt(correlationId);
-        rawBuffer.flip();
-
-        RequestHeader deserialized = RequestHeader.parse(rawBuffer);
-        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN, deserialized.apiKey());
-        assertEquals(0, deserialized.apiVersion());
-        assertEquals(correlationId, deserialized.correlationId());
-        assertEquals("", deserialized.clientId());
-        assertEquals(0, deserialized.headerVersion());
-
-        ByteBuffer serializedBuffer = RequestTestUtils.serializeRequestHeader(deserialized);
-
-        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN.id, serializedBuffer.getShort(0));
-        assertEquals(0, serializedBuffer.getShort(2));
-        assertEquals(correlationId, serializedBuffer.getInt(4));
-        assertEquals(8, serializedBuffer.limit());
-    }
-
-    @Test
     public void testRequestHeaderV1() {
         short apiVersion = 1;
         RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, apiVersion, "", 10);

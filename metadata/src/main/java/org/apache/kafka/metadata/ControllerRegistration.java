@@ -111,7 +111,7 @@ public class ControllerRegistration {
             if (supportedFeatures == null) {
                 supportedFeatures = new HashMap<>();
                 supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-                        MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+                        MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
             }
             return new ControllerRegistration(id,
@@ -203,8 +203,7 @@ public class ControllerRegistration {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ControllerRegistration)) return false;
-        ControllerRegistration other = (ControllerRegistration) o;
+        if (!(o instanceof ControllerRegistration other)) return false;
         return other.id == id &&
             other.incarnationId.equals(incarnationId) &&
             other.zkMigrationReady == zkMigrationReady &&

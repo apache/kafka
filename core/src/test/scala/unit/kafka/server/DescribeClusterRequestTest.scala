@@ -27,9 +27,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import java.lang.{Byte => JByte}
 import java.util.Properties
@@ -48,15 +46,13 @@ class DescribeClusterRequestTest extends BaseRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeClusterRequestIncludingClusterAuthorizedOperations(quorum: String): Unit = {
+  @Test
+  def testDescribeClusterRequestIncludingClusterAuthorizedOperations(): Unit = {
     testDescribeClusterRequest(true)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeClusterRequestExcludingClusterAuthorizedOperations(quorum: String): Unit = {
+  @Test
+  def testDescribeClusterRequestExcludingClusterAuthorizedOperations(): Unit = {
     testDescribeClusterRequest(false)
   }
 
@@ -69,11 +65,6 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .setRack(server.config.rack.orNull)
     }.toSet
 
-    var expectedControllerId = 0
-    if (!isKRaftTest()) {
-      // in KRaft mode DescribeClusterRequest will return a random broker id as the controllerId (KIP-590)
-      expectedControllerId = servers.filter(_.kafkaController.isActive).last.config.brokerId
-    }
     val expectedClusterId = brokers.last.clusterId
 
     val expectedClusterAuthorizedOperations = if (includeClusterAuthorizedOperations) {
@@ -92,11 +83,7 @@ class DescribeClusterRequestTest extends BaseRequestTest {
         .build(version.toShort)
       val describeClusterResponse = sentDescribeClusterRequest(describeClusterRequest)
 
-      if (isKRaftTest()) {
-        assertTrue(0 to brokerCount contains describeClusterResponse.data.controllerId)
-      } else {
-        assertEquals(expectedControllerId, describeClusterResponse.data.controllerId)
-      }
+      assertTrue(0 to brokerCount contains describeClusterResponse.data.controllerId)
       assertEquals(expectedClusterId, describeClusterResponse.data.clusterId)
       assertEquals(expectedClusterAuthorizedOperations, describeClusterResponse.data.clusterAuthorizedOperations)
       assertEquals(expectedBrokers, describeClusterResponse.data.brokers.asScala.toSet)

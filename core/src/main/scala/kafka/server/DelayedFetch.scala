@@ -18,6 +18,7 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
+import kafka.utils.Logging
 
 import java.util.concurrent.TimeUnit
 import org.apache.kafka.common.TopicIdPartition
@@ -26,6 +27,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.purgatory.DelayedOperation
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata
 
@@ -51,7 +53,7 @@ class DelayedFetch(
   replicaManager: ReplicaManager,
   quota: ReplicaQuota,
   responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit
-) extends DelayedOperation(params.maxWaitMs) {
+) extends DelayedOperation(params.maxWaitMs) with Logging {
 
   override def toString: String = {
     s"DelayedFetch(params=$params" +

@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(60)
 public class ReassignPartitionsCommandArgsTest {
-    public static final String MISSING_BOOTSTRAP_SERVER_MSG = "Please specify --bootstrap-server";
+    public static final String MISSING_BOOTSTRAP_SERVER_MSG = "Please specify either --bootstrap-server or --bootstrap-controller";
 
     @BeforeEach
     public void setUp() {
@@ -288,5 +288,35 @@ public class ReassignPartitionsCommandArgsTest {
             "--bootstrap-server", "localhost:1234",
             "--preserve-throttles"};
         shouldFailWith("Missing required argument \"[reassignment-json-file]\"", args);
+    }
+    
+    @Test
+    public void shouldAllowBootstrapControllerArg() {
+        String[] args = new String[] {
+            "--bootstrap-controller", "localhost:1234",
+            "--cancel",
+            "--reassignment-json-file", "myfile.json"};
+        ReassignPartitionsCommand.validateAndParseArgs(args);
+    }
+
+    @Test
+    public void shouldNotAllowBootstrapControllerArgWithUnsupportedAction() {
+        String[] args = new String[] {
+            "--bootstrap-controller", "localhost:1234",
+            "--generate",
+            "--broker-list", "101,102",
+            "--topics-to-move-json-file", "myfile.json"};
+        shouldFailWith("Option \"[bootstrap-controller]\" can't be used with action \"[generate]", args);
+    }
+
+    @Test
+    public void shouldNotAllowBootstrapControllerAndBootstrapServerArg() {
+        String[] args = new String[] {
+            "--bootstrap-server", "localhost:1234",
+            "--bootstrap-controller", "localhost:1234",
+            "--generate",
+            "--broker-list", "101,102",
+            "--topics-to-move-json-file", "myfile.json"};
+        shouldFailWith("Please don't specify both --bootstrap-server and --bootstrap-controller", args);
     }
 }

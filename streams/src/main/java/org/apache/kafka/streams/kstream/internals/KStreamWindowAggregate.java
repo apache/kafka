@@ -29,13 +29,18 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -44,6 +49,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
     private static final Logger log = LoggerFactory.getLogger(KStreamWindowAggregate.class);
 
     private final String storeName;
+    private final StoreFactory storeFactory;
     private final Windows<W> windows;
     private final Initializer<VAgg> initializer;
     private final Aggregator<? super KIn, ? super VIn, VAgg> aggregator;
@@ -52,12 +58,13 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
     private boolean sendOldValues = false;
 
     public KStreamWindowAggregate(final Windows<W> windows,
-                                  final String storeName,
+                                  final StoreFactory storeFactory,
                                   final EmitStrategy emitStrategy,
                                   final Initializer<VAgg> initializer,
                                   final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.windows = windows;
-        this.storeName = storeName;
+        this.storeName = storeFactory.storeName();
+        this.storeFactory = storeFactory;
         this.emitStrategy = emitStrategy;
         this.initializer = initializer;
         this.aggregator = aggregator;
@@ -68,6 +75,11 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                     + "TimeWindows and SlidingWindows for TimeWindowedKStream");
             }
         }
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override

@@ -28,7 +28,7 @@
     { "name": "ZkMigrationReady", "type": "bool", "versions": "0+",
       "about": "Set if the required configurations for ZK migration are present." },
     { "name": "Listeners", "type": "[]Listener",
-      "about": "The listeners of this controller", "versions": "0+", "fields": [
+      "about": "The listeners of this controller.", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
         "about": "The name of the endpoint." },
       { "name": "Host", "type": "string", "versions": "0+",
@@ -39,7 +39,7 @@
         "about": "The security protocol." }
     ]},
     { "name": "Features", "type": "[]Feature",
-      "about": "The features on this controller", "versions": "0+", "fields": [
+      "about": "The features on this controller.", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
         "about": "The feature name." },
       { "name": "MinSupportedVersion", "type": "int16", "versions": "0+",

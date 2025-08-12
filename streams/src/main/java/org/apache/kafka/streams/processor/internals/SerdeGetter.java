@@ -18,37 +18,34 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+
+import java.util.function.Supplier;
 
 /**
  * Allows serde access across different context types.
  */
 public class SerdeGetter {
 
-    private final org.apache.kafka.streams.processor.ProcessorContext oldProcessorContext;
-    private final org.apache.kafka.streams.processor.api.ProcessorContext newProcessorContext;
-    private final StateStoreContext stateStorecontext;
-    public SerdeGetter(final org.apache.kafka.streams.processor.ProcessorContext context) {
-        oldProcessorContext = context;
-        newProcessorContext = null;
-        stateStorecontext = null;
+    private final Supplier<Serde<?>> keySerdeSupplier;
+    private final Supplier<Serde<?>> valueSerdeSupplier;
+
+    public SerdeGetter(final ProcessorContext<?, ?> context) {
+        keySerdeSupplier = context::keySerde;
+        valueSerdeSupplier = context::valueSerde;
     }
-    public SerdeGetter(final org.apache.kafka.streams.processor.api.ProcessorContext context) {
-        oldProcessorContext = null;
-        newProcessorContext = context;
-        stateStorecontext = null;
-    }
+
     public SerdeGetter(final StateStoreContext context) {
-        oldProcessorContext = null;
-        newProcessorContext = null;
-        stateStorecontext = context;
+        keySerdeSupplier = context::keySerde;
+        valueSerdeSupplier = context::valueSerde;
     }
-    public Serde keySerde() {
-        return oldProcessorContext != null ? oldProcessorContext.keySerde() :
-            newProcessorContext != null ? newProcessorContext.keySerde() : stateStorecontext.keySerde();
+
+    public Serde<?> keySerde() {
+        return keySerdeSupplier.get();
     }
-    public Serde valueSerde() {
-        return oldProcessorContext != null ? oldProcessorContext.valueSerde() :
-            newProcessorContext != null ? newProcessorContext.valueSerde() : stateStorecontext.valueSerde();
+
+    public Serde<?> valueSerde() {
+        return valueSerdeSupplier.get();
     }
 
 }

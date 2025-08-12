@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.Collections
 
-import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC, UNKNOWN}
@@ -39,6 +38,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, NONE}
 import org.apache.kafka.common.requests.ApiError
+import org.apache.kafka.metadata.MockConfigRepository
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Assertions, Test}
 import org.slf4j.LoggerFactory
@@ -47,7 +47,7 @@ class ConfigAdminManagerTest {
   val logger = LoggerFactory.getLogger(classOf[ConfigAdminManagerTest])
 
   def newConfigAdminManager(brokerId: Integer): ConfigAdminManager = {
-    val config = TestUtils.createBrokerConfig(nodeId = brokerId, zkConnect = null)
+    val config = TestUtils.createBrokerConfig(nodeId = brokerId)
     new ConfigAdminManager(brokerId, new KafkaConfig(config), new MockConfigRepository())
   }
 

@@ -21,8 +21,8 @@ import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendR
 
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-import kafka.server.{KafkaConfig, MetadataCache}
-import kafka.utils.{CoreUtils, Logging}
+import kafka.server.KafkaConfig
+import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -32,12 +32,15 @@ import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersReque
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
+import org.apache.kafka.coordinator.transaction.TxnTransitMetadata
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 object TransactionMarkerChannelManager {
   private val UnknownDestinationQueueSizeMetricName = "UnknownDestinationQueueSize"
@@ -62,7 +65,6 @@ object TransactionMarkerChannelManager {
       config.interBrokerListenerName,
       config.saslMechanismInterBrokerProtocol,
       time,
-      config.saslInterBrokerHandshakeRequestEnable,
       logContext
     )
     channelBuilder match {
@@ -120,7 +122,7 @@ class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
   }
 
   def addMarkers(txnTopicPartition: Int, pendingCompleteTxnAndMarker: PendingCompleteTxnAndMarkerEntry): Unit = {
-    val queue = CoreUtils.atomicGetOrUpdate(markersPerTxnTopicPartition, txnTopicPartition, {
+    val queue = markersPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, {
       // Note that this may get called more than once if threads have a close race while adding new queue.
       info(s"Creating new marker queue for txn partition $txnTopicPartition to destination broker ${destination.id}")
       new LinkedBlockingQueue[PendingCompleteTxnAndMarkerEntry]()
@@ -208,7 +210,7 @@ class TransactionMarkerChannelManager(
 
     // we do not synchronize on the update of the broker node with the enqueuing,
     // since even if there is a race condition we will just retry
-    val brokerRequestQueue = CoreUtils.atomicGetOrUpdate(markersQueuePerBroker, brokerId, {
+    val brokerRequestQueue = markersQueuePerBroker.getOrElseUpdate(brokerId, {
       // Note that this may get called more than once if threads have a close race while adding new queue.
       info(s"Creating new marker queue map to destination broker $brokerId")
       new TxnMarkerQueue(broker)
@@ -256,9 +258,7 @@ class TransactionMarkerChannelManager(
     }.filter { case (_, entries) => !entries.isEmpty }.map { case (node, entries) =>
       val markersToSend = entries.asScala.map(_.txnMarkerEntry).asJava
       val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(node.id, txnStateManager, this, entries)
-      val request = new WriteTxnMarkersRequest.Builder(
-        metadataCache.metadataVersion().writeTxnMarkersRequestVersion(), markersToSend
-      )
+      val request = new WriteTxnMarkersRequest.Builder(markersToSend)
 
       new RequestAndCompletionHandler(
         currentTimeMs,
@@ -385,7 +385,7 @@ class TransactionMarkerChannelManager(
                                  topicPartitions: immutable.Set[TopicPartition]): Unit = {
     val txnTopicPartition = txnStateManager.partitionFor(pendingCompleteTxn.transactionalId)
     val partitionsByDestination: immutable.Map[Option[Node], immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
-      metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
+      OptionConverters.toScala(metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName))
     }
 
     val coordinatorEpoch = pendingCompleteTxn.coordinatorEpoch

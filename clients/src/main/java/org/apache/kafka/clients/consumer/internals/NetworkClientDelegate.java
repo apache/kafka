@@ -27,6 +27,7 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -69,6 +70,9 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
+    private Optional<Exception> metadataError;
+    private final boolean notifyMetadataErrorsViaErrorQueue;
+    private final AsyncConsumerMetrics asyncConsumerMetrics;
 
     public NetworkClientDelegate(
             final Time time,
@@ -76,7 +80,9 @@ public class NetworkClientDelegate implements AutoCloseable {
             final LogContext logContext,
             final KafkaClient client,
             final Metadata metadata,
-            final BackgroundEventHandler backgroundEventHandler) {
+            final BackgroundEventHandler backgroundEventHandler,
+            final boolean notifyMetadataErrorsViaErrorQueue,
+            final AsyncConsumerMetrics asyncConsumerMetrics) {
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -85,6 +91,9 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.metadataError = Optional.empty();
+        this.notifyMetadataErrorsViaErrorQueue = notifyMetadataErrorsViaErrorQueue;
+        this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
 
     // Visible for testing
@@ -144,13 +153,18 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.client.poll(pollTimeoutMs, currentTimeMs);
         maybePropagateMetadataError();
         checkDisconnects(currentTimeMs);
+        asyncConsumerMetrics.recordUnsentRequestsQueueSize(unsentRequests.size(), currentTimeMs);
     }
 
     private void maybePropagateMetadataError() {
         try {
             metadata.maybeThrowAnyException();
         } catch (Exception e) {
-            backgroundEventHandler.add(new ErrorEvent(e));
+            if (notifyMetadataErrorsViaErrorQueue) {
+                backgroundEventHandler.add(new ErrorEvent(e));
+            } else {
+                metadataError = Optional.of(e);
+            }
         }
     }
 
@@ -173,6 +187,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             unsent.timer.update(currentTimeMs);
             if (unsent.timer.isExpired()) {
                 iterator.remove();
+                asyncConsumerMetrics.recordUnsentRequestsQueueTime(time.milliseconds() - unsent.enqueueTimeMs());
                 unsent.handler.onFailure(currentTimeMs, new TimeoutException(
                     "Failed to send request after " + unsent.timer.timeoutMs() + " ms."));
                 continue;
@@ -183,6 +198,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                 continue;
             }
             iterator.remove();
+            asyncConsumerMetrics.recordUnsentRequestsQueueTime(time.milliseconds() - unsent.enqueueTimeMs());
         }
     }
 
@@ -210,6 +226,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             UnsentRequest u = iter.next();
             if (u.node.isPresent() && client.connectionFailed(u.node.get())) {
                 iter.remove();
+                asyncConsumerMetrics.recordUnsentRequestsQueueTime(time.milliseconds() - u.enqueueTimeMs());
                 AuthenticationException authenticationException = client.authenticationException(u.node.get());
                 u.handler.onFailure(currentTimeMs, authenticationException);
             }
@@ -229,6 +246,12 @@ public class NetworkClientDelegate implements AutoCloseable {
             (int) unsent.timer.remainingMs(),
             unsent.handler
         );
+    }
+    
+    public Optional<Exception> getAndClearMetadataError() {
+        Optional<Exception> metadataError = this.metadataError;
+        this.metadataError = Optional.empty();
+        return metadataError;
     }
 
     public Node leastLoadedNode() {
@@ -267,6 +290,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     public void add(final UnsentRequest r) {
         Objects.requireNonNull(r);
         r.setTimer(this.time, this.requestTimeoutMs);
+        r.setEnqueueTimeMs(time.milliseconds());
         unsentRequests.add(r);
     }
 
@@ -300,6 +324,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         private final Optional<Node> node; // empty if random node can be chosen
 
         private Timer timer;
+        private long enqueueTimeMs; // time when the request was enqueued to unsentRequests, not duration in the queue.
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
                              final Optional<Node> node) {
@@ -315,6 +340,20 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         Timer timer() {
             return timer;
+        }
+
+        /**
+         * Set the time when the request was enqueued to {@link NetworkClientDelegate#unsentRequests}.
+         */
+        private void setEnqueueTimeMs(final long enqueueTimeMs) {
+            this.enqueueTimeMs = enqueueTimeMs;
+        }
+
+        /**
+         * Return the time when the request was enqueued to {@link NetworkClientDelegate#unsentRequests}.
+         */
+        private long enqueueTimeMs() {
+            return enqueueTimeMs;
         }
 
         CompletableFuture<ClientResponse> future() {
@@ -412,8 +451,10 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final Metrics metrics,
                                                            final Sensor throttleTimeSensor,
                                                            final ClientTelemetrySender clientTelemetrySender,
-                                                           final BackgroundEventHandler backgroundEventHandler) {
-        return new CachedSupplier<NetworkClientDelegate>() {
+                                                           final BackgroundEventHandler backgroundEventHandler,
+                                                           final boolean notifyMetadataErrorsViaErrorQueue,
+                                                           final AsyncConsumerMetrics asyncConsumerMetrics) {
+        return new CachedSupplier<>() {
             @Override
             protected NetworkClientDelegate create() {
                 KafkaClient client = ClientUtils.createNetworkClient(config,
@@ -426,7 +467,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                         metadata,
                         throttleTimeSensor,
                         clientTelemetrySender);
-                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler);
+                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
             }
         };
     }

@@ -28,7 +28,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Base64.Encoder;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
@@ -50,25 +49,16 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     private static final String TOO_EARLY_EXPIRATION_TIME_CLAIM_TEXT = expClaimText(0);
     private static final String ISSUED_AT_CLAIM_TEXT = claimOrHeaderText("iat", MOCK_TIME.milliseconds() / 1000.0);
     private static final String SCOPE_CLAIM_TEXT = claimOrHeaderText("scope", "scope1");
-    private static final Map<String, String> MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED;
-    static {
-        Map<String, String> tmp = new HashMap<>();
-        tmp.put("unsecuredValidatorPrincipalClaimName", "principal");
-        tmp.put("unsecuredValidatorAllowableClockSkewMs", "1");
-        MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED = Collections.unmodifiableMap(tmp);
-    }
-    private static final Map<String, String> MODULE_OPTIONS_MAP_REQUIRE_EXISTING_SCOPE;
-    static {
-        Map<String, String> tmp = new HashMap<>();
-        tmp.put("unsecuredValidatorRequiredScope", "scope1");
-        MODULE_OPTIONS_MAP_REQUIRE_EXISTING_SCOPE = Collections.unmodifiableMap(tmp);
-    }
-    private static final Map<String, String> MODULE_OPTIONS_MAP_REQUIRE_ADDITIONAL_SCOPE;
-    static {
-        Map<String, String> tmp = new HashMap<>();
-        tmp.put("unsecuredValidatorRequiredScope", "scope1 scope2");
-        MODULE_OPTIONS_MAP_REQUIRE_ADDITIONAL_SCOPE = Collections.unmodifiableMap(tmp);
-    }
+    private static final Map<String, String> MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED = Map.of(
+            "unsecuredValidatorPrincipalClaimName", "principal",
+            "unsecuredValidatorAllowableClockSkewMs", "1");
+
+    private static final Map<String, String> MODULE_OPTIONS_MAP_REQUIRE_EXISTING_SCOPE = Map.of(
+            "unsecuredValidatorRequiredScope", "scope1");
+
+    private static final Map<String, String> MODULE_OPTIONS_MAP_REQUIRE_ADDITIONAL_SCOPE = Map.of(
+            "unsecuredValidatorRequiredScope", "scope1 scope2");
+
 
     @Test
     public void validToken() {

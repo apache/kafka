@@ -14,11 +14,13 @@
 // limitations under the License.
 
 {
-  "type": "data",
+  "apiKey": 2,
+  "type": "coordinator-key",
   "name": "GroupMetadataKey",
-  "validVersions": "2",
+  "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "group", "type": "string", "versions": "2" }
+    { "name": "group", "type": "string", "versions": "0",
+      "about": "The group id."}
   ]
 }

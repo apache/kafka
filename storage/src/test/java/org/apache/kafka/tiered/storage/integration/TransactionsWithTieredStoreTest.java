@@ -33,9 +33,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.stream.Collectors;
+import java.util.Set;
 
-import scala.collection.JavaConverters;
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
@@ -72,13 +72,12 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
         return overridingTopicProps;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public void maybeWaitForAtLeastOneSegmentUpload(scala.collection.Seq<TopicPartition> topicPartitions) {
-        JavaConverters.seqAsJavaList(topicPartitions).forEach(topicPartition -> {
-            List<BrokerLocalStorage> localStorages = JavaConverters.bufferAsJavaList(brokers()).stream()
-                    .map(b -> new BrokerLocalStorage(b.config().brokerId(), JavaConverters.setAsJavaSet(b.config().logDirs().toSet()), STORAGE_WAIT_TIMEOUT_SEC))
-                    .collect(Collectors.toList());
+        CollectionConverters.asJava(topicPartitions).forEach(topicPartition -> {
+            List<BrokerLocalStorage> localStorages = CollectionConverters.asJava(brokers()).stream()
+                    .map(b -> new BrokerLocalStorage(b.config().brokerId(), Set.copyOf(b.config().logDirs()), STORAGE_WAIT_TIMEOUT_SEC))
+                    .toList();
             localStorages
                     .stream()
                     // Select brokers which are assigned a replica of the topic-partition
@@ -92,13 +91,12 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
         });
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public void maybeVerifyLocalLogStartOffsets(scala.collection.immutable.Map<TopicPartition, Long> partitionLocalStartOffsets) throws InterruptedException {
         Map<Integer, Long> offsets = new HashMap<>();
         TestUtils.waitForCondition(() ->
-                JavaConverters.seqAsJavaList(brokers()).stream().allMatch(broker ->
-                        JavaConverters.mapAsJavaMapConverter(partitionLocalStartOffsets).asJava()
+                CollectionConverters.asJava(brokers()).stream().allMatch(broker ->
+                        CollectionConverters.asJava(partitionLocalStartOffsets)
                                 .entrySet().stream().allMatch(entry -> {
                                     long offset = broker.replicaManager().localLog(entry.getKey()).get().localLogStartOffset();
                                     offsets.put(broker.config().brokerId(), offset);
@@ -107,10 +105,9 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
                 ), () -> "local log start offset doesn't change to the expected position:" + partitionLocalStartOffsets + ", current position:" + offsets);
     }
 
-    @SuppressWarnings("deprecation")
     private boolean isAssignedReplica(TopicPartition topicPartition,
                                       Integer replicaId) {
-        Optional<KafkaBroker> brokerOpt = JavaConverters.seqAsJavaList(brokers())
+        Optional<KafkaBroker> brokerOpt = CollectionConverters.asJava(brokers())
                 .stream()
                 .filter(b -> b.config().brokerId() == replicaId).findFirst();
         boolean isAssigned = false;

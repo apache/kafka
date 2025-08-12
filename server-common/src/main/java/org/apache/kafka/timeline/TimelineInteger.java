@@ -25,7 +25,7 @@ import java.util.Iterator;
  * <br>
  * This class requires external synchronization.
  */
-public class TimelineInteger implements Revertable {
+public final class TimelineInteger implements Revertable {
     public static final int INIT = 0;
 
     static class IntegerContainer implements Delta {
@@ -48,7 +48,6 @@ public class TimelineInteger implements Revertable {
     private final SnapshotRegistry snapshotRegistry;
     private int value;
 
-    @SuppressWarnings("this-escape")
     public TimelineInteger(SnapshotRegistry snapshotRegistry) {
         this.snapshotRegistry = snapshotRegistry;
         this.value = INIT;
@@ -111,8 +110,7 @@ public class TimelineInteger implements Revertable {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TimelineInteger)) return false;
-        TimelineInteger other = (TimelineInteger) o;
+        if (!(o instanceof TimelineInteger other)) return false;
         return value == other.value;
     }
 

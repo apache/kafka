@@ -154,7 +154,7 @@ public class JoinWindows extends Windows<Window> {
      * @param timeDifference join window interval
      * @return a new JoinWindows object with the window definition with and grace period (default to 24 hours minus {@code timeDifference})
      * @throws IllegalArgumentException if {@code timeDifference} is negative or can't be represented as {@code long milliseconds}
-     * @deprecated since 3.0. Use {@link #ofTimeDifferenceWithNoGrace(Duration)}} instead
+     * @deprecated Since 3.0. Use {@link #ofTimeDifferenceWithNoGrace(Duration)}} instead.
      */
     @Deprecated
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
@@ -221,7 +221,7 @@ public class JoinWindows extends Windows<Window> {
      * @return this updated builder
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
      * @throws IllegalStateException if {@link #grace(Duration)} is called after {@link #ofTimeDifferenceAndGrace(Duration, Duration)} or {@link #ofTimeDifferenceWithNoGrace(Duration)}
-     * @deprecated since 3.0. Use {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead
+     * @deprecated Since 3.0. Use {@link #ofTimeDifferenceAndGrace(Duration, Duration)} instead.
      */
     @Deprecated
     public JoinWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {

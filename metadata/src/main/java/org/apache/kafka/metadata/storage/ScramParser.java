@@ -33,7 +33,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 
 public class ScramParser {
     static List<ApiMessageAndVersion> parse(List<String> arguments) throws Exception {
@@ -136,7 +135,7 @@ public class ScramParser {
                 if (saltedPasswordString == null) {
                     throw new FormatterException("You must supply one of 'password' or 'saltedpassword' " +
                             "to add-scram");
-                } else if (!configuredSalt.isPresent()) {
+                } else if (configuredSalt.isEmpty()) {
                     throw new FormatterException("You must supply 'salt' with 'saltedpassword' to add-scram");
                 }
                 try {
@@ -151,8 +150,7 @@ public class ScramParser {
                 this.configuredSaltedPassword = Optional.empty();
             }
             if (!components.isEmpty()) {
-                throw new FormatterException("Unknown SCRAM configurations: " +
-                    components.keySet().stream().collect(Collectors.joining(", ")));
+                throw new FormatterException("Unknown SCRAM configurations: " + String.join(", ", components.keySet()));
             }
         }
 
@@ -208,12 +206,12 @@ public class ScramParser {
             PerMechanismData other = (PerMechanismData) o;
             return mechanism.equals(other.mechanism) &&
                 configuredName.equals(other.configuredName) &&
-                Arrays.equals(configuredSalt.orElseGet(() -> null),
-                    other.configuredSalt.orElseGet(() -> null)) &&
+                Arrays.equals(configuredSalt.orElse(null),
+                    other.configuredSalt.orElse(null)) &&
                 configuredIterations.equals(other.configuredIterations) &&
                 configuredPasswordString.equals(other.configuredPasswordString) &&
-                Arrays.equals(configuredSaltedPassword.orElseGet(() -> null),
-                    other.configuredSaltedPassword.orElseGet(() -> null));
+                Arrays.equals(configuredSaltedPassword.orElse(null),
+                    other.configuredSaltedPassword.orElse(null));
         }
 
         @Override
@@ -231,10 +229,10 @@ public class ScramParser {
             return "PerMechanismData" +
                 "(mechanism=" + mechanism +
                 ", configuredName=" + configuredName +
-                ", configuredSalt=" + configuredSalt.map(v -> Arrays.toString(v)) +
+                ", configuredSalt=" + configuredSalt.map(Arrays::toString) +
                 ", configuredIterations=" + configuredIterations +
                 ", configuredPasswordString=" + configuredPasswordString +
-                ", configuredSaltedPassword=" + configuredSaltedPassword.map(v -> Arrays.toString(v)) +
+                ", configuredSaltedPassword=" + configuredSaltedPassword.map(Arrays::toString) +
                 ")";
         }
     }

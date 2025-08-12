@@ -21,9 +21,12 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 
+import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class EndTxnRequestTest {
@@ -34,13 +37,16 @@ public class EndTxnRequestTest {
         int producerId = 1;
         String transactionId = "txn_id";
         int throttleTimeMs = 10;
+        boolean isTransactionV2Enabled = true;
 
         EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
             new EndTxnRequestData()
                 .setCommitted(true)
                 .setProducerEpoch(producerEpoch)
                 .setProducerId(producerId)
-                .setTransactionalId(transactionId));
+                .setTransactionalId(transactionId),
+            isTransactionV2Enabled
+        );
 
         for (short version : ApiKeys.END_TXN.allVersions()) {
             EndTxnRequest request = builder.build(version);
@@ -53,5 +59,37 @@ public class EndTxnRequestTest {
 
             assertEquals(throttleTimeMs, response.throttleTimeMs());
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testEndTxnRequestWithParameterizedTransactionsV2(boolean isTransactionV2Enabled) {
+        short latestVersion = ApiKeys.END_TXN.latestVersion();
+
+        EndTxnRequestData requestData = new EndTxnRequestData()
+                .setTransactionalId("txn_id")
+                .setCommitted(true)
+                .setProducerId(1L)
+                .setProducerEpoch((short) 0);
+
+        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
+                requestData,
+                false,
+                isTransactionV2Enabled
+        );
+
+        EndTxnRequest request = builder.build(latestVersion);
+
+        // Determine the expected version based on whether transactions V2 is enabled
+        short expectedVersion = isTransactionV2Enabled ?
+                latestVersion :
+                LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
+
+        // Verify that the request is built with the expected version
+        assertEquals(expectedVersion, request.version());
+
+        // Verify that producerId and producerEpoch are included
+        assertEquals(1L, request.data().producerId());
+        assertEquals((short) 0, request.data().producerEpoch());
     }
 }

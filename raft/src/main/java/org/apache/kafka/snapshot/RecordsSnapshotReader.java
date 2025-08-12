@@ -20,9 +20,10 @@ package org.apache.kafka.snapshot;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.RecordsIterator;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.NoSuchElementException;
@@ -61,7 +62,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public long lastContainedLogTimestamp() {
-        if (!lastContainedLogTimestamp.isPresent()) {
+        if (lastContainedLogTimestamp.isEmpty()) {
             nextBatch.ifPresent(batch -> {
                 throw new IllegalStateException(
                     String.format(
@@ -83,7 +84,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public boolean hasNext() {
-        if (!nextBatch.isPresent()) {
+        if (nextBatch.isEmpty()) {
             nextBatch = nextBatch();
         }
 
@@ -112,11 +113,12 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
         int maxBatchSize,
-        boolean doCrcValidation
+        boolean doCrcValidation,
+        LogContext logContext
     ) {
         return new RecordsSnapshotReader<>(
             snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation)
+            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation, logContext)
         );
     }
 
@@ -127,7 +129,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         if (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
 
-            if (!lastContainedLogTimestamp.isPresent()) {
+            if (lastContainedLogTimestamp.isEmpty()) {
                 // This must be the first batch which is expected to be a control batch with at least one record for
                 // the snapshot header.
                 if (batch.controlRecords().isEmpty()) {

@@ -425,7 +425,7 @@ public class TaskAssignorConvergenceTest {
         testForConvergence(harness, configs, numStatefulTasks / maxWarmupReplicas + 1);
         verifyValidAssignment(numStandbyReplicas, harness);
 
-        // min-cost rack aware assignor doesn't balance subtopolgy
+        // min-cost rack aware assignor doesn't balance subtopology
         if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
             verifyBalancedAssignment(harness, skewThreshold);
         }
@@ -463,7 +463,7 @@ public class TaskAssignorConvergenceTest {
 
         verifyValidAssignment(numStandbyReplicas, harness);
 
-        // min-cost rack aware assignor doesn't balance subtopolgy
+        // min-cost rack aware assignor doesn't balance subtopology
         if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
             verifyBalancedAssignment(harness, skewThreshold);
         }
@@ -520,7 +520,7 @@ public class TaskAssignorConvergenceTest {
             testForConvergence(harness, configs, 1);
             verifyValidAssignment(numStandbyReplicas, harness);
 
-            // min-cost rack aware assignor doesn't balance subtopolgy
+            // min-cost rack aware assignor doesn't balance subtopology
             if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
                 verifyBalancedAssignment(harness, skewThreshold);
             }
@@ -540,7 +540,7 @@ public class TaskAssignorConvergenceTest {
                 if (!harness.clientStates.isEmpty()) {
                     testForConvergence(harness, configs, 2 * (numStatefulTasks + numStatefulTasks * numStandbyReplicas));
                     verifyValidAssignment(numStandbyReplicas, harness);
-                    // min-cost rack aware assignor doesn't balance subtopolgy
+                    // min-cost rack aware assignor doesn't balance subtopology
                     if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
                         verifyBalancedAssignment(harness, skewThreshold);
                     }
@@ -573,13 +573,7 @@ public class TaskAssignorConvergenceTest {
         assertBalancedStatefulAssignment(allStatefulTasks, clientStates, failureContext);
         final AssignmentTestUtils.TaskSkewReport taskSkewReport = AssignmentTestUtils.analyzeTaskAssignmentBalance(harness.clientStates, skewThreshold);
         if (taskSkewReport.totalSkewedTasks() > 0) {
-            fail(
-                new StringBuilder().append("Expected a balanced task assignment, but was: ")
-                                   .append(taskSkewReport)
-                                   .append('\n')
-                                   .append(failureContext)
-                                   .toString()
-            );
+            fail("Expected a balanced task assignment, but was: " + taskSkewReport + '\n' + failureContext);
         }
     }
 
@@ -628,13 +622,7 @@ public class TaskAssignorConvergenceTest {
         }
 
         if (rebalancePending) {
-            final StringBuilder message =
-                new StringBuilder().append("Rebalances have not converged after iteration cutoff: ")
-                                   .append(iterationLimit)
-                                   .append(harness.history);
-            fail(message.toString());
+            fail("Rebalances have not converged after iteration cutoff: " + iterationLimit + harness.history);
         }
     }
-
-
 }

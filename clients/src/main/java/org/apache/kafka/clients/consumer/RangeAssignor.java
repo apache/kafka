@@ -269,7 +269,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         boolean racksMatch(String consumer, TopicPartition tp) {
             Optional<String> consumerRack = consumers.get(consumer);
             Set<String> replicaRacks = partitionRacks.get(tp);
-            return !consumerRack.isPresent() || (replicaRacks != null && replicaRacks.contains(consumerRack.get()));
+            return consumerRack.isEmpty() || (replicaRacks != null && replicaRacks.contains(consumerRack.get()));
         }
 
         int maxAssignable(String consumer) {

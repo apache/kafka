@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
-import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -489,14 +488,12 @@ public class ConnectPluginPathTest {
                     outputJar.getParent().toFile().mkdirs();
                     Files.copy(jarPath, outputJar, StandardCopyOption.REPLACE_EXISTING);
                     outputJar.toUri().toURL().openConnection().setDefaultUseCaches(false);
-                    disableCaching(outputJar);
                     return new PluginLocation(outputJar);
                 }
                 case MULTI_JAR: {
                     Path outputJar = path.resolve(jarPath.getFileName());
                     outputJar.getParent().toFile().mkdirs();
                     Files.copy(jarPath, outputJar, StandardCopyOption.REPLACE_EXISTING);
-                    disableCaching(outputJar);
                     return new PluginLocation(path);
                 }
                 default:
@@ -505,15 +502,6 @@ public class ConnectPluginPathTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-    }
-
-    private static void disableCaching(Path path) throws IOException {
-        // This function is a workaround for a Java 8 caching bug. When Java 8 support is dropped it may be removed.
-        // This test runs the sync-manifests command, and _without stopping the jvm_ executes a list command.
-        // Under normal use, the sync-manifests command is followed immediately by a JVM shutdown, clearing caches.
-        // The Java 8 ServiceLoader does not disable the URLConnection caching, so doesn't read some previous writes.
-        // Java 9+ ServiceLoaders disable the URLConnection caching, so don't need this patch (it becomes a no-op)
-        path.toUri().toURL().openConnection().setDefaultUseCaches(false);
     }
 
     private static class PluginPathElement {
@@ -580,7 +568,7 @@ public class ConnectPluginPathTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        return new WorkerConfig(path, Arrays.asList(pluginPathElements));
+        return new WorkerConfig(path, List.of(pluginPathElements));
     }
 
     private static class CommandResult {
@@ -602,34 +590,30 @@ public class ConnectPluginPathTest {
     private static CommandResult runCommand(Object... args) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
-        try {
-            int returnCode = ConnectPluginPath.mainNoExit(
-                    Arrays.stream(args)
-                            .map(Object::toString)
-                            .collect(Collectors.toList())
-                            .toArray(new String[]{}),
-                    new PrintStream(out, true, "utf-8"),
-                    new PrintStream(err, true, "utf-8"));
-            Set<Path> pluginLocations = getPluginLocations(args);
-            ClassLoader parent = ConnectPluginPath.class.getClassLoader();
-            ClassLoaderFactory factory = new ClassLoaderFactory();
-            try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
-                Set<PluginSource> sources = PluginUtils.pluginSources(pluginLocations, delegatingClassLoader, factory);
-                String stdout = new String(out.toByteArray(), StandardCharsets.UTF_8);
-                String stderr = new String(err.toByteArray(), StandardCharsets.UTF_8);
-                log.info("STDOUT:\n{}", stdout);
-                log.info("STDERR:\n{}", stderr);
-                return new CommandResult(
-                        returnCode,
-                        stdout,
-                        stderr,
-                        new ReflectionScanner().discoverPlugins(sources),
-                        new ServiceLoaderScanner().discoverPlugins(sources)
-                );
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        } catch (UnsupportedEncodingException e) {
+        int returnCode = ConnectPluginPath.mainNoExit(
+                Arrays.stream(args)
+                        .map(Object::toString)
+                        .toList()
+                        .toArray(new String[]{}),
+                new PrintStream(out, true, StandardCharsets.UTF_8),
+                new PrintStream(err, true, StandardCharsets.UTF_8));
+        Set<Path> pluginLocations = getPluginLocations(args);
+        ClassLoader parent = ConnectPluginPath.class.getClassLoader();
+        ClassLoaderFactory factory = new ClassLoaderFactory();
+        try (DelegatingClassLoader delegatingClassLoader = factory.newDelegatingClassLoader(parent)) {
+            Set<PluginSource> sources = PluginUtils.pluginSources(pluginLocations, delegatingClassLoader, factory);
+            String stdout = out.toString(StandardCharsets.UTF_8);
+            String stderr = err.toString(StandardCharsets.UTF_8);
+            log.info("STDOUT:\n{}", stdout);
+            log.info("STDERR:\n{}", stderr);
+            return new CommandResult(
+                    returnCode,
+                    stdout,
+                    stderr,
+                    new ReflectionScanner().discoverPlugins(sources),
+                    new ServiceLoaderScanner().discoverPlugins(sources)
+            );
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }

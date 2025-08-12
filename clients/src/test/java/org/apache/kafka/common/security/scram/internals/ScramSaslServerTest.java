@@ -123,6 +123,28 @@ public class ScramSaslServerTest {
             "Failure message: " + saslException.getMessage());
     }
 
+    @Test
+    public void validateFailedNonceExchangeWithPrependingClientNonce() throws SaslException {
+        ScramSaslServer spySaslServer = Mockito.spy(saslServer);
+        byte[] clientFirstMsgBytes = clientFirstMessage(USER_A, USER_A);
+        ClientFirstMessage clientFirstMessage = new ClientFirstMessage(clientFirstMsgBytes);
+
+        byte[] serverFirstMsgBytes = spySaslServer.evaluateResponse(clientFirstMsgBytes);
+        ServerFirstMessage serverFirstMessage = new ServerFirstMessage(serverFirstMsgBytes);
+        assertTrue(serverFirstMessage.nonce().startsWith(clientFirstMessage.nonce()),
+                "Nonce in server message should start with client first message's nonce");
+
+        //send client final message with nonce prepended with clientFirstMessage's nonce
+        byte[] clientFinalMessage = clientFinalMessage(clientFirstMessage.nonce() + serverFirstMessage.nonce());
+        Mockito.doNothing()
+                .when(spySaslServer).verifyClientProof(Mockito.any(ScramMessages.ClientFinalMessage.class));
+        SaslException saslException = assertThrows(SaslException.class,
+                () -> spySaslServer.evaluateResponse(clientFinalMessage));
+        assertEquals("Invalid client nonce in the final client message.",
+                saslException.getMessage(),
+                "Failure message: " + saslException.getMessage());
+    }
+
     private byte[] clientFirstMessage(String userName, String authorizationId) {
         String nonce = formatter.secureRandomString();
         String authorizationField = authorizationId != null ? "a=" + authorizationId : "";

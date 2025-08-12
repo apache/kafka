@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.ArrayList;
@@ -26,10 +25,10 @@ import java.util.Collection;
 
 /**
  * The result of the {@link Admin#listConsumerGroups()} call.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
+ * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
  */
-@InterfaceStability.Evolving
+@Deprecated(since = "4.1")
+@SuppressWarnings("removal")
 public class ListConsumerGroupsResult {
     private final KafkaFutureImpl<Collection<ConsumerGroupListing>> all;
     private final KafkaFutureImpl<Collection<ConsumerGroupListing>> valid;
@@ -39,7 +38,7 @@ public class ListConsumerGroupsResult {
         this.all = new KafkaFutureImpl<>();
         this.valid = new KafkaFutureImpl<>();
         this.errors = new KafkaFutureImpl<>();
-        future.thenApply((KafkaFuture.BaseFunction<Collection<Object>, Void>) results -> {
+        future.thenApply(results -> {
             ArrayList<Throwable> curErrors = new ArrayList<>();
             ArrayList<ConsumerGroupListing> curValid = new ArrayList<>();
             for (Object resultObject : results) {

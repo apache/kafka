@@ -45,7 +45,7 @@ public interface CompletableEvent<T> {
      *         (if applicable) is passed to {@link CompletableFuture#complete(Object)}. In the case where the generic
      *         bound type is specified as {@link Void}, {@code null} is provided.</li>
      *     <li>
-     *         Error: when the the event logic generates an error, the error is passed to
+     *         Error: when the event logic generates an error, the error is passed to
      *         {@link CompletableFuture#completeExceptionally(Throwable)}.
      *     </li>
      *     <li>

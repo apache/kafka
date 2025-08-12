@@ -25,8 +25,6 @@ import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.Json;
@@ -42,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -95,14 +92,14 @@ public class LeaderElectionCommand {
         Optional<Integer> partitionOption = Optional.ofNullable(commandOptions.getPartition());
         final Optional<Set<TopicPartition>> singleTopicPartition =
             (topicOption.isPresent() && partitionOption.isPresent()) ?
-                Optional.of(Collections.singleton(new TopicPartition(topicOption.get(), partitionOption.get()))) :
+                Optional.of(Set.of(new TopicPartition(topicOption.get(), partitionOption.get()))) :
                 Optional.empty();
 
         /* Note: No need to look at --all-topic-partitions as we want this to be null if it is use.
          * The validate function should be checking that this option is required if the --topic and --path-to-json-file
          * are not specified.
          */
-        Optional<Set<TopicPartition>> topicPartitions = jsonFileTopicPartitions.map(Optional::of).orElse(singleTopicPartition);
+        Optional<Set<TopicPartition>> topicPartitions = jsonFileTopicPartitions.or(() -> singleTopicPartition);
 
         Properties props = new Properties();
         if (commandOptions.hasAdminClientConfig()) {
@@ -348,7 +345,7 @@ public class LeaderElectionCommand {
             }
 
             // One and only one is required: --topic, --all-topic-partitions or --path-to-json-file
-            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = Arrays.asList(
+            List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = List.of(
                 topic,
                 allTopicPartitions,
                 pathToJsonFile

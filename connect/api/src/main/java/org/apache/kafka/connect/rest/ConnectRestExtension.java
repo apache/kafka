@@ -43,6 +43,10 @@ import java.util.Map;
  *
  * <p>When the Connect worker shuts down, it will call the extension's {@link #close} method to allow the implementation to release all of
  * its resources.
+ *
+ * <p>Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the extension to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>config</code> set to
+ * <code>rest.extension.classes</code>, and <code>class</code> set to the ConnectRestExtension class name.
  */
 public interface ConnectRestExtension extends Configurable, Versioned, Closeable {
 
@@ -51,7 +55,7 @@ public interface ConnectRestExtension extends Configurable, Versioned, Closeable
      * will invoke this method after registering the default Connect resources. If the implementations attempt
      * to re-register any of the Connect resources, it will be ignored and will be logged.
      *
-     * @param restPluginContext The context provides access to JAX-RS {@link javax.ws.rs.core.Configurable} and {@link
+     * @param restPluginContext The context provides access to JAX-RS {@link jakarta.ws.rs.core.Configurable} and {@link
      *                          ConnectClusterState}.The custom JAX-RS resources can be registered via the {@link
      *                          ConnectRestExtensionContext#configurable()}
      */

@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.VoterSet;
+
+import org.slf4j.Logger;
 
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -31,9 +34,11 @@ import java.util.OptionalLong;
 public final class VoterSetHistory {
     private final VoterSet staticVoterSet;
     private final LogHistory<VoterSet> votersHistory = new TreeMapLogHistory<>();
+    private final Logger logger;
 
-    VoterSetHistory(VoterSet staticVoterSet) {
+    VoterSetHistory(VoterSet staticVoterSet, LogContext logContext) {
         this.staticVoterSet = staticVoterSet;
+        this.logger = logContext.logger(getClass());
     }
 
     /**
@@ -55,12 +60,10 @@ public final class VoterSetHistory {
             // all replicas.
             VoterSet lastVoterSet = lastEntry.get().value();
             if (!lastVoterSet.hasOverlappingMajority(voters)) {
-                throw new IllegalArgumentException(
-                    String.format(
-                        "Last voter set %s doesn't have an overlapping majority with the new voter set %s",
-                        lastVoterSet,
-                        voters
-                    )
+                logger.info(
+                    "Last voter set ({}) doesn't have an overlapping majority with the new voter set ({})",
+                    lastVoterSet,
+                    voters
                 );
             }
         }
@@ -106,12 +109,9 @@ public final class VoterSetHistory {
      * @return the offset storing the last voter set
      */
     public OptionalLong lastVoterSetOffset() {
-        Optional<LogHistory.Entry<VoterSet>> lastEntry = votersHistory.lastEntry();
-        if (lastEntry.isPresent()) {
-            return OptionalLong.of(lastEntry.get().offset());
-        } else {
-            return OptionalLong.empty();
-        }
+        return votersHistory.lastEntry()
+            .map(voterSetEntry -> OptionalLong.of(voterSetEntry.offset()))
+            .orElseGet(OptionalLong::empty);
     }
 
     /**
@@ -139,7 +139,7 @@ public final class VoterSetHistory {
     }
 
     /**
-     * Removes all of the values from this object.
+     * Removes all the values from this object.
      */
     public void clear() {
         votersHistory.clear();

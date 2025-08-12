@@ -21,12 +21,14 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
+import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -42,23 +44,23 @@ import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
+import org.apache.kafka.common.requests.UpdateRaftVoterResponse;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,7 +70,7 @@ public class KafkaNetworkChannelTest {
 
         @Override
         public List<Node> fetchNodes() {
-            return Collections.emptyList();
+            return List.of();
         }
 
         @Override
@@ -80,12 +82,13 @@ public class KafkaNetworkChannelTest {
         public void update(Time time, MockClient.MetadataUpdate update) { }
     }
 
-    private static final List<ApiKeys> RAFT_APIS = asList(
+    private static final List<ApiKeys> RAFT_APIS = List.of(
         ApiKeys.VOTE,
         ApiKeys.BEGIN_QUORUM_EPOCH,
         ApiKeys.END_QUORUM_EPOCH,
         ApiKeys.FETCH,
-        ApiKeys.FETCH_SNAPSHOT
+        ApiKeys.FETCH_SNAPSHOT,
+        ApiKeys.UPDATE_RAFT_VOTER
     );
 
     private final int requestTimeoutMs = 30000;
@@ -276,12 +279,12 @@ public class KafkaNetworkChannelTest {
                     clusterId,
                     leaderId,
                     leaderEpoch,
-                    Collections.singletonList(2)
+                    List.of(2)
                 );
 
             case VOTE:
                 int lastEpoch = 4;
-                return VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329);
+                return VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329, true);
 
             case FETCH:
                 FetchRequestData request = RaftUtil.singletonFetchRequest(topicPartition, topicId, fetchPartition ->
@@ -304,42 +307,46 @@ public class KafkaNetworkChannelTest {
                     10
                 );
 
+            case UPDATE_RAFT_VOTER:
+                return RaftUtil.updateVoterRequest(
+                    clusterId,
+                    ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
+                    5,
+                    new SupportedVersionRange((short) 1, (short) 1),
+                    Endpoints.empty()
+                );
+
             default:
                 throw new AssertionError("Unexpected api " + key);
         }
     }
 
     private ApiMessage buildTestErrorResponse(ApiKeys key, Errors error) {
-        switch (key) {
-            case BEGIN_QUORUM_EPOCH:
-                return new BeginQuorumEpochResponseData().setErrorCode(error.code());
-            case END_QUORUM_EPOCH:
-                return new EndQuorumEpochResponseData().setErrorCode(error.code());
-            case VOTE:
-                return new VoteResponseData()
-                    .setErrorCode(error.code())
-                    .setTopics(
-                        Collections.singletonList(
-                            new VoteResponseData.TopicData()
-                                .setTopicName(topicPartition.topic())
-                                .setPartitions(
-                                    Collections.singletonList(
-                                        new VoteResponseData.PartitionData()
-                                            .setErrorCode(Errors.NONE.code())
-                                            .setLeaderId(1)
-                                            .setLeaderEpoch(5)
-                                            .setVoteGranted(false)
-                                    )
+        return switch (key) {
+            case BEGIN_QUORUM_EPOCH -> new BeginQuorumEpochResponseData().setErrorCode(error.code());
+            case END_QUORUM_EPOCH -> new EndQuorumEpochResponseData().setErrorCode(error.code());
+            case VOTE -> new VoteResponseData()
+                .setErrorCode(error.code())
+                .setTopics(
+                    List.of(
+                        new VoteResponseData.TopicData()
+                            .setTopicName(topicPartition.topic())
+                            .setPartitions(
+                                List.of(
+                                    new VoteResponseData.PartitionData()
+                                        .setErrorCode(Errors.NONE.code())
+                                        .setLeaderId(1)
+                                        .setLeaderEpoch(5)
+                                        .setVoteGranted(false)
                                 )
-                        )
-                    );
-            case FETCH:
-                return new FetchResponseData().setErrorCode(error.code());
-            case FETCH_SNAPSHOT:
-                return new FetchSnapshotResponseData().setErrorCode(error.code());
-            default:
-                throw new AssertionError("Unexpected api " + key);
-        }
+                            )
+                    )
+                );
+            case FETCH -> new FetchResponseData().setErrorCode(error.code());
+            case FETCH_SNAPSHOT -> new FetchSnapshotResponseData().setErrorCode(error.code());
+            case UPDATE_RAFT_VOTER -> new UpdateRaftVoterResponseData().setErrorCode(error.code());
+            default -> throw new AssertionError("Unexpected api " + key);
+        };
     }
 
     private Errors extractError(ApiMessage response) {
@@ -354,6 +361,8 @@ public class KafkaNetworkChannelTest {
             code = ((VoteResponseData) response).errorCode();
         } else if (response instanceof FetchSnapshotResponseData) {
             code = ((FetchSnapshotResponseData) response).errorCode();
+        } else if (response instanceof UpdateRaftVoterResponseData) {
+            code = ((UpdateRaftVoterResponseData) response).errorCode();
         } else {
             throw new IllegalArgumentException("Unexpected type for responseData: " + response);
         }
@@ -369,9 +378,11 @@ public class KafkaNetworkChannelTest {
         } else if (responseData instanceof EndQuorumEpochResponseData) {
             return new EndQuorumEpochResponse((EndQuorumEpochResponseData) responseData);
         } else if (responseData instanceof FetchResponseData) {
-            return new FetchResponse((FetchResponseData) responseData);
+            return FetchResponse.of((FetchResponseData) responseData);
         } else if (responseData instanceof FetchSnapshotResponseData) {
             return new FetchSnapshotResponse((FetchSnapshotResponseData) responseData);
+        } else if (responseData instanceof UpdateRaftVoterResponseData) {
+            return new UpdateRaftVoterResponse((UpdateRaftVoterResponseData) responseData);
         } else {
             throw new IllegalArgumentException("Unexpected type for responseData: " + responseData);
         }

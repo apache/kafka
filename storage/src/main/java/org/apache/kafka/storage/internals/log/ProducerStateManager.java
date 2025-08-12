@@ -49,7 +49,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -157,9 +156,9 @@ public class ProducerStateManager {
      * Maybe create the VerificationStateEntry for a given producer ID and return it.
      * This method also updates the sequence and epoch accordingly.
      */
-    public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch) {
+    public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch, boolean supportsEpochBump) {
         VerificationStateEntry entry = verificationStates.computeIfAbsent(producerId, pid ->
-            new VerificationStateEntry(time.milliseconds(), sequence, epoch)
+            new VerificationStateEntry(time.milliseconds(), sequence, epoch, supportsEpochBump)
         );
         entry.maybeUpdateLowestSequenceAndEpoch(sequence, epoch);
         return entry;
@@ -248,9 +247,9 @@ public class ProducerStateManager {
         Optional<LogOffsetMetadata> unreplicatedFirstOffset = Optional.ofNullable(unreplicatedTxns.firstEntry()).map(e -> e.getValue().firstOffset);
         Optional<LogOffsetMetadata> undecidedFirstOffset = Optional.ofNullable(ongoingTxns.firstEntry()).map(e -> e.getValue().firstOffset);
 
-        if (!unreplicatedFirstOffset.isPresent())
+        if (unreplicatedFirstOffset.isEmpty())
             return undecidedFirstOffset;
-        else if (!undecidedFirstOffset.isPresent())
+        else if (undecidedFirstOffset.isEmpty())
             return unreplicatedFirstOffset;
         else if (undecidedFirstOffset.get().messageOffset < unreplicatedFirstOffset.get().messageOffset)
             return undecidedFirstOffset;
@@ -328,7 +327,7 @@ public class ProducerStateManager {
     }
 
     private boolean isProducerExpired(long currentTimeMs, ProducerStateEntry producerState) {
-        return !producerState.currentTxnFirstOffset().isPresent() && currentTimeMs - producerState.lastTimestamp() >= producerStateManagerConfig.producerIdExpirationMs();
+        return producerState.currentTxnFirstOffset().isEmpty() && currentTimeMs - producerState.lastTimestamp() >= producerStateManagerConfig.producerIdExpirationMs();
     }
 
     /**
@@ -525,9 +524,9 @@ public class ProducerStateManager {
      * transaction index, but the completion must be done only after successfully appending to the index.
      */
     public long lastStableOffset(CompletedTxn completedTxn) {
-        return findNextIncompleteTxn(completedTxn.producerId)
+        return findNextIncompleteTxn(completedTxn.producerId())
                 .map(x -> x.firstOffset.messageOffset)
-                .orElse(completedTxn.lastOffset + 1);
+                .orElse(completedTxn.lastOffset() + 1);
     }
 
     private Optional<TxnMetadata> findNextIncompleteTxn(long producerId) {
@@ -544,13 +543,13 @@ public class ProducerStateManager {
      * advancing the first unstable offset.
      */
     public void completeTxn(CompletedTxn completedTxn) {
-        TxnMetadata txnMetadata = ongoingTxns.remove(completedTxn.firstOffset);
+        TxnMetadata txnMetadata = ongoingTxns.remove(completedTxn.firstOffset());
         if (txnMetadata == null)
             throw new IllegalArgumentException("Attempted to complete transaction " + completedTxn + " on partition "
                     + topicPartition + " which was not started");
 
-        txnMetadata.lastOffset = OptionalLong.of(completedTxn.lastOffset);
-        unreplicatedTxns.put(completedTxn.firstOffset, txnMetadata);
+        txnMetadata.lastOffset = OptionalLong.of(completedTxn.lastOffset());
+        unreplicatedTxns.put(completedTxn.firstOffset(), txnMetadata);
         updateOldestTxnTimestamp();
     }
 
@@ -567,15 +566,15 @@ public class ProducerStateManager {
     }
 
     public Optional<File> fetchSnapshot(long offset) {
-        return Optional.ofNullable(snapshots.get(offset)).map(x -> x.file());
+        return Optional.ofNullable(snapshots.get(offset)).map(SnapshotFile::file);
     }
 
     private Optional<SnapshotFile> oldestSnapshotFile() {
-        return Optional.ofNullable(snapshots.firstEntry()).map(x -> x.getValue());
+        return Optional.ofNullable(snapshots.firstEntry()).map(Map.Entry::getValue);
     }
 
     private Optional<SnapshotFile> latestSnapshotFile() {
-        return Optional.ofNullable(snapshots.lastEntry()).map(e -> e.getValue());
+        return Optional.ofNullable(snapshots.lastEntry()).map(Map.Entry::getValue);
     }
 
     /**
@@ -701,10 +700,10 @@ public class ProducerStateManager {
         if (dir.exists() && dir.isDirectory()) {
             try (Stream<Path> paths = Files.list(dir.toPath())) {
                 return paths.filter(ProducerStateManager::isSnapshotFile)
-                        .map(path -> new SnapshotFile(path.toFile())).collect(Collectors.toList());
+                        .map(path -> new SnapshotFile(path.toFile())).toList();
             }
         } else {
-            return Collections.emptyList();
+            return List.of();
         }
     }
 

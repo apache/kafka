@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -149,5 +150,22 @@ public class StructRegistryTest {
 
         assertEquals(structRegistry.findStruct(field2).name(), "TestInlineStruct");
         assertFalse(structRegistry.isStructArrayWithKeys(field2));
+    }
+
+    @Test
+    public void testValidVersionsIsNone() throws Exception {
+        MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", List.of(
+                "{",
+                "  \"type\": \"request\",",
+                "  \"name\": \"FooBar\",",
+                "  \"validVersions\": \"none\"",
+                "}")), MessageSpec.class);
+        StructRegistry structRegistry = new StructRegistry();
+        structRegistry.register(testMessageSpec);
+
+        assertFalse(testMessageSpec.hasValidVersion());
+        assertEquals(List.of(), testMessageSpec.fields());
+        assertFalse(structRegistry.structs().hasNext());
+        assertFalse(structRegistry.commonStructs().hasNext());
     }
 }

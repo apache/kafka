@@ -45,10 +45,10 @@
     ]},
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name":  "SupportedFeatures", "type": "[]SupportedFeatureKey", "ignorable": true,
-      "versions":  "3+", "tag": 0, "taggedVersions": "3+",
+    { "name": "SupportedFeatures", "type": "[]SupportedFeatureKey", "ignorable": true,
+      "versions": "3+", "tag": 0, "taggedVersions": "3+",
       "about": "Features supported by the broker. Note: in v0-v3, features with MinSupportedVersion = 0 are omitted.",
-      "fields":  [
+      "fields": [
         { "name": "Name", "type": "string", "versions": "3+", "mapKey": true,
           "about": "The name of the feature." },
         { "name": "MinVersion", "type": "int16", "versions": "3+",
@@ -59,21 +59,21 @@
     },
     { "name": "FinalizedFeaturesEpoch", "type": "int64", "versions": "3+",
       "tag": 1, "taggedVersions": "3+", "default": "-1", "ignorable": true,
-      "about": "The monotonically increasing epoch for the finalized features information. Valid values are >= 0. A value of -1 is special and represents unknown epoch."},
-    { "name":  "FinalizedFeatures", "type": "[]FinalizedFeatureKey", "ignorable": true,
-      "versions":  "3+", "tag": 2, "taggedVersions": "3+",
+      "about": "The monotonically increasing epoch for the finalized features information. Valid values are >= 0. A value of -1 is special and represents unknown epoch." },
+    { "name": "FinalizedFeatures", "type": "[]FinalizedFeatureKey", "ignorable": true,
+      "versions": "3+", "tag": 2, "taggedVersions": "3+",
       "about": "List of cluster-wide finalized features. The information is valid only if FinalizedFeaturesEpoch >= 0.",
-      "fields":  [
-        {"name": "Name", "type": "string", "versions":  "3+", "mapKey": true,
-          "about": "The name of the feature."},
-        {"name":  "MaxVersionLevel", "type": "int16", "versions":  "3+",
-          "about": "The cluster-wide finalized max version level for the feature."},
-        {"name":  "MinVersionLevel", "type": "int16", "versions":  "3+",
-          "about": "The cluster-wide finalized min version level for the feature."}
+      "fields": [
+        { "name": "Name", "type": "string", "versions":  "3+", "mapKey": true,
+          "about": "The name of the feature." },
+        { "name": "MaxVersionLevel", "type": "int16", "versions":  "3+",
+          "about": "The cluster-wide finalized max version level for the feature." },
+        { "name": "MinVersionLevel", "type": "int16", "versions":  "3+",
+          "about": "The cluster-wide finalized min version level for the feature." }
       ]
     },
-    { "name":  "ZkMigrationReady", "type": "bool", "versions": "3+", "taggedVersions": "3+",
+    { "name": "ZkMigrationReady", "type": "bool", "versions": "3+", "taggedVersions": "3+",
       "tag": 3, "ignorable": true, "default": "false",
-      "about": "Set by a KRaft controller if the required configurations for ZK migration are present" }
+      "about": "Set by a KRaft controller if the required configurations for ZK migration are present." }
   ]
 }

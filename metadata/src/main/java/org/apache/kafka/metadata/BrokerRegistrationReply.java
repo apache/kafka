@@ -38,8 +38,7 @@ public class BrokerRegistrationReply {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof BrokerRegistrationReply)) return false;
-        BrokerRegistrationReply other = (BrokerRegistrationReply) o;
+        if (!(o instanceof BrokerRegistrationReply other)) return false;
         return other.epoch == epoch;
     }
 

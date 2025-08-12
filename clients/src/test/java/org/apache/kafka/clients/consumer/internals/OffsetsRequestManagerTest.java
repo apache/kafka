@@ -21,7 +21,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.IsolationLevel;
@@ -52,7 +51,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -287,6 +285,8 @@ public class OffsetsRequestManagerTest {
         assertFalse(fetchOffsetsFuture.isDone());
         assertEquals(1, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
+        // A retriable error should be followed by a metadata update request
+        verify(metadata).requestUpdate(false);
 
         // Cluster metadata update. Failed requests should be retried and succeed
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
@@ -385,6 +385,8 @@ public class OffsetsRequestManagerTest {
         assertFalse(fetchOffsetsFuture.isDone());
         assertEquals(1, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
+        // A retriable error should be followed by a metadata update request
+        verify(metadata).requestUpdate(false);
 
         // Cluster metadata update. Failed requests should be retried
         mockSuccessfulRequest(partitionLeaders);
@@ -514,7 +516,7 @@ public class OffsetsRequestManagerTest {
     public void testResetPositionsMissingLeader() {
         mockFailedRequest_MissingLeader();
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
-        when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
+        when(subscriptionState.resetStrategy(any())).thenReturn(AutoOffsetResetStrategy.EARLIEST);
         requestManager.resetPositionsIfNeeded();
         verify(metadata).requestUpdate(true);
         assertEquals(0, requestManager.requestsToSend());
@@ -537,7 +539,7 @@ public class OffsetsRequestManagerTest {
     @Test
     public void testResetOffsetsAuthorizationFailure() {
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
-        when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
+        when(subscriptionState.resetStrategy(any())).thenReturn(AutoOffsetResetStrategy.EARLIEST);
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
 
         CompletableFuture<Void> resetResult = requestManager.resetPositionsIfNeeded();
@@ -562,7 +564,7 @@ public class OffsetsRequestManagerTest {
         CompletableFuture<Void> nextReset = assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded());
         assertEquals(0, requestManager.requestsToSend());
         assertTrue(nextReset.isCompletedExceptionally());
-        assertFutureThrows(nextReset, TopicAuthorizationException.class);
+        assertFutureThrows(TopicAuthorizationException.class, nextReset);
     }
 
     @Test
@@ -771,7 +773,7 @@ public class OffsetsRequestManagerTest {
 
         // tp2 added to the assignment when the Offset Fetch request is already sent including tp1 only
         TopicPartition tp2 = new TopicPartition("topic2", 2);
-        Set<TopicPartition> initPartitions2 = new HashSet<>(Arrays.asList(tp1, tp2));
+        Set<TopicPartition> initPartitions2 = Set.of(tp1, tp2);
         mockAssignedPartitionsMissingPositions(initPartitions2, initPartitions2, leaderAndEpoch);
 
         // tp2 requires a position, but shouldn't be reset after receiving the offset fetch response that will only
@@ -844,7 +846,7 @@ public class OffsetsRequestManagerTest {
     private void testResetPositionsSuccessWithLeaderEpoch(Metadata.LeaderAndEpoch leaderAndEpoch) {
         TopicPartition tp = TEST_PARTITION_1;
         Node leader = LEADER_1;
-        OffsetResetStrategy strategy = OffsetResetStrategy.EARLIEST;
+        AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.EARLIEST;
         long offset = 5L;
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(tp));
         when(subscriptionState.resetStrategy(any())).thenReturn(strategy);

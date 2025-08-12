@@ -23,6 +23,7 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.internals.RecordsIteratorTest.TestBatch;
@@ -79,7 +80,7 @@ class RecordsBatchReaderTest {
     public void testLeaderChangeControlBatch() {
         // Confirm that the RecordsBatchReader is able to iterate over control batches
         MemoryRecords records = RecordsIteratorTest.buildControlRecords(ControlRecordType.LEADER_CHANGE);
-        ControlRecord expectedRecord = new ControlRecord(ControlRecordType.LEADER_CHANGE, new LeaderChangeMessage());
+        ControlRecord expectedRecord = ControlRecord.of(new LeaderChangeMessage());
 
         try (RecordsBatchReader<String> reader = RecordsBatchReader.of(
                 0,
@@ -88,11 +89,12 @@ class RecordsBatchReaderTest {
                 BufferSupplier.NO_CACHING,
                 MAX_BATCH_BYTES,
                 ignore -> { },
-                true
+                true,
+                new LogContext()
             )
         ) {
             assertTrue(reader.hasNext());
-            assertEquals(Collections.singletonList(expectedRecord), reader.next().controlRecords());
+            assertEquals(List.of(expectedRecord), reader.next().controlRecords());
             assertFalse(reader.hasNext());
         }
     }
@@ -128,7 +130,8 @@ class RecordsBatchReaderTest {
             bufferSupplier,
             MAX_BATCH_BYTES,
             closeListener,
-            true
+            true,
+            new LogContext()
         );
         try {
             for (TestBatch<String> batch : expectedBatches) {
@@ -143,6 +146,6 @@ class RecordsBatchReaderTest {
         }
 
         Mockito.verify(closeListener).onClose(reader);
-        assertEquals(Collections.emptySet(), allocatedBuffers);
+        assertEquals(Set.of(), allocatedBuffers);
     }
 }

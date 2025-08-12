@@ -52,7 +52,7 @@ public class TimestampedTupleForwarderTest {
 
         new TimestampedTupleForwarder<>(
             store,
-            (org.apache.kafka.streams.processor.api.ProcessorContext<Object, Change<Object>>) null,
+            null,
             flushListener,
             sendOldValues
         );
@@ -82,7 +82,7 @@ public class TimestampedTupleForwarderTest {
         final TimestampedTupleForwarder<String, String> forwarder =
             new TimestampedTupleForwarder<>(
                 store,
-                (org.apache.kafka.streams.processor.api.ProcessorContext<String, Change<String>>) context,
+                context,
                 null,
                 sendOldValues
             );
@@ -102,7 +102,7 @@ public class TimestampedTupleForwarderTest {
         final TimestampedTupleForwarder<String, String> forwarder =
             new TimestampedTupleForwarder<>(
                 store,
-                (org.apache.kafka.streams.processor.api.ProcessorContext<String, Change<String>>) context,
+                context,
                 null,
                 false
             );

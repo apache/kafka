@@ -54,7 +54,7 @@ public class WordCountTransformerTest {
             context.getStateStoreContext().register(store, null);
         }
         final Processor<String, String, String, String> processor = supplier.get();
-        processor.init(new org.apache.kafka.streams.processor.api.MockProcessorContext<String, String>() {
+        processor.init(new org.apache.kafka.streams.processor.api.MockProcessorContext<>() {
             @Override
             public <S extends StateStore> S getStateStore(final String name) {
                 return context.getStateStore(name);

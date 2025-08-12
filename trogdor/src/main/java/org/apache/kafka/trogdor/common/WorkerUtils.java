@@ -333,7 +333,7 @@ public final class WorkerUtils {
         return out;
     }
 
-    private static Admin createAdminClient(
+    public static Admin createAdminClient(
         String bootstrapServers,
         Map<String, String> commonClientConf, Map<String, String> adminClientConf) {
         Properties props = new Properties();

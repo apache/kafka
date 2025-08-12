@@ -53,7 +53,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
@@ -103,9 +102,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
             if (schema == null || keySchema.type() == Schema.Type.STRING) {
                 if (!value.isObject())
                     throw new DataException("Maps with string fields should be encoded as JSON objects, but found " + value.getNodeType());
-                Iterator<Map.Entry<String, JsonNode>> fieldIt = value.fields();
-                while (fieldIt.hasNext()) {
-                    Map.Entry<String, JsonNode> entry = fieldIt.next();
+                for (Map.Entry<String, JsonNode> entry : value.properties()) {
                     result.put(entry.getKey(), convertToConnect(valueSchema, entry.getValue(), config));
                 }
             } else {
@@ -149,18 +146,15 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
         LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public JsonNode toJson(final Schema schema, final Object value, final JsonConverterConfig config) {
-                if (!(value instanceof BigDecimal))
+                if (!(value instanceof BigDecimal decimal))
                     throw new DataException("Invalid type for Decimal, expected BigDecimal but was " + value.getClass());
 
-                final BigDecimal decimal = (BigDecimal) value;
-                switch (config.decimalFormat()) {
-                    case NUMERIC:
-                        return JSON_NODE_FACTORY.numberNode(decimal);
-                    case BASE64:
-                        return JSON_NODE_FACTORY.binaryNode(Decimal.fromLogical(schema, decimal));
-                    default:
+                return switch (config.decimalFormat()) {
+                    case NUMERIC -> JSON_NODE_FACTORY.numberNode(decimal);
+                    case BASE64 -> JSON_NODE_FACTORY.binaryNode(Decimal.fromLogical(schema, decimal));
+                    default ->
                         throw new DataException("Unexpected " + JsonConverterConfig.DECIMAL_FORMAT_CONFIG + ": " + config.decimalFormat());
-                }
+                };
             }
 
             @Override
@@ -230,6 +224,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private JsonConverterConfig config;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
+    private Schema schema = null;     // if a schema is provided in config, this schema will be used for all messages
 
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;
@@ -241,15 +236,15 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     /**
      * Creates a JsonConvert initializing serializer and deserializer.
      *
-     * @param enableAfterburner permits to enable/disable the registration of Jackson Afterburner module.
+     * @param enableBlackbird permits to enable/disable the registration of Jackson Blackbird module.
      * <p>
      * NOTE: This is visible only for testing
      */
-    public JsonConverter(boolean enableAfterburner) {
+    public JsonConverter(boolean enableBlackbird) {
         serializer = new JsonSerializer(
             Set.of(),
             JSON_NODE_FACTORY,
-            enableAfterburner
+            enableBlackbird
         );
 
         deserializer = new JsonDeserializer(
@@ -259,7 +254,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
                 DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
             ),
             JSON_NODE_FACTORY,
-            enableAfterburner
+            enableBlackbird
         );
     }
 
@@ -292,6 +287,16 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
         fromConnectSchemaCache = new SynchronizedCache<>(new LRUCache<>(config.schemaCacheSize()));
         toConnectSchemaCache = new SynchronizedCache<>(new LRUCache<>(config.schemaCacheSize()));
+
+        try {
+            final byte[] schemaContent = config.schemaContent();
+            if (schemaContent != null) {
+                final JsonNode schemaNode = deserializer.deserialize("", schemaContent);
+                this.schema = asConnectSchema(schemaNode);
+            }
+        } catch (SerializationException e) {
+            throw new DataException("Failed to parse schema in converter config due to serialization error: ", e);
+        }
     }
 
     @Override
@@ -346,13 +351,16 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
             throw new DataException("Converting byte[] to Kafka Connect data failed due to serialization error: ", e);
         }
 
-        if (config.schemasEnabled() && (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)))
-            throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
+        if (config.schemasEnabled()) {
+            if (schema != null) {
+                return new SchemaAndValue(schema, convertToConnect(schema, jsonValue, config));
+            } else if (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)) {
+                throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
                     " If you are trying to deserialize plain JSON data, set schemas.enable=false in your converter configuration.");
-
-        // The deserialized data should either be an envelope object containing the schema and the payload or the schema
-        // was stripped during serialization and we need to fill in an all-encompassing schema.
-        if (!config.schemasEnabled()) {
+            }
+        } else {
+            // The deserialized data should either be an envelope object containing the schema and the payload or the schema
+            // was stripped during serialization and we need to fill in an all-encompassing schema.
             ObjectNode envelope = JSON_NODE_FACTORY.objectNode();
             envelope.set(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME, null);
             envelope.set(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME, jsonValue);
@@ -541,9 +549,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
         JsonNode schemaParamsNode = jsonSchema.get(JsonSchema.SCHEMA_PARAMETERS_FIELD_NAME);
         if (schemaParamsNode != null && schemaParamsNode.isObject()) {
-            Iterator<Map.Entry<String, JsonNode>> paramsIt = schemaParamsNode.fields();
-            while (paramsIt.hasNext()) {
-                Map.Entry<String, JsonNode> entry = paramsIt.next();
+            for (Map.Entry<String, JsonNode> entry : schemaParamsNode.properties()) {
                 JsonNode paramValue = entry.getValue();
                 if (!paramValue.isTextual())
                     throw new DataException("Schema parameters must have string values.");

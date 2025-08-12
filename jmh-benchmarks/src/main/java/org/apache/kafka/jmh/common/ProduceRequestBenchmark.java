@@ -54,7 +54,7 @@ public class ProduceRequestBenchmark {
 
     @Setup(Level.Trial)
     public void setup() {
-        this.produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData())
+        this.produceRequest = ProduceRequest.builder(new ProduceRequestData())
                 .build(ApiKeys.PRODUCE.latestVersion());
     }
 

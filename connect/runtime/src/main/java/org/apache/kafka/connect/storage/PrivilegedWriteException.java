@@ -22,9 +22,6 @@ import org.apache.kafka.connect.errors.ConnectException;
  * Used when a write that requires {@link ConfigBackingStore#claimWritePrivileges() special privileges} fails
  */
 public class PrivilegedWriteException extends ConnectException {
-    public PrivilegedWriteException(String message) {
-        super(message);
-    }
 
     public PrivilegedWriteException(String message, Throwable cause) {
         super(message, cause);

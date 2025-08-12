@@ -69,6 +69,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -164,7 +165,6 @@ public class KafkaConfigBackingStoreTest {
             new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1)),
             new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(2))
     );
-    private static final Struct TARGET_STATE_STARTED = new Struct(KafkaConfigBackingStore.TARGET_STATE_V0).put("state", "STARTED");
     private static final Struct TARGET_STATE_PAUSED = new Struct(KafkaConfigBackingStore.TARGET_STATE_V1)
             .put("state", "PAUSED")
             .put("state.v2", "PAUSED");
@@ -175,7 +175,8 @@ public class KafkaConfigBackingStoreTest {
             .put("state.v2", "STOPPED");
     private static final List<Struct> CONNECTOR_TASK_COUNT_RECORD_STRUCTS = Arrays.asList(
             new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("task-count", 6),
-            new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("task-count", 9)
+            new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("task-count", 9),
+            new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("task-count", 2)
     );
 
     // The exact format doesn't matter here since both conversions are mocked
@@ -310,7 +311,7 @@ public class KafkaConfigBackingStoreTest {
         doAnswer(expectReadToEnd(Collections.singletonMap(CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0))))
                 .doAnswer(expectReadToEnd(Collections.singletonMap(CONNECTOR_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1))))
                 // Config deletion
-                .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
                             put(configKey, null);
                             put(targetStateKey, null);
                         }})
@@ -363,7 +364,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testPutConnectorConfigWithTargetState() throws Exception {
+    public void testPutConnectorConfigWithTargetState() {
         when(configLog.partitionCount()).thenReturn(1);
 
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
@@ -376,7 +377,7 @@ public class KafkaConfigBackingStoreTest {
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.targetState(CONNECTOR_IDS.get(0)));
 
-        doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
+        doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
                     put(TARGET_STATE_KEYS.get(0), TARGET_STATES_SERIALIZED.get(2));
                     put(CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
                 }})
@@ -820,6 +821,56 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
+    public void testRestoreCompactedDeletedConnector() {
+        // When a connector is deleted, we emit a tombstone record for its config (with key
+        // "connector-<name>") and its target state (with key "target-state-<name>"), but not
+        // for its task configs
+        // As a result, we need to carefully handle the case where task configs are present in
+        // the config topic for a connector, but there is no accompanying config for the
+        // connector itself
+
+        int offset = 0;
+        List<ConsumerRecord<String, byte[]>> existingRecords = List.of(
+            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()),
+            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3), new RecordHeaders(), Optional.empty()));
+        LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
+        deserialized.put(CONFIGS_SERIALIZED.get(0), TASK_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
+        deserialized.put(CONFIGS_SERIALIZED.get(2), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(3), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(2));
+        logOffset = offset;
+        expectStart(existingRecords, deserialized);
+        when(configLog.partitionCount()).thenReturn(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        // Should see no connectors and no task configs
+        ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(Set.of(), configState.connectors());
+        assertEquals(0, configState.taskCount(CONNECTOR_1_NAME));
+        assertNull(configState.rawTaskConfig(TASK_IDS.get(0)));
+        assertNull(configState.rawTaskConfig(TASK_IDS.get(1)));
+
+        // Probe internal collections just to be sure
+        assertEquals(Map.of(), configState.connectorConfigs);
+        assertEquals(Map.of(), configState.taskConfigs);
+        assertEquals(Map.of(), configState.connectorTaskCounts);
+
+        // Exception: we still include task count records, for the unlikely-but-possible case
+        // where there are still zombie instances of the tasks for this long-deleted connector
+        // running somewhere on the cluster
+        assertEquals(2, (int) configState.taskCountRecord(CONNECTOR_1_NAME));
+    }
+
+    @Test
     public void testRecordToRestartRequest() {
         ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
@@ -1028,7 +1079,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testPutTaskConfigsDoesNotResolveAllInconsistencies() throws Exception {
+    public void testPutTaskConfigsDoesNotResolveAllInconsistencies() {
         // Test a case where a failure and compaction has left us in an inconsistent state when reading the log.
         // We start out by loading an initial configuration where we started to write a task update, and then
         // compaction cleaned up the earlier record.
@@ -1105,18 +1156,18 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testPutRestartRequestOnlyFailed() throws Exception {
+    public void testPutRestartRequestOnlyFailed() {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_IDS.get(0), true, false);
         testPutRestartRequest(restartRequest);
     }
 
     @Test
-    public void testPutRestartRequestOnlyFailedIncludingTasks() throws Exception {
+    public void testPutRestartRequestOnlyFailedIncludingTasks() {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_IDS.get(0), true, true);
         testPutRestartRequest(restartRequest);
     }
 
-    private void testPutRestartRequest(RestartRequest restartRequest) throws Exception {
+    private void testPutRestartRequest(RestartRequest restartRequest) {
         expectStart(Collections.emptyList(), Collections.emptyMap());
         when(configLog.partitionCount()).thenReturn(1);
 
@@ -1191,7 +1242,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testPutTaskConfigsZeroTasks() throws Exception {
+    public void testPutTaskConfigsZeroTasks() {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
         verifyConfigure();
         configStorage.start();
@@ -1290,7 +1341,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testSameTargetState() throws Exception {
+    public void testSameTargetState() {
         // verify that we handle target state changes correctly when they come up through the log
         List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
                 new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
@@ -1391,7 +1442,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testTaskCountRecordsAndGenerations() throws Exception {
+    public void testTaskCountRecordsAndGenerations() {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
         verifyConfigure();
         configStorage.start();
@@ -1408,7 +1459,7 @@ public class KafkaConfigBackingStoreTest {
         doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(serializedConfigs))
-                .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
                             put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3));
                         }})
                 )
@@ -1467,7 +1518,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testPutTaskConfigs() throws Exception {
+    public void testPutTaskConfigs() {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
         verifyConfigure();
         configStorage.start();
@@ -1475,7 +1526,7 @@ public class KafkaConfigBackingStoreTest {
 
         doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
-                .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
                         put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
                         put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
                         put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
@@ -1525,7 +1576,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testPutTaskConfigsStartsOnlyReconfiguredTasks() throws Exception {
+    public void testPutTaskConfigsStartsOnlyReconfiguredTasks() {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
         verifyConfigure();
         configStorage.start();
@@ -1533,7 +1584,7 @@ public class KafkaConfigBackingStoreTest {
 
         doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
-                .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
                             put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
                             put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
                             put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
@@ -1541,7 +1592,7 @@ public class KafkaConfigBackingStoreTest {
                 )
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
-                .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
                             put(TASK_CONFIG_KEYS.get(2), CONFIGS_SERIALIZED.get(3));
                             put(COMMIT_TASKS_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(4));
                         }})
@@ -1628,7 +1679,7 @@ public class KafkaConfigBackingStoreTest {
     // from the log. Validate the data that is captured when the conversion is performed matches the specified data
     // (by checking a single field's value)
     private void expectConvertWriteRead2(final String configKey, final Schema valueSchema, final byte[] serialized,
-                                        final Struct value) throws Exception {
+                                        final Struct value) {
         doReturn(serialized).when(converter).fromConnectData(eq(TOPIC), eq(valueSchema), eq(value));
         doReturn(producerFuture).when(configLog).sendWithReceipt(eq(configKey), eq(serialized));
         doReturn(new SchemaAndValue(null, structToMap(value))).when(converter).toConnectData(eq(TOPIC), eq(serialized));
@@ -1638,7 +1689,7 @@ public class KafkaConfigBackingStoreTest {
     // from the log. Validate the data that is captured when the conversion is performed matches the specified data
     // (by checking a single field's value)
     private void expectConvertWriteRead(final String configKey, final Schema valueSchema, final byte[] serialized,
-                                        final String dataFieldName, final Object dataFieldValue) throws Exception {
+                                        final String dataFieldName, final Object dataFieldValue) {
         final ArgumentCaptor<Struct> capturedRecord = ArgumentCaptor.forClass(Struct.class);
         when(converter.fromConnectData(eq(TOPIC), eq(valueSchema), capturedRecord.capture())).thenReturn(serialized);
         when(configLog.sendWithReceipt(configKey, serialized)).thenReturn(producerFuture);
@@ -1656,12 +1707,6 @@ public class KafkaConfigBackingStoreTest {
             when(converter.toConnectData(TOPIC, serializedValue))
                     .thenReturn(new SchemaAndValue(null, structToMap(deserializedValueEntry.getValue())));
         }
-    }
-
-    private void expectRead(final String key, final byte[] serializedValue, Struct deserializedValue) {
-        LinkedHashMap<String, byte[]> serializedData = new LinkedHashMap<>();
-        serializedData.put(key, serializedValue);
-        expectRead(serializedData, Collections.singletonMap(key, deserializedValue));
     }
 
     // This map needs to maintain ordering

@@ -51,7 +51,7 @@ import static org.hamcrest.Matchers.is;
 public class MockProcessorContextAPITest {
     @Test
     public void shouldCaptureOutputRecords() {
-        final Processor<String, Long, String, Long> processor = new Processor<String, Long, String, Long>() {
+        final Processor<String, Long, String, Long> processor = new Processor<>() {
             private ProcessorContext<String, Long> context;
 
             @Override
@@ -87,7 +87,7 @@ public class MockProcessorContextAPITest {
 
     @Test
     public void shouldCaptureRecordsOutputToChildByName() {
-        final Processor<String, Long, String, Long> processor = new Processor<String, Long, String, Long>() {
+        final Processor<String, Long, String, Long> processor = new Processor<>() {
             private ProcessorContext<String, Long> context;
 
             @Override
@@ -158,7 +158,7 @@ public class MockProcessorContextAPITest {
 
     @Test
     public void shouldCaptureCommitsAndAllowReset() {
-        final Processor<String, Long, Void, Void> processor = new Processor<String, Long, Void, Void>() {
+        final Processor<String, Long, Void, Void> processor = new Processor<>() {
             private ProcessorContext<Void, Void> context;
             private int count = 0;
 
@@ -195,7 +195,7 @@ public class MockProcessorContextAPITest {
 
     @Test
     public void shouldStoreAndReturnStateStores() {
-        final Processor<String, Long, Void, Void> processor = new Processor<String, Long, Void, Void>() {
+        final Processor<String, Long, Void, Void> processor = new Processor<>() {
             private ProcessorContext<Void, Void> context;
 
             @Override
@@ -246,7 +246,7 @@ public class MockProcessorContextAPITest {
             )
         );
 
-        final Processor<String, Object, String, Object> processor = new Processor<String, Object, String, Object>() {
+        final Processor<String, Object, String, Object> processor = new Processor<>() {
             private ProcessorContext<String, Object> context;
 
             @Override
@@ -302,7 +302,7 @@ public class MockProcessorContextAPITest {
 
     @Test
     public void shouldCapturePunctuator() {
-        final Processor<String, Long, Void, Void> processor = new Processor<String, Long, Void, Void>() {
+        final Processor<String, Long, Void, Void> processor = new Processor<>() {
             @Override
             public void init(final ProcessorContext<Void, Void> context) {
                 context.schedule(
@@ -331,13 +331,14 @@ public class MockProcessorContextAPITest {
         assertThat(context.committed(), is(true));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void fullConstructorShouldSetAllExpectedAttributes() {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testFullConstructor");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
 
         final File dummyFile = new File("");
         final MockProcessorContext<Void, Void> context =
@@ -347,8 +348,8 @@ public class MockProcessorContextAPITest {
         assertThat(context.taskId(), is(new TaskId(1, 1)));
         assertThat(context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG), is("testFullConstructor"));
         assertThat(context.appConfigsWithPrefix("application.").get("id"), is("testFullConstructor"));
-        assertThat(context.keySerde().getClass(), is(Serdes.String().getClass()));
-        assertThat(context.valueSerde().getClass(), is(Serdes.Long().getClass()));
+        assertThat(context.keySerde().getClass(), is(Serdes.StringSerde.class));
+        assertThat(context.valueSerde().getClass(), is(Serdes.LongSerde.class));
         assertThat(context.stateDir(), is(dummyFile));
     }
 }

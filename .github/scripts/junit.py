@@ -14,16 +14,21 @@
 # limitations under the License.
 
 import argparse
+from collections import OrderedDict
 import dataclasses
 from functools import partial
 from glob import glob
 import logging
 import os
 import os.path
+import pathlib
+import re
 import sys
 from typing import Tuple, Optional, List, Iterable
 import xml.etree.ElementTree
 import html
+
+import yaml
 
 
 logger = logging.getLogger()
@@ -36,6 +41,7 @@ PASSED = "PASSED ✅"
 FAILED = "FAILED ❌"
 FLAKY = "FLAKY ⚠️ "
 SKIPPED = "SKIPPED 🙈"
+QUARANTINED = "QUARANTINED 😷"
 
 
 def get_env(key: str, fn = str) -> Optional:
@@ -78,10 +84,68 @@ class TestSuite:
     passed_tests: List[TestCase]
 
 
+# Java method names can start with alpha, "_", or "$". Following characters can also include digits
+method_matcher = re.compile(r"([a-zA-Z_$][a-zA-Z0-9_$]+).*")
+
+
+def clean_test_name(test_name: str) -> str:
+    cleaned = test_name.strip("\"").rstrip("()")
+    m = method_matcher.match(cleaned)
+    if m is None:
+        raise ValueError(f"Could not parse test name '{test_name}'. Expected a valid Java method name.")
+    else:
+        return m.group(1)
+
+
+class TestCatalogExporter:
+    def __init__(self):
+        self.all_tests = {}   # module -> class -> set of methods
+
+    def handle_suite(self, module: str, suite: TestSuite):
+        if module not in self.all_tests:
+            self.all_tests[module] = OrderedDict()
+
+        for test in suite.failed_tests:
+            if test.class_name not in self.all_tests[module]:
+                self.all_tests[module][test.class_name] = set()
+            self.all_tests[module][test.class_name].add(clean_test_name(test.test_name))
+        for test in suite.passed_tests:
+            if test.class_name not in self.all_tests[module]:
+                self.all_tests[module][test.class_name] = set()
+            self.all_tests[module][test.class_name].add(clean_test_name(test.test_name))
+
+    def export(self, out_dir: str):
+        if not os.path.exists(out_dir):
+            logger.debug(f"Creating output directory {out_dir} for test catalog export.")
+            os.makedirs(out_dir)
+
+        total_count = 0
+        for module, module_tests in self.all_tests.items():
+            module_path = os.path.join(out_dir, module)
+            if not os.path.exists(module_path):
+                os.makedirs(module_path)
+
+            sorted_tests = {}
+            count = 0
+            for test_class, methods in module_tests.items():
+                sorted_methods = sorted(methods)
+                count += len(sorted_methods)
+                sorted_tests[test_class] = sorted_methods
+
+            out_path = os.path.join(module_path, f"tests.yaml")
+            logger.debug(f"Writing {count} tests for {module} into {out_path}.")
+            total_count += count
+            with open(out_path, "w") as fp:
+                yaml.dump(sorted_tests, fp)
+
+        logger.debug(f"Wrote {total_count} tests into test catalog.")
+
+
 def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
     cur_suite: Optional[TestSuite] = None
     partial_test_case = None
     test_case_failed = False
+    test_case_skipped = False
     for (event, elem) in xml.etree.ElementTree.iterparse(fp, events=["start", "end"]):
         if event == "start":
             if elem.tag == "testsuite":
@@ -98,6 +162,7 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
                 test_time = float(elem.get("time", 0.0))
                 partial_test_case = partial(TestCase, test_name, class_name, test_time)
                 test_case_failed = False
+                test_case_skipped = False
             elif elem.tag == "failure":
                 failure_message = elem.get("message")
                 if failure_message:
@@ -111,11 +176,12 @@ def parse_report(workspace_path, report_path, fp) -> Iterable[TestSuite]:
             elif elem.tag == "skipped":
                 skipped = partial_test_case(None, None, None)
                 cur_suite.skipped_tests.append(skipped)
+                test_case_skipped = True
             else:
                 pass
         elif event == "end":
             if elem.tag == "testcase":
-                if not test_case_failed:
+                if not test_case_failed and not test_case_skipped:
                     passed = partial_test_case(None, None, None)
                     cur_suite.passed_tests.append(passed)
                 partial_test_case = None
@@ -138,6 +204,23 @@ def pretty_time_duration(seconds: float) -> str:
     return time_fmt
 
 
+def split_report_path(base_path: str, report_path: str) -> Tuple[str, str]:
+    """
+    Parse a report XML and extract the module path. Test report paths look like:
+
+        build/junit-xml/module[/sub-module]/[test-job]/TEST-class.method.xml
+
+    This method strips off a base path and assumes all path segments leading up to the job name
+    are part of the module path.
+
+    Returns a tuple of (module, job)
+    """
+    rel_report_path = os.path.relpath(report_path, base_path)
+    path_segments = pathlib.Path(rel_report_path).parts
+
+    return os.path.join(*path_segments[0:-2]), path_segments[-2]
+
+
 if __name__ == "__main__":
     """
     Parse JUnit XML reports and generate GitHub job summary in Markdown format.
@@ -150,8 +233,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse JUnit XML results.")
     parser.add_argument("--path",
                         required=False,
-                        default="build/junit-xml/**/*.xml",
-                        help="Path to XML files. Glob patterns are supported.")
+                        default="build/junit-xml",
+                        help="Base path of JUnit XML files. A glob of **/*.xml will be applied on top of this path.")
+    parser.add_argument("--export-test-catalog",
+                        required=False,
+                        default="",
+                        help="Optional path to dump all tests.")
 
     if not os.getenv("GITHUB_WORKSPACE"):
         print("This script is intended to by run by GitHub Actions.")
@@ -159,8 +246,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    reports = glob(pathname=args.path, recursive=True)
+    glob_path = os.path.join(args.path, "**/*.xml")
+    reports = glob(pathname=glob_path, recursive=True)
     logger.info(f"Found {len(reports)} JUnit results")
+
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
     total_file_count = 0
@@ -176,11 +265,16 @@ if __name__ == "__main__":
     failed_table = []
     flaky_table = []
     skipped_table = []
+    quarantined_table = []
+    new_table = []
+
+    exporter = TestCatalogExporter()
 
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
-            logger.debug(f"Parsing {report}")
+            module_path, test_job = split_report_path(args.path, report)
+            logger.debug(f"Parsing file: {report}, module: {module_path}, job: {test_job}")
             for suite in parse_report(workspace_path, report, fp):
                 total_skipped += suite.skipped
                 total_errors += suite.errors
@@ -190,10 +284,10 @@ if __name__ == "__main__":
                 # Due to how the Develocity Test Retry plugin interacts with our generated ClusterTests, we can see
                 # tests pass and then fail in the same run. Because of this, we need to capture all passed and all
                 # failed for each suite. Then we can find flakes by taking the intersection of those two.
-                all_suite_passed = {test.key() for test in suite.passed_tests}
+                all_suite_passed = {test.key(): test for test in suite.passed_tests}
                 all_suite_failed = {test.key(): test for test in suite.failed_tests}
-                flaky = all_suite_passed & all_suite_failed.keys()
-                all_tests = all_suite_passed | all_suite_failed.keys()
+                flaky = all_suite_passed.keys() & all_suite_failed.keys()
+                all_tests = all_suite_passed.keys() | all_suite_failed.keys()
                 total_tests += len(all_tests)
                 total_flaky += len(flaky)
                 total_failures += len(all_suite_failed) - len(flaky)
@@ -216,71 +310,152 @@ if __name__ == "__main__":
                     simple_class_name = skipped_test.class_name.split(".")[-1]
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped_table.append((simple_class_name, skipped_test.test_name))
+
+                # Only collect quarantined tests from the "flaky" test jobs
+                if re.match(r".*\bflaky\b.*", test_job) is not None:
+                    for test in all_suite_passed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        quarantined_table.append((simple_class_name, test.test_name))
+                    for test in all_suite_failed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        quarantined_table.append((simple_class_name, test.test_name))
+
+                if re.match(r".*\bnew\b.*", test_job) is not None:
+                    for test in all_suite_passed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        new_table.append((simple_class_name, test.test_name))
+                    for test in all_suite_failed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        new_table.append((simple_class_name, test.test_name))
+
+                if args.export_test_catalog:
+                    exporter.handle_suite(module_path, suite)
+
     logger.debug("::endgroup::")
+
+    if args.export_test_catalog:
+        logger.debug(f"::group::Generating Test Catalog Files")
+        exporter.export(args.export_test_catalog)
+        logger.debug("::endgroup::")
+
     duration = pretty_time_duration(total_time)
     logger.info(f"Finished processing {len(reports)} reports")
 
-    # Print summary
-    report_url = get_env("JUNIT_REPORT_URL")
-    report_md = f"Download [HTML report]({report_url})."
-    summary = (f"{total_run} tests cases run in {duration}. "
+    # Determine exit status. If we add anything to failure_messages, we will exit(1)
+    failure_messages = []
+
+    exit_code = get_env("GRADLE_TEST_EXIT_CODE", int)
+    junit_report_url = get_env("JUNIT_REPORT_URL")
+    thread_dump_url = get_env("THREAD_DUMP_URL")
+
+    if exit_code is None:
+        failure_messages.append("Missing required GRADLE_TEST_EXIT_CODE environment variable. Failing this script.")
+    elif exit_code == 124:
+        # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
+        # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
+        # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
+        # this script. If any task fails due to timeout, we want to fail the overall build since it will not
+        # include all the test results
+        failure_messages.append(f"Gradle task had a timeout. Failing this script. These are partial results!")
+    elif exit_code > 0:
+        failure_messages.append(f"Gradle task had a failure exit code. Failing this script.")
+
+    if thread_dump_url:
+        failure_messages.append(f"Thread dump available at {thread_dump_url} and the script will now fail.")
+
+    if junit_report_url:
+        report_md = f"Download [JUnit HTML report]({junit_report_url})"
+    else:
+        report_md = "No reports available. Environment variable JUNIT_REPORT_URL was not found."
+
+    # Print summary of the tests
+    # The stdout (print) goes to the workflow step console output.
+    # The stderr (logger) is redirected to GITHUB_STEP_SUMMARY which becomes part of the HTML job summary.
+    summary = (f"{total_run} tests cases run in {duration}.\n\n"
                f"{total_success} {PASSED}, {total_failures} {FAILED}, "
-               f"{total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, and {total_errors} errors.")
+               f"{total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, {len(quarantined_table)} {QUARANTINED}, and {total_errors} errors.")
     print("## Test Summary\n")
-    print(f"{summary} {report_md}\n")
+    print(f"{summary}\n\n{report_md}\n")
+
+    # Failed
     if len(failed_table) > 0:
-        logger.info(f"Found {len(failed_table)} test failures:")
-        print("### Failed Tests\n")
+        print("<details open=\"true\">")
+        print(f"<summary>Failed Tests {FAILED} ({len(failed_table)})</summary>\n")
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
+        logger.info(f"Found {len(failed_table)} test failures:")
         for row in failed_table:
             logger.info(f"{FAILED} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+        print("\n</details>")
     print("\n")
+
+    # Flaky
     if len(flaky_table) > 0:
-        logger.info(f"Found {len(flaky_table)} flaky test failures:")
-        print("### Flaky Tests\n")
+        print("<details open=\"true\">")
+        print(f"<summary>Flaky Tests {FLAKY} ({len(flaky_table)})</summary>\n")
         print(f"| Module | Test | Message | Time |")
         print(f"| ------ | ---- | ------- | ---- |")
+        logger.info(f"Found {len(flaky_table)} flaky test failures:")
         for row in flaky_table:
             logger.info(f"{FLAKY} {row[0]} > {row[1]}")
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+        print("\n</details>")
     print("\n")
+
+    # Skipped
     if len(skipped_table) > 0:
         print("<details>")
-        print(f"<summary>{len(skipped_table)} Skipped Tests</summary>\n")
+        print(f"<summary>Skipped Tests {SKIPPED} ({len(skipped_table)})</summary>\n")
         print(f"| Module | Test |")
         print(f"| ------ | ---- |")
+        logger.debug(f"::group::Found {len(skipped_table)} skipped tests")
         for row in skipped_table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
+            logger.debug(f"{row[0]} > {row[1]}")
         print("\n</details>")
+        logger.debug("::endgroup::")
+    print("\n")
 
-    # Print special message if there was a timeout
-    exit_code = get_env("GRADLE_EXIT_CODE", int)
-    if exit_code == 124:
-        thread_dump_url = get_env("THREAD_DUMP_URL")
-        logger.debug(f"Gradle command timed out. These are partial results!")
-        logger.debug(summary)
-        if thread_dump_url:
-            print(f"\nThe JUnit tests were cancelled due to a timeout. Thread dumps were generated before the job was cancelled. "
-                  f"Download [thread dumps]({thread_dump_url}).\n")
-            logger.debug(f"Failing this step because the tests timed out. Thread dumps were taken and archived here: {thread_dump_url}")
-        else:
-            logger.debug(f"Failing this step because the tests timed out. Thread dumps were not archived, check logs in JUnit step.")
+    # Quarantined
+    if len(quarantined_table) > 0:
+        print("<details>")
+        print(f"<summary>Quarantined Tests {QUARANTINED} ({len(quarantined_table)})</summary>\n")
+        print(f"| Module | Test |")
+        print(f"| ------ | ---- |")
+        logger.debug(f"::group::Found {len(quarantined_table)} quarantined tests")
+        for row in quarantined_table:
+            row_joined = " | ".join(row)
+            print(f"| {row_joined} |")
+            logger.debug(f"{row[0]} > {row[1]}")
+        print("\n</details>")
+        logger.debug("::endgroup::")
+
+    if len(new_table) > 0:
+        print("<details>")
+        print(f"<summary>New Tests ({len(new_table)})</summary>\n")
+        print(f"| Module | Test |")
+        print(f"| ------ | ---- |")
+        logger.debug(f"::group::Found {len(new_table)} new tests")
+        for row in new_table:
+            row_joined = " | ".join(row)
+            print(f"| {row_joined} |")
+            logger.debug(f"{row[0]} > {row[1]}")
+        print("\n</details>")
+        logger.debug("::endgroup::")
+
+    print("<hr/>")
+
+
+    # Print errors and exit
+    for message in failure_messages:
+        logger.debug(message)
+    logger.debug(summary)
+
+    if len(failure_messages) > 0:
         exit(1)
-    elif exit_code in (0, 1):
-        logger.debug(summary)
-        if total_failures > 0:
-            logger.debug(f"Failing this step due to {total_failures} test failures")
-            exit(1)
-        elif total_errors > 0:
-            logger.debug(f"Failing this step due to {total_errors} test errors")
-            exit(1)
-        else:
-            exit(0)
     else:
-        logger.debug(f"Gradle had unexpected exit code {exit_code}. Failing this step")
-        exit(1)
+        exit(0)

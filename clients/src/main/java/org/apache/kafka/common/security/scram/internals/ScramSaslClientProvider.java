@@ -21,12 +21,11 @@ import org.apache.kafka.common.security.scram.internals.ScramSaslClient.ScramSas
 import java.security.Provider;
 import java.security.Security;
 
-public class ScramSaslClientProvider extends Provider {
+public final class ScramSaslClientProvider extends Provider {
 
     private static final long serialVersionUID = 1L;
 
-    @SuppressWarnings("this-escape")
-    protected ScramSaslClientProvider() {
+    private ScramSaslClientProvider() {
         super("SASL/SCRAM Client Provider", "1.0", "SASL/SCRAM Client Provider for Kafka");
         for (ScramMechanism mechanism : ScramMechanism.values())
             put("SaslClientFactory." + mechanism.mechanismName(), ScramSaslClientFactory.class.getName());

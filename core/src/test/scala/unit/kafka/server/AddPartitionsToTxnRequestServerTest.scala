@@ -55,7 +55,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 
   @ParameterizedTest
   @MethodSource(value = Array("parameters"))
-  def shouldReceiveOperationNotAttemptedWhenOtherPartitionHasError(quorum: String, version: Short): Unit = {
+  def shouldReceiveOperationNotAttemptedWhenOtherPartitionHasError(version: Short): Unit = {
     // The basic idea is that we have one unknown topic and one created topic. We should get the 'UNKNOWN_TOPIC_OR_PARTITION'
     // error for the unknown topic and the 'OPERATION_NOT_ATTEMPTED' error for the known and authorized topic.
     val nonExistentTopic = new TopicPartition("unknownTopic", 0)
@@ -109,7 +109,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertTrue(errors.containsKey(nonExistentTopic))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, errors.get(nonExistentTopic))
   }
-  
+
   @Test
   def testOneSuccessOneErrorInBatchedRequest(): Unit = {
     val tp0 = new TopicPartition(topic1, 0)
@@ -172,6 +172,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     // First find coordinator request creates the state topic, then wait for transactional topics to be created.
     connectAndReceive[FindCoordinatorResponse](findCoordinatorRequest, brokerSocketServer(brokers.head.config.brokerId))
     TestUtils.waitForAllPartitionsMetadata(brokers, "__transaction_state", 50)
+    TestUtils.ensureConsistentKRaftMetadata(brokers, controllerServer)
     val findCoordinatorResponse = connectAndReceive[FindCoordinatorResponse](findCoordinatorRequest, brokerSocketServer(brokers.head.config.brokerId))
     val coordinatorId = findCoordinatorResponse.data().coordinators().get(0).nodeId()
 
@@ -206,9 +207,7 @@ object AddPartitionsToTxnRequestServerTest {
    def parameters: JStream[Arguments] = {
     val arguments = mutable.ListBuffer[Arguments]()
     ApiKeys.ADD_PARTITIONS_TO_TXN.allVersions().forEach { version =>
-      Array("kraft", "zk").foreach { quorum =>
-        arguments += Arguments.of(quorum, version)
-      }
+      arguments += Arguments.of(version)
     }
     arguments.asJava.stream()
   }

@@ -38,7 +38,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.network.RequestConvertToJson
 
 import scala.jdk.CollectionConverters._
-import scala.compat.java8.OptionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
@@ -48,7 +48,12 @@ object RequestChannel extends Logging {
   private val ResponseQueueSizeMetric = "ResponseQueueSize"
   val ProcessorMetricTag = "processor"
 
-  private def isRequestLoggingEnabled: Boolean = requestLogger.underlying.isDebugEnabled
+  /**
+    * Deprecated protocol apis are logged at info level while the rest are logged at debug level.
+    * That makes it possible to enable the former without enabling latter.
+    */
+  private def isRequestLoggingEnabled(header: RequestHeader): Boolean = requestLogger.underlying.isDebugEnabled ||
+    (requestLogger.underlying.isInfoEnabled && header.isApiVersionDeprecated())
 
   sealed trait BaseRequest
   case object ShutdownRequest extends BaseRequest
@@ -73,7 +78,7 @@ object RequestChannel extends Logging {
     @volatile var messageConversionsTimeNanos: Long = 0L
     @volatile var apiThrottleTimeMs: Long = 0L
     @volatile var temporaryMemoryBytes: Long = 0L
-    @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
+    @volatile var recordNetworkThreadTimeCallback: Option[java.util.function.Consumer[java.lang.Long]] = None
     @volatile var callbackRequestDequeueTimeNanos: Option[Long] = None
     @volatile var callbackRequestCompleteTimeNanos: Option[Long] = None
 
@@ -84,7 +89,7 @@ object RequestChannel extends Logging {
     // This is constructed on creation of a Request so that the JSON representation is computed before the request is
     // processed by the api layer. Otherwise, a ProduceRequest can occur without its data (ie. it goes into purgatory).
     val requestLog: Option[JsonNode] =
-      if (RequestChannel.isRequestLoggingEnabled) Some(RequestConvertToJson.request(loggableRequest))
+      if (RequestChannel.isRequestLoggingEnabled(context.header)) Some(RequestConvertToJson.request(loggableRequest))
       else None
 
     def header: RequestHeader = context.header
@@ -128,7 +133,7 @@ object RequestChannel extends Logging {
     }
 
     def responseNode(response: AbstractResponse): Option[JsonNode] = {
-      if (RequestChannel.isRequestLoggingEnabled)
+      if (RequestChannel.isRequestLoggingEnabled(context.header))
         Some(RequestConvertToJson.response(response, context.apiVersion))
       else
         None
@@ -222,6 +227,8 @@ object RequestChannel extends Logging {
           Seq(specifiedMetricName, header.apiKey.name)
         } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN && body[AddPartitionsToTxnRequest].allVerifyOnlyRequest) {
             Seq(RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME)
+        } else if (header.apiKey == ApiKeys.LIST_CONFIG_RESOURCES && header.apiVersion == 0) {
+          Seq(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME, header.apiKey.name)
         } else {
           Seq(header.apiKey.name)
         }
@@ -247,16 +254,21 @@ object RequestChannel extends Logging {
       // The time recorded here is the time spent on the network thread for receiving this request
       // and sending the response. Note that for the first request on a connection, the time includes
       // the total time spent on authentication, which may be significant for SASL/SSL.
-      recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
+      recordNetworkThreadTimeCallback.foreach(record => record.accept(networkThreadTimeNanos))
 
-      if (isRequestLoggingEnabled) {
-        val desc = RequestConvertToJson.requestDescMetrics(header, requestLog.asJava, response.responseLog.asJava,
+      if (isRequestLoggingEnabled(header)) {
+        val desc = RequestConvertToJson.requestDescMetrics(header, requestLog.toJava, response.responseLog.toJava,
           context, session, isForwarded,
           totalTimeMs, requestQueueTimeMs, apiLocalTimeMs,
           apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
           responseSendTimeMs, temporaryMemoryBytes,
           messageConversionsTimeMs)
-        requestLogger.debug("Completed request:" + desc.toString)
+        val logPrefix = "Completed request:{}"
+        // log deprecated apis at `info` level to allow them to be selectively enabled
+        if (header.isApiVersionDeprecated())
+          requestLogger.info(logPrefix, desc)
+        else
+          requestLogger.debug(logPrefix, desc)
       }
     }
 
@@ -270,6 +282,10 @@ object RequestChannel extends Logging {
             buffer = null
           }
       }
+    }
+
+    def setRecordNetworkThreadTimeCallback(callback: java.util.function.Consumer[java.lang.Long]): Unit = {
+      recordNetworkThreadTimeCallback = Some(callback)
     }
 
     override def toString: String = s"Request(processor=$processor, " +
@@ -326,7 +342,6 @@ object RequestChannel extends Logging {
 }
 
 class RequestChannel(val queueSize: Int,
-                     val metricNamePrefix: String,
                      time: Time,
                      val metrics: RequestChannelMetrics) {
   import RequestChannel._
@@ -335,13 +350,11 @@ class RequestChannel(val queueSize: Int,
 
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
-  private val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
-  private val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
   private val callbackQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
 
-  metricsGroup.newGauge(requestQueueSizeMetricName, () => requestQueue.size)
+  metricsGroup.newGauge(RequestQueueSizeMetric, () => requestQueue.size)
 
-  metricsGroup.newGauge(responseQueueSizeMetricName, () => {
+  metricsGroup.newGauge(ResponseQueueSizeMetric, () => {
     processors.values.asScala.foldLeft(0) {(total, processor) =>
       total + processor.responseQueueSize
     }
@@ -351,13 +364,13 @@ class RequestChannel(val queueSize: Int,
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    metricsGroup.newGauge(responseQueueSizeMetricName, () => processor.responseQueueSize,
+    metricsGroup.newGauge(ResponseQueueSizeMetric, () => processor.responseQueueSize,
       Map(ProcessorMetricTag -> processor.id.toString).asJava)
   }
 
   def removeProcessor(processorId: Int): Unit = {
     processors.remove(processorId)
-    metricsGroup.removeMetric(responseQueueSizeMetricName, Map(ProcessorMetricTag -> processorId.toString).asJava)
+    metricsGroup.removeMetric(ResponseQueueSizeMetric, Map(ProcessorMetricTag -> processorId.toString).asJava)
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */

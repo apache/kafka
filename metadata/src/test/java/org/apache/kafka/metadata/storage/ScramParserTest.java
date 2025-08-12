@@ -87,9 +87,9 @@ public class ScramParserTest {
             OptionalInt.empty(),
             Optional.of("my pass"),
             Optional.empty());
-        TestUtils.retryOnExceptionWithTimeout(10_000, () -> {
-            assertNotEquals(data.salt().toString(), data.salt().toString());
-        });
+        TestUtils.retryOnExceptionWithTimeout(10_000, () ->
+            assertNotEquals(data.salt().toString(), data.salt().toString())
+        );
     }
 
     @Test

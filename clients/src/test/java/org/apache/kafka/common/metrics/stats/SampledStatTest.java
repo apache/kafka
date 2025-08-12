@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -41,7 +40,6 @@ class SampledStatTest {
     }
 
     @Test
-    @DisplayName("Sample should be purged if doesn't overlap the window")
     public void testSampleIsPurgedIfDoesntOverlap() {
         MetricConfig config = new MetricConfig().timeWindow(1, SECONDS).samples(2);
 
@@ -50,11 +48,10 @@ class SampledStatTest {
         time.sleep(2500);
 
         double numSamples = stat.measure(config, time.milliseconds());
-        assertEquals(0, numSamples);
+        assertEquals(0, numSamples, "Sample should be purged if doesn't overlap the window");
     }
 
     @Test
-    @DisplayName("Sample should be kept if overlaps the window")
     public void testSampleIsKeptIfOverlaps() {
         MetricConfig config = new MetricConfig().timeWindow(1, SECONDS).samples(2);
 
@@ -63,11 +60,10 @@ class SampledStatTest {
         time.sleep(1500);
 
         double numSamples = stat.measure(config, time.milliseconds());
-        assertEquals(1, numSamples);
+        assertEquals(1, numSamples, "Sample should be kept if overlaps the window");
     }
 
     @Test
-    @DisplayName("Sample should be kept if overlaps the window and is n+1")
     public void testSampleIsKeptIfOverlapsAndExtra() {
         MetricConfig config = new MetricConfig().timeWindow(1, SECONDS).samples(2);
 
@@ -80,7 +76,7 @@ class SampledStatTest {
         stat.record(config, 1, time.milliseconds());
 
         double numSamples = stat.measure(config, time.milliseconds());
-        assertEquals(3, numSamples);
+        assertEquals(3, numSamples, "Sample should be kept if overlaps the window and is n+1");
     }
 
     // Creates a sample with events at the start and at the end. Positions clock at the end.

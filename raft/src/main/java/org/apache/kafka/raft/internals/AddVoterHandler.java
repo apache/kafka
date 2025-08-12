@@ -87,6 +87,7 @@ public final class AddVoterHandler {
         LeaderState<?> leaderState,
         ReplicaKey voterKey,
         Endpoints voterEndpoints,
+        boolean ackWhenCommitted,
         long currentTimeMs
     ) {
         // Check if there are any pending voter change requests
@@ -101,7 +102,7 @@ public final class AddVoterHandler {
 
         // Check that the leader has established a HWM and committed the current epoch
         Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
-        if (!highWatermark.isPresent()) {
+        if (highWatermark.isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -127,7 +128,7 @@ public final class AddVoterHandler {
 
         // Check that there are no uncommitted VotersRecord
         Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
-        if (!votersEntry.isPresent() || votersEntry.get().offset() >= highWatermark.get()) {
+        if (votersEntry.isEmpty() || votersEntry.get().offset() >= highWatermark.get()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -172,7 +173,7 @@ public final class AddVoterHandler {
             this::buildApiVersionsRequest,
             currentTimeMs
         );
-        if (!timeout.isPresent()) {
+        if (timeout.isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -184,6 +185,7 @@ public final class AddVoterHandler {
         AddVoterHandlerState state = new AddVoterHandlerState(
             voterKey,
             voterEndpoints,
+            ackWhenCommitted,
             time.timer(timeout.getAsLong())
         );
         leaderState.resetAddVoterHandlerState(
@@ -203,7 +205,7 @@ public final class AddVoterHandler {
         long currentTimeMs
     ) {
         Optional<AddVoterHandlerState> handlerState = leaderState.addVoterHandlerState();
-        if (!handlerState.isPresent()) {
+        if (handlerState.isEmpty()) {
             // There are no pending add operation just ignore the api response
             return true;
         }
@@ -242,7 +244,7 @@ public final class AddVoterHandler {
             return false;
         }
 
-        // Check that the new voter supports the kraft.verion for reconfiguration
+        // Check that the new voter supports the kraft.version for reconfiguration
         KRaftVersion kraftVersion = partitionState.lastKraftVersion();
         if (!validVersionRange(kraftVersion, supportedKraftVersions)) {
             logger.info(
@@ -321,7 +323,11 @@ public final class AddVoterHandler {
                 )
             );
         current.setLastOffset(leaderState.appendVotersRecord(newVoters, currentTimeMs));
-
+        if (!current.ackWhenCommitted()) {
+            // complete the future to send response, but do not reset the state,
+            // since the new voter set is not yet committed
+            current.future().complete(RaftUtil.addVoterResponse(Errors.NONE, null));
+        }
         return true;
     }
 

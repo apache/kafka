@@ -37,7 +37,7 @@ public abstract class AsyncClient<T1, Req extends AbstractRequest, Resp extends 
     public RequestFuture<T2> sendAsyncRequest(Node node, T1 requestData) {
         AbstractRequest.Builder<Req> requestBuilder = prepareRequest(node, requestData);
 
-        return client.send(node, requestBuilder).compose(new RequestFutureAdapter<ClientResponse, T2>() {
+        return client.send(node, requestBuilder).compose(new RequestFutureAdapter<>() {
             @Override
             @SuppressWarnings("unchecked")
             public void onSuccess(ClientResponse value, RequestFuture<T2> future) {

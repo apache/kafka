@@ -24,17 +24,17 @@
     { "name": "Topics", "type": "[]TopicRequest", "versions": "0+",
       "about": "The topics to fetch details for.",
       "fields": [
-        { "name": "Name", "type": "string", "versions": "0+",
-          "about": "The topic name", "versions": "0+", "entityType": "topicName"}
+        { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+          "about": "The topic name." }
       ]
     },
     { "name": "ResponsePartitionLimit", "type": "int32", "versions": "0+", "default": "2000",
       "about": "The maximum number of partitions included in the response." },
     { "name": "Cursor", "type": "Cursor", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The first topic and partition index to fetch details for.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+",
-        "about": "The name for the first topic to process", "versions": "0+", "entityType": "topicName"},
-      { "name": "PartitionIndex", "type": "int32", "versions": "0+", "about": "The partition index to start with"}
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The name for the first topic to process." },
+      { "name": "PartitionIndex", "type": "int32", "versions": "0+", "about": "The partition index to start with." }
     ]}
   ]
 }

@@ -86,6 +86,9 @@ public final class EventHandlerExceptionInfo {
             return new EventHandlerExceptionInfo(false, false, internal,
                 new PolicyViolationException("Unable to perform excessively large batch " +
                     "operation."));
+        } else if (internal instanceof PeriodicControlTaskException) {
+            // This exception is a periodic task which failed.
+            return new EventHandlerExceptionInfo(true, false, internal);
         } else if (internal instanceof InterruptedException) {
             // The controller event queue has been interrupted. This normally only happens during
             // a JUnit test that has hung. The test framework sometimes sends an InterruptException
@@ -164,10 +167,8 @@ public final class EventHandlerExceptionInfo {
             bld.append("event unable to start processing because of ");
         }
         bld.append(internalException.getClass().getSimpleName());
-        if (externalException.isPresent()) {
-            bld.append(" (treated as ").
-                append(externalException.get().getClass().getSimpleName()).append(")");
-        }
+        externalException.ifPresent(e -> bld.append(" (treated as ")
+                .append(e.getClass().getSimpleName()).append(")"));
         if (causesFailover()) {
             bld.append(" at epoch ").append(epoch);
         }

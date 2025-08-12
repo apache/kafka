@@ -373,19 +373,9 @@ public final class AssignmentTestUtils {
                 .collect(entriesToMap(TreeMap::new));
 
         if (!misassigned.isEmpty()) {
-            assertThat(
-                new StringBuilder().append("Found some over- or under-assigned tasks in the final assignment with ")
-                                   .append(numStandbyReplicas)
-                                   .append(" and max warmups ")
-                                   .append(maxWarmupReplicas)
-                                   .append(" standby replicas, stateful tasks:")
-                                   .append(statefulTasks)
-                                   .append(", and stateless tasks:")
-                                   .append(statelessTasks)
-                                   .append(failureContext)
-                                   .toString(),
-                misassigned,
-                is(emptyMap()));
+            assertThat("Found some over- or under-assigned tasks in the final assignment with " + numStandbyReplicas +
+                    " and max warmups " + maxWarmupReplicas + " standby replicas, stateful tasks:" + statefulTasks +
+                    ", and stateless tasks:" + statelessTasks + failureContext, misassigned, is(emptyMap()));
         }
     }
 
@@ -396,29 +386,13 @@ public final class AssignmentTestUtils {
                                                          final Map.Entry<ProcessId, ClientState> entry) {
         for (final TaskId standbyTask : entry.getValue().standbyTasks()) {
             if (statelessTasks.contains(standbyTask)) {
-                throw new AssertionError(
-                    new StringBuilder().append("Found a standby task for stateless task ")
-                                       .append(standbyTask)
-                                       .append(" on client ")
-                                       .append(entry)
-                                       .append(" stateless tasks:")
-                                       .append(statelessTasks)
-                                       .append(failureContext)
-                                       .toString()
-                );
+                throw new AssertionError("Found a standby task for stateless task " + standbyTask + " on client " +
+                        entry + " stateless tasks:" + statelessTasks + failureContext);
             } else if (assignments.containsKey(standbyTask)) {
                 assignments.get(standbyTask).add(entry.getKey());
             } else {
-                throw new AssertionError(
-                    new StringBuilder().append("Found an extra standby task ")
-                                       .append(standbyTask)
-                                       .append(" on client ")
-                                       .append(entry)
-                                       .append(" but expected stateful tasks:")
-                                       .append(statefulTasks)
-                                       .append(failureContext)
-                                       .toString()
-                );
+                throw new AssertionError("Found an extra standby task " + standbyTask + " on client " +
+                        entry + " but expected stateful tasks:" + statefulTasks + failureContext);
             }
         }
     }
@@ -432,18 +406,7 @@ public final class AssignmentTestUtils {
             if (assignments.containsKey(activeTask)) {
                 assignments.get(activeTask).add(entry.getKey());
             } else {
-                throw new AssertionError(
-                    new StringBuilder().append("Found an extra active task ")
-                                       .append(activeTask)
-                                       .append(" on client ")
-                                       .append(entry)
-                                       .append(" but expected stateful tasks:")
-                                       .append(statefulTasks)
-                                       .append(" and stateless tasks:")
-                                       .append(statelessTasks)
-                                       .append(failureContext)
-                                       .toString()
-                );
+                throw new AssertionError("Found an extra active task " + activeTask + " on client " + entry + " but expected stateful tasks:" + statefulTasks + " and stateless tasks:" + statelessTasks + failureContext);
             }
         }
     }
@@ -560,7 +523,7 @@ public final class AssignmentTestUtils {
     static <V> Matcher<ClientState> hasProperty(final String propertyName,
                                                 final Function<ClientState, V> propertyExtractor,
                                                 final V propertyValue) {
-        return new BaseMatcher<ClientState>() {
+        return new BaseMatcher<>() {
             @Override
             public void describeTo(final Description description) {
                 description.appendText(propertyName).appendText(":").appendValue(propertyValue);

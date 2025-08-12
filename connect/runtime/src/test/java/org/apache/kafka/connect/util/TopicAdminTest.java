@@ -65,7 +65,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -525,8 +524,6 @@ public class TopicAdminTest {
         Cluster cluster = createCluster(1, "myTopic", 1);
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
-            Map<TopicPartition, Long> offsetMap = new HashMap<>();
-            offsetMap.put(tp1, offset);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // This error should be treated as non-retriable and cause TopicAdmin::retryEndOffsets to fail
@@ -543,10 +540,7 @@ public class TopicAdminTest {
 
             Throwable cause = exception.getCause();
             assertNotNull(cause, "cause of failure should be preserved");
-            assertTrue(
-                    cause instanceof TopicAuthorizationException,
-                    "cause of failure should be accurately reported; expected topic authorization error, but was " + cause
-            );
+            assertInstanceOf(TopicAuthorizationException.class, cause, "cause of failure should be accurately reported; expected topic authorization error, but was " + cause);
         }
     }
 
@@ -559,8 +553,6 @@ public class TopicAdminTest {
         Cluster cluster = createCluster(1, "myTopic", 1);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
-            Map<TopicPartition, Long> offsetMap = new HashMap<>();
-            offsetMap.put(tp1, offset);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.UNKNOWN_TOPIC_OR_PARTITION));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
@@ -674,7 +666,7 @@ public class TopicAdminTest {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         TopicPartition tp2 = new TopicPartition(topicName, 1);
-        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(tp1, tp2));
+        Set<TopicPartition> tps = Set.of(tp1, tp2);
         long offset1 = 1001;
         long offset2 = 1002;
         Cluster cluster = createCluster(1, topicName, 2);

@@ -31,9 +31,10 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.function.Supplier;
 
-public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<SubscriptionWrapper<K>, K, Void> {
+public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<SubscriptionWrapper<KLeft>, KLeft, Void> {
+
     public SubscriptionWrapperSerde(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
-                                    final Serde<K> primaryKeySerde) {
+                                    final Serde<KLeft> primaryKeySerde) {
         super(
             new SubscriptionWrapperSerializer<>(primaryKeySerializationPseudoTopicSupplier,
                                                 primaryKeySerde == null ? null : primaryKeySerde.serializer()),
@@ -42,25 +43,25 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
         );
     }
 
-    private static class SubscriptionWrapperSerializer<K>
-        implements Serializer<SubscriptionWrapper<K>>, WrappingNullableSerializer<SubscriptionWrapper<K>, K, Void> {
+    private static class SubscriptionWrapperSerializer<KLeft>
+        implements Serializer<SubscriptionWrapper<KLeft>>, WrappingNullableSerializer<SubscriptionWrapper<KLeft>, KLeft, Void> {
 
         private final Supplier<String> primaryKeySerializationPseudoTopicSupplier;
         private String primaryKeySerializationPseudoTopic = null;
-        private Serializer<K> primaryKeySerializer;
+        private Serializer<KLeft> primaryKeySerializer;
         private boolean upgradeFromV0 = false;
 
         SubscriptionWrapperSerializer(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
-                                      final Serializer<K> primaryKeySerializer) {
+                                      final Serializer<KLeft> primaryKeySerializer) {
             this.primaryKeySerializationPseudoTopicSupplier = primaryKeySerializationPseudoTopicSupplier;
             this.primaryKeySerializer = primaryKeySerializer;
         }
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "resource"})
         @Override
         public void setIfUnset(final SerdeGetter getter) {
             if (primaryKeySerializer == null) {
-                primaryKeySerializer = (Serializer<K>) getter.keySerde().serializer();
+                primaryKeySerializer = (Serializer<KLeft>) getter.keySerde().serializer();
             }
         }
 
@@ -103,12 +104,11 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
         }
 
         @Override
-        public byte[] serialize(final String ignored, final SubscriptionWrapper<K> data) {
+        public byte[] serialize(final String ignored, final SubscriptionWrapper<KLeft> data) {
             //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
 
-            //7-bit (0x7F) maximum for data version.
-            if (Byte.compare((byte) 0x7F, data.version()) < 0) {
-                throw new UnsupportedVersionException("SubscriptionWrapper version is larger than maximum supported 0x7F");
+            if (data.version() < 0) {
+                throw new UnsupportedVersionException("SubscriptionWrapper version cannot be negative");
             }
 
             final int version = data.version();
@@ -121,7 +121,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             }
         }
 
-        private byte[] serializePrimaryKey(final SubscriptionWrapper<K> data) {
+        private byte[] serializePrimaryKey(final SubscriptionWrapper<KLeft> data) {
             if (primaryKeySerializationPseudoTopic == null) {
                 primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopicSupplier.get();
             }
@@ -132,7 +132,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             );
         }
 
-        private ByteBuffer serializeCommon(final SubscriptionWrapper<K> data, final byte version, final int extraLength) {
+        private ByteBuffer serializeCommon(final SubscriptionWrapper<KLeft> data, final byte version, final int extraLength) {
             final byte[] primaryKeySerializedData = serializePrimaryKey(data);
             final ByteBuffer buf;
             int dataLength = 2 + primaryKeySerializedData.length + extraLength;
@@ -155,40 +155,40 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             return buf;
         }
 
-        private byte[] serializeV0(final SubscriptionWrapper<K> data) {
+        private byte[] serializeV0(final SubscriptionWrapper<KLeft> data) {
             return serializeCommon(data, (byte) 0, 0).array();
         }
 
-        private byte[] serializeV1(final SubscriptionWrapper<K> data) {
+        private byte[] serializeV1(final SubscriptionWrapper<KLeft> data) {
             final ByteBuffer buf = serializeCommon(data, data.version(), Integer.BYTES);
             buf.putInt(data.primaryPartition());
             return buf.array();
         }
     }
 
-    private static class SubscriptionWrapperDeserializer<K>
-        implements Deserializer<SubscriptionWrapper<K>>, WrappingNullableDeserializer<SubscriptionWrapper<K>, K, Void> {
+    private static class SubscriptionWrapperDeserializer<KLeft>
+        implements Deserializer<SubscriptionWrapper<KLeft>>, WrappingNullableDeserializer<SubscriptionWrapper<KLeft>, KLeft, Void> {
 
         private final Supplier<String> primaryKeySerializationPseudoTopicSupplier;
         private String primaryKeySerializationPseudoTopic = null;
-        private Deserializer<K> primaryKeyDeserializer;
+        private Deserializer<KLeft> primaryKeyDeserializer;
 
         SubscriptionWrapperDeserializer(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
-                                        final Deserializer<K> primaryKeyDeserializer) {
+                                        final Deserializer<KLeft> primaryKeyDeserializer) {
             this.primaryKeySerializationPseudoTopicSupplier = primaryKeySerializationPseudoTopicSupplier;
             this.primaryKeyDeserializer = primaryKeyDeserializer;
         }
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "resource"})
         @Override
         public void setIfUnset(final SerdeGetter getter) {
             if (primaryKeyDeserializer == null) {
-                primaryKeyDeserializer = (Deserializer<K>) getter.keySerde().deserializer();
+                primaryKeyDeserializer = (Deserializer<KLeft>) getter.keySerde().deserializer();
             }
         }
 
         @Override
-        public SubscriptionWrapper<K> deserialize(final String ignored, final byte[] data) {
+        public SubscriptionWrapper<KLeft> deserialize(final String ignored, final byte[] data) {
             //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
@@ -220,7 +220,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopicSupplier.get();
             }
 
-            final K primaryKey = primaryKeyDeserializer.deserialize(
+            final KLeft primaryKey = primaryKeyDeserializer.deserialize(
                 primaryKeySerializationPseudoTopic,
                 primaryKeyRaw
             );

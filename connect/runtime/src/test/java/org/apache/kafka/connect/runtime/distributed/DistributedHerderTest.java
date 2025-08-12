@@ -114,9 +114,9 @@ import java.util.stream.IntStream;
 
 import javax.crypto.SecretKey;
 
+import static jakarta.ws.rs.core.Response.Status.FORBIDDEN;
+import static jakarta.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static java.util.Collections.singletonList;
-import static javax.ws.rs.core.Response.Status.FORBIDDEN;
-import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import static org.apache.kafka.connect.runtime.AbstractStatus.State.FAILED;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
@@ -312,6 +312,7 @@ public class DistributedHerderTest {
     public void setUp() throws Exception {
         time = new MockTime();
         metrics = new MockConnectMetrics(time);
+        when(worker.metrics()).thenReturn(metrics);
         AutoCloseable uponShutdown = shutdownCalled::countDown;
 
         // Default to the old protocol unless specified otherwise
@@ -320,7 +321,7 @@ public class DistributedHerderTest {
         herder = mock(DistributedHerder.class, withSettings().defaultAnswer(CALLS_REAL_METHODS).useConstructor(new DistributedConfig(HERDER_CONFIG),
                 worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time,
                 noneConnectorClientConfigOverridePolicy, Collections.emptyList(), null, new AutoCloseable[]{uponShutdown}));
-
+        verify(worker).getPlugins();
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener(time);
         conn1SinkConfig = new SinkConnectorConfig(plugins, CONN1_CONFIG);
@@ -1030,7 +1031,7 @@ public class DistributedHerderTest {
         // tasks are revoked
         TopicStatus fooStatus = new TopicStatus(FOO_TOPIC, CONN1, 0, time.milliseconds());
         TopicStatus barStatus = new TopicStatus(BAR_TOPIC, CONN1, 0, time.milliseconds());
-        when(statusBackingStore.getAllTopics(eq(CONN1))).thenReturn(new HashSet<>(Arrays.asList(fooStatus, barStatus)));
+        when(statusBackingStore.getAllTopics(eq(CONN1))).thenReturn(Set.of(fooStatus, barStatus));
         doNothing().when(statusBackingStore).deleteTopic(eq(CONN1), eq(FOO_TOPIC));
         doNothing().when(statusBackingStore).deleteTopic(eq(CONN1), eq(BAR_TOPIC));
 
@@ -1347,6 +1348,7 @@ public class DistributedHerderTest {
             return true;
         }).when(worker).startConnector(eq(CONN1), any(), any(), eq(herder), any(), stateCallback.capture());
         doNothing().when(member).wakeup();
+        when(worker.connectorVersion(any())).thenReturn(null);
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1377,6 +1379,7 @@ public class DistributedHerderTest {
         doNothing().when(statusBackingStore).put(eq(status));
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any())).thenReturn(true);
+        when(worker.taskVersion(any())).thenReturn(null);
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1418,6 +1421,8 @@ public class DistributedHerderTest {
         doNothing().when(statusBackingStore).put(eq(taskStatus));
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any())).thenReturn(true);
+        when(worker.taskVersion(any())).thenReturn(null);
+        when(worker.connectorVersion(any())).thenReturn(null);
 
         herder.doRestartConnectorAndTasks(restartRequest);
 
@@ -1669,6 +1674,7 @@ public class DistributedHerderTest {
         when(member.memberId()).thenReturn("member");
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
         when(worker.isSinkConnector(CONN1)).thenReturn(Boolean.TRUE);
+        when(worker.connectorVersion(CONN1)).thenReturn(null);
 
         WorkerConfigTransformer configTransformer = mock(WorkerConfigTransformer.class);
         // join
@@ -2333,8 +2339,6 @@ public class DistributedHerderTest {
         herder.connectorConfig(CONN1, connectorConfigCb);
         FutureCallback<List<TaskInfo>> taskConfigsCb = new FutureCallback<>();
         herder.taskConfigs(CONN1, taskConfigsCb);
-        FutureCallback<Map<ConnectorTaskId, Map<String, String>>> tasksConfigCb = new FutureCallback<>();
-        herder.tasksConfig(CONN1, tasksConfigCb);
 
         herder.tick();
         assertTrue(listConnectorsCb.isDone());
@@ -2351,11 +2355,6 @@ public class DistributedHerderTest {
                         new TaskInfo(TASK1, TASK_CONFIG),
                         new TaskInfo(TASK2, TASK_CONFIG)),
                 taskConfigsCb.get());
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = new HashMap<>();
-        tasksConfig.put(TASK0, TASK_CONFIG);
-        tasksConfig.put(TASK1, TASK_CONFIG);
-        tasksConfig.put(TASK2, TASK_CONFIG);
-        assertEquals(tasksConfig, tasksConfigCb.get());
 
         // Config transformation should not occur when requesting connector or task info
         verify(configTransformer, never()).transform(eq(CONN1), any());
@@ -3233,7 +3232,7 @@ public class DistributedHerderTest {
         taskConfigGenerations.put(CONN1, 3);
         taskConfigGenerations.put(CONN2, 4);
         taskConfigGenerations.put(conn3, 2);
-        Set<String> pendingFencing = new HashSet<>(Arrays.asList(CONN1, CONN2, conn3));
+        Set<String> pendingFencing = Set.of(CONN1, CONN2, conn3);
         ClusterConfigState configState = exactlyOnceSnapshot(
                 sessionKey,
                 TASK_CONFIGS_MAP,
@@ -3557,7 +3556,7 @@ public class DistributedHerderTest {
         herder = mock(DistributedHerder.class, withSettings().defaultAnswer(CALLS_REAL_METHODS).useConstructor(new DistributedConfig(HERDER_CONFIG),
                 worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time,
                 noneConnectorClientConfigOverridePolicy, Collections.emptyList(), new MockSynchronousExecutor(), new AutoCloseable[]{}));
-
+        verify(worker, times(2)).getPlugins();
         rebalanceListener = herder.new RebalanceListener(time);
 
         when(member.memberId()).thenReturn("member");
@@ -3999,6 +3998,7 @@ public class DistributedHerderTest {
     public void testModifyOffsetsSourceConnectorExactlyOnceEnabled() throws Exception {
         // Setup herder with exactly-once support for source connectors enabled
         herder = exactlyOnceHerder();
+        verify(worker, times(2)).getPlugins();
         rebalanceListener = herder.new RebalanceListener(time);
         // Get the initial assignment
         when(member.memberId()).thenReturn("leader");
@@ -4064,6 +4064,7 @@ public class DistributedHerderTest {
     public void testModifyOffsetsSourceConnectorExactlyOnceEnabledZombieFencingFailure() {
         // Setup herder with exactly-once support for source connectors enabled
         herder = exactlyOnceHerder();
+        verify(worker, times(2)).getPlugins();
         rebalanceListener = herder.new RebalanceListener(time);
 
         // Get the initial assignment

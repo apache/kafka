@@ -56,7 +56,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {}
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
 
     @Override
     public void flush() {

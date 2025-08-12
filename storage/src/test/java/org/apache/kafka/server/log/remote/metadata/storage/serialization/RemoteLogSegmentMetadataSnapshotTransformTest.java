@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class RemoteLogSegmentMetadataSnapshotTransformTest {
     @ParameterizedTest
     @MethodSource("parameters")
-    void testToAndFromMessage(Optional<CustomMetadata> customMetadata) {
+    void testToAndFromMessage(Optional<CustomMetadata> customMetadata, boolean isTxnIdxEmpty) {
         Map<Integer, Long> segmentLeaderEpochs = new HashMap<>();
         segmentLeaderEpochs.put(0, 0L);
         RemoteLogSegmentMetadataSnapshot snapshot = new RemoteLogSegmentMetadataSnapshot(
@@ -43,7 +43,8 @@ class RemoteLogSegmentMetadataSnapshotTransformTest {
                 0L, 100L, -1L, 0, 0, 1234,
                 customMetadata,
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                segmentLeaderEpochs
+                segmentLeaderEpochs,
+                isTxnIdxEmpty
         );
 
         RemoteLogSegmentMetadataSnapshotTransform transform = new RemoteLogSegmentMetadataSnapshotTransform();
@@ -51,11 +52,11 @@ class RemoteLogSegmentMetadataSnapshotTransformTest {
         assertEquals(snapshot, transform.fromApiMessageAndVersion(message));
     }
 
-    private static Stream<Object> parameters() {
+    private static Stream<Object[]> parameters() {
         return Stream.of(
-                Optional.of(new CustomMetadata(new byte[]{0, 1, 2, 3})),
-                Optional.of(new CustomMetadata(new byte[0])),
-                Optional.empty()
+                new Object[]{Optional.of(new CustomMetadata(new byte[]{0, 1, 2, 3})), true},
+                new Object[]{Optional.of(new CustomMetadata(new byte[0])), false},
+                new Object[]{Optional.empty(), true}
         );
     }
 }

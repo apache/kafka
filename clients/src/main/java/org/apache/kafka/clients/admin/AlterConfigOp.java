@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -27,11 +25,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * A class representing a alter configuration entry containing name, value and operation type.
- *
- * The API of this class is evolving, see {@link Admin} for details.
+ * A class representing an alter configuration entry containing name, value and operation type.
  */
-@InterfaceStability.Evolving
 public class AlterConfigOp {
 
     public enum OpType {

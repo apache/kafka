@@ -31,7 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -55,7 +54,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
 
     @Override
     public void handleRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
-        log.debug("Adding remote log segment : [{}]", remoteLogSegmentMetadata);
+        log.debug("Adding remote log segment: {}", remoteLogSegmentMetadata);
 
         final RemoteLogSegmentId remoteLogSegmentId = remoteLogSegmentMetadata.remoteLogSegmentId();
         TopicIdPartition topicIdPartition = remoteLogSegmentId.topicIdPartition();
@@ -71,7 +70,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
 
     @Override
     public void handleRemoteLogSegmentMetadataUpdate(RemoteLogSegmentMetadataUpdate rlsmUpdate) {
-        log.debug("Updating remote log segment: [{}]", rlsmUpdate);
+        log.debug("Updating remote log segment: {}", rlsmUpdate);
         RemoteLogSegmentId remoteLogSegmentId = rlsmUpdate.remoteLogSegmentId();
         TopicIdPartition topicIdPartition = remoteLogSegmentId.topicIdPartition();
         RemoteLogMetadataCache remoteLogMetadataCache = idToRemoteLogMetadataCache.get(topicIdPartition);
@@ -88,7 +87,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
 
     @Override
     public void handleRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata) {
-        log.debug("Received partition delete state with: [{}]", remotePartitionDeleteMetadata);
+        log.debug("Received partition delete state with: {}", remotePartitionDeleteMetadata);
 
         TopicIdPartition topicIdPartition = remotePartitionDeleteMetadata.topicIdPartition();
         idToPartitionDeleteMetadata.put(topicIdPartition, remotePartitionDeleteMetadata);
@@ -106,48 +105,45 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         idToRemoteLogMetadataCache.remove(topicIdPartition);
     }
 
-    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
+    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
             throws RemoteStorageException {
-        Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");
-
         return getRemoteLogMetadataCache(topicIdPartition).listAllRemoteLogSegments();
     }
 
-    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition, int leaderEpoch)
+    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition, int leaderEpoch)
             throws RemoteStorageException {
-        Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");
-
         return getRemoteLogMetadataCache(topicIdPartition).listRemoteLogSegments(leaderEpoch);
     }
 
     private RemoteLogMetadataCache getRemoteLogMetadataCache(TopicIdPartition topicIdPartition)
             throws RemoteResourceNotFoundException {
+        Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");
         RemoteLogMetadataCache remoteLogMetadataCache = idToRemoteLogMetadataCache.get(topicIdPartition);
         if (remoteLogMetadataCache == null) {
             throw new RemoteResourceNotFoundException("No resource found for partition: " + topicIdPartition);
         }
-
         if (!remoteLogMetadataCache.isInitialized()) {
             // Throwing a retriable ReplicaNotAvailableException here for clients retry.
             throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
         }
-
         return remoteLogMetadataCache;
     }
 
-    public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                       long offset,
-                                                                       int epochForOffset)
+    Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
+                                                                long offset,
+                                                                int epochForOffset)
             throws RemoteStorageException {
-        Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");
-
         return getRemoteLogMetadataCache(topicIdPartition).remoteLogSegmentMetadata(epochForOffset, offset);
     }
 
-    public Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
-                                           int leaderEpoch) throws RemoteStorageException {
-        Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");
+    Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
+                                                               int epoch,
+                                                               long offset) throws RemoteStorageException {
+        return getRemoteLogMetadataCache(topicIdPartition).nextSegmentWithTxnIndex(epoch, offset);
+    }
 
+    Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
+                                    int leaderEpoch) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).highestOffsetForEpoch(leaderEpoch);
     }
 
@@ -157,8 +153,8 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
 
         // Clear the entries by creating unmodifiable empty maps.
         // Practically, we do not use the same instances that are closed.
-        idToPartitionDeleteMetadata = Collections.emptyMap();
-        idToRemoteLogMetadataCache = Collections.emptyMap();
+        idToPartitionDeleteMetadata = Map.of();
+        idToRemoteLogMetadataCache = Map.of();
     }
 
     @Override

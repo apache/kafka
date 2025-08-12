@@ -129,6 +129,14 @@
       "type": "int8",
       "versions": "0+",
       "about": "State identifier of the remote log segment, which is RemoteLogSegmentState.id()."
+    },
+    {
+      "name": "TxnIndexEmpty",
+      "type": "bool",
+      "versions": "0+",
+      "about": "Flag to indicate if the transaction index is empty.",
+      "taggedVersions": "0+",
+      "tag": 0
     }
   ]
 }

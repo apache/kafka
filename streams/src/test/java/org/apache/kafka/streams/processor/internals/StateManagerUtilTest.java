@@ -69,7 +69,7 @@ public class StateManagerUtilTest {
     @Mock
     private InternalProcessorContext processorContext;
 
-    private Logger logger = new LogContext("test").logger(AbstractTask.class);
+    private final Logger logger = new LogContext("test").logger(AbstractTask.class);
 
     private final TaskId taskId = new TaskId(0, 0);
 
@@ -184,7 +184,7 @@ public class StateManagerUtilTest {
         doThrow(new ProcessorStateException("Close failed")).when(stateManager).close();
         when(stateManager.baseDir()).thenReturn(randomFile);
 
-        try (MockedStatic<Utils> utils = mockStatic(Utils.class)) {
+        try (MockedStatic<Utils> ignored = mockStatic(Utils.class)) {
             assertThrows(ProcessorStateException.class, () ->
                     StateManagerUtil.closeStateManager(logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
         }

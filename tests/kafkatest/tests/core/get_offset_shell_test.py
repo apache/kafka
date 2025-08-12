@@ -20,7 +20,6 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.console_consumer import ConsoleConsumer
 
@@ -51,7 +50,6 @@ class GetOffsetShellTest(Test):
     """
     def __init__(self, test_context):
         super(GetOffsetShellTest, self).__init__(test_context)
-        self.num_zk = 1
         self.num_brokers = 1
         self.messages_received_count = 0
         self.topics = {
@@ -64,16 +62,10 @@ class GetOffsetShellTest(Test):
             TOPIC_TEST_TOPIC_PARTITIONS2: {'partitions': 2, 'replication-factor': REPLICATION_FACTOR}
         }
 
-        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
-
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
-
     def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
             self.test_context, self.num_brokers,
-            self.zk, security_protocol=security_protocol,
+            None, security_protocol=security_protocol,
             interbroker_security_protocol=interbroker_security_protocol, topics=self.topics)
         self.kafka.start()
 

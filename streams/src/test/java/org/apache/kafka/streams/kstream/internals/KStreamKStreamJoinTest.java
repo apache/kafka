@@ -34,11 +34,11 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -57,7 +57,7 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
@@ -66,10 +66,8 @@ import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -452,43 +450,46 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void shouldThrottleEmitNonJoinedOuterRecordsEvenWhenClockDrift() {
-        /**
+        /*
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
         final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();
-        final KStreamKStreamJoinRightSide<String, String, String, String> join = new KStreamKStreamJoinRightSide<>(
+        final WindowStoreBuilder<String, String> otherStoreBuilder = new WindowStoreBuilder<>(
+            new InMemoryWindowBytesStoreSupplier(
                 "other",
-                new JoinWindowsInternal(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(1000))),
-                (key, v1, v2) -> v1 + v2,
-                true,
-                Optional.of("outer"),
-                tracker);
-        final Processor<String, String, String, String> joinProcessor = join.get();
-        final MockInternalNewProcessorContext<String, String> procCtx = new MockInternalNewProcessorContext<>();
-        final WindowStore<String, String> otherStore = new WindowStoreBuilder<>(
-                new InMemoryWindowBytesStoreSupplier(
-                        "other",
-                        1000L,
-                        100,
-                        false),
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()).build();
+                1000L,
+                100,
+                false),
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime());
+        final KeyValueStoreBuilder<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStoreBuilder = new KeyValueStoreBuilder<>(
+            new InMemoryKeyValueBytesStoreSupplier("outer"),
+            new TimestampedKeyAndJoinSideSerde<>(Serdes.String()),
+            new LeftOrRightValueSerde<>(Serdes.String(), Serdes.String()),
+            new MockTime()
+        );
+        final KStreamKStreamJoinRightSide<String, String, String, String> join = new KStreamKStreamJoinRightSide<>(
+            new JoinWindowsInternal(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(1000))),
+            (key, v1, v2) -> v1 + v2,
+            true,
+            tracker,
+            StoreBuilderWrapper.wrapStoreBuilder(otherStoreBuilder),
+            Optional.of(StoreBuilderWrapper.wrapStoreBuilder(outerStoreBuilder)));
 
-        final KeyValueStore<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStore = Mockito.spy(
-                new KeyValueStoreBuilder<>(
-                    new InMemoryKeyValueBytesStoreSupplier("outer"),
-                    new TimestampedKeyAndJoinSideSerde<>(Serdes.String()),
-                    new LeftOrRightValueSerde<>(Serdes.String(), Serdes.String()),
-                    new MockTime()
-                ).build());
+        final Processor<String, String, String, String> joinProcessor = join.get();
+        final MockInternalProcessorContext<String, String> procCtx = new MockInternalProcessorContext<>();
+        final WindowStore<String, String> otherStore = otherStoreBuilder.build();
+
+        final KeyValueStore<TimestampedKeyAndJoinSide<String>, LeftOrRightValue<String, String>> outerStore =
+            Mockito.spy(outerStoreBuilder.build());
 
         final GenericInMemoryKeyValueStore<String, String> rootStore = new GenericInMemoryKeyValueStore<>("root");
 
-        otherStore.init((StateStoreContext) procCtx, rootStore);
+        otherStore.init(procCtx, rootStore);
         procCtx.addStateStore(otherStore);
 
-        outerStore.init((StateStoreContext) procCtx, rootStore);
+        outerStore.init(procCtx, rootStore);
         procCtx.addStateStore(outerStore);
 
         joinProcessor.init(procCtx);
@@ -582,7 +583,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -704,7 +705,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -827,7 +828,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -1392,7 +1393,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -1659,7 +1660,7 @@ public class KStreamKStreamJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =

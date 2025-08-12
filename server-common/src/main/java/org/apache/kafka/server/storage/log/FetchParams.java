@@ -25,7 +25,6 @@ import java.util.Optional;
 import static org.apache.kafka.common.requests.FetchRequest.FUTURE_LOCAL_REPLICA_ID;
 
 public class FetchParams {
-    public final short requestVersion;
     public final int replicaId;
     public final long replicaEpoch;
     public final long maxWaitMs;
@@ -33,18 +32,28 @@ public class FetchParams {
     public final int maxBytes;
     public final FetchIsolation isolation;
     public final Optional<ClientMetadata> clientMetadata;
+    public final boolean shareFetchRequest;
 
-    public FetchParams(short requestVersion,
-                       int replicaId,
+    public FetchParams(int replicaId,
                        long replicaEpoch,
                        long maxWaitMs,
                        int minBytes,
                        int maxBytes,
                        FetchIsolation isolation,
                        Optional<ClientMetadata> clientMetadata) {
+        this(replicaId, replicaEpoch, maxWaitMs, minBytes, maxBytes, isolation, clientMetadata, false);
+    }
+
+    public FetchParams(int replicaId,
+                       long replicaEpoch,
+                       long maxWaitMs,
+                       int minBytes,
+                       int maxBytes,
+                       FetchIsolation isolation,
+                       Optional<ClientMetadata> clientMetadata,
+                       boolean shareFetchRequest) {
         Objects.requireNonNull(isolation);
         Objects.requireNonNull(clientMetadata);
-        this.requestVersion = requestVersion;
         this.replicaId = replicaId;
         this.replicaEpoch = replicaEpoch;
         this.maxWaitMs = maxWaitMs;
@@ -52,6 +61,7 @@ public class FetchParams {
         this.maxBytes = maxBytes;
         this.isolation = isolation;
         this.clientMetadata = clientMetadata;
+        this.shareFetchRequest = shareFetchRequest;
     }
 
     public boolean isFromFollower() {
@@ -67,11 +77,7 @@ public class FetchParams {
     }
 
     public boolean fetchOnlyLeader() {
-        return isFromFollower() || (isFromConsumer() && !clientMetadata.isPresent());
-    }
-
-    public boolean hardMaxBytesLimit() {
-        return requestVersion <= 2;
+        return isFromFollower() || (isFromConsumer() && clientMetadata.isEmpty()) || shareFetchRequest;
     }
 
     @Override
@@ -79,40 +85,40 @@ public class FetchParams {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         FetchParams that = (FetchParams) o;
-        return requestVersion == that.requestVersion
-                && replicaId == that.replicaId
+        return replicaId == that.replicaId
                 && replicaEpoch == that.replicaEpoch
                 && maxWaitMs == that.maxWaitMs
                 && minBytes == that.minBytes
                 && maxBytes == that.maxBytes
                 && isolation.equals(that.isolation)
-                && clientMetadata.equals(that.clientMetadata);
+                && clientMetadata.equals(that.clientMetadata)
+                && shareFetchRequest == that.shareFetchRequest;
     }
 
     @Override
     public int hashCode() {
-        int result = requestVersion;
-        result = 31 * result + replicaId;
+        int result = replicaId;
         result = 31 * result + (int) replicaEpoch;
         result = 31 * result + Long.hashCode(32);
         result = 31 * result + minBytes;
         result = 31 * result + maxBytes;
         result = 31 * result + isolation.hashCode();
         result = 31 * result + clientMetadata.hashCode();
+        result = 31 * result + Boolean.hashCode(shareFetchRequest);
         return result;
     }
 
     @Override
     public String toString() {
         return "FetchParams(" +
-                "requestVersion=" + requestVersion +
-                ", replicaId=" + replicaId +
+                "replicaId=" + replicaId +
                 ", replicaEpoch=" + replicaEpoch +
                 ", maxWaitMs=" + maxWaitMs +
                 ", minBytes=" + minBytes +
                 ", maxBytes=" + maxBytes +
                 ", isolation=" + isolation +
                 ", clientMetadata=" + clientMetadata +
+                ", shareFetchRequest=" + shareFetchRequest +
                 ')';
     }
 }

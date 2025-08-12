@@ -37,6 +37,7 @@ public interface Group {
         CONSUMER("consumer"),
         CLASSIC("classic"),
         SHARE("share"),
+        STREAMS("streams"),
         UNKNOWN("unknown");
 
         private final String name;
@@ -66,6 +67,13 @@ public interface Group {
             GroupType type = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
 
             return type == null ? UNKNOWN : type;
+        }
+        
+        static String[] documentValidValues() {
+            return Arrays.stream(GroupType.values())
+                .filter(type -> type != UNKNOWN)
+                .map(GroupType::toString)
+                .toArray(String[]::new);
         }
     }
 
@@ -109,7 +117,7 @@ public interface Group {
         String groupInstanceId,
         int generationIdOrMemberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
 
     ) throws KafkaException;
 
@@ -187,4 +195,18 @@ public interface Group {
      * @return The number of members.
      */
     int numMembers();
+
+    /**
+     * Requests a metadata refresh.
+     */
+    void requestMetadataRefresh();
+
+    /**
+     * Returns whether this group should be expired or not.
+     *
+     * @return whether the group should be expired.
+     */
+    default boolean shouldExpire() {
+        return true;
+    }
 }

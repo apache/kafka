@@ -58,9 +58,9 @@
     },
     { "name": "NextCursor", "type": "Cursor", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The next topic and partition index to fetch details for.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+",
-        "about": "The name for the first topic to process", "versions": "0+", "entityType": "topicName"},
-      { "name": "PartitionIndex", "type": "int32", "versions": "0+", "about": "The partition index to start with"}
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The name for the first topic to process." },
+      { "name": "PartitionIndex", "type": "int32", "versions": "0+", "about": "The partition index to start with." }
     ]}
   ]
 }

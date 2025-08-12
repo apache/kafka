@@ -235,7 +235,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         if (isCompressed())
             return new DeepRecordsIterator(this, false, Integer.MAX_VALUE, bufferSupplier);
 
-        return new CloseableIterator<Record>() {
+        return new CloseableIterator<>() {
             private boolean hasNext = true;
 
             @Override

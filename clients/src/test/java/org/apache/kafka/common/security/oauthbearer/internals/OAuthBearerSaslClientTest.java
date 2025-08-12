@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class OAuthBearerSaslClientTest {
 
-    private static final Map<String, String> TEST_PROPERTIES = new LinkedHashMap<String, String>() {
+    private static final Map<String, String> TEST_PROPERTIES = new LinkedHashMap<>() {
         {
             put("One", "1");
             put("Two", "2");

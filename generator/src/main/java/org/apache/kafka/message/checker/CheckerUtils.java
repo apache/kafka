@@ -22,8 +22,22 @@ import org.apache.kafka.message.MessageGenerator;
 import org.apache.kafka.message.MessageSpec;
 import org.apache.kafka.message.Versions;
 
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectLoader;
+import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevTree;
+import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.treewalk.TreeWalk;
+import org.eclipse.jgit.treewalk.filter.PathFilter;
+
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
@@ -65,7 +79,7 @@ class CheckerUtils {
         FieldSpec field,
         Versions topLevelFlexibleVersions
     ) {
-        if (!field.flexibleVersions().isPresent()) {
+        if (field.flexibleVersions().isEmpty()) {
             if (!topLevelFlexibleVersions.contains(field.taggedVersions())) {
                 throw new RuntimeException("Tagged versions for " + what + " " +
                         field.name() + " are " + field.taggedVersions() + ", but top " +
@@ -89,6 +103,68 @@ class CheckerUtils {
             return MessageGenerator.JSON_SERDE.readValue(new File(schemaPath), MessageSpec.class);
         } catch (Exception e) {
             throw new RuntimeException("Unable to parse file as MessageSpec: " + schemaPath, e);
+        }
+    }
+
+    /**
+     * Return a MessageSpec file give file contents.
+     *
+     * @param contents      The path to read the file from.
+     * @return              The MessageSpec.
+     */
+    static MessageSpec readMessageSpecFromString(String contents) {
+        try {
+            return MessageGenerator.JSON_SERDE.readValue(contents, MessageSpec.class);
+        } catch (Exception e) {
+            throw new RuntimeException("Unable to parse string as MessageSpec: " + contents, e);
+        }
+    }
+
+    /**
+     * Read the file from the specified git reference.
+     *
+     * @param filePath The fully qualified file path. The git directory will be derived from this.
+     * @param gitRef The specific git reference to be used for comparison.
+     * @return The file contents.
+     */
+    static String readFileFromGitRef(String filePath, String gitRef) throws IOException {
+        Path fileAbsolutePath = Paths.get(filePath).toAbsolutePath();
+
+        // traverse up parent directories until .git directory is found
+        Path projectRoot = fileAbsolutePath.getParent();
+        if (projectRoot == null) {
+            throw new RuntimeException("The file path provided does not have a parent directory");
+        }
+        while (!Files.exists(projectRoot.resolve(".git"))) {
+            projectRoot = projectRoot.getParent();
+            if (projectRoot == null) {
+                throw new RuntimeException("Invalid path, need to be within a Git repository");
+            }
+        }
+
+        String pathFromProjectRoot = projectRoot.relativize(fileAbsolutePath).toString();
+
+        Git git = Git.open(Paths.get(projectRoot.toString(), ".git").toFile());
+        Repository repository = git.getRepository();
+        Ref head = repository.getRefDatabase().findRef(gitRef);
+        if (head == null) {
+            throw new IllegalStateException("Cannot find " + gitRef + " in the repository.");
+        }
+
+        try (RevWalk revWalk = new RevWalk(repository)) {
+            RevCommit commit = revWalk.parseCommit(head.getObjectId());
+            RevTree tree = commit.getTree();
+            try (TreeWalk treeWalk = new TreeWalk(repository)) {
+                treeWalk.addTree(tree);
+                treeWalk.setRecursive(true);
+                treeWalk.setFilter(PathFilter.create(String.valueOf(Paths.get(pathFromProjectRoot))));
+                if (!treeWalk.next()) {
+                    throw new IllegalStateException("Did not find expected file " + pathFromProjectRoot);
+                }
+                ObjectId objectId = treeWalk.getObjectId(0);
+                ObjectLoader loader = repository.open(objectId);
+                return new String(loader.getBytes(), StandardCharsets.UTF_8);
+            }
         }
     }
 }

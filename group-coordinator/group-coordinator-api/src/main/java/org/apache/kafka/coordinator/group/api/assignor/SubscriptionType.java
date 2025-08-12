@@ -16,21 +16,18 @@
  */
 package org.apache.kafka.coordinator.group.api.assignor;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * The subscription type followed by a consumer group.
  */
-@InterfaceStability.Unstable
 public enum SubscriptionType {
     /**
      * A homogeneous subscription type means that all the members
-     * of the group are subscribed to the same set of topics.
+     * of the group use the same subscription.
      */
     HOMOGENEOUS("Homogeneous"),
     /**
      * A heterogeneous subscription type means that not all the members
-     * of the group are subscribed to the same set of topics.
+     * of the group use the same subscription.
      */
     HETEROGENEOUS("Heterogeneous");
 

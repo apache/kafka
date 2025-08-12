@@ -232,10 +232,10 @@ public class ErrorReporterTest {
     @Test
     public void testSetDLQConfigs() {
         SinkConnectorConfig configuration = config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC));
-        assertEquals(configuration.dlqTopicName(), DLQ_TOPIC);
+        assertEquals(DLQ_TOPIC, configuration.dlqTopicName());
 
         configuration = config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "7"));
-        assertEquals(configuration.dlqTopicReplicationFactor(), 7);
+        assertEquals(7, configuration.dlqTopicReplicationFactor());
     }
 
     @Test

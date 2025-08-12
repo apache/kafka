@@ -19,21 +19,18 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataManagerTestUtils;
 import org.apache.kafka.server.log.remote.metadata.storage.RemotePartitionMetadataStore;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 
-import org.junit.jupiter.api.extension.ExtendWith;
-
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_FINISHED;
 import static org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteState.DELETE_PARTITION_FINISHED;
@@ -44,7 +41,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@ExtendWith(ClusterTestExtensions.class)
 @ClusterTestDefaults(brokers = 3)
 public class RemoteLogMetadataManagerTest {
     private final ClusterInstance clusterInstance;
@@ -61,7 +57,6 @@ public class RemoteLogMetadataManagerTest {
     private TopicBasedRemoteLogMetadataManager topicBasedRlmm() {
         return RemoteLogMetadataManagerTestUtils.builder()
                 .bootstrapServers(clusterInstance.bootstrapServers())
-                .startConsumerThread(true)
                 .remotePartitionMetadataStore(RemotePartitionMetadataStore::new)
                 .build();
     }
@@ -69,10 +64,10 @@ public class RemoteLogMetadataManagerTest {
     @ClusterTest
     public void testFetchSegments() throws Exception {
         try (TopicBasedRemoteLogMetadataManager remoteLogMetadataManager = topicBasedRlmm()) {
-            remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(TP0), Collections.emptySet());
+            remoteLogMetadataManager.onPartitionLeadershipChanges(Set.of(TP0), Set.of());
 
             // 1.Create a segment with state COPY_SEGMENT_STARTED, and this segment should not be available.
-            Map<Integer, Long> segmentLeaderEpochs = Collections.singletonMap(0, 101L);
+            Map<Integer, Long> segmentLeaderEpochs = Map.of(0, 101L);
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(
                     segmentId, 101L, 200L, -1L, BROKER_ID_0, time.milliseconds(), SEG_SIZE, segmentLeaderEpochs);
@@ -99,8 +94,8 @@ public class RemoteLogMetadataManagerTest {
     @ClusterTest
     public void testRemotePartitionDeletion() throws Exception {
         try (TopicBasedRemoteLogMetadataManager remoteLogMetadataManager = topicBasedRlmm()) {
-            remoteLogMetadataManager.configure(Collections.emptyMap());
-            remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(TP0), Collections.emptySet());
+            remoteLogMetadataManager.configure(Map.of());
+            remoteLogMetadataManager.onPartitionLeadershipChanges(Set.of(TP0), Set.of());
 
             // Create remote log segment metadata and add them to RLMM.
 

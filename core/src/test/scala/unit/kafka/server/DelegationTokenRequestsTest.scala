@@ -16,7 +16,7 @@
   */
 package kafka.server
 
-import kafka.api.{IntegrationTestHarness, KafkaSasl, SaslSetup}
+import kafka.api.{IntegrationTestHarness, SaslSetup}
 import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
@@ -25,14 +25,12 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.util
-import scala.compat.java8.OptionConverters
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -52,7 +50,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
   }
 
@@ -65,9 +63,8 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     config
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testDelegationTokenRequests(quorum: String): Unit = {
+  @Test
+  def testDelegationTokenRequests(): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
     // create token1 with renewer1
@@ -151,7 +148,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     // Create a DelegationToken with a short lifetime to validate the expire code
     val createResult5 = adminClient.createDelegationToken(new CreateDelegationTokenOptions()
       .renewers(renewer1)
-      .maxlifeTimeMs(1 * 1000))
+      .maxLifetimeMs(1 * 1000))
     val token5 = createResult5.delegationToken().get()
 
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),

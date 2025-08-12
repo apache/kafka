@@ -24,13 +24,16 @@ import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -45,6 +48,7 @@ import java.util.Optional;
 
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.clients.consumer.StickyAssignor.serializeTopicPartitionAssignment;
+import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_CONSUMER_RACK;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_RACK_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -79,6 +83,14 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     @Override
     public ByteBuffer generateUserData(List<String> topics, List<TopicPartition> partitions, int generation) {
         return serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation)));
+    }
+
+    @Timeout(30)
+    @ParameterizedTest(name = TEST_NAME_WITH_CONSUMER_RACK)
+    @ValueSource(booleans = {false, true})
+    @Flaky(value = "KAFKA-18797", comment = "Remove this override once the flakiness has been resolved.")
+    public void testLargeAssignmentAndGroupWithUniformSubscription(boolean hasConsumerRack) {
+        super.testLargeAssignmentAndGroupWithUniformSubscription(hasConsumerRack);
     }
 
     @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)

@@ -24,7 +24,7 @@ from kafkatest.services.kafka import KafkaService, config_property, quorum, cons
 from kafkatest.services.connect import ConnectDistributedService, ConnectServiceBase, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, LATEST_2_3, LATEST_2_2, LATEST_2_1, LATEST_2_0, LATEST_1_1, LATEST_1_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_2_3, LATEST_2_2, LATEST_2_1, KafkaVersion
 
 from functools import reduce
 from collections import Counter, namedtuple
@@ -175,17 +175,10 @@ class ConnectDistributedTest(Test):
     @matrix(
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        exactly_once_source=[True, False],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_restart_failed_connector(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_restart_failed_connector(self, exactly_once_source, connect_protocol, metadata_quorum, group_protocol=None):
         self.EXACTLY_ONCE_SOURCE_SUPPORT = 'enabled' if exactly_once_source else 'disabled'
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -210,17 +203,10 @@ class ConnectDistributedTest(Test):
     @matrix(
         connector_type=['source', 'exactly-once source', 'sink'],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        connector_type=['source', 'exactly-once source', 'sink'],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_restart_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_restart_failed_task(self, connector_type, connect_protocol, metadata_quorum, group_protocol=None):
         self.EXACTLY_ONCE_SOURCE_SUPPORT = 'enabled' if connector_type == 'exactly-once source' else 'disabled'
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -247,16 +233,10 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=5)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol, metadata_quorum, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -277,17 +257,10 @@ class ConnectDistributedTest(Test):
     @matrix(
         connector_type=['source', 'sink'],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        connector_type=['source', 'sink'],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol, metadata_quorum, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -314,16 +287,9 @@ class ConnectDistributedTest(Test):
     @matrix(
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
+        metadata_quorum=[quorum.isolated_kraft]
     )
-    @matrix(
-        exactly_once_source=[True, False],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
-    )
-    def test_pause_and_resume_source(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_pause_and_resume_source(self, exactly_once_source, connect_protocol, metadata_quorum):
         """
         Verify that source connectors stop producing records when paused and begin again after
         being resumed.
@@ -366,16 +332,10 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=5)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_pause_and_resume_sink(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_pause_and_resume_sink(self, connect_protocol, metadata_quorum, group_protocol=None):
         """
         Verify that sink connectors stop consuming records when paused and begin again after
         being resumed.
@@ -425,16 +385,9 @@ class ConnectDistributedTest(Test):
     @matrix(
         exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
+        metadata_quorum=[quorum.isolated_kraft]
     )
-    @matrix(
-        exactly_once_source=[True, False],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
-    )
-    def test_pause_state_persistent(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_pause_state_persistent(self, exactly_once_source, connect_protocol, metadata_quorum):
         """
         Verify that paused state is preserved after a cluster restart.
         """
@@ -461,7 +414,8 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector startup in PAUSED state")
 
     @cluster(num_nodes=5)
-    def test_dynamic_logging(self):
+    @parametrize(metadata_quorum=quorum.isolated_kraft)
+    def test_dynamic_logging(self, metadata_quorum):
         """
         Test out the REST API for dynamically adjusting logging levels, on both a single-worker and cluster-wide basis.
         """
@@ -574,7 +528,16 @@ class ConnectDistributedTest(Test):
         # have been discarded
         self._restart_worker(worker)
         restarted_loggers = self.cc.get_all_loggers(worker)
-        assert initial_loggers == restarted_loggers
+
+        for loggerName in restarted_loggers:
+            logger = self.cc.get_logger(worker, loggerName)
+            level = logger['level']
+            # ConsumerConfig logger is pre-defined in log4j2 config with ERROR level,
+            # while other loggers should be set to DEBUG level
+            if loggerName == 'org.apache.kafka.clients.consumer.ConsumerConfig':
+                assert level == 'ERROR'
+            else:
+                assert level == 'DEBUG'
 
     def _different_level(self, current_level):
         return 'INFO' if current_level is None or current_level.upper() != 'INFO' else 'WARN'
@@ -641,20 +604,12 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=6)
     @matrix(
         security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
-        exactly_once_source=[True, False],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
         exactly_once_source=[True, False], 
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_file_source_and_sink(self, security_protocol, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_file_source_and_sink(self, security_protocol, exactly_once_source, connect_protocol, metadata_quorum, group_protocol=None):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
         correctly created, tasks instantiated, and as nodes restart the work is rebalanced across nodes.
@@ -693,17 +648,10 @@ class ConnectDistributedTest(Test):
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        clean=[True, False],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_bounce(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_bounce(self, clean, connect_protocol, metadata_quorum, group_protocol=None):
         """
         Validates that source and sink tasks that run continuously and produce a predictable sequence of messages
         run correctly and deliver messages exactly once when Kafka Connect workers undergo clean rolling bounces,
@@ -826,16 +774,9 @@ class ConnectDistributedTest(Test):
     @matrix(
         clean=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
+        metadata_quorum=[quorum.isolated_kraft]
     )
-    @matrix(
-        clean=[True, False],
-        connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
-    )
-    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False):
+    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum):
         """
         Validates that source tasks run correctly and deliver messages exactly once
         when Kafka Connect workers undergo bounces, both clean and unclean.
@@ -933,16 +874,10 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=6)
     @matrix(
         connect_protocol=['sessioned', 'compatible', 'eager'],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_transformations(self, connect_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_transformations(self, connect_protocol, metadata_quorum, group_protocol=None):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services(timestamp_type='CreateTime', include_filestream_connectors=True)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -999,32 +934,23 @@ class ConnectDistributedTest(Test):
             assert obj['payload'][ts_fieldname] == ts
 
     @cluster(num_nodes=5)
-    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
-    @parametrize(broker_version=str(LATEST_2_3), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
-    @parametrize(broker_version=str(LATEST_2_2), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
-    @parametrize(broker_version=str(LATEST_2_1), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
-    @parametrize(broker_version=str(LATEST_2_0), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
-    @parametrize(broker_version=str(LATEST_1_1), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
-    @parametrize(broker_version=str(LATEST_1_0), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned')
-    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=False, connect_protocol='sessioned')
-    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible')
-    @parametrize(broker_version=str(LATEST_2_3), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible')
-    @parametrize(broker_version=str(LATEST_2_2), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible')
-    @parametrize(broker_version=str(LATEST_2_1), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible')
-    @parametrize(broker_version=str(LATEST_2_0), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible')
-    @parametrize(broker_version=str(LATEST_1_1), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible')
-    @parametrize(broker_version=str(LATEST_1_0), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible')
-    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager')
-    @parametrize(broker_version=str(LATEST_2_3), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager')
-    @parametrize(broker_version=str(LATEST_2_2), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager')
-    @parametrize(broker_version=str(LATEST_2_1), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager')
-    @parametrize(broker_version=str(LATEST_2_0), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager')
-    @parametrize(broker_version=str(LATEST_1_1), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager')
-    @parametrize(broker_version=str(LATEST_1_0), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager')
-    def test_broker_compatibility(self, broker_version, auto_create_topics, exactly_once_source, connect_protocol):
+    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned', metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_2_3), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned', metadata_quorum=quorum.zk)
+    @parametrize(broker_version=str(LATEST_2_2), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned', metadata_quorum=quorum.zk)
+    @parametrize(broker_version=str(LATEST_2_1), auto_create_topics=False, exactly_once_source=True, connect_protocol='sessioned', metadata_quorum=quorum.zk)
+    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=False, connect_protocol='sessioned', metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible', metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_2_3), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible', metadata_quorum=quorum.zk)
+    @parametrize(broker_version=str(LATEST_2_2), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible', metadata_quorum=quorum.zk)
+    @parametrize(broker_version=str(LATEST_2_1), auto_create_topics=False, exactly_once_source=False, connect_protocol='compatible', metadata_quorum=quorum.zk)
+    @parametrize(broker_version=str(DEV_BRANCH), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager', metadata_quorum=quorum.isolated_kraft)
+    @parametrize(broker_version=str(LATEST_2_3), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager', metadata_quorum=quorum.zk)
+    @parametrize(broker_version=str(LATEST_2_2), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager', metadata_quorum=quorum.zk)
+    @parametrize(broker_version=str(LATEST_2_1), auto_create_topics=False, exactly_once_source=False, connect_protocol='eager', metadata_quorum=quorum.zk)
+    def test_broker_compatibility(self, broker_version, auto_create_topics, exactly_once_source, connect_protocol, metadata_quorum):
         """
-        Verify that Connect will start up with various broker versions with various configurations. 
-        When Connect distributed starts up, it either creates internal topics (v0.10.1.0 and after) 
+        Verify that Connect will start up with various broker versions with various configurations.
+        When Connect distributed starts up, it either creates internal topics (v0.10.1.0 and after)
         or relies upon the broker to auto-create the topics (v0.10.0.x and before).
         """
         self.EXACTLY_ONCE_SOURCE_SUPPORT = 'enabled' if exactly_once_source else 'disabled'

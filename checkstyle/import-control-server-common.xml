@@ -38,12 +38,13 @@
     <disallow pkg="kafka" />
 
     <!-- anyone can use public classes -->
-    <allow pkg="org.apache.kafka.common" exact-match="true" />
+    <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.common.security" />
     <allow pkg="org.apache.kafka.common.serialization" />
     <allow pkg="org.apache.kafka.common.utils" />
     <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
     <allow pkg="org.apache.kafka.common.memory" />
+    <allow pkg="org.apache.kafka.common.test.api" />
 
     <!-- persistent collection factories/non-library-specific wrappers -->
     <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
@@ -72,6 +73,7 @@
 
         <subpackage name="common">
             <allow pkg="org.apache.kafka.server.common" />
+            <allow pkg="org.apache.kafka.clients" />
         </subpackage>
 
         <subpackage name="immutable">
@@ -90,6 +92,21 @@
 
         <subpackage name="network">
             <allow pkg="org.apache.kafka.server.authorizer" />
+        </subpackage>
+
+        <subpackage name="purgatory">
+            <allow pkg="org.apache.kafka.server.metrics" />
+            <allow pkg="org.apache.kafka.server.util" />
+            <allow pkg="com.yammer.metrics.core" />
+        </subpackage>
+
+        <subpackage name="share">
+          <allow pkg="org.apache.kafka.server.share" />
+          <subpackage name="persister">
+            <allow pkg="org.apache.kafka.clients" />
+            <allow pkg="org.apache.kafka.server.util" />
+            <allow pkg="org.apache.kafka.test" />
+          </subpackage>
         </subpackage>
 
         <subpackage name="util">
@@ -113,6 +130,7 @@
         </subpackage>
         <subpackage name="config">
             <allow pkg="org.apache.kafka.server"/>
+            <allow pkg="org.apache.kafka.clients"/>
         </subpackage>
     </subpackage>
 

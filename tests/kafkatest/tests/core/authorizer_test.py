@@ -19,7 +19,6 @@ from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 
 from kafkatest.services.kafka import KafkaService, quorum
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.security.kafka_acls import ACLs
 
 class AuthorizerTest(Test):
@@ -44,20 +43,11 @@ class AuthorizerTest(Test):
 
     @cluster(num_nodes=4)
     @parametrize(metadata_quorum=quorum.isolated_kraft, authorizer_class=KafkaService.KRAFT_ACL_AUTHORIZER)
-    @parametrize(metadata_quorum=quorum.isolated_kraft, authorizer_class=KafkaService.ZK_ACL_AUTHORIZER)
-    @parametrize(metadata_quorum=quorum.zk, authorizer_class=KafkaService.ZK_ACL_AUTHORIZER)
     def test_authorizer(self, metadata_quorum, authorizer_class):
         topics = {"test_topic": {"partitions": 1, "replication-factor": 1}}
 
-        if (authorizer_class == KafkaService.KRAFT_ACL_AUTHORIZER):
-            self.zk = None
-        else:
-            self.zk = ZookeeperService(self.test_context, num_nodes=1)
-            self.zk.start()
-
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
-                                  topics=topics, controller_num_nodes_override=1,
-                                  allow_zk_with_kraft=True)
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=None,
+                                  topics=topics, controller_num_nodes_override=1)
 
         broker_security_protocol = "SSL"
         broker_principal = "User:CN=systemtest"
@@ -108,8 +98,9 @@ class AuthorizerTest(Test):
 
         # add ACLs
         self.logger.info("Adding ACLs with broker credentials so that alter client quotas command will succeed")
-        self.acls.add_cluster_acl(self.kafka, client_principal, force_use_zk_connection=False,
-                                  additional_cluster_operations_to_grant=['AlterConfigs'], security_protocol=broker_security_protocol)
+        self.acls.add_cluster_acl(self.kafka, client_principal,
+                                  additional_cluster_operations_to_grant=['AlterConfigs'],
+                                  security_protocol=broker_security_protocol)
 
         # the alter client quotas command should now succeed again
         self.logger.info(alter_client_quotas_cmd_log_msg)

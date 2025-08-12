@@ -59,7 +59,7 @@ public class ProducerManager implements Closeable {
      * @param remoteLogMetadata RemoteLogMetadata to be published
      * @return
      */
-    public CompletableFuture<RecordMetadata> publishMessage(RemoteLogMetadata remoteLogMetadata) {
+    CompletableFuture<RecordMetadata> publishMessage(RemoteLogMetadata remoteLogMetadata) {
         CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
 
         TopicIdPartition topicIdPartition = remoteLogMetadata.topicIdPartition();

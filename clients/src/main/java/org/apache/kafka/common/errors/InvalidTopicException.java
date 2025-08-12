@@ -27,7 +27,7 @@ import java.util.Set;
  *
  * @see UnknownTopicOrPartitionException
  */
-public class InvalidTopicException extends ApiException {
+public class InvalidTopicException extends InvalidConfigurationException {
     private static final long serialVersionUID = 1L;
 
     private final Set<String> invalidTopics;

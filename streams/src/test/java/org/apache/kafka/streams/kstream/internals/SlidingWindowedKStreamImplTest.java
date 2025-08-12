@@ -208,7 +208,7 @@ public class SlidingWindowedKStreamImplTest {
             {
                 final WindowStore<String, Long> windowStore = driver.getWindowStore("count-store");
                 final List<KeyValue<Windowed<String>, Long>> data =
-                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
                 assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), 1L),
@@ -223,7 +223,7 @@ public class SlidingWindowedKStreamImplTest {
                 final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
                     driver.getTimestampedWindowStore("count-store");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
-                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), ValueAndTimestamp.make(1L, 100L)),
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), ValueAndTimestamp.make(2L, 150L)),
@@ -248,7 +248,7 @@ public class SlidingWindowedKStreamImplTest {
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("reduced");
                 final List<KeyValue<Windowed<String>, String>> data =
-                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), "1"),
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), "1+2"),
@@ -262,7 +262,7 @@ public class SlidingWindowedKStreamImplTest {
                 final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
                     driver.getTimestampedWindowStore("reduced");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
-                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), ValueAndTimestamp.make("1", 100L)),
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), ValueAndTimestamp.make("1+2", 150L)),
@@ -289,7 +289,7 @@ public class SlidingWindowedKStreamImplTest {
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("aggregated");
                 final List<KeyValue<Windowed<String>, String>> data =
-                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), "0+1"),
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), "0+1+2"),
@@ -303,7 +303,7 @@ public class SlidingWindowedKStreamImplTest {
                 final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
                     driver.getTimestampedWindowStore("aggregated");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
-                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), ValueAndTimestamp.make("0+1", 100L)),
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), ValueAndTimestamp.make("0+1+2", 150L)),
@@ -410,7 +410,7 @@ public class SlidingWindowedKStreamImplTest {
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("aggregated");
                 final List<KeyValue<Windowed<String>, String>> data =
-                    StreamsTestUtils.toList(windowStore.fetch("1", "1", ofEpochMilli(0), ofEpochMilli(10000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "1", ofEpochMilli(0), ofEpochMilli(10000L)));
                 assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(900, 1000)), "0+4"),
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(1900, 2000)), "0+5"))));
@@ -419,7 +419,7 @@ public class SlidingWindowedKStreamImplTest {
                 final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
                     driver.getTimestampedWindowStore("aggregated");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
-                    StreamsTestUtils.toList(windowStore.fetch("1", "1", ofEpochMilli(0), ofEpochMilli(2000L)));
+                    StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "1", ofEpochMilli(0), ofEpochMilli(2000L)));
                 assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(900, 1000)), ValueAndTimestamp.make("0+4", 1000L)),
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(1900, 2000)), ValueAndTimestamp.make("0+5", 2000L)))));

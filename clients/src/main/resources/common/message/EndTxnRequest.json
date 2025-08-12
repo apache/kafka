@@ -16,7 +16,7 @@
 {
   "apiKey": 26,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "EndTxnRequest",
   // Version 1 is the same as version 0.
   //
@@ -27,7 +27,7 @@
   // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   //
   // Version 5 enables bumping epoch on every transaction (KIP-890 Part 2)
-  "latestVersionUnstable": true,
+  "latestVersionUnstable": false,
   "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [

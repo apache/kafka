@@ -155,7 +155,7 @@ public class MockProcessorContextStateStoreTest {
         return values.stream();
     }
 
-    @ParameterizedTest(name = "builder = {0}, timestamped = {1}, caching = {2}, logging = {3}")
+    @ParameterizedTest
     @MethodSource(value = "parameters")
     public void shouldEitherInitOrThrow(final StoreBuilder<StateStore> builder,
                                         final boolean timestamped,
@@ -178,7 +178,7 @@ public class MockProcessorContextStateStoreTest {
                     () -> store.init(context.getStateStoreContext(), store)
                 );
             } else {
-                final InternalProcessorContext internalProcessorContext = mock(InternalProcessorContext.class);
+                final InternalProcessorContext<?, ?> internalProcessorContext = mock(InternalProcessorContext.class);
                 when(internalProcessorContext.taskId()).thenReturn(context.taskId());
                 when(internalProcessorContext.stateDir()).thenReturn(stateDir);
                 when(internalProcessorContext.metrics()).thenReturn((StreamsMetricsImpl) context.metrics());

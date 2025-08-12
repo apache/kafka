@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryDat
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.image.node.ClientQuotasImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,7 +49,7 @@ import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH
  * This class is thread-safe.
  */
 public final class ClientQuotasImage {
-    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Collections.emptyMap());
+    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Map.of());
 
     private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
 
@@ -67,11 +66,11 @@ public final class ClientQuotasImage {
         return entities;
     }
 
-    public void write(ImageWriter writer, ImageWriterOptions options) {
+    public void write(ImageWriter writer) {
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             ClientQuotaImage clientQuotaImage = entry.getValue();
-            clientQuotaImage.write(entity, writer, options);
+            clientQuotaImage.write(entity, writer);
         }
     }
 
@@ -176,8 +175,7 @@ public final class ClientQuotasImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotasImage)) return false;
-        ClientQuotasImage other = (ClientQuotasImage) o;
+        if (!(o instanceof ClientQuotasImage other)) return false;
         return entities.equals(other.entities);
     }
 

@@ -32,7 +32,6 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 
 import org.junit.jupiter.api.Test;
@@ -50,21 +49,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class AbstractStreamTest {
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
-        final org.apache.kafka.streams.kstream.ValueTransformerSupplier<?, ?> valueTransformerSupplier =
-            mock(org.apache.kafka.streams.kstream.ValueTransformerSupplier.class);
-        when(valueTransformerSupplier.get())
-            .thenReturn(new NoopValueTransformer<>())
-            .thenReturn(new NoopValueTransformer<>());
-        final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
-            AbstractStream.toValueTransformerWithKeySupplier(valueTransformerSupplier);
-        valueTransformerWithKeySupplier.get();
-        valueTransformerWithKeySupplier.get();
-        valueTransformerWithKeySupplier.get();
-    }
 
     @Test
     public void testToInternalValueTransformerWithKeySupplierSuppliesNewTransformers() {

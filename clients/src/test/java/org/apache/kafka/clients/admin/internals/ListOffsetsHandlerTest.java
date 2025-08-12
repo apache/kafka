@@ -65,7 +65,7 @@ public final class ListOffsetsHandlerTest {
 
     private final Node node = new Node(1, "host", 1234);
 
-    private final Map<TopicPartition, Long> offsetTimestampsByPartition = new HashMap<TopicPartition, Long>() {
+    private final Map<TopicPartition, Long> offsetTimestampsByPartition = new HashMap<>() {
         {
             put(t0p0, ListOffsetsRequest.LATEST_TIMESTAMP);
             put(t0p1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
