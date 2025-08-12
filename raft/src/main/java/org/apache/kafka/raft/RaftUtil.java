@@ -492,10 +492,6 @@ public class RaftUtil {
         Collection<LeaderState.ReplicaState> observers,
         long currentTimeMs
     ) {
-        if (apiVersion < 3) {
-            committedVoters = null;
-        }
-
         DescribeQuorumResponseData response = new DescribeQuorumResponseData()
             .setTopics(
                 List.of(
