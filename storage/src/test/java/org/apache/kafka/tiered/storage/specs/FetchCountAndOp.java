@@ -15,38 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.trogdor.rest;
+package org.apache.kafka.tiered.storage.specs;
 
-import org.apache.kafka.trogdor.common.JsonUtil;
-
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
-/**
- * An error response.
- */
-public record ErrorResponse(int code, String message) {
-    @JsonCreator
-    public ErrorResponse(@JsonProperty("code") int code,
-                         @JsonProperty("message") String message) {
-        this.code = code;
-        this.message = message;
-    }
-
-    @Override
-    @JsonProperty
-    public int code() {
-        return code;
-    }
-
-    @Override
-    @JsonProperty
-    public String message() {
-        return message;
+public record FetchCountAndOp(
+    int count,
+    RemoteFetchCount.OperationType operationType
+) {
+    public FetchCountAndOp(int count) {
+        this(count, RemoteFetchCount.OperationType.EQUALS_TO);
     }
 
     @Override
     public String toString() {
-        return JsonUtil.toJsonString(this);
+        return "FetchCountAndOp{" +
+            "count=" + count +
+            ", operationType=" + operationType +
+            '}';
     }
 }
