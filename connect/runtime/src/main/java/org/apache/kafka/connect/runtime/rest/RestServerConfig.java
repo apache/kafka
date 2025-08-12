@@ -140,13 +140,12 @@ public abstract class RestServerConfig extends AbstractConfig {
     public static void addPublicConfig(ConfigDef configDef) {
         addInternalConfig(configDef);
         configDef
-                .define(
-                        REST_EXTENSION_CLASSES_CONFIG,
+                .define(REST_EXTENSION_CLASSES_CONFIG,
                         ConfigDef.Type.LIST,
                         List.of(),
                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                        ConfigDef.Importance.LOW, REST_EXTENSION_CLASSES_DOC
-                ).define(ADMIN_LISTENERS_CONFIG,
+                        ConfigDef.Importance.LOW, REST_EXTENSION_CLASSES_DOC)
+                .define(ADMIN_LISTENERS_CONFIG,
                         ConfigDef.Type.LIST,
                         null,
                         new AdminListenersValidator(),

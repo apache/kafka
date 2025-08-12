@@ -34,9 +34,6 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
 
     Set<TopicPartition> taskTopicPartitions() {
         List<String> fields = getList(TASK_TOPIC_PARTITIONS);
-        if (fields.isEmpty()) {
-            return Set.of();
-        }
         return fields.stream()
             .map(MirrorUtils::decodeTopicPartition)
             .collect(Collectors.toSet());

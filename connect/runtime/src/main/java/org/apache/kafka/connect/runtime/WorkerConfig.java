@@ -65,7 +65,8 @@ public class WorkerConfig extends AbstractConfig {
                         + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
                         + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
                         + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
-    public static final List<String> BOOTSTRAP_SERVERS_DEFAULT = List.of("localhost:9092");
+    @Deprecated(since = "4.2")
+    public static final String BOOTSTRAP_SERVERS_DEFAULT = "localhost:9092";
 
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
     public static final String CLIENT_DNS_LOOKUP_DOC = CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC;
@@ -199,7 +200,7 @@ public class WorkerConfig extends AbstractConfig {
      */
     protected static ConfigDef baseConfigDef() {
         ConfigDef result = new ConfigDef()
-                .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
+                .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
                         ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(CLIENT_DNS_LOOKUP_CONFIG,
