@@ -134,7 +134,7 @@ public class MirrorClientConfig extends AbstractConfig {
 
     static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-            Type.STRING,
+            Type.LIST,
             NO_DEFAULT_VALUE,
             ConfigDef.ValidList.anyNonDuplicateValues(false, false),
             Importance.HIGH,

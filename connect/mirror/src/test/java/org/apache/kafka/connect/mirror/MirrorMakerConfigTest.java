@@ -28,6 +28,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -104,7 +105,7 @@ public class MirrorMakerConfigTest {
             "replication.policy.separator is picked up in MirrorClientConfig");
         assertEquals("b__topic1", aClientConfig.replicationPolicy().formatRemoteTopic("b", "topic1"),
             "replication.policy.separator is honored");
-        assertEquals(clusterABootstrap, aClientConfig.adminConfig().get("bootstrap.servers"),
+        assertEquals(Arrays.stream(clusterABootstrap.split(",")).map(String::trim).toList(), aClientConfig.adminConfig().get("bootstrap.servers"),
             "client configs include bootstrap.servers");
         try (ForwardingAdmin forwardingAdmin = aClientConfig.forwardingAdmin(aClientConfig.adminConfig())) {
             assertEquals(ForwardingAdmin.class.getName(), forwardingAdmin.getClass().getName(),
@@ -178,7 +179,7 @@ public class MirrorMakerConfigTest {
         SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
             MirrorSourceConnector.class);
-        DefaultTopicFilter.TopicFilterConfig filterConfig = 
+        DefaultTopicFilter.TopicFilterConfig filterConfig =
             new DefaultTopicFilter.TopicFilterConfig(connectorProps);
         assertEquals(List.of("topic1", "topic2"), filterConfig.getList("topics"),
             "source->target.topics should be passed through to TopicFilters.");
