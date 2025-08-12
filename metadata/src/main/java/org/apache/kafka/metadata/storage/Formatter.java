@@ -256,7 +256,6 @@ public class Formatter {
         releaseVersion = calculateEffectiveReleaseVersion();
         featureLevels = calculateEffectiveFeatureLevels();
         this.bootstrapMetadata = calculateBootstrapMetadata();
-        printStream.println("Bootstrap metadata: " + bootstrapMetadata);
         doFormat(bootstrapMetadata);
     }
 
@@ -416,6 +415,7 @@ public class Formatter {
         if (ensemble.emptyLogDirs().isEmpty()) {
             printStream.println("All of the log directories are already formatted.");
         } else {
+            printStream.println("Bootstrap metadata: " + bootstrapMetadata);
             Map<String, DirectoryType> directoryTypes = new HashMap<>();
             for (String emptyLogDir : ensemble.emptyLogDirs()) {
                 DirectoryType directoryType = DirectoryType.calculate(emptyLogDir,

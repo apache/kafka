@@ -188,7 +188,7 @@ public class FormatterTest {
             FormatterContext formatter2 = testEnv.newFormatter();
             formatter2.formatter.setIgnoreFormatted(true);
             formatter2.formatter.run();
-            assertTrue(formatter2.output().trim().contains("\nAll of the log directories are already formatted."));
+            assertTrue(formatter2.output().trim().contains("All of the log directories are already formatted."));
         }
     }
 
@@ -212,8 +212,7 @@ public class FormatterTest {
                 .setIgnoreFormatted(true)
                 .setInitialControllers(DynamicVoters.parse("1@localhost:8020:" + newDirectoryId))
                 .run();
-            assertEquals("Bootstrap metadata: " + formatter2.formatter.bootstrapMetadata() +
-                    "\nAll of the log directories are already formatted.",
+            assertEquals("All of the log directories are already formatted.",
                 formatter2.output().trim());
             assertMetadataDirectoryId(testEnv, Uuid.fromString(originalDirectoryId));
         }
