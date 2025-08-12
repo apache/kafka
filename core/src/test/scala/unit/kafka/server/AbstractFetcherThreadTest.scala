@@ -323,7 +323,7 @@ class AbstractFetcherThreadTest {
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
-    // This test is contrived because it shouldn't be possible to to see unknown leader epoch
+    // This test is contrived because it shouldn't be possible to see unknown leader epoch
     // in the Fetching state as the leader must validate the follower's epoch when it checks
     // the truncation offset.
 

@@ -14,28 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.common;
+package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.SerializationException;
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
+public class ShareFetchException extends SerializationException {
 
-public class MetadataVersionValidator implements Validator {
+    private final ShareFetch<?, ?> shareFetch;
 
-    @Override
-    public void ensureValid(String name, Object value) {
-        try {
-            MetadataVersion.fromVersionString(value.toString());
-        } catch (IllegalArgumentException e) {
-            throw new ConfigException(name, value.toString(), e.getMessage());
-        }
+    private final KafkaException cause;
+
+    public ShareFetchException(ShareFetch<?, ?> shareFetch, KafkaException cause) {
+        this.shareFetch = shareFetch;
+        this.cause = cause;
     }
 
-    @Override
-    public String toString() {
-        return "[" + Arrays.stream(MetadataVersion.VERSIONS).map(MetadataVersion::version).collect(
-             Collectors.joining(", ")) + "]";
+    public ShareFetch<?, ?> shareFetch() {
+        return shareFetch;
+    }
+
+    public KafkaException cause() {
+        return cause;
     }
 }

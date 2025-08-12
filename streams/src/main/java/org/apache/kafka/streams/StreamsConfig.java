@@ -1859,7 +1859,7 @@ public class StreamsConfig extends AbstractConfig {
 
             if (segmentSize < batchSize) {
                 throw new IllegalArgumentException(String.format(
-                    "Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
+                    "Specified topic segment size %d is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
                     segmentSize,
                     batchSize
                 ));
