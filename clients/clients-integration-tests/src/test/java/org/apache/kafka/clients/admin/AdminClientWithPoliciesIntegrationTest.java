@@ -28,16 +28,15 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -61,9 +60,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     }
 )
 public class AdminClientWithPoliciesIntegrationTest {
-    private Admin adminClient;
     private final ClusterInstance clusterInstance;
-    private static List<AlterConfigPolicy.RequestMetadata> validations = new java.util.ArrayList<>();
+    private static List<AlterConfigPolicy.RequestMetadata> validations = new ArrayList<>();
 
     AdminClientWithPoliciesIntegrationTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
@@ -72,110 +70,106 @@ public class AdminClientWithPoliciesIntegrationTest {
     @BeforeEach
     public void setup() throws InterruptedException {
         clusterInstance.waitForReadyBrokers();
-        adminClient = clusterInstance.admin();
-    }
-
-    @AfterEach
-    public void teardown() {
-        if (adminClient != null)
-            Utils.closeQuietly(adminClient, "adminClient");
     }
 
     @ClusterTest
     public void testInvalidAlterConfigsDueToPolicy() throws Exception {
-        // Create topics
-        String topic1 = "invalid-alter-configs-due-to-policy-topic-1";
-        String topic2 = "invalid-alter-configs-due-to-policy-topic-2";
-        String topic3 = "invalid-alter-configs-due-to-policy-topic-3";
-        clusterInstance.createTopic(topic1, 1, (short) 1);
-        clusterInstance.createTopic(topic2, 1, (short) 1);
-        clusterInstance.createTopic(topic3, 1, (short) 1);
+        try (final Admin adminClient = clusterInstance.admin()) {
+            // Create topics
+            String topic1 = "invalid-alter-configs-due-to-policy-topic-1";
+            String topic2 = "invalid-alter-configs-due-to-policy-topic-2";
+            String topic3 = "invalid-alter-configs-due-to-policy-topic-3";
+            clusterInstance.createTopic(topic1, 1, (short) 1);
+            clusterInstance.createTopic(topic2, 1, (short) 1);
+            clusterInstance.createTopic(topic3, 1, (short) 1);
 
-        ConfigResource topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1);
-        ConfigResource topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
-        ConfigResource topicResource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3);
+            ConfigResource topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1);
+            ConfigResource topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
+            ConfigResource topicResource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3);
 
-        // Set a mutable broker config
-        String brokerId = "0";
-        ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId);
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(
-            brokerResource, List.of(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))
-        );
-        adminClient.incrementalAlterConfigs(configOps).all().get();
-        System.err.println("test:" + validationsForResource(brokerResource).get(0).configs());
-        assertEquals(Set.of(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG), validationsForResource(brokerResource).get(0).configs().keySet());
-        validations.clear();
+            // Set a mutable broker config
+            ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0"); // "0" represents the broker ID
+            Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(
+                    brokerResource, List.of(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))
+            );
+            adminClient.incrementalAlterConfigs(configOps).all().get();
+            assertEquals(Set.of(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG), validationsForResource(brokerResource).get(0).configs().keySet());
+            validations.clear();
 
-        Map<ConfigResource, Collection<AlterConfigOp>> alterConfigs = new HashMap<>();
-        alterConfigs.put(topicResource1, List.of(
-            new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), OpType.SET),
-            new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"), OpType.SET)
-        ));
-        alterConfigs.put(topicResource2, List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.8"), OpType.SET)));
-        alterConfigs.put(topicResource3, List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1"), OpType.SET)));
-        alterConfigs.put(brokerResource, List.of(new AlterConfigOp(new ConfigEntry(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "12313"), OpType.SET)));
+            Map<ConfigResource, Collection<AlterConfigOp>> alterConfigs = new HashMap<>();
+            alterConfigs.put(topicResource1, List.of(
+                    new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), OpType.SET),
+                    new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"), OpType.SET)
+            ));
+            alterConfigs.put(topicResource2, List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.8"), OpType.SET)));
+            alterConfigs.put(topicResource3, List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1"), OpType.SET)));
+            alterConfigs.put(brokerResource, List.of(new AlterConfigOp(new ConfigEntry(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "12313"), OpType.SET)));
 
-        // Alter configs: second is valid, the others are invalid
-        AlterConfigsResult alterResult = adminClient.incrementalAlterConfigs(alterConfigs);
-        assertEquals(Set.of(topicResource1, topicResource2, topicResource3, brokerResource), alterResult.values().keySet());
-        assertFutureThrows(PolicyViolationException.class, alterResult.values().get(topicResource1));
-        alterResult.values().get(topicResource2).get();
-        assertFutureThrows(InvalidConfigurationException.class, alterResult.values().get(topicResource3));
-        assertFutureThrows(InvalidRequestException.class, alterResult.values().get(brokerResource));
-        assertTrue(validationsForResource(brokerResource).isEmpty(),
-            "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.");
-        validations.clear();
+            // Alter configs: second is valid, the others are invalid
+            AlterConfigsResult alterResult = adminClient.incrementalAlterConfigs(alterConfigs);
+            assertEquals(Set.of(topicResource1, topicResource2, topicResource3, brokerResource), alterResult.values().keySet());
+            assertFutureThrows(PolicyViolationException.class, alterResult.values().get(topicResource1));
+            alterResult.values().get(topicResource2).get();
+            assertFutureThrows(InvalidConfigurationException.class, alterResult.values().get(topicResource3));
+            assertFutureThrows(InvalidRequestException.class, alterResult.values().get(brokerResource));
+            assertTrue(validationsForResource(brokerResource).isEmpty(),
+                    "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.");
+            validations.clear();
 
-        // Verify that the second resource was updated and the others were not
-        clusterInstance.ensureConsistentMetadata();
-        DescribeConfigsResult describeResult = adminClient.describeConfigs(List.of(topicResource1, topicResource2, topicResource3, brokerResource));
-        var configs = describeResult.all().get();
-        assertEquals(4, configs.size());
+            // Verify that the second resource was updated and the others were not
+            clusterInstance.ensureConsistentMetadata();
+            DescribeConfigsResult describeResult = adminClient.describeConfigs(List.of(topicResource1, topicResource2, topicResource3, brokerResource));
+            var configs = describeResult.all().get();
+            assertEquals(4, configs.size());
 
-        assertEquals(String.valueOf(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO), configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value());
-        assertEquals(String.valueOf(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT), configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
+            assertEquals(String.valueOf(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO), configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value());
+            assertEquals(String.valueOf(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT), configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
 
-        assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value());
+            assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value());
 
-        assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value());
+            assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value());
 
-        // Alter configs with validateOnly = true: only second is valid
-        alterConfigs.put(topicResource2, List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.7"), OpType.SET)));
-        alterResult = adminClient.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true));
+            // Alter configs with validateOnly = true: only second is valid
+            alterConfigs.put(topicResource2, List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.7"), OpType.SET)));
+            alterResult = adminClient.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true));
 
-        assertFutureThrows(PolicyViolationException.class, alterResult.values().get(topicResource1));
-        alterResult.values().get(topicResource2).get();
-        assertFutureThrows(InvalidConfigurationException.class, alterResult.values().get(topicResource3));
-        assertFutureThrows(InvalidRequestException.class, alterResult.values().get(brokerResource));
-        assertTrue(validationsForResource(brokerResource).isEmpty(),
-            "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.");
-        validations.clear();
+            assertFutureThrows(PolicyViolationException.class, alterResult.values().get(topicResource1));
+            alterResult.values().get(topicResource2).get();
+            assertFutureThrows(InvalidConfigurationException.class, alterResult.values().get(topicResource3));
+            assertFutureThrows(InvalidRequestException.class, alterResult.values().get(brokerResource));
+            assertTrue(validationsForResource(brokerResource).isEmpty(),
+                    "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.");
+            validations.clear();
 
-        // Verify that no resources are updated since validate_only = true
-        clusterInstance.ensureConsistentMetadata();
-        describeResult = adminClient.describeConfigs(List.of(topicResource1, topicResource2, topicResource3, brokerResource));
-        configs = describeResult.all().get();
-        assertEquals(4, configs.size());
+            // Verify that no resources are updated since validate_only = true
+            clusterInstance.ensureConsistentMetadata();
+            describeResult = adminClient.describeConfigs(List.of(topicResource1, topicResource2, topicResource3, brokerResource));
+            configs = describeResult.all().get();
+            assertEquals(4, configs.size());
 
-        assertEquals(String.valueOf(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO), configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value());
-        assertEquals(String.valueOf(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT), configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
+            assertEquals(String.valueOf(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO), configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value());
+            assertEquals(String.valueOf(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT), configs.get(topicResource1).get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value());
 
-        assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value());
+            assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value());
 
-        assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value());
+            assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value());
 
-        // Do an incremental alter config on the broker, ensure we don't see the broker config we set earlier in the policy
-        alterResult = adminClient.incrementalAlterConfigs(Map.of(
-            brokerResource, List.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999"), OpType.SET))
-        ));
-        alterResult.all().get();
-        assertEquals(Set.of(SocketServerConfigs.MAX_CONNECTIONS_CONFIG), validationsForResource(brokerResource).get(0).configs().keySet());
+            // Do an incremental alter config on the broker, ensure we don't see the broker config we set earlier in the policy
+            alterResult = adminClient.incrementalAlterConfigs(Map.of(
+                    brokerResource, List.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999"), OpType.SET))
+            ));
+            alterResult.all().get();
+            assertEquals(Set.of(SocketServerConfigs.MAX_CONNECTIONS_CONFIG), validationsForResource(brokerResource).get(0).configs().keySet());
+        }
     }
 
     private static List<AlterConfigPolicy.RequestMetadata> validationsForResource(ConfigResource resource) {
         return validations.stream().filter(req -> req.resource().equals(resource)).toList();
     }
 
+    /**
+     * Indirectly used in @ClusterTestDefaults serverProperties and may appear unused in the IDE.
+     */
     public static class Policy implements AlterConfigPolicy {
         private Map<String, ?> configs;
         private boolean closed = false;
