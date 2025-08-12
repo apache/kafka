@@ -168,7 +168,7 @@ public class AdminClientWithPoliciesIntegrationTest {
     }
 
     /**
-     * Indirectly used in @ClusterTestDefaults serverProperties and may appear unused in the IDE.
+     * Used in @ClusterTestDefaults serverProperties, so it may appear unused in the IDE.
      */
     public static class Policy implements AlterConfigPolicy {
         private Map<String, ?> configs;
