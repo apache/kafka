@@ -131,7 +131,7 @@ public class WorkerSinkTaskTest {
     private static final TopicPartition TOPIC_PARTITION3 = new TopicPartition(TOPIC, PARTITION3);
 
     private static final Set<TopicPartition> INITIAL_ASSIGNMENT =
-            new HashSet<>(List.of(TOPIC_PARTITION, TOPIC_PARTITION2));
+            Set.of(TOPIC_PARTITION, TOPIC_PARTITION2);
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
 
