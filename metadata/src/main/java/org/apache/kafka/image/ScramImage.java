@@ -39,13 +39,11 @@ import java.util.Map.Entry;
 
 /**
  * Represents the SCRAM credentials in the metadata image.
- *
+ * <p>
  * This class is thread-safe.
  */
-public final class ScramImage {
+public record ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms) {
     public static final ScramImage EMPTY = new ScramImage(Map.of());
-
-    private final Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms;
 
     public ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms) {
         this.mechanisms = Collections.unmodifiableMap(mechanisms);
@@ -105,17 +103,17 @@ public final class ScramImage {
 
         DescribeUserScramCredentialsResponseData retval = new DescribeUserScramCredentialsResponseData();
 
-        for (Map.Entry<String, Boolean> user : uniqueUsers.entrySet()) {
+        for (Entry<String, Boolean> user : uniqueUsers.entrySet()) {
             DescribeUserScramCredentialsResult result = new DescribeUserScramCredentialsResult().setUser(user.getKey());
 
             if (!user.getValue()) {
                 boolean dataFound = false;
                 List<CredentialInfo> credentialInfos = new ArrayList<>();
-                for (Map.Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismsEntry : mechanisms.entrySet()) {
+                for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismsEntry : mechanisms.entrySet()) {
                     Map<String, ScramCredentialData> credentialDataSet = mechanismsEntry.getValue();
                     if (credentialDataSet.containsKey(user.getKey())) {
                         credentialInfos.add(new CredentialInfo().setMechanism(mechanismsEntry.getKey().type())
-                                                                .setIterations(credentialDataSet.get(user.getKey()).iterations()));
+                            .setIterations(credentialDataSet.get(user.getKey()).iterations()));
                         dataFound = true;
                     }
                 }
@@ -123,36 +121,19 @@ public final class ScramImage {
                     result.setCredentialInfos(credentialInfos);
                 } else {
                     result.setErrorCode(Errors.RESOURCE_NOT_FOUND.code())
-                          .setErrorMessage(DESCRIBE_USER_THAT_DOES_NOT_EXIST + user.getKey());
+                        .setErrorMessage(DESCRIBE_USER_THAT_DOES_NOT_EXIST + user.getKey());
                 }
             } else {
                 result.setErrorCode(Errors.DUPLICATE_RESOURCE.code())
-                      .setErrorMessage(DESCRIBE_DUPLICATE_USER + user.getKey());
+                    .setErrorMessage(DESCRIBE_DUPLICATE_USER + user.getKey());
             }
             retval.results().add(result);
         }
         return retval;
     }
 
-    public Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms() {
-        return mechanisms;
-    }
-
     public boolean isEmpty() {
         return mechanisms.isEmpty();
-    }
-
-    @Override
-    public int hashCode() {
-        return mechanisms.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null) return false;
-        if (!o.getClass().equals(ScramImage.class)) return false;
-        ScramImage other = (ScramImage) o;
-        return mechanisms.equals(other.mechanisms);
     }
 
     @Override

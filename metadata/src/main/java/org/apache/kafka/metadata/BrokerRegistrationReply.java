@@ -17,30 +17,8 @@
 
 package org.apache.kafka.metadata;
 
-import java.util.Objects;
 
-
-public class BrokerRegistrationReply {
-    private final long epoch;
-
-    public BrokerRegistrationReply(long epoch) {
-        this.epoch = epoch;
-    }
-
-    public long epoch() {
-        return epoch;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(epoch);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof BrokerRegistrationReply other)) return false;
-        return other.epoch == epoch;
-    }
+public record BrokerRegistrationReply(long epoch) {
 
     @Override
     public String toString() {

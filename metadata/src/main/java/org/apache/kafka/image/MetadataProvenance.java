@@ -20,51 +20,22 @@ package org.apache.kafka.image;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.Snapshots;
 
-import java.util.Objects;
-
 
 /**
  * Information about the source of a metadata image.
  */
-public final class MetadataProvenance {
+public record MetadataProvenance(long lastContainedOffset, int lastContainedEpoch, long lastContainedLogTimeMs,
+                                 boolean isOffsetBatchAligned) {
     public static final MetadataProvenance EMPTY = new MetadataProvenance(-1L, -1, -1L, false);
-
-    private final long lastContainedOffset;
-    private final int lastContainedEpoch;
-    private final long lastContainedLogTimeMs;
-    private final boolean isOffsetBatchAligned;
-
-    public MetadataProvenance(
-        long lastContainedOffset,
-        int lastContainedEpoch,
-        long lastContainedLogTimeMs,
-        boolean isOffsetBatchAligned
-    ) {
-        this.lastContainedOffset = lastContainedOffset;
-        this.lastContainedEpoch = lastContainedEpoch;
-        this.lastContainedLogTimeMs = lastContainedLogTimeMs;
-        this.isOffsetBatchAligned = isOffsetBatchAligned;
-    }
 
     public OffsetAndEpoch snapshotId() {
         return new OffsetAndEpoch(lastContainedOffset + 1, lastContainedEpoch);
     }
 
-    public long lastContainedOffset() {
-        return lastContainedOffset;
-    }
-
-    public int lastContainedEpoch() {
-        return lastContainedEpoch;
-    }
-
-    public long lastContainedLogTimeMs() {
-        return lastContainedLogTimeMs;
-    }
-
     /**
      * Returns whether lastContainedOffset is the last offset in a record batch
      */
+    @Override
     public boolean isOffsetBatchAligned() {
         return isOffsetBatchAligned;
     }
@@ -74,24 +45,6 @@ public final class MetadataProvenance {
      */
     public String snapshotName() {
         return String.format("snapshot %s", Snapshots.filenameFromSnapshotId(snapshotId()));
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || !o.getClass().equals(this.getClass())) return false;
-        MetadataProvenance other = (MetadataProvenance) o;
-        return lastContainedOffset == other.lastContainedOffset &&
-            lastContainedEpoch == other.lastContainedEpoch &&
-            lastContainedLogTimeMs == other.lastContainedLogTimeMs &&
-            isOffsetBatchAligned == other.isOffsetBatchAligned;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(lastContainedOffset,
-            lastContainedEpoch,
-            lastContainedLogTimeMs,
-            isOffsetBatchAligned);
     }
 
     @Override
