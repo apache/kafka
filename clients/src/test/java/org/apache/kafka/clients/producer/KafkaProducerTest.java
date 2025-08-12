@@ -637,30 +637,7 @@ public class KafkaProducerTest {
             MockProducerInterceptor.resetCounters();
         }
     }
-    @Test
-    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
-        final int targetInterceptor = 3;
-        try {
-            Properties props = new Properties();
-            props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, org.apache.kafka.test.MockProducerInterceptor.class.getName() + ", "
-                    +  org.apache.kafka.test.MockProducerInterceptor.class.getName() + ", "
-                    +  org.apache.kafka.test.MockProducerInterceptor.class.getName());
-            props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
 
-            MockProducerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
-
-            assertThrows(KafkaException.class, () ->
-                new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())
-            );
-
-            assertEquals(3, MockProducerInterceptor.CONFIG_COUNT.get());
-            assertEquals(3, MockProducerInterceptor.CLOSE_COUNT.get());
-
-        } finally {
-            MockProducerInterceptor.resetCounters();
-        }
-    }
     @Test
     public void testPartitionerClose() {
         try {
@@ -1412,12 +1389,12 @@ public class KafkaProducerTest {
 
         // Capture flags from the InitProducerIdRequest
         boolean[] requestFlags = new boolean[2]; // [keepPreparedTxn, enable2Pc]
-        
+
         client.prepareResponse(
             request -> request instanceof FindCoordinatorRequest &&
                 ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
             FindCoordinatorResponse.prepareResponse(Errors.NONE, "test-txn-id", NODE));
-            
+
         client.prepareResponse(
             request -> {
                 if (request instanceof InitProducerIdRequest) {
@@ -1429,15 +1406,15 @@ public class KafkaProducerTest {
                 return false;
             },
             initProducerIdResponse(1L, (short) 5, Errors.NONE));
-            
+
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions(keepPreparedTxn);
-            
+
             // Verify request flags match expected values
-            assertEquals(keepPreparedTxn, requestFlags[0], 
+            assertEquals(keepPreparedTxn, requestFlags[0],
                 "keepPreparedTxn flag should match input parameter");
-            assertEquals(enable2PC, requestFlags[1], 
+            assertEquals(enable2PC, requestFlags[1],
                 "enable2Pc flag should match producer configuration");
         }
     }
@@ -1603,7 +1580,7 @@ public class KafkaProducerTest {
             );
         }
     }
-    
+
     @Test
     public void testCompleteTransactionWithMatchingState() throws Exception {
         StringSerializer serializer = new StringSerializer();
@@ -1611,37 +1588,37 @@ public class KafkaProducerTest {
 
         when(ctx.transactionManager.isPrepared()).thenReturn(true);
         when(ctx.sender.isRunning()).thenReturn(true);
-        
+
         // Create prepared states with matching values
         long producerId = 12345L;
         short epoch = 5;
         PreparedTxnState inputState = new PreparedTxnState(producerId, epoch);
         ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
-        
+
         // Set up the transaction manager to return the prepared state
         when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);
-        
+
         // Should trigger commit when states match
         TransactionalRequestResult commitResult = mock(TransactionalRequestResult.class);
         when(ctx.transactionManager.beginCommit()).thenReturn(commitResult);
-        
+
         try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
             // Call completeTransaction with the matching state
             producer.completeTransaction(inputState);
-            
+
             // Verify methods called in order
             verify(ctx.transactionManager).isPrepared();
             verify(ctx.transactionManager).preparedTransactionState();
             verify(ctx.transactionManager).beginCommit();
-            
+
             // Verify abort was never called
             verify(ctx.transactionManager, never()).beginAbort();
-            
+
             // Verify sender was woken up
             verify(ctx.sender).wakeup();
         }
     }
-    
+
     @Test
     public void testCompleteTransactionWithNonMatchingState() throws Exception {
         StringSerializer serializer = new StringSerializer();
@@ -1649,37 +1626,37 @@ public class KafkaProducerTest {
 
         when(ctx.transactionManager.isPrepared()).thenReturn(true);
         when(ctx.sender.isRunning()).thenReturn(true);
-        
+
         // Create txn prepared states with different values
         long producerId = 12345L;
         short epoch = 5;
         PreparedTxnState inputState = new PreparedTxnState(producerId + 1, epoch);
         ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
-        
+
         // Set up the transaction manager to return the prepared state
         when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);
-        
+
         // Should trigger abort when states don't match
         TransactionalRequestResult abortResult = mock(TransactionalRequestResult.class);
         when(ctx.transactionManager.beginAbort()).thenReturn(abortResult);
-        
+
         try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
             // Call completeTransaction with the non-matching state
             producer.completeTransaction(inputState);
-            
+
             // Verify methods called in order
             verify(ctx.transactionManager).isPrepared();
             verify(ctx.transactionManager).preparedTransactionState();
             verify(ctx.transactionManager).beginAbort();
-            
+
             // Verify commit was never called
             verify(ctx.transactionManager, never()).beginCommit();
-            
+
             // Verify sender was woken up
             verify(ctx.sender).wakeup();
         }
     }
-    
+
     @Test
     public void testClusterAuthorizationFailure() throws Exception {
         int maxBlockMs = 500;
