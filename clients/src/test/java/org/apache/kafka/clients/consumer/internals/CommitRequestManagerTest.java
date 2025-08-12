@@ -87,7 +87,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -1495,7 +1494,6 @@ public class CommitRequestManagerTest {
     @Test
     public void testPollWithFatalErrorDuringCoordinatorIsEmptyAndClosing() {
         CommitRequestManager commitRequestManager = create(true, 100);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
                 new OffsetAndMetadata(0));
@@ -1511,10 +1509,7 @@ public class CommitRequestManagerTest {
 
         assertTrue(commitFuture.isCompletedExceptionally());
 
-        ExecutionException exception = assertThrows(ExecutionException.class, commitFuture::get);
-
-        assertInstanceOf(GroupAuthorizationException.class, exception.getCause());
-        assertEquals("Fatal error", exception.getCause().getMessage());
+        TestUtils.assertFutureThrows(GroupAuthorizationException.class, commitFuture, "Fatal error");
     }
 
     // Supplies (error, isRetriable)

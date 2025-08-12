@@ -178,14 +178,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (coordinatorRequestManager.coordinator().isEmpty() && closing) {
-            handleClosingWithoutCoordinator();
-            return EMPTY;
-        }
-
         // poll when the coordinator node is known and fatal error is not present
         if (coordinatorRequestManager.coordinator().isEmpty()) {
             pendingRequests.maybeFailOnCoordinatorFatalError();
+
+            if (closing && pendingRequests.hasUnsentRequests()) {
+                CommitFailedException exception = new CommitFailedException(
+                        "Failed to commit offsets: Coordinator unknown and consumer is closing");
+                pendingRequests.drainPendingCommits()
+                        .forEach(request -> request.future().completeExceptionally(exception));
+            }
+
             return EMPTY;
         }
 
@@ -623,22 +626,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     public void resetAutoCommitTimer(long retryBackoffMs) {
         autoCommitState.ifPresent(s -> s.resetTimer(retryBackoffMs));
-    }
-
-    private void handleClosingWithoutCoordinator() {
-        if (coordinatorRequestManager.fatalError().isPresent()) {
-            pendingRequests.maybeFailOnCoordinatorFatalError();
-        } else {
-            failPendingCommitsWithCoordinatorUnknown();
-        }
-    }
-
-    private void failPendingCommitsWithCoordinatorUnknown() {
-        CommitFailedException exception = new CommitFailedException(
-                "Failed to commit offsets: Coordinator unknown and consumer is closing");
-
-        pendingRequests.drainPendingCommits()
-                .forEach(request -> request.future().completeExceptionally(exception));
     }
 
     /**
