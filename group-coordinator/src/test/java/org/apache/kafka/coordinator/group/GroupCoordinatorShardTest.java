@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -77,8 +78,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -89,7 +88,6 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
@@ -1007,60 +1005,6 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
-    public void testReplayStreamsGroupPartitionMetadata() {
-        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
-        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
-        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
-        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
-            new LogContext(),
-            groupMetadataManager,
-            offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
-            mock(GroupCoordinatorConfig.class),
-            coordinatorMetrics,
-            metricsShard
-        );
-
-        StreamsGroupPartitionMetadataKey key = new StreamsGroupPartitionMetadataKey();
-        StreamsGroupPartitionMetadataValue value = new StreamsGroupPartitionMetadataValue();
-
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, CoordinatorRecord.record(
-            key,
-            new ApiMessageAndVersion(value, (short) 0)
-        ));
-
-        verify(groupMetadataManager).replay(key, value);
-    }
-
-    @Test
-    public void testReplayStreamsGroupPartitionMetadataWithNullValue() {
-        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
-        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
-        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
-        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
-            new LogContext(),
-            groupMetadataManager,
-            offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
-            mock(GroupCoordinatorConfig.class),
-            coordinatorMetrics,
-            metricsShard
-        );
-
-        StreamsGroupPartitionMetadataKey key = new StreamsGroupPartitionMetadataKey();
-
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, CoordinatorRecord.tombstone(
-            key
-        ));
-
-        verify(groupMetadataManager).replay(key, null);
-    }
-
-    @Test
     public void testReplayStreamsGroupMemberMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
@@ -1304,7 +1248,7 @@ public class GroupCoordinatorShardTest {
 
     @Test
     public void testOnLoaded() {
-        MetadataImage image = MetadataImage.EMPTY;
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
@@ -1400,7 +1344,7 @@ public class GroupCoordinatorShardTest {
             mock(CoordinatorMetrics.class),
             mock(CoordinatorMetricsShard.class)
         );
-        MetadataImage image = MetadataImage.EMPTY;
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
 
         // Confirm the cleanup is scheduled when the coordinator is initially loaded.
         coordinator.onLoaded(image);
@@ -1535,12 +1479,12 @@ public class GroupCoordinatorShardTest {
             coordinatorMetrics,
             metricsShard
         );
-        coordinator.onLoaded(MetadataImage.EMPTY);
+        coordinator.onLoaded(CoordinatorMetadataImage.EMPTY);
 
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
 
         // Advance the timer to trigger the update.
@@ -1551,7 +1495,7 @@ public class GroupCoordinatorShardTest {
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
     }
 

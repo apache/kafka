@@ -60,6 +60,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -235,7 +236,7 @@ public class KafkaStreams implements AutoCloseable {
      *   </li>
      *   <li>
      *     REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
-     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are are ready for processing.
+     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are ready for processing.
      *     Standby tasks are not considered.)
      *   </li>
      *   <li>
@@ -971,13 +972,16 @@ public class KafkaStreams implements AutoCloseable {
         this.log = logContext.logger(getClass());
         topologyMetadata.setLog(logContext);
 
-        // use client id instead of thread client id since this admin client may be shared among threads
         this.clientSupplier = clientSupplier;
-        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
 
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
 
+        throwIfUnsupportedFeatureIsUsedWithStreamsRebalanceProtocol();
+
+        // use client id instead of thread client id since this admin client may be shared among threads
+        adminClient = clientSupplier.getAdmin(applicationConfigs.getAdminConfigs(ClientUtils.adminClientId(clientId)));
+        
         metrics = createMetrics(applicationConfigs, time, clientId);
         final StreamsClientMetricsDelegatingReporter reporter = new StreamsClientMetricsDelegatingReporter(adminClient, clientId);
         metrics.addReporter(reporter);
@@ -993,7 +997,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addCommitIdMetric(streamsMetrics);
         ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
-        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
+        ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state.name());
         ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, (metricsConfig, now) -> state.ordinal());
         ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, calculateMetricsRecordingLevel());
         threads = Collections.synchronizedList(new LinkedList<>());
@@ -1045,6 +1049,22 @@ public class KafkaStreams implements AutoCloseable {
 
         stateDirCleaner = setupStateDirCleaner();
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, applicationConfigs);
+    }
+
+    private void throwIfUnsupportedFeatureIsUsedWithStreamsRebalanceProtocol() {
+        if (applicationConfigs.isStreamsProtocolEnabled()) {
+            log.info("Streams rebalance protocol enabled");
+            if (topologyMetadata.hasNamedTopologies()) {
+                throw new UnsupportedOperationException("Named topologies are not supported with the STREAMS protocol.");
+            }
+            if (topologyMetadata.usesPatternSubscription()) {
+                throw new UnsupportedOperationException("Pattern subscriptions are not supported with the STREAMS protocol.");
+            }
+            if (!(clientSupplier instanceof DefaultKafkaClientSupplier)) {
+                log.warn("A non-default kafka client supplier was supplied. Note that supplying a custom main consumer" +
+                    " is not supported with the STREAMS protocol.");
+            }
+        }
     }
 
     private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {

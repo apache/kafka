@@ -53,7 +53,7 @@ class ForwardingManagerTest {
   private val forwardingManager = new ForwardingManagerImpl(brokerToController, metrics)
   private val principalBuilder = new DefaultKafkaPrincipalBuilder(null, null)
   private val queueTimeMsP999 = metrics.metrics().get(forwardingManager.forwardingManagerMetrics.queueTimeMsHist.latencyP999Name)
-  private val queueLength = metrics.metrics().get(forwardingManager.forwardingManagerMetrics.queueLengthName)
+  private val queueLength = metrics.metrics().get(forwardingManager.forwardingManagerMetrics.queueLengthName())
   private val remoteTimeMsP999 = metrics.metrics().get(forwardingManager.forwardingManagerMetrics.remoteTimeMsHist.latencyP999Name)
 
   private def controllerApiVersions: NodeApiVersions = {

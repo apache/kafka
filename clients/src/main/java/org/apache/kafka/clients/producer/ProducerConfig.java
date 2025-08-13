@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -100,8 +101,10 @@ public class ProducerConfig extends AbstractConfig {
                                                  + "similar or lower producer latency despite the increased linger.";
 
     /** <code>partitioner.adaptive.partitioning.enable</code> */
-    public static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG = "partitioner.adaptive.partitioning.enable";
-    private static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_DOC =
+    public static final String PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG = "partitioner.adaptive.partitioning.enable";
+    @Deprecated
+    public static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG = PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG;
+    private static final String PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_DOC =
             "When set to 'true', the producer will try to adapt to broker performance and produce more messages to partitions hosted on faster brokers. "
             + "If 'false', the producer will try to distribute messages uniformly. Note: this setting has no effect if a custom partitioner is used.";
 
@@ -110,7 +113,7 @@ public class ProducerConfig extends AbstractConfig {
     private static final String PARTITIONER_AVAILABILITY_TIMEOUT_MS_DOC =
             "If a broker cannot process produce requests from a partition for <code>" + PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG + "</code> time, "
             + "the partitioner treats that partition as not available.  If the value is 0, this logic is disabled. "
-            + "Note: this setting has no effect if a custom partitioner is used or <code>" + PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG
+            + "Note: this setting has no effect if a custom partitioner is used or <code>" + PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG
             + "</code> is set to 'false'.";
 
     /** <code>partitioner.ignore.keys</code> */
@@ -274,11 +277,12 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
-    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
-            + " Note that this retry is no different than if the client resent the record upon receiving the error."
-            + " Produce requests will be failed before the number of retries has been exhausted if the timeout configured by"
-            + " <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> expires first before successful acknowledgement. Users should generally"
-            + " prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
+    private static final String RETRIES_DOC = "Number of times to retry a request that fails with a transient error."
+            + " Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error. "
+            + " Requests will be retried this many times until they succeed, fail with a non-transient error, or the <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> expires."
+            + " Note that this automatic retry will simply resend the same record upon receiving the error."
+            + " Setting a value of zero will disable this automatic retry behaviour, so that the transient errors will be propagated to the application to be handled."
+            + " Users should generally prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
             + " retry behavior."
             + "<p>"
             + "Enabling idempotence requires this config value to be greater than 0."
@@ -390,7 +394,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(COMPRESSION_LZ4_LEVEL_CONFIG, Type.INT, CompressionType.LZ4.defaultLevel(), CompressionType.LZ4.levelValidator(), Importance.MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
                                 .define(COMPRESSION_ZSTD_LEVEL_CONFIG, Type.INT, CompressionType.ZSTD.defaultLevel(), CompressionType.ZSTD.levelValidator(), Importance.MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
-                                .define(PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG, Type.BOOLEAN, true, Importance.LOW, PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_DOC)
+                                .define(PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG, Type.BOOLEAN, true, Importance.LOW, PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_DOC)
                                 .define(PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.LOW, PARTITIONER_AVAILABILITY_TIMEOUT_MS_DOC)
                                 .define(PARTITIONER_IGNORE_KEYS_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM, PARTITIONER_IGNORE_KEYS_DOC)
                                 .define(LINGER_MS_CONFIG, Type.LONG, 5, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
@@ -548,7 +552,12 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG, 
+                                        ConfigDef.Type.LIST,
+                                        List.of(), 
+                                        ConfigDef.Importance.LOW, 
+                                        CONFIG_PROVIDERS_DOC);
     }
 
     @Override
@@ -665,10 +674,6 @@ public class ProducerConfig extends AbstractConfig {
 
     public ProducerConfig(Map<String, Object> props) {
         super(CONFIG, props);
-    }
-
-    ProducerConfig(Map<?, ?> props, boolean doLog) {
-        super(CONFIG, props, doLog);
     }
 
     public static Set<String> configNames() {

@@ -26,6 +26,8 @@ import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -62,6 +64,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
@@ -69,6 +72,7 @@ import org.apache.kafka.common.requests.DeleteShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
@@ -80,6 +84,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
@@ -90,8 +96,6 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -138,6 +142,7 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationEx
 import static org.apache.kafka.coordinator.group.Utils.throwIfEmptyString;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNotEmptyCollection;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNotNull;
+import static org.apache.kafka.coordinator.group.Utils.throwIfNotNullOrEmpty;
 import static org.apache.kafka.coordinator.group.Utils.throwIfNull;
 
 /**
@@ -323,9 +328,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      * The metadata image to extract topic id to names map.
-     * This is initialised when the {@link GroupCoordinator#onNewMetadataImage(MetadataImage, MetadataDelta)} is called
+     * This is initialised when the {@link GroupCoordinator#onNewMetadataImage(CoordinatorMetadataImage, CoordinatorMetadataDelta)} is called
      */
-    private MetadataImage metadataImage = null;
+    private CoordinatorMetadataImage metadataImage = null;
 
     /**
      *
@@ -538,6 +543,26 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * Validates the request. Specifically, throws if any not-yet-supported features are used.
+     *
+     * @param request The request to validate.
+     * @throws InvalidRequestException if the request is not valid.
+     */
+    private static void throwIfStreamsGroupHeartbeatRequestIsUsingUnsupportedFeatures(
+        StreamsGroupHeartbeatRequestData request
+    ) throws InvalidRequestException {
+        throwIfNotNull(request.instanceId(), "Static membership is not yet supported.");
+        throwIfNotNull(request.taskOffsets(), "TaskOffsets are not supported yet.");
+        throwIfNotNull(request.taskEndOffsets(), "TaskEndOffsets are not supported yet.");
+        throwIfNotNullOrEmpty(request.warmupTasks(), "WarmupTasks are not supported yet.");
+        if (request.topology() != null) {
+            for (StreamsGroupHeartbeatRequestData.Subtopology subtopology : request.topology().subtopologies()) {
+                throwIfNotEmptyCollection(subtopology.sourceTopicRegex(), "Regular expressions for source topics are not supported yet.");
+            }
+        }
+    }
+
+    /**
      * See
      * {@link GroupCoordinator#streamsGroupHeartbeat(AuthorizableRequestContext, StreamsGroupHeartbeatRequestData)}.
      */
@@ -556,6 +581,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         try {
+            throwIfStreamsGroupHeartbeatRequestIsUsingUnsupportedFeatures(request);
             throwIfStreamsGroupHeartbeatRequestIsInvalid(request);
         } catch (Throwable ex) {
             ApiError apiError = ApiError.fromThrowable(ex);
@@ -646,7 +672,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 timer.add(new TimerTask(0L) {
                     @Override
                     public void run() {
-                        persisterInitialize(result.getValue().get(), result.getKey());
+                        persisterInitialize(result.getValue().get(), result.getKey())
+                            .whenComplete((__, exp) -> {
+                                if (exp != null) {
+                                    log.error("Persister initialization failed", exp);
+                                }
+                            });
                     }
                 });
             }
@@ -660,6 +691,96 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 .setErrorMessage(message),
             log
         ));
+    }
+
+    // Visibility for testing
+    CompletableFuture<AlterShareGroupOffsetsResponseData> persisterInitialize(
+        InitializeShareGroupStateParameters request,
+        AlterShareGroupOffsetsResponseData response
+    ) {
+        if (request.groupTopicPartitionData().topicsData().isEmpty()) {
+            return CompletableFuture.completedFuture(response);
+        }
+
+        return persister.initializeState(request)
+            .handle((result, exp) -> {
+                if (exp == null) {
+                    if (result.errorCounts().isEmpty()) {
+                        handlePersisterInitializeResponse(request.groupTopicPartitionData().groupId(), result, new ShareGroupHeartbeatResponseData());
+                        return response;
+                    } else {
+                        return buildErrorResponse(response, result);
+                    }
+                } else {
+                    return buildErrorResponse(request, response, exp);
+                }
+
+            });
+    }
+    
+    private AlterShareGroupOffsetsResponseData buildErrorResponse(AlterShareGroupOffsetsResponseData response, InitializeShareGroupStateResult result) {
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+        Map<Uuid, Map<Integer, PartitionErrorData>> topicPartitionErrorsMap = result.getErrors();
+        data.setResponses(
+            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
+                .map(topic -> {
+                    AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName())
+                        .setTopicId(topic.topicId());
+                    topic.partitions().forEach(partition -> {
+                        if (partition.errorCode() != Errors.NONE.code()) {
+                            topicData.partitions().add(partition);
+                            return;
+                        }
+                        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData;
+                        Map<Integer, PartitionErrorData> partitionErrors =
+                            Optional.ofNullable(topicPartitionErrorsMap)
+                                .map(map -> map.get(topic.topicId()))
+                                .orElse(Collections.emptyMap());
+                        PartitionErrorData error = partitionErrors.get(partition.partitionIndex());
+                        if (error == null) {
+                            partitionData = partition.duplicate();
+                        } else {
+                            partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(error.errorCode())
+                                .setErrorMessage(error.errorMessage());
+                        }
+                        topicData.partitions().add(partitionData);
+                    });
+                    return topicData;
+                })
+                .iterator()));
+        return data;
+    }
+
+    private AlterShareGroupOffsetsResponseData buildErrorResponse(InitializeShareGroupStateParameters request, AlterShareGroupOffsetsResponseData response, Throwable exp) {
+        // build new AlterShareGroupOffsetsResponseData for error response
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+        GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
+        log.error("Unable to initialize share group state for {}, {} while altering share group offsets", gtp.groupId(), gtp.topicsData(), exp);
+        Errors error = Errors.forException(exp);
+        data.setErrorCode(error.code())
+            .setErrorMessage(exp.getMessage())
+            .setResponses(response.responses());
+        data.setResponses(
+            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection(response.responses().stream()
+                .map(topic -> {
+                    AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName())
+                        .setTopicId(topic.topicId());
+                    topic.partitions().forEach(partition -> {
+                        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition partitionData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                            .setPartitionIndex(partition.partitionIndex())
+                            .setErrorCode(error.code())
+                            .setErrorMessage(error.message());
+                        topicData.partitions().add(partitionData);
+                    });
+                    return topicData;
+                })
+                .iterator()));
+        // don't uninitialized share group state here, as we regard this alter share group offsets request failed.
+        return data;
     }
 
     // Visibility for testing
@@ -711,7 +832,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             }
             return performShareGroupStateMetadataInitialize(groupId, topicPartitionMap, defaultResponse);
         }
-        log.error("Received error while calling initialize state for {} on persister {}.", groupId, persisterError.code());
+        log.error("Received error while calling initialize state for {} on persister, errorCode: {}.", groupId, persisterError.code());
         return uninitializeShareGroupState(persisterError, groupId, topicPartitionMap);
     }
 
@@ -755,30 +876,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Errors error = Errors.forException(exp);
             return uninitializeShareGroupState(error, groupId, topicPartitionMap);
         }).thenCompose(resp -> resp);
-    }
-
-    // Visibility for testing
-    CompletableFuture<Void> reconcileShareGroupStateInitializingState() {
-        List<CompletableFuture<List<InitializeShareGroupStateParameters>>> requestsStages = runtime.scheduleReadAllOperation(
-            "reconcile-share-group-initializing-state",
-            GroupCoordinatorShard::reconcileShareGroupStateInitializingState
-        );
-
-        if (requestsStages.isEmpty()) {
-            log.debug("Nothing to reconcile for share group initializing state.");
-            return CompletableFuture.completedFuture(null);
-        }
-
-        CompletableFuture<Void> allRequestsStage = CompletableFuture.allOf(requestsStages.toArray(new CompletableFuture<?>[0]));
-        final List<CompletableFuture<ShareGroupHeartbeatResponseData>> persisterResponses = new ArrayList<>();
-        allRequestsStage.thenApply(__ -> {
-            requestsStages.forEach(requestsStage -> requestsStage.join().forEach(request -> {
-                log.debug("Reconciling initializing state - {}", request);
-                persisterResponses.add(persisterInitialize(request, new ShareGroupHeartbeatResponseData()));
-            }));
-            return null;
-        });
-        return CompletableFuture.allOf(persisterResponses.toArray(new CompletableFuture<?>[0]));
     }
 
     /**
@@ -1042,7 +1139,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             } else {
                 futures.add(CompletableFuture.completedFuture(List.of(
                     new ConsumerGroupDescribeResponseData.DescribedGroup()
-                        .setGroupId(null)
+                        .setGroupId("")
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                 )));
             }
@@ -1094,7 +1191,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             } else {
                 futures.add(CompletableFuture.completedFuture(List.of(
                     new StreamsGroupDescribeResponseData.DescribedGroup()
-                        .setGroupId(null)
+                        .setGroupId("")
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                 )));
             }
@@ -1146,7 +1243,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             } else {
                 futures.add(CompletableFuture.completedFuture(List.of(
                     new ShareGroupDescribeResponseData.DescribedGroup()
-                        .setGroupId(null)
+                        .setGroupId("")
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                 )));
             }
@@ -1173,6 +1270,43 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#alterShareGroupOffsets(AuthorizableRequestContext, String, AlterShareGroupOffsetsRequestData)}.
+     */
+    @Override
+    public CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(
+        AuthorizableRequestContext context,
+        String groupId,
+        AlterShareGroupOffsetsRequestData request
+    ) {
+        if (!isActive.get() || metadataImage == null) {
+            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
+        }
+        
+        if (groupId == null || groupId.isEmpty()) {
+            return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.INVALID_GROUP_ID));
+        }
+
+        if (request.topics() == null) {
+            return CompletableFuture.completedFuture(new AlterShareGroupOffsetsResponseData());
+        }
+
+        return runtime.scheduleWriteOperation(
+            "share-group-offsets-alter",
+            topicPartitionFor(groupId),
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.alterShareGroupOffsets(groupId, request)
+        ).thenCompose(result ->
+            persisterInitialize(result.getValue(), result.getKey())
+        ).exceptionally(exception -> handleOperationException(
+            "share-group-offsets-alter",
+            request,
+            exception,
+            AlterShareGroupOffsetsRequest::getErrorResponseData,
+            log
+        ));
+    }
+
+    /**
      * See {@link GroupCoordinator#describeGroups(AuthorizableRequestContext, List)}.
      */
     @Override
@@ -1195,7 +1329,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             if (groupId == null) {
                 futures.add(CompletableFuture.completedFuture(List.of(
                     new DescribeGroupsResponseData.DescribedGroup()
-                        .setGroupId(null)
+                        .setGroupId("")
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                 )));
             } else {
@@ -1262,6 +1396,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            // Since the specific group types are not known, group deletion operations are chained.
+            // The sequence of these deletions is important: the initial share group deletion should
+            // not error if the group ID isn't found, whereas the subsequent consumer group deletion
+            // (the final operation) must return an error if its corresponding group ID is not found.
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList).thenCompose(groupErrMap -> {
                 DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults = new DeleteGroupsResponseData.DeletableGroupResultCollection();
                 List<String> retainedGroupIds = updateResponseAndGetNonErrorGroupList(groupErrMap, groupList, deletableGroupResults);
@@ -1323,7 +1461,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         Set<String> groupSet = new HashSet<>(groupList);
         // Remove all share group ids which have errored out
         // when deleting with persister.
-        groupSet.removeAll(errGroupIds);
+        errGroupIds.forEach(groupSet::remove);
 
         // Let us invoke the standard procedure of any non-share
         // groups or successfully deleted share groups remaining.
@@ -1458,18 +1596,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
         boolean requireStable
     ) {
         if (!isActive.get()) {
-            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                .setGroupId(request.groupId())
-                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-            );
+            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
+                request,
+                Errors.COORDINATOR_NOT_AVAILABLE,
+                context.requestVersion()
+            ));
         }
 
         // For backwards compatibility, we support fetch commits for the empty group id.
         if (request.groupId() == null) {
-            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                .setGroupId(request.groupId())
-                .setErrorCode(Errors.INVALID_GROUP_ID.code())
-            );
+            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
+                request,
+                Errors.INVALID_GROUP_ID,
+                context.requestVersion()
+            ));
         }
 
         // The require stable flag when set tells the broker to hold on returning unstable
@@ -1491,6 +1631,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 )
             ).exceptionally(exception -> handleOffsetFetchException(
                 "fetch-offsets",
+                context,
                 request,
                 exception
             ));
@@ -1513,18 +1654,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
         boolean requireStable
     ) {
         if (!isActive.get()) {
-            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                .setGroupId(request.groupId())
-                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-            );
+            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
+                request,
+                Errors.COORDINATOR_NOT_AVAILABLE,
+                context.requestVersion()
+            ));
         }
 
         // For backwards compatibility, we support fetch commits for the empty group id.
         if (request.groupId() == null) {
-            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                .setGroupId(request.groupId())
-                .setErrorCode(Errors.INVALID_GROUP_ID.code())
-            );
+            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
+                request,
+                Errors.INVALID_GROUP_ID,
+                context.requestVersion()
+            ));
         }
 
         // The require stable flag when set tells the broker to hold on returning unstable
@@ -1546,6 +1689,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 )
             ).exceptionally(exception -> handleOffsetFetchException(
                 "fetch-all-offsets",
+                context,
                 request,
                 exception
             ));
@@ -1580,8 +1724,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         List<ReadShareGroupStateSummaryRequestData.ReadStateSummaryData> readStateSummaryData = new ArrayList<>(requestData.topics().size());
         List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList = new ArrayList<>(requestData.topics().size());
         requestData.topics().forEach(topic -> {
-            Uuid topicId = metadataImage.topics().topicNameToIdView().get(topic.topicName());
-            if (topicId != null) {
+            Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOpt = metadataImage.topicMetadata(topic.topicName());
+            if (topicMetadataOpt.isPresent()) {
+                var topicId = topicMetadataOpt.get().id();
                 requestTopicIdToNameMapping.put(topicId, topic.topicName());
                 readStateSummaryData.add(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                     .setTopicId(topicId)
@@ -1648,9 +1793,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             ReadShareGroupStateSummaryRequestData readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
                 .setGroupId(requestData.groupId());
             topicPartitionMap.forEach((topicId, partitionSet) -> {
-                String topicName = metadataImage.topics().topicIdToNameView().get(topicId);
-                if (topicName != null) {
-                    requestTopicIdToNameMapping.put(topicId, topicName);
+                metadataImage.topicMetadata(topicId).ifPresent(topicMetadata -> {
+                    requestTopicIdToNameMapping.put(topicId, topicMetadata.name());
                     readSummaryRequestData.topics().add(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(topicId)
                         .setPartitions(
@@ -1658,7 +1802,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                                 partitionIndex -> new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partitionIndex)
                             ).toList()
                         ));
-                }
+                });
             });
             return readShareGroupStateSummary(readSummaryRequestData, requestTopicIdToNameMapping, describeShareGroupOffsetsResponseTopicList);
         });
@@ -1702,6 +1846,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                             partitionData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                                 .setPartitionIndex(partitionData.partition())
                                 .setStartOffset(partitionData.errorCode() == Errors.NONE.code() ? partitionData.startOffset() : PartitionFactory.UNINITIALIZED_START_OFFSET)
+                                .setLeaderEpoch(partitionData.errorCode() == Errors.NONE.code() ? partitionData.leaderEpoch() : PartitionFactory.DEFAULT_LEADER_EPOCH)
                         ).toList())
                     ));
 
@@ -1721,26 +1866,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
         AuthorizableRequestContext context,
         DeleteShareGroupOffsetsRequestData requestData
     ) {
-        if (!isActive.get()) {
-            return CompletableFuture.completedFuture(
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
-        }
-
-        if (metadataImage == null) {
-            return CompletableFuture.completedFuture(
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
+        if (!isActive.get() || metadataImage == null) {
+            return CompletableFuture.completedFuture(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
         }
 
         String groupId = requestData.groupId();
 
         if (!isGroupIdNotEmpty(groupId)) {
-            return CompletableFuture.completedFuture(
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.INVALID_GROUP_ID));
+            return CompletableFuture.completedFuture(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.INVALID_GROUP_ID));
         }
 
-        if (requestData.topics() == null || requestData.topics().isEmpty()) {
-            return CompletableFuture.completedFuture(
-                new DeleteShareGroupOffsetsResponseData()
+        if (requestData.topics() == null) {
+            return CompletableFuture.completedFuture(new DeleteShareGroupOffsetsResponseData()
             );
         }
 
@@ -1749,15 +1886,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(groupId),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.initiateDeleteShareGroupOffsets(groupId, requestData)
-        )
-            .thenCompose(resultHolder -> deleteShareGroupOffsetsState(groupId, resultHolder))
-            .exceptionally(exception -> handleOperationException(
-                "initiate-delete-share-group-offsets",
-                groupId,
-                exception,
-                (error, __) -> DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(error),
-                log
-            ));
+        ).thenCompose(resultHolder -> deleteShareGroupOffsetsState(groupId, resultHolder)
+        ).exceptionally(exception -> handleOperationException(
+            "initiate-delete-share-group-offsets",
+            groupId,
+            exception,
+            DeleteShareGroupOffsetsRequest::getErrorDeleteResponseData,
+            log
+        ));
     }
 
     private CompletableFuture<DeleteShareGroupOffsetsResponseData> deleteShareGroupOffsetsState(
@@ -1816,18 +1952,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 .filter(errData -> errData.errorCode() != Errors.NONE.code())
                 .findAny();
 
+            String topicName = metadataImage.topicMetadata(topicData.topicId()).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
+
             if (errItem.isPresent()) {
                 errorTopicResponses.add(
                     new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                         .setTopicId(topicData.topicId())
-                        .setTopicName(metadataImage.topics().topicIdToNameView().get(topicData.topicId()))
+                        .setTopicName(topicName)
                         .setErrorMessage(Errors.forCode(errItem.get().errorCode()).message())
                         .setErrorCode(errItem.get().errorCode())
                 );
             } else {
                 successTopics.put(
                     topicData.topicId(),
-                    metadataImage.topics().topicIdToNameView().get(topicData.topicId())
+                    topicName
                 );
             }
         });
@@ -2034,6 +2172,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 }
             ).toArray(new CompletableFuture<?>[0])
         ).get();
+
+        // At this point the metadata will not have been updated
+        // with the deleted topics. However, we must guard against it.
+        if (metadataImage == null || metadataImage.equals(CoordinatorMetadataImage.EMPTY)) {
+            return;
+        }
+
+        Set<Uuid> topicIds = topicPartitions.stream()
+            .filter(tp -> metadataImage.topicMetadata(tp.topic()).isPresent())
+            .map(tp -> metadataImage.topicMetadata(tp.topic()).get().id())
+            .collect(Collectors.toSet());
+
+        if (topicIds.isEmpty()) {
+            return;
+        }
+
+        CompletableFuture.allOf(
+            FutureUtils.mapExceptionally(
+                runtime.scheduleWriteAllOperation(
+                    "maybe-cleanup-share-group-state",
+                    Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                    coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+                ),
+                exception -> {
+                    log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
+                    return null;
+                }
+            ).toArray(new CompletableFuture<?>[0])
+        ).get();
     }
 
     /**
@@ -2049,13 +2216,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataPartitionIndex),
             groupMetadataPartitionLeaderEpoch
         );
-
-        // Wait for reconciliation to complete.
-        try {
-            reconcileShareGroupStateInitializingState().join();
-        } catch (Exception e) {
-            log.error("Share group reconciliation failed", e);
-        }
     }
 
     /**
@@ -2074,12 +2234,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#onNewMetadataImage(MetadataImage, MetadataDelta)}.
+     * See {@link GroupCoordinator#onNewMetadataImage(CoordinatorMetadataImage, CoordinatorMetadataDelta)}.
      */
     @Override
     public void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+        CoordinatorMetadataImage newImage,
+        CoordinatorMetadataDelta delta
     ) {
         throwIfNotActive();
         metadataImage = newImage;
@@ -2159,45 +2319,47 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * The handler also handles and logs unexpected errors.
      *
      * @param operationName     The name of the operation.
+     * @param context           The request context.
      * @param request           The OffsetFetchRequestGroup request.
      * @param exception         The exception to handle.
      * @return The OffsetFetchRequestGroup response.
      */
     private OffsetFetchResponseData.OffsetFetchResponseGroup handleOffsetFetchException(
         String operationName,
+        AuthorizableRequestContext context,
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         Throwable exception
     ) {
         ApiError apiError = ApiError.fromThrowable(exception);
 
-        switch (apiError.error()) {
-            case UNKNOWN_TOPIC_OR_PARTITION:
-            case NOT_ENOUGH_REPLICAS:
-            case REQUEST_TIMED_OUT:
-                // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, since consumers on versions prior
-                // to 3.9 do not expect the error and won't retry the request. NOT_COORDINATOR
-                // additionally triggers coordinator re-lookup, which is necessary if the client is
-                // talking to a zombie coordinator.
-                //
-                // While handleOperationException does remap UNKNOWN_TOPIC_OR_PARTITION,
-                // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
-                // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
-                // 3.9.
-                return new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                    .setGroupId(request.groupId())
-                    .setErrorCode(Errors.NOT_COORDINATOR.code());
-
-            default:
-                return handleOperationException(
+        return switch (apiError.error()) {
+            case UNKNOWN_TOPIC_OR_PARTITION, NOT_ENOUGH_REPLICAS, REQUEST_TIMED_OUT ->
+                    // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, since consumers on versions prior
+                    // to 3.9 do not expect the error and won't retry the request. NOT_COORDINATOR
+                    // additionally triggers coordinator re-lookup, which is necessary if the client is
+                    // talking to a zombie coordinator.
+                    //
+                    // While handleOperationException does remap UNKNOWN_TOPIC_OR_PARTITION,
+                    // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
+                    // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
+                    // 3.9.
+                    OffsetFetchResponse.groupError(
+                            request,
+                            Errors.NOT_COORDINATOR,
+                            context.requestVersion()
+                    );
+            default -> handleOperationException(
                     operationName,
                     request,
                     exception,
-                    (error, __) -> new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                        .setGroupId(request.groupId())
-                        .setErrorCode(error.code()),
+                    (error, __) -> OffsetFetchResponse.groupError(
+                        request,
+                        error,
+                        context.requestVersion()
+                    ),
                     log
-                );
-        }
+            );
+        };
     }
 
     private static void requireNonNull(Object obj, String msg) {

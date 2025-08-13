@@ -253,8 +253,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return PushTelemetryResponse.parse(readable, version);
             case ASSIGN_REPLICAS_TO_DIRS:
                 return AssignReplicasToDirsResponse.parse(readable, version);
-            case LIST_CLIENT_METRICS_RESOURCES:
-                return ListClientMetricsResourcesResponse.parse(readable, version);
+            case LIST_CONFIG_RESOURCES:
+                return ListConfigResourcesResponse.parse(readable, version);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsResponse.parse(readable, version);
             case SHARE_GROUP_HEARTBEAT:
@@ -291,6 +291,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return AlterShareGroupOffsetsResponse.parse(readable, version);
             case DELETE_SHARE_GROUP_OFFSETS:
                 return DeleteShareGroupOffsetsResponse.parse(readable, version);
+            case GET_REPLICA_LOG_INFO:
+                return GetReplicaLogInfoResponse.parse(readable, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

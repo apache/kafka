@@ -41,7 +41,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
-import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -259,6 +258,19 @@ public class RecordCollectorImpl implements RecordCollector {
 
         final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 
+        // As many records could be in-flight,
+        // freeing raw records in the context to reduce memory pressure
+        freeRawInputRecordFromContext(context);
+
+        send(key, value, processorNodeId, context, serializedRecord);
+    }
+
+    public <K, V> void send(final K key,
+                            final V value,
+                            final String processorNodeId,
+                            final InternalProcessorContext<?, ?> context,
+                            final ProducerRecord<byte[], byte[]> serializedRecord) {
+
         streamsProducer.send(serializedRecord, (metadata, exception) -> {
             try {
                 // if there's already an exception record, skip logging offsets or new exceptions
@@ -274,16 +286,16 @@ public class RecordCollectorImpl implements RecordCollector {
                         log.warn("Received offset={} in produce response for {}", metadata.offset(), tp);
                     }
 
-                    if (!topic.endsWith("-changelog")) {
+                    if (!serializedRecord.topic().endsWith("-changelog")) {
                         // we may not have created a sensor during initialization if the node uses dynamic topic routing,
                         // as all topics are not known up front, so create the sensor for this topic if absent
                         final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
-                            topic,
+                            serializedRecord.topic(),
                             t -> TopicMetrics.producedSensor(
                                 Thread.currentThread().getName(),
                                 taskId.toString(),
                                 processorNodeId,
-                                topic,
+                                serializedRecord.topic(),
                                 context.metrics()
                             )
                         );
@@ -295,7 +307,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     }
                 } else {
                     recordSendError(
-                        topic,
+                        serializedRecord.topic(),
                         exception,
                         serializedRecord,
                         context,
@@ -303,12 +315,18 @@ public class RecordCollectorImpl implements RecordCollector {
                     );
 
                     // KAFKA-7510 only put message key and value in TRACE level log so we don't leak data by default
-                    log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
+                    log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, serializedRecord.timestamp(), serializedRecord.topic(), serializedRecord.partition());
                 }
             } catch (final RuntimeException fatal) {
                 sendException.set(new StreamsException("Producer.send `Callback` failed", fatal));
             }
         });
+    }
+
+    private static void freeRawInputRecordFromContext(final InternalProcessorContext<Void, Void> context) {
+        if (context != null && context.recordContext() != null) {
+            context.recordContext().freeRawRecord();
+        }
     }
 
     private <K, V> void handleException(final ProductionExceptionHandler.SerializationExceptionOrigin origin,
@@ -319,16 +337,16 @@ public class RecordCollectorImpl implements RecordCollector {
                                         final Integer partition,
                                         final Long timestamp,
                                         final String processorNodeId,
-                                        final InternalProcessorContext<Void, Void> context,
+                                        final InternalProcessorContext<?, ?> context,
                                         final Exception serializationException) {
         log.debug(String.format("Error serializing record for topic %s", topic), serializationException);
 
         final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
 
-        final ProductionExceptionHandlerResponse response;
+        final ProductionExceptionHandler.Response response;
         try {
             response = Objects.requireNonNull(
-                productionExceptionHandler.handleSerializationException(
+                productionExceptionHandler.handleSerializationError(
                     errorHandlerContext(context, processorNodeId),
                     record,
                     serializationException,
@@ -355,7 +373,20 @@ public class RecordCollectorImpl implements RecordCollector {
             );
         }
 
-        if (maybeFailResponse(response) == ProductionExceptionHandlerResponse.FAIL) {
+        final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.deadLetterQueueRecords();
+        if (!deadLetterQueueRecords.isEmpty()) {
+            for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
+                this.send(
+                        deadLetterQueueRecord.key(),
+                        deadLetterQueueRecord.value(),
+                        processorNodeId,
+                        context,
+                        deadLetterQueueRecord
+                );
+            }
+        }
+
+        if (maybeFailResponse(response.result()) == ProductionExceptionHandler.Result.FAIL) {
             throw new StreamsException(
                 String.format(
                     "Unable to serialize record. ProducerRecord(topic=[%s], partition=[%d], timestamp=[%d]",
@@ -375,7 +406,7 @@ public class RecordCollectorImpl implements RecordCollector {
         droppedRecordsSensor.record();
     }
 
-    private DefaultErrorHandlerContext errorHandlerContext(final InternalProcessorContext<Void, Void> context,
+    private DefaultErrorHandlerContext errorHandlerContext(final InternalProcessorContext<?, ?> context,
                                                            final String processorNodeId) {
         final RecordContext recordContext = context != null ? context.recordContext() : null;
 
@@ -388,7 +419,9 @@ public class RecordCollectorImpl implements RecordCollector {
                 recordContext.headers(),
                 processorNodeId,
                 taskId,
-                recordContext.timestamp()
+                recordContext.timestamp(),
+                context.recordContext().sourceRawKey(),
+                context.recordContext().sourceRawValue()
             ) :
             new DefaultErrorHandlerContext(
                 context,
@@ -398,7 +431,9 @@ public class RecordCollectorImpl implements RecordCollector {
                 new RecordHeaders(),
                 processorNodeId,
                 taskId,
-                -1L
+                -1L,
+                null,
+                null
             );
     }
 
@@ -428,7 +463,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private void recordSendError(final String topic,
                                  final Exception productionException,
                                  final ProducerRecord<byte[], byte[]> serializedRecord,
-                                 final InternalProcessorContext<Void, Void> context,
+                                 final InternalProcessorContext<?, ?> context,
                                  final String processorNodeId) {
         String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, productionException.toString());
 
@@ -448,10 +483,10 @@ public class RecordCollectorImpl implements RecordCollector {
             // TransactionAbortedException is only thrown after `abortTransaction()` was called,
             // so it's only a followup error, and Kafka Streams is already handling the original error
         } else {
-            final ProductionExceptionHandlerResponse response;
+            final ProductionExceptionHandler.Response response;
             try {
                 response = Objects.requireNonNull(
-                    productionExceptionHandler.handle(
+                    productionExceptionHandler.handleError(
                         errorHandlerContext(context, processorNodeId),
                         serializedRecord,
                         productionException
@@ -476,14 +511,27 @@ public class RecordCollectorImpl implements RecordCollector {
                 return;
             }
 
-            if (productionException instanceof RetriableException && response == ProductionExceptionHandlerResponse.RETRY) {
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.deadLetterQueueRecords();
+            if (!deadLetterQueueRecords.isEmpty()) {
+                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
+                    this.send(
+                            deadLetterQueueRecord.key(),
+                            deadLetterQueueRecord.value(),
+                            processorNodeId,
+                            context,
+                            deadLetterQueueRecord
+                    );
+                }
+            }
+
+            if (productionException instanceof RetriableException && response.result() == ProductionExceptionHandler.Result.RETRY) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
                 sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
-                if (maybeFailResponse(response) == ProductionExceptionHandlerResponse.FAIL) {
+                if (maybeFailResponse(response.result()) == ProductionExceptionHandler.Result.FAIL) {
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
                     sendException.set(new StreamsException(errorMessage, productionException));
                 } else {
@@ -496,12 +544,12 @@ public class RecordCollectorImpl implements RecordCollector {
         log.error(errorMessage, productionException);
     }
 
-    private ProductionExceptionHandlerResponse maybeFailResponse(final ProductionExceptionHandlerResponse response) {
-        if (response == ProductionExceptionHandlerResponse.RETRY) {
+    private ProductionExceptionHandler.Result maybeFailResponse(final ProductionExceptionHandler.Result result) {
+        if (result == ProductionExceptionHandler.Result.RETRY) {
             log.warn("ProductionExceptionHandler returned RETRY for a non-retriable exception. Will treat it as FAIL.");
-            return ProductionExceptionHandlerResponse.FAIL;
+            return ProductionExceptionHandler.Result.FAIL;
         } else {
-            return response;
+            return result;
         }
     }
 

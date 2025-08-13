@@ -74,12 +74,14 @@ DELEGATION_TOKEN_EXPIRY_TIME_MS="delegation.token.expiry.time.ms"
 DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
-GROUP_COORDINATOR_REBALANCE_PROTOCOLS="group.coordinator.rebalance.protocols"
 CONSUMER_GROUP_MIGRATION_POLICY = "group.consumer.migration.policy"
 
 SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR ="share.coordinator.state.topic.replication.factor"
 SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR = "share.coordinator.state.topic.min.isr"
 SHARE_GROUP_ENABLE = "group.share.enable"
+
+UNSTABLE_API_VERSIONS_ENABLE = "unstable.api.versions.enable"
+UNSTABLE_FEATURE_VERSIONS_ENABLE = "unstable.feature.versions.enable"
 
 """
 From KafkaConfig.scala

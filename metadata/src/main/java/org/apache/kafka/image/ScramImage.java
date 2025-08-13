@@ -109,17 +109,17 @@ public final class ScramImage {
             DescribeUserScramCredentialsResult result = new DescribeUserScramCredentialsResult().setUser(user.getKey());
 
             if (!user.getValue()) {
-                boolean datafound = false;
+                boolean dataFound = false;
                 List<CredentialInfo> credentialInfos = new ArrayList<>();
                 for (Map.Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismsEntry : mechanisms.entrySet()) {
                     Map<String, ScramCredentialData> credentialDataSet = mechanismsEntry.getValue();
                     if (credentialDataSet.containsKey(user.getKey())) {
                         credentialInfos.add(new CredentialInfo().setMechanism(mechanismsEntry.getKey().type())
                                                                 .setIterations(credentialDataSet.get(user.getKey()).iterations()));
-                        datafound = true;
+                        dataFound = true;
                     }
                 }
-                if (datafound) {
+                if (dataFound) {
                     result.setCredentialInfos(credentialInfos);
                 } else {
                     result.setErrorCode(Errors.RESOURCE_NOT_FOUND.code())

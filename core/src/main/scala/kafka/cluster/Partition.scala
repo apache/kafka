@@ -36,6 +36,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.{PartitionState => JPartitionState}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache}
 import org.apache.kafka.server.common.RequestLocal
@@ -44,6 +45,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, TopicPartitionOperationKey}
+import org.apache.kafka.server.replica.Replica
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, UnexpectedAppendOffsetException}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
@@ -729,7 +731,7 @@ class Partition(val topicPartition: TopicPartition,
    * from the time when this broker was the leader last time) and setting the new leader and ISR.
    * If the leader replica id does not change, return false to indicate the replica manager.
    */
-  def makeLeader(partitionState: LeaderAndIsrRequest.PartitionState,
+  def makeLeader(partitionState: JPartitionState,
                  highWatermarkCheckpoints: OffsetCheckpoints,
                  topicId: Option[Uuid],
                  targetDirectoryId: Option[Uuid] = None): Boolean = {
@@ -795,10 +797,10 @@ class Partition(val topicPartition: TopicPartition,
         // lastFetchLeaderLogEndOffset.
         remoteReplicas.foreach { replica =>
           replica.resetReplicaState(
-            currentTimeMs = currentTimeMs,
-            leaderEndOffset = leaderEpochStartOffset,
-            isNewLeader = isNewLeader,
-            isFollowerInSync = partitionState.isr.contains(replica.brokerId)
+            currentTimeMs,
+            leaderEpochStartOffset,
+            isNewLeader,
+            partitionState.isr.contains(replica.brokerId)
           )
         }
 
@@ -835,7 +837,7 @@ class Partition(val topicPartition: TopicPartition,
    * replica manager that state is already correct and the become-follower steps can
    * be skipped.
    */
-  def makeFollower(partitionState: LeaderAndIsrRequest.PartitionState,
+  def makeFollower(partitionState: JPartitionState,
                    highWatermarkCheckpoints: OffsetCheckpoints,
                    topicId: Option[Uuid],
                    targetLogDirectoryId: Option[Uuid] = None): Boolean = {
@@ -883,7 +885,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def createLogInAssignedDirectoryId(partitionState: LeaderAndIsrRequest.PartitionState, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): Unit = {
+  private def createLogInAssignedDirectoryId(partitionState: JPartitionState, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): Unit = {
     targetLogDirectoryId match {
       case Some(directoryId) =>
         if (logManager.onlineLogDirId(directoryId) || !logManager.hasOfflineLogDirs() || directoryId == DirectoryId.UNASSIGNED) {
@@ -1072,9 +1074,9 @@ class Partition(val topicPartition: TopicPartition,
       isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
   }
 
-  private def isBrokerEpochIsrEligible(storedBrokerEpoch: Option[Long], cachedBrokerEpoch: Optional[java.lang.Long]): Boolean = {
-    storedBrokerEpoch.isDefined && cachedBrokerEpoch.isPresent() &&
-      (storedBrokerEpoch.get == -1 || storedBrokerEpoch.get == cachedBrokerEpoch.get())
+  private def isBrokerEpochIsrEligible(storedBrokerEpoch: Optional[java.lang.Long], cachedBrokerEpoch: Optional[java.lang.Long]): Boolean = {
+    storedBrokerEpoch.isPresent && cachedBrokerEpoch.isPresent &&
+      (storedBrokerEpoch.get == -1 || storedBrokerEpoch.get == cachedBrokerEpoch.get)
   }
 
   /*
@@ -1730,7 +1732,7 @@ class Partition(val topicPartition: TopicPartition,
             case Some(epochAndOffset) => new EpochEndOffset()
               .setPartition(partitionId)
               .setErrorCode(Errors.NONE.code)
-              .setLeaderEpoch(epochAndOffset.leaderEpoch)
+              .setLeaderEpoch(epochAndOffset.epoch())
               .setEndOffset(epochAndOffset.offset)
             case None => new EpochEndOffset()
               .setPartition(partitionId)
@@ -1802,7 +1804,7 @@ class Partition(val topicPartition: TopicPartition,
         brokerState.setBrokerEpoch(localBrokerEpochSupplier())
       } else {
         val replica = remoteReplicasMap.get(brokerId)
-        val brokerEpoch = if (replica == null) Option.empty else replica.stateSnapshot.brokerEpoch
+        val brokerEpoch = if (replica == null) Optional.empty else replica.stateSnapshot.brokerEpoch
         if (brokerEpoch.isEmpty) {
           // There are two cases where the broker epoch can be missing:
           // 1. During ISR expansion, we already held lock for the partition and did the broker epoch check, so the new

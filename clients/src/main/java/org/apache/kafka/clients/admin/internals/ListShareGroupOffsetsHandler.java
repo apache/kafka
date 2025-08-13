@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsSpec;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
@@ -39,13 +40,14 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * This class is the handler for {@link KafkaAdminClient#listShareGroupOffsets(Map, ListShareGroupOffsetsOptions)} call
  */
-public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, Long>> {
+public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> {
 
     private final Map<String, ListShareGroupOffsetsSpec> groupSpecs;
     private final Logger log;
@@ -58,7 +60,7 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
 
-    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Long>> newFuture(Collection<String> groupIds) {
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> newFuture(Collection<String> groupIds) {
         return AdminApiFuture.forKeys(coordinatorKeys(groupIds));
     }
 
@@ -108,13 +110,13 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, Long>> handleResponse(Node coordinator,
-                                                                               Set<CoordinatorKey> groupIds,
-                                                                               AbstractResponse abstractResponse) {
+    public ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleResponse(Node coordinator,
+                                                                                            Set<CoordinatorKey> groupIds,
+                                                                                            AbstractResponse abstractResponse) {
         validateKeys(groupIds);
 
         final DescribeShareGroupOffsetsResponse response = (DescribeShareGroupOffsetsResponse) abstractResponse;
-        final Map<CoordinatorKey, Map<TopicPartition, Long>> completed = new HashMap<>();
+        final Map<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> completed = new HashMap<>();
         final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         final List<CoordinatorKey> unmapped = new ArrayList<>();
 
@@ -123,17 +125,19 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
             if (response.hasGroupError(groupId)) {
                 handleGroupError(coordinatorKey, response.groupError(groupId), failed, unmapped);
             } else {
-                Map<TopicPartition, Long> groupOffsetsListing = new HashMap<>();
+                Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
                 response.data().groups().stream().filter(g -> g.groupId().equals(groupId)).forEach(groupResponse -> {
                     for (DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic topicResponse : groupResponse.topics()) {
                         for (DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition partitionResponse : topicResponse.partitions()) {
                             TopicPartition tp = new TopicPartition(topicResponse.topicName(), partitionResponse.partitionIndex());
                             if (partitionResponse.errorCode() == Errors.NONE.code()) {
+                                final long startOffset = partitionResponse.startOffset();
+                                final Optional<Integer> leaderEpoch = partitionResponse.leaderEpoch() < 0 ? Optional.empty() : Optional.of(partitionResponse.leaderEpoch());
                                 // Negative offset indicates there is no start offset for this partition
                                 if (partitionResponse.startOffset() < 0) {
                                     groupOffsetsListing.put(tp, null);
                                 } else {
-                                    groupOffsetsListing.put(tp, partitionResponse.startOffset());
+                                    groupOffsetsListing.put(tp, new OffsetAndMetadata(startOffset, leaderEpoch, ""));
                                 }
                             } else {
                                 log.warn("Skipping return offset for {} due to error {}: {}.", tp, partitionResponse.errorCode(), partitionResponse.errorMessage());

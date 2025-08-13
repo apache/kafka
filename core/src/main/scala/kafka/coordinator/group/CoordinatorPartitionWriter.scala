@@ -17,13 +17,14 @@
 package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
-import kafka.server.{AddPartitionsToTxnManager, ReplicaManager}
-import org.apache.kafka.common.TopicPartition
+import kafka.server.ReplicaManager
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
 import org.apache.kafka.server.ActionQueue
 import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 
 import java.util.concurrent.CompletableFuture
@@ -139,11 +140,12 @@ class CoordinatorPartitionWriter(
     records: MemoryRecords
   ): Long = {
     // We write synchronously to the leader replica without waiting on replication.
+    val topicIdPartition: TopicIdPartition = replicaManager.topicIdPartition(tp)
     val appendResults = replicaManager.appendRecordsToLeader(
       requiredAcks = 1,
       internalTopicsAllowed = true,
       origin = AppendOrigin.COORDINATOR,
-      entriesPerPartition = Map(tp -> records),
+      entriesPerPartition = Map(topicIdPartition -> records),
       requestLocal = RequestLocal.noCaching,
       verificationGuards = Map(tp -> verificationGuard),
       // We can directly complete the purgatories here because we don't hold
@@ -151,7 +153,7 @@ class CoordinatorPartitionWriter(
       actionQueue = directActionQueue
     )
 
-    val partitionResult = appendResults.getOrElse(tp,
+    val partitionResult = appendResults.getOrElse(topicIdPartition,
       throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
 
     if (partitionResult.error != Errors.NONE) {

@@ -34,7 +34,7 @@ public class StreamsGroupBuilder {
     private StreamsTopology topology;
     private final Map<String, StreamsGroupMember> members = new HashMap<>();
     private final Map<String, TasksTuple> targetAssignments = new HashMap<>();
-    private Map<String, TopicMetadata> partitionMetadata = new HashMap<>();
+    private long metadataHash = 0L;
 
     public StreamsGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
@@ -48,8 +48,8 @@ public class StreamsGroupBuilder {
         return this;
     }
 
-    public StreamsGroupBuilder withPartitionMetadata(Map<String, TopicMetadata> partitionMetadata) {
-        this.partitionMetadata = partitionMetadata;
+    public StreamsGroupBuilder withMetadataHash(long metadataHash) {
+        this.metadataHash = metadataHash;
         return this;
     }
 
@@ -77,15 +77,9 @@ public class StreamsGroupBuilder {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member))
         );
 
-        if (!partitionMetadata.isEmpty()) {
-            records.add(
-                StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId,
-                    partitionMetadata));
-        }
-
         // Add group epoch record.
         records.add(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch, 0));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch, metadataHash));
 
         // Add target assignment records.
         targetAssignments.forEach((memberId, assignment) ->
@@ -114,5 +108,9 @@ public class StreamsGroupBuilder {
         );
 
         return records;
+    }
+
+    public String groupId() {
+        return groupId;
     }
 }

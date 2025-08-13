@@ -58,7 +58,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -231,7 +230,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public void run() {
         try {
             printJson(new StartupComplete());
-            consumer.subscribe(Collections.singletonList(topic), this);
+            consumer.subscribe(List.of(topic), this);
 
             while (!isFinished()) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
@@ -623,7 +622,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
         String configFile = res.getString("consumer.config");
-        String brokerHostandPort = res.getString("bootstrapServer");
+        String brokerHostAndPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
         if (configFile != null) {
@@ -664,7 +663,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         }
 
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostAndPort);
 
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));

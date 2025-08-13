@@ -25,7 +25,7 @@ import org.apache.kafka.common.record.UnalignedFileRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;

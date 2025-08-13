@@ -93,10 +93,15 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
             .setGroupId("grp-unknown")
             .setGroupState(ClassicGroupState.DEAD.toString) // Return DEAD group when the group does not exist.
             .setErrorCode(if (version >= 6) Errors.GROUP_ID_NOT_FOUND.code() else Errors.NONE.code())
-            .setErrorMessage(if (version >= 6) "Group grp-unknown not found." else null)
+            .setErrorMessage(if (version >= 6) "Group grp-unknown not found." else null),
+          new DescribedGroup()
+            .setGroupId("")
+            .setGroupState(ClassicGroupState.DEAD.toString) // Return DEAD group when the group does not exist.
+            .setErrorCode(if (version >= 6) Errors.GROUP_ID_NOT_FOUND.code() else Errors.NONE.code())
+            .setErrorMessage(if (version >= 6) "Group  not found." else null)
         ),
         describeGroups(
-          groupIds = List("grp-1", "grp-2", "grp-unknown"),
+          groupIds = List("grp-1", "grp-2", "grp-unknown", ""),
           version = version.toShort
         )
       )

@@ -22,8 +22,8 @@ import java.util
 import java.util.{Arrays, Collections, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.config.{ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
+import org.apache.kafka.common.{Endpoint, Node}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, Records}
@@ -35,7 +35,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.network.EndPoint
 import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -44,7 +43,6 @@ import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
-import org.apache.kafka.common.test.{TestUtils => JTestUtils}
 
 import scala.jdk.CollectionConverters._
 
@@ -343,7 +341,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(
-      Seq(new EndPoint("lb1.example.com", 9000, ListenerName.normalised("CONTROLLER"), SecurityProtocol.PLAINTEXT)),
+      Seq(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "lb1.example.com", 9000)),
       config.effectiveAdvertisedControllerListeners
     )
   }
@@ -359,7 +357,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(
-      Seq(new EndPoint("localhost", 9093, ListenerName.normalised("CONTROLLER"), SecurityProtocol.PLAINTEXT)),
+      Seq(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
       config.effectiveAdvertisedControllerListeners
     )
   }
@@ -377,8 +375,8 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(
       Seq(
-        new EndPoint("lb1.example.com", 9000, ListenerName.normalised("CONTROLLER"), SecurityProtocol.PLAINTEXT),
-        new EndPoint("localhost", 9094, ListenerName.normalised("CONTROLLER_NEW"), SecurityProtocol.PLAINTEXT)
+        new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "lb1.example.com", 9000),
+        new Endpoint("CONTROLLER_NEW", SecurityProtocol.PLAINTEXT, "localhost", 9094)
       ),
       config.effectiveAdvertisedControllerListeners
     )
@@ -442,7 +440,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
     val controllerListenerName = new ListenerName("CONTROLLER")
-    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+    assertEquals(SecurityProtocol.PLAINTEXT,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
     // ensure we don't map it to PLAINTEXT when there is a SSL or SASL controller listener
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER,SSL")
@@ -455,7 +453,7 @@ class KafkaConfigTest {
     props.remove(SocketServerConfigs.LISTENERS_CONFIG)
     // ensure we don't map it to PLAINTEXT when it is explicitly mapped otherwise
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
-    assertEquals(Some(SecurityProtocol.SSL),
+    assertEquals(SecurityProtocol.SSL,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(controllerListenerName))
     // ensure we don't map it to PLAINTEXT when anything is explicitly given
     // (i.e. it is only part of the default value, even with KRaft)
@@ -464,7 +462,7 @@ class KafkaConfigTest {
     // ensure we can map it to a non-PLAINTEXT security protocol by default (i.e. when nothing is given)
     props.remove(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    assertEquals(Some(SecurityProtocol.SSL),
+    assertEquals(SecurityProtocol.SSL,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("SSL")))
   }
 
@@ -476,9 +474,9 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER1,CONTROLLER2")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
-    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+    assertEquals(SecurityProtocol.PLAINTEXT,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER1")))
-    assertEquals(Some(SecurityProtocol.PLAINTEXT),
+    assertEquals(SecurityProtocol.PLAINTEXT,
       KafkaConfig.fromProps(props).effectiveListenerSecurityProtocolMap.get(new ListenerName("CONTROLLER2")))
   }
 
@@ -507,16 +505,16 @@ class KafkaConfigTest {
     props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "REPLICATION")
     val config = KafkaConfig.fromProps(props)
     val expectedListeners = Seq(
-      new EndPoint("localhost", 9091, new ListenerName("CLIENT"), SecurityProtocol.SSL),
-      new EndPoint("localhost", 9092, new ListenerName("REPLICATION"), SecurityProtocol.SSL),
-      new EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT))
+      new Endpoint("CLIENT", SecurityProtocol.SSL, "localhost", 9091),
+      new Endpoint("REPLICATION", SecurityProtocol.SSL, "localhost", 9092),
+      new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))
     assertEquals(expectedListeners, config.listeners)
     assertEquals(expectedListeners, config.effectiveAdvertisedBrokerListeners)
-    val expectedSecurityProtocolMap = Map(
-      new ListenerName("CLIENT") -> SecurityProtocol.SSL,
-      new ListenerName("REPLICATION") -> SecurityProtocol.SSL,
-      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT,
-      new ListenerName("CONTROLLER") -> SecurityProtocol.PLAINTEXT
+    val expectedSecurityProtocolMap = util.Map.of(
+      new ListenerName("CLIENT"), SecurityProtocol.SSL,
+      new ListenerName("REPLICATION"), SecurityProtocol.SSL,
+      new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT,
+      new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT
     )
     assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
   }
@@ -536,21 +534,21 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
 
     val expectedListeners = Seq(
-      new EndPoint("localhost", 9091, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
-      new EndPoint("localhost", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
+      new Endpoint("EXTERNAL", SecurityProtocol.SSL, "localhost", 9091),
+      new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093)
     )
     assertEquals(expectedListeners, config.listeners)
 
     val expectedAdvertisedListeners = Seq(
-      new EndPoint("lb1.example.com", 9000, new ListenerName("EXTERNAL"), SecurityProtocol.SSL),
-      new EndPoint("host1", 9093, new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT)
+      new Endpoint("EXTERNAL", SecurityProtocol.SSL, "lb1.example.com", 9000),
+      new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "host1", 9093)
     )
     assertEquals(expectedAdvertisedListeners, config.effectiveAdvertisedBrokerListeners)
 
-    val expectedSecurityProtocolMap = Map(
-      new ListenerName("EXTERNAL") -> SecurityProtocol.SSL,
-      new ListenerName("INTERNAL") -> SecurityProtocol.PLAINTEXT,
-      new ListenerName("CONTROLLER") -> SecurityProtocol.PLAINTEXT
+    val expectedSecurityProtocolMap = util.Map.of(
+      new ListenerName("EXTERNAL"), SecurityProtocol.SSL,
+      new ListenerName("INTERNAL"), SecurityProtocol.PLAINTEXT,
+      new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT
     )
     assertEquals(expectedSecurityProtocolMap, config.effectiveListenerSecurityProtocolMap)
   }
@@ -593,12 +591,21 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "plaintext://localhost:9091,SsL://localhost:9092")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL,CONTROLLER:PLAINTEXT")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listenerName.value == "SSL").map(JTestUtils.endpointToString))
-    assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.listenerName.value == "PLAINTEXT").map(JTestUtils.endpointToString))
+    assertEndpointsEqual(new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9092),
+      config.listeners.find(_.listener == "SSL").getOrElse(fail("SSL endpoint not found")))
+    assertEndpointsEqual( new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9091),
+      config.listeners.find(_.listener == "PLAINTEXT").getOrElse(fail("PLAINTEXT endpoint not found")))
+  }
+
+  private def assertEndpointsEqual(expected: Endpoint, actual: Endpoint): Unit = {
+    assertEquals(expected.host(), actual.host(), "Host mismatch")
+    assertEquals(expected.port(), actual.port(), "Port mismatch")
+    assertEquals(expected.listener(), actual.listener(), "Listener mismatch")
+    assertEquals(expected.securityProtocol(), actual.securityProtocol(), "Security protocol mismatch")
   }
 
   private def listenerListToEndPoints(listenerList: String,
-                              securityProtocolMap: collection.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO.asScala) =
+                              securityProtocolMap: util.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO) =
     CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
@@ -775,6 +782,7 @@ class KafkaConfigTest {
 
     KafkaConfig.configNames.foreach { name =>
       name match {
+        case AbstractConfig.CONFIG_PROVIDERS_CONFIG => // ignore string
         case ServerConfigs.BROKER_ID_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ServerConfigs.NUM_IO_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.BACKGROUND_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
@@ -794,6 +802,10 @@ class KafkaConfigTest {
         case MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG => // no op
+        case MetadataLogConfig.INTERNAL_METADATA_MAX_BATCH_SIZE_IN_BYTES_CONFIG => // no op
+        case MetadataLogConfig.INTERNAL_METADATA_MAX_FETCH_SIZE_IN_BYTES_CONFIG => // no op
+        case MetadataLogConfig.INTERNAL_METADATA_DELETE_DELAY_MILLIS_CONFIG => // no op
         case KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG => // ignore string
         case MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG  => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
@@ -943,16 +955,33 @@ class KafkaConfigTest {
         case SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS =>
         case SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS =>
         case SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS =>
-        case SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME =>
-        case SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME =>
-        case SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL =>
-        case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL =>
-        case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS =>
-        case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS =>
-        case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE =>
+        case SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE =>
+        case SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID =>
+        case SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET =>
         case SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS =>
         case SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE =>
         case SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER =>
+        case SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE =>
+        case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS =>
+        case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS =>
+        case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS =>
+        case SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL =>
+        case SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS =>
+        case SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS =>
+        case SaslConfigs.SASL_OAUTHBEARER_SCOPE =>
+        case SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME =>
+        case SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME =>
+        case SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL =>
 
         // Security config
         case SecurityConfig.SECURITY_PROVIDERS_CONFIG =>
@@ -990,6 +1019,7 @@ class KafkaConfigTest {
         case RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP => // ignore string
         case RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1, -2)
         case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1, -2)
         case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
@@ -1136,6 +1166,8 @@ class KafkaConfigTest {
         // topic only config
         case QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
+        case "internal.segment.bytes" =>
+        // topic internal config
         case prop =>
           fail(prop + " must be explicitly checked for dynamic updatability. Note that LogConfig(s) require that KafkaConfig value lookups are dynamic and not static values.")
       }
@@ -1163,9 +1195,10 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(defaults)
     assertEquals(1, config.brokerId)
-    assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedBrokerListeners.map(JTestUtils.endpointToString))
+    assertEndpointsEqual(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "127.0.0.1", 1122),
+      config.effectiveAdvertisedBrokerListeners.head)
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
-    assertEquals(List("/tmp1", "/tmp2"), config.logDirs)
+    assertEquals(util.List.of("/tmp1", "/tmp2"), config.logDirs)
     assertEquals(12 * 60L * 1000L * 60, config.logRollTimeMillis)
     assertEquals(11 * 60L * 1000L * 60, config.logRollTimeJitterMillis)
     assertEquals(10 * 60L * 1000L * 60, config.logRetentionTimeMillis)
@@ -1500,7 +1533,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(metadataDir, config.metadataLogDir)
-    assertEquals(Seq(dataDir), config.logDirs)
+    assertEquals(util.List.of(dataDir), config.logDirs)
   }
 
   @Test
@@ -1518,7 +1551,7 @@ class KafkaConfigTest {
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
-    assertEquals(Seq(dataDir1, dataDir2), config.logDirs)
+    assertEquals(util.List.of(dataDir1, dataDir2), config.logDirs)
   }
 
   @Test
@@ -1743,13 +1776,11 @@ class KafkaConfigTest {
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     var config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
-    assertFalse(config.shareGroupConfig.isShareGroupEnabled)
 
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
     config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER, GroupType.SHARE), config.groupCoordinatorRebalanceProtocols)
-    assertTrue(config.shareGroupConfig.isShareGroupEnabled)
 
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,streams")
     val config2 = KafkaConfig.fromProps(props)
@@ -1847,5 +1878,13 @@ class KafkaConfigTest {
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
     props.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "30000")
     assertDoesNotThrow(() => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testLowercaseControllerListenerNames(): Unit = {
+    val props = createDefaultConfig()
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "controller")
+    val message = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage
+    assertEquals("requirement failed: controller.listener.names must contain at least one value appearing in the 'listeners' configuration when running the KRaft controller role", message)
   }
 }

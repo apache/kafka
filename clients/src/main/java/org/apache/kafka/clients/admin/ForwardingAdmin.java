@@ -301,6 +301,12 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+        return delegate.listConfigResources(configResourceTypes, options);
+    }
+
+    @SuppressWarnings({"deprecation", "removal"})
+    @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
         return delegate.listClientMetricsResources(options);
     }

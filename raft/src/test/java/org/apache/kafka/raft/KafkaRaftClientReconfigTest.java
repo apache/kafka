@@ -41,6 +41,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
@@ -55,13 +56,13 @@ import org.mockito.Mockito;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -94,26 +95,22 @@ public class KafkaRaftClientReconfigTest {
 
         List<List<ControlRecord>> expectedBootstrapRecords = List.of(
             List.of(
-                new ControlRecord(
-                    ControlRecordType.SNAPSHOT_HEADER,
+                ControlRecord.of(
                     new SnapshotHeaderRecord()
                         .setVersion((short) 0)
                         .setLastContainedLogTimestamp(0)
                 ),
-                new ControlRecord(
-                    ControlRecordType.KRAFT_VERSION,
+                ControlRecord.of(
                     new KRaftVersionRecord()
                         .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
                         .setKRaftVersion((short) 1)
                 ),
-                new ControlRecord(
-                    ControlRecordType.KRAFT_VOTERS,
+                ControlRecord.of(
                     voters.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
                 )
             ),
             List.of(
-                new ControlRecord(
-                    ControlRecordType.SNAPSHOT_FOOTER,
+                ControlRecord.of(
                     new SnapshotFooterRecord()
                         .setVersion((short) 0)
                 )
@@ -127,7 +124,8 @@ public class KafkaRaftClientReconfigTest {
                 context.serde,
                 BufferSupplier.NO_CACHING,
                 KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-                false
+                false,
+                new LogContext()
             )
         ) {
             SnapshotWriterReaderTest.assertControlSnapshot(expectedBootstrapRecords, reader);
@@ -231,7 +229,7 @@ public class KafkaRaftClientReconfigTest {
         // check that follower will send fetch request to leader
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // check if leader response were to contain bootstrap snapshot id, follower would not send fetch snapshot request
         context.deliverResponse(
@@ -241,7 +239,7 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
     @Test
@@ -261,7 +259,7 @@ public class KafkaRaftClientReconfigTest {
         // check that follower will send fetch request to leader
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // check that before receiving bootstrap records from leader, follower is not in the voter set
         assertFalse(context.client.quorum().isVoter(follower));
@@ -341,27 +339,108 @@ public class KafkaRaftClientReconfigTest {
             Map.of(context.channel.listenerName(), newAddress)
         );
 
-        // Show that the new voter is not currently a voter
-        assertFalse(context.client.quorum().isVoter(newVoter));
+        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
+
+        // Attempt to add new voter to the quorum
+        context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
+
+        completeApiVersionsForAddVoter(context, newVoter, newAddress);
+
+        // Handle the API_VERSIONS response
+        context.client.poll();
+        // Append new VotersRecord to log
+        context.client.poll();
+
+        commitNewVoterSetForAddVoter(context, local, follower, newVoter, epoch);
+
+        // Expect reply for AddVoter request
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.NONE);
+    }
+
+    @Test
+    void testAddVoterCompletesEarlyWithAckWhenCommittedFalse() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_1186_PROTOCOL)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        checkLeaderMetricValues(2, 0, 0, context);
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + newVoter.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Map.of(context.channel.listenerName(), newAddress)
+        );
+
+        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
+
+        // Attempt to add new voter to the quorum
+        context.deliverRequest(
+            context.addVoterRequest(
+                Integer.MAX_VALUE,
+                newVoter,
+                newListeners
+            ).setAckWhenCommitted(false)
+        );
+
+        completeApiVersionsForAddVoter(context, newVoter, newAddress);
+
+        // Handle the API_VERSIONS response
+        context.client.poll();
+        // Append new VotersRecord to log
+        // Expect a response for AddVoter request before committing the new voter
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.NONE);
+
+        commitNewVoterSetForAddVoter(context, local, follower, newVoter, epoch);
+    }
+
+    // This method sets up the context so a test can send an AddVoter request after
+    // exiting this method
+    private void prepareLeaderToReceiveAddVoter(
+        RaftClientTestContext context,
+        int epoch,
+        ReplicaKey leader,
+        ReplicaKey follower,
+        ReplicaKey observer
+    ) throws Exception {
+        // Show that the observer is not currently a voter
+        assertFalse(context.client.quorum().isVoter(observer));
 
         // Establish a HWM and fence previous leaders
         context.deliverRequest(
             context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
         );
         context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()));
 
         // Catch up the new voter to the leader's LEO, the new voter is still an observer at this point
         context.deliverRequest(
-            context.fetchRequest(epoch, newVoter, context.log.endOffset().offset(), epoch, 0)
+            context.fetchRequest(epoch, observer, context.log.endOffset().offset(), epoch, 0)
         );
         context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()));
         checkLeaderMetricValues(2, 1, 0, context);
+    }
 
-        // Attempt to add new voter to the quorum
-        context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
-
+    private void completeApiVersionsForAddVoter(
+        RaftClientTestContext context,
+        ReplicaKey newVoter,
+        InetSocketAddress newAddress
+    ) throws Exception {
         // Leader should send an API_VERSIONS request to the new voter's endpoint
         context.pollUntilRequest();
         RaftRequest.Outbound apiVersionRequest = context.assertSentApiVersionsRequest();
@@ -376,26 +455,32 @@ public class KafkaRaftClientReconfigTest {
             apiVersionRequest.destination(),
             apiVersionsResponse(Errors.NONE)
         );
+    }
 
-        // Handle the API_VERSIONS response
-        context.client.poll();
-        // Append new VotersRecord to log
-        context.client.poll();
+    private void commitNewVoterSetForAddVoter(
+        RaftClientTestContext context,
+        ReplicaKey leader,
+        ReplicaKey follower,
+        ReplicaKey newVoter,
+        int epoch
+    ) throws Exception {
         // The new voter is now a voter after writing the VotersRecord to the log
         assertTrue(context.client.quorum().isVoter(newVoter));
         checkLeaderMetricValues(3, 0, 1, context);
 
         // Send a FETCH to increase the HWM and commit the new voter set
         context.deliverRequest(
-            context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
+            context.fetchRequest(
+                epoch,
+                follower,
+                context.log.endOffset().offset(),
+                epoch,
+                0
+            )
         );
         context.pollUntilResponse();
-        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(leader.id()));
         checkLeaderMetricValues(3, 0, 0, context);
-
-        // Expect reply for AddVoter request
-        context.pollUntilResponse();
-        context.assertSentAddVoterResponse(Errors.NONE);
     }
 
     @Test
@@ -1129,7 +1214,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilRequest();
         context.collectEndQuorumRequests(
             epoch,
-            new HashSet<>(List.of(follower1.id(), follower2.id())),
+            Set.of(follower1.id(), follower2.id()),
             Optional.empty()
         );
 
@@ -2144,7 +2229,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2181,7 +2266,7 @@ public class KafkaRaftClientReconfigTest {
         // after sending an update voter the next request should be a fetch
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
     @ParameterizedTest
@@ -2217,7 +2302,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2257,7 +2342,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2308,7 +2393,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2344,7 +2429,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // Election a new leader causes the replica to resend update voter request
         int newEpoch = epoch + 1;
@@ -2356,7 +2441,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, newEpoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, newEpoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2392,7 +2477,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, newEpoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, newEpoch, 0L, 0, context.client.highWatermark());
     }
 
     @Test
@@ -2642,7 +2727,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2663,7 +2748,7 @@ public class KafkaRaftClientReconfigTest {
         context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // after more than 3 fetch timeouts the update voter period timer should have expired.
         // check that the update voter period timer doesn't remain at zero (0) and cause the message queue to get
@@ -2703,7 +2788,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2723,7 +2808,7 @@ public class KafkaRaftClientReconfigTest {
         // expect one last FETCH request
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
         // don't send a response but increase the time
         context.time.sleep(context.requestTimeoutMs() - 1);
@@ -2783,7 +2868,7 @@ public class KafkaRaftClientReconfigTest {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
 
             context.deliverResponse(
                 fetchRequest.correlationId(),
@@ -2820,7 +2905,7 @@ public class KafkaRaftClientReconfigTest {
         // check that there is a fetch to the new leader
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch + 1, 0L, 0, context.client.highWatermark());
         assertEquals(voter2.id(), fetchRequest.destination().id());
     }
 
@@ -2839,7 +2924,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
         assertEquals(-2, fetchRequest.destination().id());
     }
 

@@ -66,9 +66,11 @@ import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
@@ -109,13 +111,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -161,6 +163,7 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -916,6 +919,7 @@ public class StreamThreadTest {
         thread = createStreamThread(CLIENT_ID, config);
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
 
         final TaskId task1 = new TaskId(0, t1p1.partition());
@@ -1290,6 +1294,7 @@ public class StreamThreadTest {
         thread = createStreamThread(CLIENT_ID, new StreamsConfig(props));
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -1547,6 +1552,7 @@ public class StreamThreadTest {
         consumer.updatePartitions(topic1, Collections.singletonList(new PartitionInfo(topic1, 1, null, null, null)));
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -1612,6 +1618,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -1694,6 +1701,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.buildTopology();
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -1788,6 +1796,7 @@ public class StreamThreadTest {
         consumer.updatePartitions(topic1, Collections.singletonList(new PartitionInfo(topic1, 1, null, null, null)));
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -1852,6 +1861,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -1933,6 +1943,7 @@ public class StreamThreadTest {
         );
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -1993,6 +2004,7 @@ public class StreamThreadTest {
         restoreConsumer.updateBeginningOffsets(offsets);
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
@@ -2238,7 +2250,7 @@ public class StreamThreadTest {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
         final ProcessorSupplier<Object, Object, Void, Void> punctuateProcessor =
-            () -> new ContextualProcessor<Object, Object, Void, Void>() {
+            () -> new ContextualProcessor<>() {
                 @Override
                 public void init(final ProcessorContext<Void, Void> context) {
                     context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
@@ -2256,6 +2268,7 @@ public class StreamThreadTest {
         thread = createStreamThread(CLIENT_ID, config);
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
@@ -2335,6 +2348,7 @@ public class StreamThreadTest {
         thread = createStreamThread(CLIENT_ID, stateUpdaterEnabled, processingThreadsEnabled);
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
@@ -2506,7 +2520,7 @@ public class StreamThreadTest {
 
         if (stateUpdaterEnabled) {
             TestUtils.waitForCondition(
-                () -> mockRestoreConsumer.assignment().size() == 0,
+                () -> mockRestoreConsumer.assignment().isEmpty(),
                 "Never get the assignment");
         } else {
             TestUtils.waitForCondition(
@@ -2532,6 +2546,7 @@ public class StreamThreadTest {
         thread = createStreamThread(CLIENT_ID, new StreamsConfig(properties));
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
 
         final TaskId task1 = new TaskId(0, t1p1.partition());
@@ -3018,6 +3033,7 @@ public class StreamThreadTest {
         thread = createStreamThread(CLIENT_ID, config);
 
         thread.setState(StreamThread.State.STARTING);
+        thread.taskManager().init();
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
 
         final TaskId task1 = new TaskId(0, t1p1.partition());
@@ -3391,6 +3407,7 @@ public class StreamThreadTest {
 
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> clientInstanceIdFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3415,6 +3432,7 @@ public class StreamThreadTest {
     public void shouldReturnErrorIfMainConsumerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3431,6 +3449,7 @@ public class StreamThreadTest {
     public void shouldReturnErrorIfRestoreConsumerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3444,9 +3463,10 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> producerFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3464,6 +3484,7 @@ public class StreamThreadTest {
         clientSupplier.consumer.disableTelemetry();
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3481,6 +3502,7 @@ public class StreamThreadTest {
 
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3500,6 +3522,7 @@ public class StreamThreadTest {
 
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> producerFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3517,6 +3540,7 @@ public class StreamThreadTest {
         clientSupplier.consumer.injectTimeoutException(-1);
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3541,6 +3565,7 @@ public class StreamThreadTest {
         clientSupplier.restoreConsumer.injectTimeoutException(-1);
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3560,7 +3585,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldTimeOutOnProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldTimeOutOnProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         producer.setClientInstanceId(Uuid.randomUuid());
         producer.injectTimeoutException(-1);
@@ -3568,6 +3593,7 @@ public class StreamThreadTest {
 
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
+        thread.taskManager().init();
 
         final Map<String, KafkaFuture<Uuid>> producerFutures = thread.clientInstanceIds(Duration.ZERO);
 
@@ -3584,9 +3610,10 @@ public class StreamThreadTest {
         );
     }
 
-    @Test
-    public void testNamedTopologyWithStreamsProtocol() {
-        final Properties props = configProps(false, false, false);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testNamedTopologyWithStreamsProtocol(final boolean stateUpdaterEnabled) {
+        final Properties props = configProps(false, stateUpdaterEnabled, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
         final StreamsConfig config = new StreamsConfig(props);
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
@@ -3643,9 +3670,10 @@ public class StreamThreadTest {
         assertTrue(thread.streamsRebalanceData().isEmpty());
     }
 
-    @Test
-    public void testStreamsRebalanceDataWithExtraCopartition() {
-        final Properties props = configProps(false, false, false);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testStreamsRebalanceDataWithExtraCopartition(final boolean stateUpdaterEnabled) {
+        final Properties props = configProps(false, stateUpdaterEnabled, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
 
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
@@ -3805,6 +3833,11 @@ public class StreamThreadTest {
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
         final Properties props = configProps(false, false, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
         final StreamsConfig config = new StreamsConfig(props);
         thread = new StreamThread(
             new MockTime(1),
@@ -3828,7 +3861,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.of(streamsRebalanceData),
-            null
+            streamsMetadataState
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3842,6 +3875,134 @@ public class StreamThreadTest {
         ));
         thread.runOnceWithoutProcessingThreads();
         verify(shutdownErrorHook).run();
+    }
+
+    @Test
+    public void testStreamsProtocolRunOnceWithoutProcessingThreadsMissingSourceTopic() {
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                UUID.randomUUID(),
+                Optional.empty(),
+                Map.of(),
+                Map.of()
+        );
+        final Runnable shutdownErrorHook = mock(Runnable.class);
+
+        final Properties props = configProps(false, false, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final StreamsConfig config = new StreamsConfig(props);
+        final MockTime mockTime = new MockTime(1);
+        thread = new StreamThread(
+                mockTime,
+                config,
+                null,
+                mainConsumer,
+                consumer,
+                changelogReader,
+                null,
+                mock(TaskManager.class),
+                null,
+                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+                new TopologyMetadata(internalTopologyBuilder, config),
+                PROCESS_ID,
+                CLIENT_ID,
+                new LogContext(""),
+                null,
+                new AtomicLong(Long.MAX_VALUE),
+                new LinkedList<>(),
+                shutdownErrorHook,
+                HANDLER,
+                null,
+                Optional.of(streamsRebalanceData),
+                streamsMetadataState
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(State.STARTING);
+        thread.runOnceWithoutProcessingThreads();
+
+        streamsRebalanceData.setStatuses(List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
+                        .setStatusDetail("Missing source topics")
+        ));
+        
+        // First call should not throw exception (within timeout)
+        thread.runOnceWithoutProcessingThreads();
+        
+        // Advance time beyond max.poll.interval.ms (default is 300000ms) to trigger timeout
+        mockTime.sleep(300001);
+        
+        final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class, () -> thread.runOnceWithoutProcessingThreads());
+        assertTrue(exception.getMessage().contains("Missing source topics"));
+        assertTrue(exception.getMessage().contains("Timeout exceeded"));
+    }
+
+    @Test
+    public void testStreamsProtocolIncorrectlyPartitionedTopics() {
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                UUID.randomUUID(),
+                Optional.empty(),
+                Map.of(),
+                Map.of()
+        );
+        final Runnable shutdownErrorHook = mock(Runnable.class);
+
+        final Properties props = configProps(false, false, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final StreamsConfig config = new StreamsConfig(props);
+        final MockTime mockTime = new MockTime(1);
+        thread = new StreamThread(
+                mockTime,
+                config,
+                null,
+                mainConsumer,
+                consumer,
+                changelogReader,
+                null,
+                mock(TaskManager.class),
+                null,
+                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+                new TopologyMetadata(internalTopologyBuilder, config),
+                PROCESS_ID,
+                CLIENT_ID,
+                new LogContext(""),
+                null,
+                new AtomicLong(Long.MAX_VALUE),
+                new LinkedList<>(),
+                shutdownErrorHook,
+                HANDLER,
+                null,
+                Optional.of(streamsRebalanceData),
+                streamsMetadataState
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(State.STARTING);
+
+        streamsRebalanceData.setStatuses(List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.INCORRECTLY_PARTITIONED_TOPICS.code())
+                        .setStatusDetail("Topics are incorrectly partitioned")
+        ));
+
+        // Should immediately throw TopologyException (no timeout like MISSING_SOURCE_TOPICS)
+        final TopologyException exception = assertThrows(TopologyException.class, 
+            () -> thread.runOnceWithoutProcessingThreads());
+        assertTrue(exception.getMessage().contains("Topics are incorrectly partitioned"));
     }
 
     @Test
@@ -3860,6 +4021,11 @@ public class StreamThreadTest {
         final Properties props = configProps(false, false, false);
         final Runnable shutdownErrorHook = mock(Runnable.class);
         final StreamsConfig config = new StreamsConfig(props);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, config),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
         thread = new StreamThread(
             new MockTime(1),
             config,
@@ -3882,7 +4048,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.of(streamsRebalanceData),
-            null
+            streamsMetadataState
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3896,6 +4062,162 @@ public class StreamThreadTest {
         ));
         thread.runOnceWithProcessingThreads();
         verify(shutdownErrorHook).run();
+    }
+
+    @Test
+    public void testStreamsProtocolRunOnceWithProcessingThreadsMissingSourceTopic() {
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                UUID.randomUUID(),
+                Optional.empty(),
+                Map.of(),
+                Map.of()
+        );
+
+        final Properties props = configProps(false, false, false);
+        final Runnable shutdownErrorHook = mock(Runnable.class);
+        final StreamsConfig config = new StreamsConfig(props);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, config),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final MockTime mockTime = new MockTime(1);
+        thread = new StreamThread(
+                mockTime,
+                config,
+                null,
+                mainConsumer,
+                consumer,
+                changelogReader,
+                null,
+                mock(TaskManager.class),
+                null,
+                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+                new TopologyMetadata(internalTopologyBuilder, config),
+                PROCESS_ID,
+                CLIENT_ID,
+                new LogContext(""),
+                null,
+                new AtomicLong(Long.MAX_VALUE),
+                new LinkedList<>(),
+                shutdownErrorHook,
+                HANDLER,
+                null,
+                Optional.of(streamsRebalanceData),
+                streamsMetadataState
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(State.STARTING);
+        thread.runOnceWithProcessingThreads();
+
+        streamsRebalanceData.setStatuses(List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
+                        .setStatusDetail("Missing source topics")
+        ));
+        
+        // First call should not throw exception (within timeout)
+        thread.runOnceWithProcessingThreads();
+        
+        // Advance time beyond max.poll.interval.ms (default is 300000ms) to trigger timeout
+        mockTime.sleep(300001);
+        
+        final MissingSourceTopicException exception = assertThrows(MissingSourceTopicException.class, () -> thread.runOnceWithProcessingThreads());
+        assertTrue(exception.getMessage().contains("Missing source topics"));
+        assertTrue(exception.getMessage().contains("Timeout exceeded"));
+    }
+
+    @Test
+    public void testStreamsProtocolMissingSourceTopicRecovery() {
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                UUID.randomUUID(),
+                Optional.empty(),
+                Map.of(),
+                Map.of()
+        );
+
+        final Properties props = configProps(false, false, false);
+        final Runnable shutdownErrorHook = mock(Runnable.class);
+        final StreamsConfig config = new StreamsConfig(props);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, config),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final MockTime mockTime = new MockTime(1);
+        thread = new StreamThread(
+                mockTime,
+                config,
+                null,
+                mainConsumer,
+                consumer,
+                changelogReader,
+                null,
+                mock(TaskManager.class),
+                null,
+                new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+                new TopologyMetadata(internalTopologyBuilder, config),
+                PROCESS_ID,
+                CLIENT_ID,
+                new LogContext(""),
+                null,
+                new AtomicLong(Long.MAX_VALUE),
+                new LinkedList<>(),
+                shutdownErrorHook,
+                HANDLER,
+                null,
+                Optional.of(streamsRebalanceData),
+                streamsMetadataState
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(State.STARTING);
+        thread.runOnceWithoutProcessingThreads();
+
+        // Set missing source topics status
+        streamsRebalanceData.setStatuses(List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
+                        .setStatusDetail("Missing source topics")
+        ));
+        
+        // First call should not throw exception (within timeout)
+        thread.runOnceWithoutProcessingThreads();
+        
+        // Advance time but not beyond timeout
+        mockTime.sleep(150000); // Half of max.poll.interval.ms
+        
+        // Should still not throw exception
+        thread.runOnceWithoutProcessingThreads();
+        
+        // Clear the missing source topics (simulate recovery)
+        streamsRebalanceData.setStatuses(List.of());
+        
+        // Should complete without exception (recovery successful)
+        assertDoesNotThrow(() -> thread.runOnceWithoutProcessingThreads());
+        
+        // Set missing topics again - should reset the timeout
+        streamsRebalanceData.setStatuses(List.of(
+                new StreamsGroupHeartbeatResponseData.Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
+                        .setStatusDetail("Different missing topics")
+        ));
+        
+        // Advance time by 250 seconds to test if timer was reset
+        // Total time from beginning: 150000 + 250000 = 400000ms (400s)
+        // If timer was NOT reset: elapsed time = 400s > 300s → should throw
+        // If timer WAS reset: elapsed time = 250s < 300s → should NOT throw
+        mockTime.sleep(250000); // Advance by 250 seconds
+        
+        // Should not throw because timer was reset - only 250s elapsed from reset point
+        assertDoesNotThrow(() -> thread.runOnceWithoutProcessingThreads());
     }
 
     @Test
@@ -3986,7 +4308,6 @@ public class StreamThreadTest {
     // TODO: change return type to `StandbyTask`
     private Collection<Task> createStandbyTask(final StreamsConfig config) {
         final LogContext logContext = new LogContext("test");
-        final Logger log = logContext.logger(StreamThreadTest.class);
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
@@ -3996,7 +4317,7 @@ public class StreamThreadTest {
             stateDirectory,
             new MockChangelogReader(),
             CLIENT_ID,
-            log,
+            logContext,
             false);
         return standbyTaskCreator.createTasks(singletonMap(new TaskId(1, 2), emptySet()));
     }

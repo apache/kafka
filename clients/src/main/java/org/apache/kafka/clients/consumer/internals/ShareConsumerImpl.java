@@ -561,13 +561,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * {@inheritDoc}
      */
     @Override
+    @SuppressWarnings("unchecked")
     public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
         Timer timer = time.timer(timeout);
 
         acquireAndEnsureOpen();
         try {
             // Handle any completed acknowledgements for which we already have the responses
-            handleCompletedAcknowledgements();
+            handleCompletedAcknowledgements(false);
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
             acknowledgeBatchIfImplicitAcknowledgement();
@@ -601,6 +602,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             } while (timer.notExpired());
 
             return ConsumerRecords.empty();
+        } catch (ShareFetchException e) {
+            currentFetch = (ShareFetch<K, V>) e.shareFetch();
+            throw e.cause();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
@@ -695,6 +699,19 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     /**
      * {@inheritDoc}
      */
+    public void acknowledge(final String topic, final int partition, final long offset, final AcknowledgeType type) {
+        acquireAndEnsureOpen();
+        try {
+            ensureExplicitAcknowledgement();
+            currentFetch.acknowledge(topic, partition, offset, type);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Map<TopicIdPartition, Optional<KafkaException>> commitSync() {
         return this.commitSync(Duration.ofMillis(defaultApiTimeoutMs));
@@ -708,7 +725,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             // Handle any completed acknowledgements for which we already have the responses
-            handleCompletedAcknowledgements();
+            handleCompletedAcknowledgements(false);
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
             acknowledgeBatchIfImplicitAcknowledgement();
@@ -752,7 +769,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             // Handle any completed acknowledgements for which we already have the responses
-            handleCompletedAcknowledgements();
+            handleCompletedAcknowledgements(false);
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
             acknowledgeBatchIfImplicitAcknowledgement();
@@ -883,7 +900,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         swallow(log, Level.ERROR, "Failed to stop finding coordinator",
                 this::stopFindCoordinatorOnClose, firstException);
         swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
-                this::handleCompletedAcknowledgements, firstException);
+                () -> handleCompletedAcknowledgements(true), firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
@@ -911,6 +928,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     private void stopFindCoordinatorOnClose() {
+        if (applicationEventHandler == null) {
+            return;
+        }
         log.debug("Stop finding coordinator during consumer close");
         applicationEventHandler.add(new StopFindCoordinatorOnCloseEvent());
     }
@@ -927,6 +947,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * 2. leave the group
      */
     private void sendAcknowledgementsAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
+        if (applicationEventHandler == null || backgroundEventProcessor == null ||
+            backgroundEventReaper == null || backgroundEventQueue == null) {
+            return;
+        }
         completeQuietly(
                 () -> applicationEventHandler.addAndGet(new ShareAcknowledgeOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer))),
                 "Failed to send pending acknowledgements with a timeout(ms)=" + timer.timeoutMs(), firstException);
@@ -1017,8 +1041,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * <p>
      * If the acknowledgement commit callback throws an exception, this method will throw an exception.
      */
-    private void handleCompletedAcknowledgements() {
-        processBackgroundEvents();
+    private void handleCompletedAcknowledgements(boolean onClose) {
+        if (backgroundEventQueue == null || backgroundEventReaper == null || backgroundEventProcessor == null) {
+            return;
+        }
+        // If the user gets any fatal errors, they will get these exceptions in the background queue.
+        // While closing, we ignore these exceptions so that the consumers close successfully.
+        processBackgroundEvents(onClose ? e -> (e instanceof GroupAuthorizationException
+                || e instanceof TopicAuthorizationException
+                || e instanceof InvalidTopicException) : e -> false);
 
         if (!completedAcknowledgements.isEmpty()) {
             try {
@@ -1063,6 +1094,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private static ShareAcknowledgementMode initializeAcknowledgementMode(ConsumerConfig config, Logger log) {
         String s = config.getString(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
         return ShareAcknowledgementMode.fromString(s);
+    }
+
+    private void processBackgroundEvents(final Predicate<Exception> ignoreErrorEventException) {
+        try {
+            processBackgroundEvents();
+        } catch (Exception e) {
+            if (!ignoreErrorEventException.test(e))
+                throw e;
+        }
     }
 
     /**

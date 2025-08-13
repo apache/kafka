@@ -44,6 +44,7 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import scala.jdk.javaapi.OptionConverters;
 
@@ -69,8 +70,9 @@ public class KafkaApisBuilder {
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
     private ClientMetricsManager clientMetricsManager = null;
-    private Optional<ShareCoordinator> shareCoordinator = Optional.empty();
+    private ShareCoordinator shareCoordinator = null;
     private GroupConfigManager groupConfigManager = null;
+    private Supplier<Long> brokerEpochSupplier = () -> -1L;
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -97,7 +99,7 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setShareCoordinator(Optional<ShareCoordinator> shareCoordinator) {
+    public KafkaApisBuilder setShareCoordinator(ShareCoordinator shareCoordinator) {
         this.shareCoordinator = shareCoordinator;
         return this;
     }
@@ -187,6 +189,11 @@ public class KafkaApisBuilder {
         return this;
     }
 
+    public KafkaApisBuilder setBrokerEpochSupplier(Supplier<Long> brokerEpochSupplier) {
+        this.brokerEpochSupplier = brokerEpochSupplier;
+        return this;
+    }
+
     @SuppressWarnings({"CyclomaticComplexity"})
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
@@ -194,8 +201,8 @@ public class KafkaApisBuilder {
         if (replicaManager == null) throw new RuntimeException("You must set replicaManager");
         if (groupCoordinator == null) throw new RuntimeException("You must set groupCoordinator");
         if (txnCoordinator == null) throw new RuntimeException("You must set txnCoordinator");
-        if (autoTopicCreationManager == null)
-            throw new RuntimeException("You must set autoTopicCreationManager");
+        if (shareCoordinator == null) throw new RuntimeException("You must set shareCoordinator");
+        if (autoTopicCreationManager == null) throw new RuntimeException("You must set autoTopicCreationManager");
         if (config == null) config = new KafkaConfig(Map.of());
         if (configRepository == null) throw new RuntimeException("You must set configRepository");
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
@@ -213,7 +220,7 @@ public class KafkaApisBuilder {
                              replicaManager,
                              groupCoordinator,
                              txnCoordinator,
-                             OptionConverters.toScala(shareCoordinator),
+                             shareCoordinator,
                              autoTopicCreationManager,
                              brokerId,
                              config,
@@ -230,6 +237,7 @@ public class KafkaApisBuilder {
                              tokenManager,
                              apiVersionManager,
                              clientMetricsManager,
-                             groupConfigManager);
+                             groupConfigManager,
+                             brokerEpochSupplier);
     }
 }

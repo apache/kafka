@@ -17,7 +17,7 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.message.SnapshotFooterRecord;
-import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.util.List;
 
