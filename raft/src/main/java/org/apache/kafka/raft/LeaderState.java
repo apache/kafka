@@ -740,12 +740,7 @@ public class LeaderState<T> implements EpochState {
                             !highWatermarkUpdateMetadata.metadata().equals(currentHighWatermarkMetadata.metadata()))) {
                         Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
                         highWatermark = highWatermarkUpdateOpt;
-
-                        // If the new high watermark is greater than the current voter offset,
-                        // then the current voter set is committed.
-                        if (currentVoterOffset.isPresent() && currentVoterOffset.getAsLong() <= highWatermarkUpdateOffset) {
-                            committedVoterStates = currentVoterStates;
-                        }
+                        maybeUpdateCommittedVoters(highWatermarkUpdateOffset);
 
                         logHighWatermarkUpdate(
                             oldHighWatermark,
@@ -767,6 +762,7 @@ public class LeaderState<T> implements EpochState {
                 } else {
                     Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
                     highWatermark = highWatermarkUpdateOpt;
+                    maybeUpdateCommittedVoters(highWatermarkUpdateOffset);
                     logHighWatermarkUpdate(
                         oldHighWatermark,
                         highWatermarkUpdateMetadata,
@@ -881,6 +877,17 @@ public class LeaderState<T> implements EpochState {
             .filter(state -> !state.matchesKey(localVoterNode.voterKey()))
             .map(state -> state.replicaKey)
             .collect(Collectors.toList());
+    }
+
+    /**
+     * If the new high watermark is greater than the current voter offset,
+     * then the current voter set is committed.
+     * @param highWatermarkUpdateOffset the update-to-day high watermark offset
+     */
+    private void maybeUpdateCommittedVoters(long highWatermarkUpdateOffset) {
+        if (currentVoterOffset.isPresent() && currentVoterOffset.getAsLong() <= highWatermarkUpdateOffset) {
+            committedVoterStates = currentVoterStates;
+        }
     }
 
     private Stream<ReplicaState> followersByDescendingFetchOffset() {

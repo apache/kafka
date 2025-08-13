@@ -167,7 +167,7 @@ public final class KRaftControlRecordStateMachine {
     public Map.Entry<VoterSet, Long> lastVoterSetWithOffset() {
         synchronized (voterSetHistory) {
             VoterSet voters = voterSetHistory.lastValue();
-            Long offset = voterSetHistory.lastVoterSetOffset().orElse(0L);
+            Long offset = voterSetHistory.lastVoterSetOffset().orElse(SMALLEST_LOG_OFFSET);
             return Map.entry(voters, offset);
         }
     }
