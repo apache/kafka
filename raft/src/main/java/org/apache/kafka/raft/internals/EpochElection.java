@@ -28,7 +28,7 @@ import java.util.stream.Stream;
  *  Tracks the votes cast by voters in an election held by a Nominee.
  */
 public class EpochElection {
-    private Map<Integer, VoterState> voterStates;
+    private final Map<Integer, VoterState> voterStates;
 
     public EpochElection(Set<ReplicaKey> voters) {
         this.voterStates = voters.stream()

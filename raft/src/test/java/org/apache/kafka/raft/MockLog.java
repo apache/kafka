@@ -43,7 +43,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -627,12 +626,7 @@ public class MockLog implements ReplicatedLog {
         );
     }
 
-    static class MockOffsetMetadata implements OffsetMetadata {
-        final long id;
-
-        MockOffsetMetadata(long id) {
-            this.id = id;
-        }
+    record MockOffsetMetadata(long id) implements OffsetMetadata {
 
         @Override
         public String toString() {
@@ -640,49 +634,12 @@ public class MockLog implements ReplicatedLog {
                 "id=" + id +
                 ')';
         }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            MockOffsetMetadata that = (MockOffsetMetadata) o;
-            return id == that.id;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(id);
-        }
     }
 
-    static class LogEntry {
-        final MockOffsetMetadata metadata;
-        final long offset;
-        final SimpleRecord record;
-
-        LogEntry(MockOffsetMetadata metadata, long offset, SimpleRecord record) {
-            this.metadata = metadata;
-            this.offset = offset;
-            this.record = record;
-        }
+    record LogEntry(MockOffsetMetadata metadata, long offset, SimpleRecord record) {
 
         LogOffsetMetadata logOffsetMetadata() {
             return new LogOffsetMetadata(offset, Optional.of(metadata));
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            LogEntry logEntry = (LogEntry) o;
-            return offset == logEntry.offset &&
-                Objects.equals(metadata, logEntry.metadata) &&
-                Objects.equals(record, logEntry.record);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(metadata, offset, record);
         }
 
         @Override
@@ -696,17 +653,10 @@ public class MockLog implements ReplicatedLog {
         }
     }
 
-    static class LogBatch {
-        final List<LogEntry> entries;
-        final int epoch;
-        final boolean isControlBatch;
-
-        LogBatch(int epoch, boolean isControlBatch, List<LogEntry> entries) {
+    record LogBatch(int epoch, boolean isControlBatch, List<LogEntry> entries) {
+        LogBatch {
             if (entries.isEmpty())
                 throw new IllegalArgumentException("Empty batches are not supported");
-            this.entries = entries;
-            this.epoch = epoch;
-            this.isControlBatch = isControlBatch;
         }
 
         long firstOffset() {
@@ -753,14 +703,7 @@ public class MockLog implements ReplicatedLog {
         }
     }
 
-    private static class EpochStartOffset {
-        final int epoch;
-        final long startOffset;
-
-        private EpochStartOffset(int epoch, long startOffset) {
-            this.epoch = epoch;
-            this.startOffset = startOffset;
-        }
+    private record EpochStartOffset(int epoch, long startOffset) {
 
         @Override
         public String toString() {

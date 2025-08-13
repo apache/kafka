@@ -23,28 +23,20 @@ import org.apache.kafka.common.network.ListenerName;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * The textual representation of a KIP-853 voter.
- *
+ * <p>
  * Since this is used in command-line tools, format changes to the parsing logic require a KIP,
  * and should be backwards compatible.
  */
-public final class DynamicVoter {
-    private final Uuid directoryId;
-    private final int nodeId;
-    private final String host;
-    private final int port;
-
+public record DynamicVoter(Uuid directoryId, int nodeId, String host, int port) {
     /**
      * Create a DynamicVoter object by parsing an input string.
      *
-     * @param input                         The input string.
-     *
-     * @return                              The DynamicVoter object.
-     *
-     * @throws IllegalArgumentException     If parsing fails.
+     * @param input The input string.
+     * @return The DynamicVoter object.
+     * @throws IllegalArgumentException If parsing fails.
      */
     public static DynamicVoter parse(String input) {
         input = input.trim();
@@ -75,7 +67,7 @@ public final class DynamicVoter {
             int endBracketIndex = input.indexOf("]");
             if (endBracketIndex < 0) {
                 throw new IllegalArgumentException("Hostname began with left bracket, but no right " +
-                        "bracket was found.");
+                    "bracket was found.");
             }
             host = input.substring(1, endBracketIndex);
             input = input.substring(endBracketIndex + 1);
@@ -118,65 +110,22 @@ public final class DynamicVoter {
     /**
      * Create a new KIP-853 voter.
      *
-     * @param directoryId   The directory ID.
-     * @param nodeId        The voter ID.
-     * @param host          The voter hostname or IP address.
-     * @param port          The voter port.
+     * @param directoryId The directory ID.
+     * @param nodeId      The voter ID.
+     * @param host        The voter hostname or IP address.
+     * @param port        The voter port.
      */
-    public DynamicVoter(
-        Uuid directoryId,
-        int nodeId,
-        String host,
-        int port
-    ) {
-        this.directoryId = directoryId;
-        this.nodeId = nodeId;
-        this.host = host;
-        this.port = port;
-    }
-
-    public Uuid directoryId() {
-        return directoryId;
-    }
-
-    public int nodeId() {
-        return nodeId;
-    }
-
-    public String host() {
-        return host;
-    }
-
-    public int port() {
-        return port;
+    public DynamicVoter {
     }
 
     public VoterSet.VoterNode toVoterNode(String controllerListenerName) {
         ReplicaKey voterKey = ReplicaKey.of(nodeId, directoryId);
         Endpoints listeners = Endpoints.fromInetSocketAddresses(Map.of(
-                ListenerName.normalised(controllerListenerName),
-                new InetSocketAddress(host, port)));
+            ListenerName.normalised(controllerListenerName),
+            new InetSocketAddress(host, port)));
         SupportedVersionRange supportedKRaftVersion =
-                new SupportedVersionRange((short) 0, (short) 1);
+            new SupportedVersionRange((short) 0, (short) 1);
         return VoterSet.VoterNode.of(voterKey, listeners, supportedKRaftVersion);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || (!(o.getClass().equals(DynamicVoter.class)))) return false;
-        DynamicVoter other = (DynamicVoter) o;
-        return directoryId.equals(other.directoryId) &&
-            nodeId == other.nodeId &&
-            host.equals(other.host) &&
-            port == other.port;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(directoryId,
-            nodeId,
-            host,
-            port);
     }
 
     @Override
