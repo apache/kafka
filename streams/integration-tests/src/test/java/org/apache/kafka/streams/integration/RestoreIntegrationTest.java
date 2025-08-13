@@ -138,9 +138,7 @@ public class RestoreIntegrationTest {
 
     @AfterAll
     public static void closeCluster() {
-        if (admin != null) {
-            admin.close();
-        }
+        Utils.closeQuietly(admin, "admin");
         CLUSTER.stop();
     }
 
