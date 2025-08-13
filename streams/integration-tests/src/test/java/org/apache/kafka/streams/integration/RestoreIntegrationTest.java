@@ -846,7 +846,7 @@ public class RestoreIntegrationTest {
                 offsetsToCommit.put(partition, new OffsetAndMetadata(targetOffset));
             }
 
-            admin.alterConsumerGroupOffsets(appId, offsetsToCommit).all().get();
+            admin.alterStreamsGroupOffsets(appId, offsetsToCommit).all().get();
         } catch (final Exception e) {
             throw new RuntimeException("Failed to set committed offsets", e);
         }
