@@ -508,12 +508,10 @@ class AutoTopicCreationManagerTest {
       transactionCoordinator,
       shareCoordinator,
       mockTime)
-    
-    // 测试getTopicCreationErrors在没有缓存时返回空
+
     val initialResult = autoTopicCreationManager.getTopicCreationErrors(Set("nonexistent-topic"))
     assertTrue(initialResult.isEmpty)
-    
-    // 让时间前进，再次查询确保仍然为空
+
     mockTime.sleep(config.groupCoordinatorConfig.classicGroupMaxSessionTimeoutMs + 1000)
     val laterResult = autoTopicCreationManager.getTopicCreationErrors(Set("nonexistent-topic"))
     assertTrue(laterResult.isEmpty)

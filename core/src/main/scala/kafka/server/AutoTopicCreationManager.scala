@@ -81,7 +81,7 @@ class DefaultAutoTopicCreationManager(
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
   private val topicCreationErrorCache = new ConcurrentHashMap[String, CachedTopicCreationError]()
-  // Use session timeout instead of request timeout for better semantic alignment with client lifecycle
+  // Use session timeout for better semantic alignment with client lifecycle
   private val errorCacheTtlMs = config.groupCoordinatorConfig.classicGroupMaxSessionTimeoutMs.toLong
 
   /**
