@@ -153,13 +153,35 @@ public class ReassignPartitionsCommandTest {
         produceMessages(foo0.topic(), foo0.partition(), 100);
 
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            String assignment = "{\"version\":1,\"partitions\":" +
-                    "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[3,1,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                    "]}";
-            generateAssignment(admin, assignment, "1,2,3", false);
+            String topicsToMoveJson = """
+                {
+                    "topics": [
+                        { "topic": "foo" }
+                    ],
+                    "version": 1
+                }
+                """;
+            var assignment = generateAssignment(admin, topicsToMoveJson, "1,2,3", false);
+            Map<TopicPartition, List<Integer>> proposedAssignments = assignment.getKey();
+            String assignmentJson = String.format("""
+                {
+                    "version": 1,
+                    "partitions": [
+                        {
+                            "topic": "foo",
+                            "partition": 0,
+                            "replicas": %s,
+                            "log_dirs": ["any", "any", "any"]
+                        }
+                    ]
+                }
+                """, proposedAssignments.get(foo0));
+
+            runExecuteAssignment(false, assignmentJson, -1L, -1L);
+
             Map<TopicPartition, PartitionReassignmentState> finalAssignment = Map.of(foo0,
-                    new PartitionReassignmentState(List.of(0, 1, 2), List.of(3, 1, 2), true));
-            waitForVerifyAssignment(admin, assignment, false,
+                    new PartitionReassignmentState(proposedAssignments.get(foo0), proposedAssignments.get(foo0), true));
+            waitForVerifyAssignment(admin, assignmentJson, false,
                     new VerifyAssignmentResult(finalAssignment));
         }
     }
@@ -237,15 +259,15 @@ public class ReassignPartitionsCommandTest {
                 // Check the reassignment status.
                 VerifyAssignmentResult result = runVerifyAssignment(admin, assignment, true);
 
-                if (!result.partsOngoing) {
+                if (!result.partsOngoing()) {
                     return true;
                 } else {
                     assertFalse(
-                            result.partStates.values().stream().allMatch(state -> state.done),
+                            result.partStates().values().stream().allMatch(PartitionReassignmentState::done),
                             "Expected at least one partition reassignment to be ongoing when result = " + result
                     );
-                    assertEquals(List.of(0, 3, 2), result.partStates.get(new TopicPartition("foo", 0)).targetReplicas);
-                    assertEquals(List.of(3, 2, 1), result.partStates.get(new TopicPartition("baz", 2)).targetReplicas);
+                    assertEquals(List.of(0, 3, 2), result.partStates().get(new TopicPartition("foo", 0)).targetReplicas());
+                    assertEquals(List.of(3, 2, 1), result.partStates().get(new TopicPartition("baz", 2)).targetReplicas());
                     waitForInterBrokerThrottle(admin, List.of(0, 1, 2, 3), interBrokerThrottle);
                     return false;
                 }
@@ -540,7 +562,7 @@ public class ReassignPartitionsCommandTest {
             finalAssignment.put(bar0, new PartitionReassignmentState(List.of(3, 2, 0), List.of(3, 2, 0), true));
 
             VerifyAssignmentResult verifyAssignmentResult = runVerifyAssignment(admin, assignment, false);
-            assertFalse(verifyAssignmentResult.movesOngoing);
+            assertFalse(verifyAssignmentResult.movesOngoing());
 
             // Wait for the assignment to complete
             waitForVerifyAssignment(admin, assignment, false,
@@ -786,7 +808,7 @@ public class ReassignPartitionsCommandTest {
             // This time, the broker throttles were removed.
             waitForBrokerLevelThrottles(admin, unthrottledBrokerConfigs);
             // Verify that there are no ongoing reassignments.
-            assertFalse(runVerifyAssignment(admin, assignment, false).partsOngoing);
+            assertFalse(runVerifyAssignment(admin, assignment, false).partsOngoing());
         }
         // Verify that the partition is removed from cancelled replicas
         verifyReplicaDeleted(new TopicPartitionReplica(foo0.topic(), foo0.partition(), 3));
