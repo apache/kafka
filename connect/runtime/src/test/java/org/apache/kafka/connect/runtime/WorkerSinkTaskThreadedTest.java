@@ -174,6 +174,7 @@ public class WorkerSinkTaskThreadedTest {
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
         Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
         Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
@@ -651,7 +652,7 @@ public class WorkerSinkTaskThreadedTest {
             @Override
             public Object answer(InvocationOnMock invocation) {
                 ExpectOffsetCommitCommand commitCommand = commands[index++];
-                // All assigned partitions will have offsets committed, but we've only processed messages/updated 
+                // All assigned partitions will have offsets committed, but we've only processed messages/updated
                 // offsets for one
                 final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit =
                         offsetsToCommitFn.apply(commitCommand.expectedMessages);
@@ -664,7 +665,7 @@ public class WorkerSinkTaskThreadedTest {
             }
         }).when(sinkTask).preCommit(anyMap());
     }
-    
+
     private void expectOffsetCommit(ExpectOffsetCommitCommand... commands) {
         doAnswer(new Answer<>() {
             int index = 0;
