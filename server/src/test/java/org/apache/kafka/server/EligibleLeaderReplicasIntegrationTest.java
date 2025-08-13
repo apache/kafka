@@ -25,7 +25,6 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Node;
@@ -38,6 +37,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
@@ -79,7 +79,7 @@ public class EligibleLeaderReplicasIntegrationTest {
         this.clusterInstance = clusterInstance;
     }
 
-    @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr() throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin();
             var producer = clusterInstance.producer(Map.of(
@@ -146,8 +146,7 @@ public class EligibleLeaderReplicasIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 try {
-                    ConsumerRecords record = consumer.poll(Duration.ofMillis(100L));
-                    return record.count() >= 1;
+                    return consumer.poll(Duration.ofMillis(100L)).count() >= 1;
                 } catch (Exception e) {
                     return false;
                 }
