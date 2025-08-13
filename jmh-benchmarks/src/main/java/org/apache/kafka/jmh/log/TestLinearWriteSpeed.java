@@ -143,9 +143,7 @@ public class TestLinearWriteSpeed {
         int compressionLevel = options.valueOf(compressionLevelOpt);
 
         setupCompression(compressionType, compressionBuilder, compressionLevel);
-        final Compression compression = compressionBuilder.build();
-
-        System.out.printf("Using compression=%s level=%d%n", compressionType.name, compressionLevel);
+        Compression compression = compressionBuilder.build();
 
         ThreadLocalRandom.current().nextBytes(buffer.array());
         int numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD);
