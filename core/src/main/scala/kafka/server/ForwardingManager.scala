@@ -30,7 +30,6 @@ import org.apache.kafka.server.metrics.ForwardingManagerMetrics
 
 import java.util.Optional
 import java.util.concurrent.TimeUnit
-import scala.jdk.OptionConverters.RichOptional
 
 trait ForwardingManager {
   def close(): Unit
@@ -98,10 +97,12 @@ object ForwardingManager {
     new ForwardingManagerImpl(channelManager, metrics)
   }
 
-  private[server] def buildEnvelopeRequest(context: RequestContext,
-                                           forwardRequestBuffer: ByteBuffer): EnvelopeRequest.Builder = {
-    val principalSerde = context.principalSerde.toScala.getOrElse(
-      throw new IllegalArgumentException(s"Cannot deserialize principal from request context $context " +
+  def buildEnvelopeRequest(
+    context: RequestContext,
+    forwardRequestBuffer: ByteBuffer
+  ): EnvelopeRequest.Builder = {
+    val principalSerde = context.principalSerde.orElseThrow(() =>
+      new IllegalArgumentException(s"Cannot deserialize principal from request context $context " +
         "since there is no serde defined")
     )
     val serializedPrincipal = principalSerde.serialize(context.principal)

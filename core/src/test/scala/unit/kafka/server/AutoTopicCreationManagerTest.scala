@@ -48,8 +48,6 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.never
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
-import scala.collection.{Map, Seq}
-
 class AutoTopicCreationManagerTest {
 
   private val requestTimeout = 100
@@ -151,7 +149,7 @@ class AutoTopicCreationManagerTest {
     val requestContext = initializeRequestContext(userPrincipal, Optional.of(principalSerde))
 
     autoTopicCreationManager.createTopics(
-      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
+      util.Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Optional.of(requestContext))
 
     assertTrue(serializeIsCalled.get())
 
@@ -171,7 +169,7 @@ class AutoTopicCreationManagerTest {
 
     // Throw upon undefined principal serde when building the forward request
     assertThrows(classOf[IllegalArgumentException], () => autoTopicCreationManager.createTopics(
-      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext)))
+      util.Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Optional.of(requestContext)))
   }
 
   @Test
@@ -187,9 +185,9 @@ class AutoTopicCreationManagerTest {
 
     val requestContext = initializeRequestContext(KafkaPrincipal.ANONYMOUS, Optional.of(principalSerde))
     autoTopicCreationManager.createTopics(
-      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
+      util.Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Optional.of(requestContext))
     autoTopicCreationManager.createTopics(
-      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
+      util.Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Optional.of(requestContext))
 
     // Should only trigger once
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
@@ -209,7 +207,7 @@ class AutoTopicCreationManagerTest {
 
     // Could do the send again as inflight topics are cleared.
     autoTopicCreationManager.createTopics(
-      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
+      util.Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Optional.of(requestContext))
     Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
       argumentCaptor.capture())
@@ -220,10 +218,9 @@ class AutoTopicCreationManagerTest {
     val topicConfig = new CreatableTopicConfigCollection()
     topicConfig.add(new CreatableTopicConfig().setName("cleanup.policy").setValue("compact"))
 
-    val topics = Map(
-      "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(3).setReplicationFactor(2).setConfigs(topicConfig),
-      "stream-topic-2" -> new CreatableTopic().setName("stream-topic-2").setNumPartitions(1).setReplicationFactor(1)
-    )
+    val topics = new util.LinkedHashMap[String, CreatableTopic]()
+    topics.put("stream-topic-1", new CreatableTopic().setName("stream-topic-1").setNumPartitions(3).setReplicationFactor(2).setConfigs(topicConfig))
+    topics.put("stream-topic-2", new CreatableTopic().setName("stream-topic-2").setNumPartitions(1).setReplicationFactor(1))
     val requestContext = initializeRequestContextWithUserPrincipal()
 
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
@@ -259,7 +256,7 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testCreateStreamsInternalTopicsWithEmptyTopics(): Unit = {
-    val topics = Map.empty[String, CreatableTopic]
+    val topics = util.Map.of[String, CreatableTopic]()
     val requestContext = initializeRequestContextWithUserPrincipal()
 
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
@@ -278,8 +275,8 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testCreateStreamsInternalTopicsWithDefaultConfig(): Unit = {
-    val topics = Map(
-      "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
+    val topics = util.Map.of(
+      "stream-topic-1", new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
     )
     val requestContext = initializeRequestContextWithUserPrincipal()
 
@@ -315,8 +312,8 @@ class AutoTopicCreationManagerTest {
 
   @Test
   def testCreateStreamsInternalTopicsPassesPrincipal(): Unit = {
-    val topics = Map(
-      "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
+    val topics = util.Map.of(
+      "stream-topic-1", new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
     )
     val requestContext = initializeRequestContextWithUserPrincipal()
 
@@ -374,12 +371,11 @@ class AutoTopicCreationManagerTest {
 
   private def createTopicAndVerifyResult(error: Errors,
                                          topicName: String,
-                                         isInternal: Boolean,
-                                         metadataContext: Option[RequestContext] = None): Unit = {
+                                         isInternal: Boolean): Unit = {
     val topicResponses = autoTopicCreationManager.createTopics(
-      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, metadataContext)
+      util.Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Optional.empty())
 
-    val expectedResponses = Seq(new MetadataResponseTopic()
+    val expectedResponses = util.List.of(new MetadataResponseTopic()
       .setErrorCode(error.code())
       .setIsInternal(isInternal)
       .setName(topicName))
