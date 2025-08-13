@@ -40,8 +40,8 @@ public class FollowerState implements EpochState {
     private final Set<Integer> voters;
     // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
-    // Used to track when to send another update voter request
-    private final Timer updateVoterPeriodTimer;
+    // Used to track when to send another add, remove, or update voter request
+    private final Timer updateVoterSetPeriodTimer;
 
     /* Used to track if the replica has fetched successfully from the leader at least once since
      * the transition to follower in this epoch. If the replica has not yet fetched successfully,
@@ -76,7 +76,7 @@ public class FollowerState implements EpochState {
         this.votedKey = votedKey;
         this.voters = voters;
         this.fetchTimer = time.timer(fetchTimeoutMs);
-        this.updateVoterPeriodTimer = time.timer(updateVoterPeriodMs());
+        this.updateVoterSetPeriodTimer = time.timer(updateVoterPeriodMs());
         this.highWatermark = highWatermark;
         this.log = logContext.logger(FollowerState.class);
     }
@@ -154,19 +154,19 @@ public class FollowerState implements EpochState {
         return fetchTimeoutMs;
     }
 
-    public boolean hasUpdateVoterPeriodExpired(long currentTimeMs) {
-        updateVoterPeriodTimer.update(currentTimeMs);
-        return updateVoterPeriodTimer.isExpired();
+    public boolean hasUpdateVoterSetPeriodExpired(long currentTimeMs) {
+        updateVoterSetPeriodTimer.update(currentTimeMs);
+        return updateVoterSetPeriodTimer.isExpired();
     }
 
-    public long remainingUpdateVoterPeriodMs(long currentTimeMs) {
-        updateVoterPeriodTimer.update(currentTimeMs);
-        return updateVoterPeriodTimer.remainingMs();
+    public long remainingUpdateVoterSetPeriodMs(long currentTimeMs) {
+        updateVoterSetPeriodTimer.update(currentTimeMs);
+        return updateVoterSetPeriodTimer.remainingMs();
     }
 
-    public void resetUpdateVoterPeriod(long currentTimeMs) {
-        updateVoterPeriodTimer.update(currentTimeMs);
-        updateVoterPeriodTimer.reset(updateVoterPeriodMs());
+    public void resetUpdateVoterSetPeriod(long currentTimeMs) {
+        updateVoterSetPeriodTimer.update(currentTimeMs);
+        updateVoterSetPeriodTimer.reset(updateVoterPeriodMs());
     }
 
     public boolean hasUpdatedLeader() {
