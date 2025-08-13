@@ -605,7 +605,7 @@ public class AbstractConfig {
     ) {
         final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
 
-        if (configProviders == null || configProviders.isEmpty()) {
+        if (configProviders.isEmpty()) {
             return Collections.emptyMap();
         }
 
