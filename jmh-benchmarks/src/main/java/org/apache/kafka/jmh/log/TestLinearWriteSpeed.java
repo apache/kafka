@@ -126,16 +126,6 @@ public class TestLinearWriteSpeed {
         OptionSpec<Void> mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.");
         OptionSpec<Void> channelOpt = parser.accepts("channel", "Do writes to file channels.");
         OptionSpec<Void> logOpt = parser.accepts("log", "Do writes to kafka logs.");
-        OptionSpec<Integer> runsOpt = parser.accepts("runs", "How many times to repeat the evaluation.")
-            .withRequiredArg()
-            .describedAs("count")
-            .ofType(Integer.class)
-            .defaultsTo(1);
-        OptionSpec<Integer> warmupOpt = parser.accepts("warmup", "How many initial runs to discard from summary.")
-            .withRequiredArg()
-            .describedAs("count")
-            .ofType(Integer.class)
-            .defaultsTo(0);
         OptionSet options = parser.parse(args);
         CommandLineUtils.checkRequiredArgs(parser, options, bytesOpt, sizeOpt, filesOpt);
 
