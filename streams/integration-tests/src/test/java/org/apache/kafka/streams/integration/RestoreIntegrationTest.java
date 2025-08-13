@@ -20,7 +20,9 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -75,6 +77,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -255,8 +258,13 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldRestoreStateFromSourceTopicForReadOnlyStore(final boolean stateUpdaterEnabled) throws Exception {
+    @CsvSource({
+        "true,true",
+        "true,false", 
+        "false,true",
+        "false,false"
+    })
+    public void shouldRestoreStateFromSourceTopicForReadOnlyStore(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final Topology topology = new Topology();
 
@@ -266,7 +274,7 @@ public class RestoreIntegrationTest {
         final int offsetLimitDelta = 1000;
         final int offsetCheckpointed = 1000;
         createStateForRestoration(inputStream, 0);
-        setCommittedOffset(inputStream, offsetLimitDelta);
+        setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
@@ -311,8 +319,13 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldRestoreStateFromSourceTopicForGlobalTable(final boolean stateUpdaterEnabled) throws Exception {
+    @CsvSource({
+        "true,true",
+        "true,false",
+        "false,true",
+        "false,false"
+    })
+    public void shouldRestoreStateFromSourceTopicForGlobalTable(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -323,7 +336,7 @@ public class RestoreIntegrationTest {
         final int offsetLimitDelta = 1000;
         final int offsetCheckpointed = 1000;
         createStateForRestoration(inputStream, 0);
-        setCommittedOffset(inputStream, offsetLimitDelta);
+        setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
@@ -825,7 +838,32 @@ public class RestoreIntegrationTest {
         }
     }
 
-    private void setCommittedOffset(final String topic, final int limitDelta) {
+    private void setCommittedOffset(final String topic, final int limitDelta, final boolean useNewProtocol) {
+        if (useNewProtocol) {
+            final Properties consumerConfig = new Properties();
+            consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+            consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, appId);
+            consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, "commit-consumer");
+            consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
+            consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
+
+            try (final Consumer<Integer, Integer> consumer = new KafkaConsumer<>(consumerConfig)) {
+                final List<TopicPartition> partitions = asList(
+                        new TopicPartition(topic, 0),
+                        new TopicPartition(topic, 1));
+
+                consumer.assign(partitions);
+                consumer.seekToEnd(partitions);
+
+                for (final TopicPartition partition : partitions) {
+                    final long position = consumer.position(partition);
+                    consumer.seek(partition, position - limitDelta);
+                }
+
+                consumer.commitSync();
+            }
+        }
+
         try {
             final List<TopicPartition> partitions = asList(
                     new TopicPartition(topic, 0),
@@ -844,7 +882,9 @@ public class RestoreIntegrationTest {
                 offsetsToCommit.put(partition, new OffsetAndMetadata(targetOffset));
             }
 
-            admin.alterStreamsGroupOffsets(appId, offsetsToCommit).all().get();
+            // Use alterConsumerGroupOffsets for backward compatibility, 
+            // as alterStreamsGroupOffsets is just a wrapper around it
+            admin.alterConsumerGroupOffsets(appId, offsetsToCommit).all().get();
         } catch (final Exception e) {
             throw new RuntimeException("Failed to set committed offsets", e);
         }
