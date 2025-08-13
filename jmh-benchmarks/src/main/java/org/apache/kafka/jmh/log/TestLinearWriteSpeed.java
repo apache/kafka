@@ -126,6 +126,16 @@ public class TestLinearWriteSpeed {
         OptionSpec<Void> mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.");
         OptionSpec<Void> channelOpt = parser.accepts("channel", "Do writes to file channels.");
         OptionSpec<Void> logOpt = parser.accepts("log", "Do writes to kafka logs.");
+        OptionSpec<Integer> runsOpt = parser.accepts("runs", "How many times to repeat the evaluation.")
+            .withRequiredArg()
+            .describedAs("count")
+            .ofType(Integer.class)
+            .defaultsTo(1);
+        OptionSpec<Integer> warmupOpt = parser.accepts("warmup", "How many initial runs to discard from summary.")
+            .withRequiredArg()
+            .describedAs("count")
+            .ofType(Integer.class)
+            .defaultsTo(0);
         OptionSet options = parser.parse(args);
         CommandLineUtils.checkRequiredArgs(parser, options, bytesOpt, sizeOpt, filesOpt);
 
@@ -143,6 +153,9 @@ public class TestLinearWriteSpeed {
         int compressionLevel = options.valueOf(compressionLevelOpt);
 
         setupCompression(compressionType, compressionBuilder, compressionLevel);
+        final Compression compression = compressionBuilder.build();
+
+        System.out.printf("Using compression=%s level=%d%n", compressionType.name, compressionLevel);
 
         ThreadLocalRandom.current().nextBytes(buffer.array());
         int numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD);
@@ -153,7 +166,7 @@ public class TestLinearWriteSpeed {
             recordsList.add(new SimpleRecord(createTime, null, new byte[messageSize]));
         }
 
-        MemoryRecords messageSet = MemoryRecords.withRecords(Compression.NONE, recordsList.toArray(new SimpleRecord[0]));
+        MemoryRecords messageSet = MemoryRecords.withRecords(compression, recordsList.toArray(new SimpleRecord[0]));
         Writable[] writables = new Writable[numFiles];
         KafkaScheduler scheduler = new KafkaScheduler(1);
         scheduler.startup();
