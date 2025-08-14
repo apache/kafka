@@ -69,6 +69,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
@@ -1249,13 +1250,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
-                if (metadata.getError(topic) != null) {
-                    throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
+                Throwable cause;
+                Errors error = metadata.getError(topic);
+                if (error != null) {
+                    cause = error.exception();
+                } else if (ex.getCause() != null) {
+                    cause = ex.getCause();
+                } else {
+                    cause = new KafkaException(METADATA_TIMEOUT_MSG);
                 }
-                if (ex.getCause() != null)
-                    throw new TimeoutException(errorMessage, ex.getCause());
-                throw new TimeoutException(errorMessage, new KafkaException(METADATA_TIMEOUT_MSG));
+
+                final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
+                throw new TimeoutException(errorMessage, cause);
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;

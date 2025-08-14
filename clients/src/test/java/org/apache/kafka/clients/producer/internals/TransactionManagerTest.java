@@ -1656,7 +1656,11 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         TransactionalRequestResult result = transactionManager.beginAbort();
-        assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS));
+        assertInstanceOf(
+                KafkaException.class,
+                assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS)).getCause(),
+                "Unknown Reason."
+        );
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         runUntil(transactionManager::isReady);
@@ -1690,7 +1694,11 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         TransactionalRequestResult result = transactionManager.beginCommit();
-        assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS));
+        assertInstanceOf(
+                KafkaException.class,
+                assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS)).getCause(),
+                "Unknown Reason."
+        );
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
         runUntil(transactionManager::isReady);
@@ -1717,7 +1725,11 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
-        assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS));
+        assertInstanceOf(
+                KafkaException.class,
+                assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS)).getCause(),
+                "Unknown Reason."
+        );
 
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
@@ -2860,9 +2872,13 @@ public class TransactionManagerTest {
 
         // make sure the produce was expired.
         assertInstanceOf(
-            TimeoutException.class,
-            assertThrows(ExecutionException.class, responseFuture::get).getCause(),
-            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+            KafkaException.class,
+            assertInstanceOf(
+                TimeoutException.class,
+                assertThrows(ExecutionException.class, responseFuture::get).getCause(),
+                "Expected to get a TimeoutException since the queued ProducerBatch should have been expired").getCause(),
+            "Unknown Reason."
+        );
         assertTrue(transactionManager.hasAbortableError());
     }
 
@@ -2908,14 +2924,23 @@ public class TransactionManagerTest {
 
         // make sure the produce was expired.
         assertInstanceOf(
-            TimeoutException.class,
-            assertThrows(ExecutionException.class, firstBatchResponse::get).getCause(),
-            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+                KafkaException.class,
+                assertInstanceOf(
+                        TimeoutException.class,
+                        assertThrows(ExecutionException.class, firstBatchResponse::get).getCause(),
+                        "Expected to get a TimeoutException since the queued ProducerBatch should have been expired").getCause(),
+                "Unknown Error."
+        );
+
         // make sure the produce was expired.
         assertInstanceOf(
-            TimeoutException.class,
-            assertThrows(ExecutionException.class, secondBatchResponse::get).getCause(),
-            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+                KafkaException.class,
+                assertInstanceOf(
+                        TimeoutException.class,
+                        assertThrows(ExecutionException.class, secondBatchResponse::get).getCause(),
+                        "Expected to get a TimeoutException since the queued ProducerBatch should have been expired").getCause(),
+                "Unknown Error."
+        );
 
         assertTrue(transactionManager.hasAbortableError());
     }
@@ -2953,12 +2978,22 @@ public class TransactionManagerTest {
 
         // make sure the produce was expired.
         assertInstanceOf(
-            TimeoutException.class,
-            assertThrows(ExecutionException.class, responseFuture::get).getCause(),
-            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+                KafkaException.class,
+                assertInstanceOf(
+                        TimeoutException.class,
+                        assertThrows(ExecutionException.class, responseFuture::get).getCause(),
+                        "Expected to get a TimeoutException since the queued ProducerBatch should have been expired").getCause(),
+                "Unknown Error."
+        );
+
         runUntil(commitResult::isCompleted);  // the commit shouldn't be completed without being sent since the produce request failed.
         assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
-        assertInstanceOf(TimeoutException.class, assertThrows(TransactionAbortableException.class, commitResult::await).getCause());
+        assertInstanceOf(
+                KafkaException.class,
+                assertInstanceOf(TimeoutException.class, assertThrows(TransactionAbortableException.class, commitResult::await).getCause()).getCause(),
+                "Unknown Error."
+        );
+
 
         assertTrue(transactionManager.hasAbortableError());
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -3025,9 +3060,14 @@ public class TransactionManagerTest {
 
         // make sure the produce was expired.
         assertInstanceOf(
-            TimeoutException.class,
-            assertThrows(ExecutionException.class, responseFuture::get).getCause(),
-            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+                KafkaException.class,
+                assertInstanceOf(
+                        TimeoutException.class,
+                        assertThrows(ExecutionException.class, responseFuture::get).getCause(),
+                        "Expected to get a TimeoutException since the queued ProducerBatch should have been expired").getCause(),
+                "Unknown Error."
+        );
+
         runUntil(commitResult::isCompleted);
         assertFalse(commitResult.isSuccessful());  // the commit should have been dropped.
 
@@ -4012,7 +4052,13 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, firstTransactionResult, producerId, epoch, producerId, epoch, true);
         runUntil(() -> !client.hasPendingResponses());
         assertFalse(result.isCompleted());
-        assertThrows(TimeoutException.class, () -> result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS));
+        assertInstanceOf(
+                KafkaException.class,
+                assertThrows(TimeoutException.class,
+                             () -> result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS)).getCause(),
+                "Unknown Error."
+        );
+
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> !client.hasPendingResponses());

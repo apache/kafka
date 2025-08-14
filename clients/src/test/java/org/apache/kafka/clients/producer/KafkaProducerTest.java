@@ -174,6 +174,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
+
+    private static final String INIT_TXN_TIMEOUT_MSG =
+            "InitTransactions timed out – could not discover the transaction coordinator or "
+            + "receive the InitProducerId response within max.block.ms (broker unavailable, "
+            + "network lag, or ACL denial).";
+    private static final String METADATA_TIMEOUT_MSG =
+            "Metadata update timed out – topic missing, ACL denial, broker/partition unavailable, "
+            + "or client sender/buffer stalled.";
+
     private final String topic = "topic";
     private final Collection<Node> nodes = Collections.singletonList(NODE);
     private final Cluster emptyCluster = new Cluster(
@@ -885,7 +894,11 @@ public class KafkaProducerTest {
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
-            assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
+            assertInstanceOf(KafkaException.class,
+                             assertInstanceOf(
+                                     TimeoutException.class,
+                                     assertThrows(ExecutionException.class, future::get).getCause()).getCause(),
+                             METADATA_TIMEOUT_MSG);
         } finally {
             producer.close(Duration.ofMillis(0));
         }
@@ -952,7 +965,11 @@ public class KafkaProducerTest {
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
-            assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
+            assertInstanceOf(KafkaException.class,
+                             assertInstanceOf(
+                                     TimeoutException.class,
+                                     assertThrows(ExecutionException.class, future::get).getCause()).getCause(),
+                             METADATA_TIMEOUT_MSG);
         } finally {
             producer.close(Duration.ofMillis(0));
         }
@@ -1080,7 +1097,11 @@ public class KafkaProducerTest {
             assertNotNull(producer.partitionsFor(topic));
             exchanger.exchange(null);  // 2
             exchanger.exchange(null);  // 3
-            assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
+            assertInstanceOf(
+                    KafkaException.class,
+                    assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic)).getCause(),
+                    METADATA_TIMEOUT_MSG
+            );
             t.join();
         }
     }
@@ -1352,7 +1373,11 @@ public class KafkaProducerTest {
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
-            assertThrows(TimeoutException.class, producer::initTransactions);
+            assertInstanceOf(
+                    KafkaException.class,
+                    assertThrows(TimeoutException.class, producer::initTransactions).getCause(),
+                    INIT_TXN_TIMEOUT_MSG
+            );
 
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
@@ -2364,7 +2389,11 @@ public class KafkaProducerTest {
 
         Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
                 metadata, client, null, time);
-        assertThrows(TimeoutException.class, producer::initTransactions);
+        assertInstanceOf(
+                KafkaException.class,
+                assertThrows(TimeoutException.class, producer::initTransactions).getCause(),
+                INIT_TXN_TIMEOUT_MSG
+        );
         // other transactional operations should not be allowed if we catch the error after initTransactions failed
         try {
             assertThrows(IllegalStateException.class, producer::beginTransaction);

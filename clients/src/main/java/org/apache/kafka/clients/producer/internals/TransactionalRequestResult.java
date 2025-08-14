@@ -50,7 +50,7 @@ public final class TransactionalRequestResult {
     }
 
     public void await() {
-        this.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, () -> new KafkaException("Unknown reason."));
+        this.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
     }
 
     public void await(long timeout, TimeUnit unit) {

@@ -163,6 +163,8 @@ public class SenderTest {
             TOPIC_NAME, TOPIC_ID,
             "testSplitBatchAndSend", Uuid.fromString("2J9hK8m1wHMKjXfIkQyXx1")
     );
+    private static final String SENDER_TIMEOUT_MSG = "The broker might be unavailable or responding slowly, or the CPU might be busy.";
+
     private final TopicPartition tp0 = new TopicPartition(TOPIC_NAME, 0);
     private final TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 1);
     private final TopicPartition tp2 = new TopicPartition(TOPIC_NAME, 2);
@@ -425,6 +427,7 @@ public class SenderTest {
             @Override
             public void onCompletion(RecordMetadata metadata, Exception exception) {
                 if (exception instanceof TimeoutException) {
+                    assertInstanceOf(KafkaException.class, exception.getCause(), SENDER_TIMEOUT_MSG);
                     expiryCallbackCount.incrementAndGet();
                     try {
                         accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value,
@@ -1408,7 +1411,7 @@ public class SenderTest {
 
         sender.runOnce();
 
-        assertFutureFailure(request1, TimeoutException.class);
+        assertFutureFailure(request1, TimeoutException.class, KafkaException.class, SENDER_TIMEOUT_MSG);
         assertFalse(transactionManager.hasUnresolvedSequence(tp0));
     }
 
@@ -1445,7 +1448,7 @@ public class SenderTest {
         client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
-        assertFutureFailure(request1, TimeoutException.class);
+        assertFutureFailure(request1, TimeoutException.class, KafkaException.class, SENDER_TIMEOUT_MSG);
         assertTrue(transactionManager.hasUnresolvedSequence(tp0));
         assertEquals(0, sender.inFlightBatches(tp0).size());
 
@@ -1507,7 +1510,7 @@ public class SenderTest {
         client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
-        assertFutureFailure(request1, TimeoutException.class);
+        assertFutureFailure(request1, TimeoutException.class, KafkaException.class, SENDER_TIMEOUT_MSG);
         assertTrue(transactionManager.hasUnresolvedSequence(tp0));
         // let's enqueue another batch, which should not be dequeued until the unresolved state is clear.
         appendToAccumulator(tp0);
@@ -1562,7 +1565,7 @@ public class SenderTest {
         client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
-        assertFutureFailure(request1, TimeoutException.class);
+        assertFutureFailure(request1, TimeoutException.class, KafkaException.class, SENDER_TIMEOUT_MSG);
         assertTrue(txnManager.hasUnresolvedSequence(tp0));
 
         // Loop once and confirm that the transaction manager does not enter a fatal error state
@@ -1595,7 +1598,7 @@ public class SenderTest {
 
         sender.runOnce(); // now expire the batch.
 
-        assertFutureFailure(request1, TimeoutException.class);
+        assertFutureFailure(request1, TimeoutException.class, KafkaException.class, SENDER_TIMEOUT_MSG);
         assertTrue(transactionManager.hasUnresolvedSequence(tp0));
         assertFalse(client.hasInFlightRequests());
         Deque<ProducerBatch> batches = accumulator.getDeque(tp0);
@@ -2531,10 +2534,10 @@ public class SenderTest {
         time.sleep(deliveryTimeoutMs);
         sender.runOnce();  // receive first response
         assertEquals(0, sender.inFlightBatches(tp0).size(), "Expect zero in-flight batch in accumulator");
-        assertInstanceOf(
-            TimeoutException.class,
-            assertThrows(ExecutionException.class, request::get).getCause(),
-            "The expired batch should throw a TimeoutException");
+
+        Throwable cause = assertThrows(ExecutionException.class, request::get).getCause();
+        assertInstanceOf(TimeoutException.class, cause, "The expired batch should throw a TimeoutException");
+        assertInstanceOf(KafkaException.class, cause.getCause(), SENDER_TIMEOUT_MSG);
     }
 
     @Test
@@ -2715,9 +2718,11 @@ public class SenderTest {
 
         ExecutionException e = assertThrows(ExecutionException.class, request1::get);
         assertInstanceOf(TimeoutException.class, e.getCause());
+        assertInstanceOf(KafkaException.class, e.getCause().getCause(), SENDER_TIMEOUT_MSG);
 
         e = assertThrows(ExecutionException.class, request2::get);
         assertInstanceOf(TimeoutException.class, e.getCause());
+        assertInstanceOf(KafkaException.class, e.getCause().getCause(), SENDER_TIMEOUT_MSG);
     }
 
     @Test
@@ -3133,7 +3138,7 @@ public class SenderTest {
         client.backoff(node, 10);
 
         sender.runOnce(); // now expire the batch.
-        assertFutureFailure(request1, TimeoutException.class);
+        assertFutureFailure(request1, TimeoutException.class, KafkaException.class, SENDER_TIMEOUT_MSG);
 
         time.sleep(20);
 
@@ -3907,6 +3912,22 @@ public class SenderTest {
             assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
         }
     }
+
+    private void assertFutureFailure(Future<?> future, Class<? extends Exception> expectedExceptionType,
+                                     Class<? extends Exception> rootCauseExceptionType,
+                                     String rootCauseExceptionMessage)
+            throws InterruptedException {
+        assertTrue(future.isDone());
+        try {
+            future.get();
+            fail("Future should have raised " + expectedExceptionType.getName());
+        } catch (ExecutionException e) {
+            Class<? extends Throwable> causeType = e.getCause().getClass();
+            assertTrue(expectedExceptionType.isAssignableFrom(causeType), "Unexpected cause " + causeType.getName());
+            assertInstanceOf(rootCauseExceptionType, e.getCause().getCause(), rootCauseExceptionMessage);
+        }
+    }
+
 
     private void createMockClientWithMaxFlightOneMetadataPending() {
         client = new MockClient(time, metadata) {

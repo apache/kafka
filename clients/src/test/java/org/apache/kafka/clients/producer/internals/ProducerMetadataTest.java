@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -148,6 +149,7 @@ public class ProducerMetadataTest {
             fail("Wait on metadata update was expected to timeout, but it didn't");
         } catch (TimeoutException te) {
             // expected
+            assertInstanceOf(KafkaException.class, te.getCause(), "Unknown Error");
         }
         // now try with a higher timeout value once
         final long twoSecondWait = 2000;
@@ -156,6 +158,7 @@ public class ProducerMetadataTest {
             fail("Wait on metadata update was expected to timeout, but it didn't");
         } catch (TimeoutException te) {
             // expected
+            assertInstanceOf(KafkaException.class, te.getCause(), "Unknown Error");
         }
     }
 
