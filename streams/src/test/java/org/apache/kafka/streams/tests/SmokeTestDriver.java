@@ -25,9 +25,11 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -45,6 +47,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +71,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
      * using the current timestamp, without using timestamps in the future.
      */
     private static final long CREATE_TIME_SHIFT_MS = Duration.ofDays(2).toMillis();
+
+    private static final long MAX_IDLE_TIME_MS = 600000L;
 
     private static final String[] NUMERIC_VALUE_TOPICS = {
         "data",
@@ -438,6 +443,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
         consumer.close();
 
+        final VerificationResult eosResult = performEosVerification(eosEnabled, kafka);
+        if (!eosResult.passed()) {
+            return eosResult;
+        }
+
         final long finished = System.currentTimeMillis() - start;
         System.out.println("Verification time=" + finished);
         System.out.println("-------------------");
@@ -721,6 +731,28 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return Integer.parseInt(key.split("-")[1]);
     }
 
+    private static VerificationResult performEosVerification(final boolean eosEnabled, final String kafka) {
+        if (!eosEnabled) {
+            return new VerificationResult(true, "EOS verification skipped");
+        }
+        
+        final Properties eosProps = new Properties();
+        eosProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "transaction-verifier");
+        eosProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        eosProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        eosProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        eosProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
+        
+        try (final KafkaConsumer<byte[], byte[]> eosConsumer = new KafkaConsumer<>(eosProps)) {
+            verifyAllTransactionFinished(eosConsumer, kafka);
+            return new VerificationResult(true, "EOS verification passed");
+        } catch (final Exception e) {
+            e.printStackTrace(System.err);
+            System.out.println("FAILED");
+            return new VerificationResult(false, "eos verification failed");
+        }
+    }
+
     private static List<TopicPartition> getAllPartitions(final KafkaConsumer<?, ?> consumer, final String... topics) {
         final List<TopicPartition> partitions = new ArrayList<>();
 
@@ -730,6 +762,54 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         }
         return partitions;
+    }
+
+    private static void verifyAllTransactionFinished(final KafkaConsumer<byte[], byte[]> consumer,
+                                                     final String kafka) {
+        final String[] topics;
+        topics = new String[] {"echo", "min", "sum", "max", "cnt"};
+
+        final List<TopicPartition> partitions = getAllPartitions(consumer, topics);
+        consumer.assign(partitions);
+        consumer.seekToEnd(partitions);
+        for (final TopicPartition tp : partitions) {
+            System.out.println(tp + " at position " + consumer.position(tp));
+        }
+
+        final Properties consumerProps = new Properties();
+        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer-uncommitted");
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+
+
+        final long maxWaitTime = System.currentTimeMillis() + MAX_IDLE_TIME_MS;
+        try (final KafkaConsumer<byte[], byte[]> consumerUncommitted = new KafkaConsumer<>(consumerProps)) {
+            while (!partitions.isEmpty() && System.currentTimeMillis() < maxWaitTime) {
+                consumer.seekToEnd(partitions);
+                final Map<TopicPartition, Long> topicEndOffsets = consumerUncommitted.endOffsets(partitions);
+
+                final Iterator<TopicPartition> iterator = partitions.iterator();
+                while (iterator.hasNext()) {
+                    final TopicPartition topicPartition = iterator.next();
+                    final long position = consumer.position(topicPartition);
+
+                    if (position == topicEndOffsets.get(topicPartition)) {
+                        iterator.remove();
+                        System.out.println("Removing " + topicPartition + " at position " + position);
+                    } else if (consumer.position(topicPartition) > topicEndOffsets.get(topicPartition)) {
+                        throw new IllegalStateException("Offset for partition " + topicPartition + " is larger than topic endOffset: " + position + " > " + topicEndOffsets.get(topicPartition));
+                    } else {
+                        System.out.println("Retry " + topicPartition + " at position " + position);
+                    }
+                }
+                Utils.sleep(1000L);
+            }
+        }
+
+        if (!partitions.isEmpty()) {
+            throw new RuntimeException("Could not read all verification records. Did not receive any new record within the last " + (MAX_IDLE_TIME_MS / 1000L) + " sec.");
+        }
     }
 
 }
