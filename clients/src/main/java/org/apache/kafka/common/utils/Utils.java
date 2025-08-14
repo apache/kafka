@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
@@ -110,6 +112,9 @@ public final class Utils {
     public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
+
+    private static final VarHandle INT_HANDLE =
+            MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
 
     /**
      * Get a sorted list representation of a collection.
@@ -489,9 +494,8 @@ public final class Utils {
      * @param data byte array to hash
      * @return 32 bit hash of the given array
      */
-    @SuppressWarnings("fallthrough")
     public static int murmur2(final byte[] data) {
-        int length = data.length;
+        final int length = data.length;
         int seed = 0x9747b28c;
         // 'm' and 'r' are mixing constants generated offline.
         // They're not really 'magic', they just happen to work well.
@@ -500,11 +504,24 @@ public final class Utils {
 
         // Initialize the hash to a random value
         int h = seed ^ length;
-        int length4 = length / 4;
 
-        for (int i = 0; i < length4; i++) {
-            final int i4 = i * 4;
-            int k = (data[i4 + 0] & 0xff) + ((data[i4 + 1] & 0xff) << 8) + ((data[i4 + 2] & 0xff) << 16) + ((data[i4 + 3] & 0xff) << 24);
+        if (length < 4) {
+            if (length != 0) {
+                h ^= data[0] & 0xff;
+                if (length != 1) {
+                    h ^= (data[1] & 0xff) << 8;
+                    if (length != 2) h ^= (data[2] & 0xff) << 16;
+                }
+                h *= m;
+            }
+            h ^= h >>> 13;
+            h *= m;
+            h ^= h >>> 15;
+            return h;
+        }
+
+        for (int i = 0; i <= length - 4; i += 4) {
+            int k = (int) INT_HANDLE.get(data, i);
             k *= m;
             k ^= k >>> r;
             k *= m;
@@ -513,16 +530,10 @@ public final class Utils {
         }
 
         // Handle the last few bytes of the input array
-        switch (length % 4) {
-            case 3:
-                h ^= (data[(length & ~3) + 2] & 0xff) << 16;
-            case 2:
-                h ^= (data[(length & ~3) + 1] & 0xff) << 8;
-            case 1:
-                h ^= data[length & ~3] & 0xff;
-                h *= m;
+        if ((length & 3) != 0) {
+            h ^= (int) INT_HANDLE.get(data, length - 4) >>> -(length << 3);
+            h *= m;
         }
-
         h ^= h >>> 13;
         h *= m;
         h ^= h >>> 15;
