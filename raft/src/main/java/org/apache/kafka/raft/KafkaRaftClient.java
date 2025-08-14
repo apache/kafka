@@ -3319,14 +3319,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private boolean shouldSendAddOrRemoveVoterRequest() {
+    private boolean shouldSendAddOrRemoveVoterRequest(FollowerState state, long currentTimeMs) {
         /* When the cluster supports reconfiguration, only replicas that can become a voter
          * and are configured to auto join should attempt to automatically join the voter
          * set for the configured topic partition.
          */
-        return partitionState.lastKraftVersion().isReconfigSupported() &&
-            canBecomeVoter &&
-            quorumConfig.autoJoin();
+        return partitionState.lastKraftVersion().isReconfigSupported() && canBecomeVoter &&
+            quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs);
     }
 
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
@@ -3335,9 +3334,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // If we are an observer, then we can shutdown immediately. We want to
             // skip potentially sending any add or remove voter RPCs.
             return 0;
-        } else if (shouldSendAddOrRemoveVoterRequest() &&
-            state.hasUpdateVoterSetPeriodExpired(currentTimeMs)
-        ) {
+        } else if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
             final var voters = partitionState.lastVoterSet();
             final RequestSendResult sendResult;
