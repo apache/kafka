@@ -3335,11 +3335,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
         GracefulShutdown shutdown = this.shutdown.get();
         final long backoffMs;
+        final var shouldSendAddOrRemoveVoterRequest = shouldSendAddOrRemoveVoterRequest();
         if (shutdown != null) {
             // If we are an observer, then we can shutdown immediately. We want to
             // skip potentially sending any add or remove voter RPCs.
             backoffMs = 0;
-        } else if (shouldSendAddOrRemoveVoterRequest() &&
+        } else if (shouldSendAddOrRemoveVoterRequest &&
             state.hasUpdateVoterSetPeriodExpired(currentTimeMs)
         ) {
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
@@ -3366,14 +3367,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         } else {
             backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
         }
-        if (shouldSendAddOrRemoveVoterRequest()) {
-            return Math.min(
-                backoffMs,
-                state.remainingUpdateVoterSetPeriodMs(currentTimeMs)
-            );
-        } else {
-            return backoffMs;
-        }
+        return Math.min(
+            backoffMs,
+            shouldSendAddOrRemoveVoterRequest ?
+                state.remainingUpdateVoterSetPeriodMs(currentTimeMs) :
+                Integer.MAX_VALUE
+        );
     }
 
     private long maybeSendFetchToBestNode(FollowerState state, long currentTimeMs) {
