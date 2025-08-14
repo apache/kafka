@@ -105,12 +105,18 @@ public class UtilsTest {
     @Test
     public void testMurmur2() {
         Map<byte[], Integer> cases = new java.util.HashMap<>();
+        cases.put("".getBytes(), 275646681);
+        cases.put("7".getBytes(), -1961297549);
         cases.put("21".getBytes(), -973932308);
+        cases.put("abc".getBytes(), 479470107);
+        cases.put("|;‑)".getBytes(), -2060539007);
+        cases.put("12345".getBytes(), -1188365604);
         cases.put("foobar".getBytes(), -790332482);
+        cases.put("7654321".getBytes(), -951606273);
+        cases.put("universe".getBytes(), 609568444);
         cases.put("a-little-bit-long-string".getBytes(), -985981536);
         cases.put("a-little-bit-longer-string".getBytes(), -1486304829);
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
-        cases.put(new byte[] {'a', 'b', 'c'}, 479470107);
 
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
             assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
