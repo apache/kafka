@@ -669,6 +669,21 @@ class KafkaApis(val requestChannel: RequestChannel,
             if (topicResponse.topic != null) {
               val tp = new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic, data.partitionIndex))
               brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
+              // Partition-level throughput (KIP-977): record per-partition fetch metrics for leader (client fetches), gated by metrics.verbosity
+              if (!fetchRequest.isFromFollower) {
+                val size = FetchResponse.recordsSize(data)
+                val serverConfig = config
+                if (size > 0 && org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+                  serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.BYTES_OUT_PER_SEC, tp.topic)) {
+                  val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
+                  m.bytesOutRate().mark(size)
+                }
+                if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+                  serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.TOTAL_FETCH_REQUESTS_PER_SEC, tp.topic)) {
+                  val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
+                  m.totalFetchRequestRate().mark()
+                }
+              }
             }
           }
         }

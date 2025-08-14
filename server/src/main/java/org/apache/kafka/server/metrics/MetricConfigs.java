@@ -48,6 +48,8 @@ public class MetricConfigs {
     public static final String METRIC_RECORDING_LEVEL_DEFAULT = Sensor.RecordingLevel.INFO.toString();
     public static final String METRIC_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
 
+    // KIP-977: metrics verbosity config is defined in CommonClientConfigs for consistency
+
     /** ********* Kafka Yammer Metrics Reporters Configuration ***********/
     public static final String KAFKA_METRICS_REPORTER_CLASSES_CONFIG = "kafka.metrics.reporters";
     public static final List<String> KAFKA_METRIC_REPORTER_CLASSES_DEFAULT = List.of();
@@ -78,13 +80,14 @@ public class MetricConfigs {
             .define(METRIC_SAMPLE_WINDOW_MS_CONFIG, LONG, METRIC_SAMPLE_WINDOW_MS_DEFAULT, atLeast(1), LOW, METRIC_SAMPLE_WINDOW_MS_DOC)
             .define(METRIC_REPORTER_CLASSES_CONFIG, LIST, METRIC_REPORTER_CLASSES_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, METRIC_REPORTER_CLASSES_DOC)
             .define(METRIC_RECORDING_LEVEL_CONFIG, STRING, METRIC_RECORDING_LEVEL_DEFAULT, LOW, METRIC_RECORDING_LEVEL_DOC)
+            .define(METRICS_VERBOSITY_CONFIG, STRING, METRICS_VERBOSITY_DEFAULT, LOW, METRICS_VERBOSITY_DOC)
 
             // Kafka Yammer Metrics Reporter Configuration
             .define(KAFKA_METRICS_REPORTER_CLASSES_CONFIG, LIST, KAFKA_METRIC_REPORTER_CLASSES_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, KAFKA_METRICS_REPORTER_CLASSES_DOC)
             .define(KAFKA_METRICS_POLLING_INTERVAL_SECONDS_CONFIG, INT, KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DEFAULT, atLeast(1), LOW, KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DOC)
 
-            // Kafka Metrics Verbosity Configuration
-            .define(METRICS_VERBOSITY_CONFIG, STRING, METRICS_VERBOSITY_DEFAULT, LOW, METRICS_VERBOSITY_DOC)
+            // Kafka Metrics Verbosity Configuration (KIP-977)
+            // Note: defined once above; available to server configs
 
             // Kafka Client Telemetry Metrics Configuration
             .define(CLIENT_TELEMETRY_MAX_BYTES_CONFIG, INT, CLIENT_TELEMETRY_MAX_BYTES_DEFAULT, atLeast(1), LOW, CLIENT_TELEMETRY_MAX_BYTES_DOC);

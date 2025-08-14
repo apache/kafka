@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.storage.log.metrics;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics;
 
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ public class BrokerTopicStats implements AutoCloseable {
     private final boolean remoteStorageEnabled;
     private final BrokerTopicMetrics allTopicsStats;
     private final ConcurrentMap<String, BrokerTopicMetrics> stats;
+    private final ConcurrentMap<TopicPartition, BrokerTopicPartitionMetrics> partitionStats;
 
     public BrokerTopicStats() {
         this(false);
@@ -40,6 +42,7 @@ public class BrokerTopicStats implements AutoCloseable {
         this.remoteStorageEnabled = remoteStorageEnabled;
         this.allTopicsStats = new BrokerTopicMetrics(remoteStorageEnabled);
         this.stats = new ConcurrentHashMap<>();
+        this.partitionStats = new ConcurrentHashMap<>();
     }
 
     public boolean isTopicStatsExisted(String topic) {
@@ -48,6 +51,11 @@ public class BrokerTopicStats implements AutoCloseable {
 
     public BrokerTopicMetrics topicStats(String topic) {
         return stats.computeIfAbsent(topic, k -> new BrokerTopicMetrics(k, remoteStorageEnabled));
+    }
+
+    public BrokerTopicPartitionMetrics partitionStats(String topic, int partition) {
+        return partitionStats.computeIfAbsent(new TopicPartition(topic, partition),
+            tp -> new BrokerTopicPartitionMetrics(tp.topic(), tp.partition()));
     }
 
     public void updateReplicationBytesIn(long value) {
@@ -102,6 +110,15 @@ public class BrokerTopicStats implements AutoCloseable {
         if (metrics != null) {
             metrics.close();
         }
+        // Clean up any partition-level metrics for this topic
+        partitionStats.keySet().removeIf(tp -> {
+            if (tp.topic().equals(topic)) {
+                BrokerTopicPartitionMetrics m = partitionStats.remove(tp);
+                if (m != null) m.close();
+                return true;
+            }
+            return false;
+        });
     }
 
     public void updateBytesOut(String topic, boolean isFollower, boolean isReassignment, long value) {

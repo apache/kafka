@@ -94,7 +94,7 @@ object DynamicBrokerConfig {
     LogCleaner.RECONFIGURABLE_CONFIGS.asScala ++
     DynamicLogConfig.ReconfigurableConfigs ++
     DynamicThreadPool.RECONFIGURABLE_CONFIGS.asScala ++
-    Set(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG) ++
+    Set(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricConfigs.METRICS_VERBOSITY_CONFIG) ++
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs ++
     DynamicProducerStateManagerConfig ++
@@ -307,6 +307,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
     addBrokerReconfigurable(new DynamicRemoteLogConfig(kafkaServer))
+    // Register metrics verbosity controller so config changes take effect without restart
+    addBrokerReconfigurable(new BrokerReconfigurable {
+      override def reconfigurableConfigs: Set[String] = Set(MetricConfigs.METRICS_VERBOSITY_CONFIG)
+      override def validateReconfiguration(newConfig: KafkaConfig): Unit = { /* no-op */ }
+      override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = { /* no-op */ }
+    })
   }
 
   /**

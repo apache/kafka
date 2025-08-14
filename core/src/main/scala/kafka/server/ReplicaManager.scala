@@ -1430,6 +1430,26 @@ class ReplicaManager(val config: KafkaConfig,
           brokerTopicStats.topicStats(topicIdPartition.topic).messagesInRate.mark(numAppendedMessages)
           brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
 
+          // Partition-level throughput (KIP-977): record per-partition produce metrics
+          val tp = topicIdPartition.topicPartition()
+          // Gate partition-level emission via metrics.verbosity
+          val serverConfig = config
+          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+            serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.BYTES_IN_PER_SEC, tp.topic())) {
+            val partMetrics = brokerTopicStats.partitionStats(tp.topic(), tp.partition())
+            partMetrics.bytesInRate().mark(records.sizeInBytes)
+          }
+          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+            serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.MESSAGE_IN_PER_SEC, tp.topic())) {
+            val partMetrics = brokerTopicStats.partitionStats(tp.topic(), tp.partition())
+            partMetrics.messagesInRate().mark(numAppendedMessages)
+          }
+          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+            serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.TOTAL_PRODUCE_REQUESTS_PER_SEC, tp.topic())) {
+            val partMetrics = brokerTopicStats.partitionStats(tp.topic(), tp.partition())
+            partMetrics.totalProduceRequestRate().mark()
+          }
+
           if (traceEnabled)
             trace(s"${records.sizeInBytes} written to log $topicIdPartition beginning at offset " +
               s"${info.firstOffset} and ending at offset ${info.lastOffset}")
