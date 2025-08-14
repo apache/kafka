@@ -60,6 +60,7 @@ object Server {
       .samples(kafkaConfig.metricNumSamples)
       .recordLevel(Sensor.RecordingLevel.forName(kafkaConfig.metricRecordingLevel))
       .timeWindow(kafkaConfig.metricSampleWindowMs, TimeUnit.MILLISECONDS)
+      .verbosity(kafkaConfig.metricVerbosity)
   }
 
   private[server] def createKafkaMetricsContext(

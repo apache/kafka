@@ -36,7 +36,9 @@ import java.util.Map;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -148,6 +150,32 @@ public class CommonClientConfigsTest {
         config = new TestConfig(props);
         reporters = CommonClientConfigs.metricsReporters("clientId", config);
         assertEquals(2, reporters.size());
+    }
+
+    @Test
+    public void testMetricsVerbosityDocumentation() {
+        // Test that the METRICS_VERBOSITY_DOC constant is properly defined and accessible
+        assertNotNull(CommonClientConfigs.METRICS_VERBOSITY_DOC);
+        assertFalse(CommonClientConfigs.METRICS_VERBOSITY_DOC.isEmpty());
+        
+        // Test that the documentation contains expected content
+        String doc = CommonClientConfigs.METRICS_VERBOSITY_DOC;
+        assertTrue(doc.contains("Controls the verbosity of metrics reporting"));
+        assertTrue(doc.contains("JSON array string"));
+        assertTrue(doc.contains("level"));
+        assertTrue(doc.contains("name"));
+        assertTrue(doc.contains("filters"));
+        assertTrue(doc.contains("high"));
+        assertTrue(doc.contains("medium"));
+        assertTrue(doc.contains("low"));
+        assertTrue(doc.contains("Bytes*"));
+        assertTrue(doc.contains("topics"));
+        
+        // Test that the JSON example is properly formatted
+        assertTrue(doc.contains("<pre>"));
+        assertTrue(doc.contains("</pre>"));
+        assertTrue(doc.contains("<code>"));
+        assertTrue(doc.contains("</code>"));
     }
 
     public static class MyJmxReporter extends JmxReporter {

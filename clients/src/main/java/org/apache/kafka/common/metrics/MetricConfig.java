@@ -33,6 +33,7 @@ public class MetricConfig {
     private long timeWindowMs;
     private Map<String, String> tags;
     private Sensor.RecordingLevel recordingLevel;
+    private String verbosity;
 
     public MetricConfig() {
         this.quota = null;
@@ -41,6 +42,7 @@ public class MetricConfig {
         this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
         this.tags = new LinkedHashMap<>();
         this.recordingLevel = Sensor.RecordingLevel.INFO;
+        this.verbosity = "[]";
     }
 
     public Quota quota() {
@@ -99,5 +101,12 @@ public class MetricConfig {
         return this;
     }
 
+    public String verbosity() {
+        return this.verbosity;
+    }
 
+    public MetricConfig verbosity(String verbosity) {
+        this.verbosity = verbosity;
+        return this;
+    }
 }

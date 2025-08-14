@@ -61,6 +61,11 @@ public class MetricConfigs {
     public static final String KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DOC = "The metrics polling interval (in seconds) which can be used in " +
             KAFKA_METRICS_REPORTER_CLASSES_CONFIG + " implementations.";
 
+    /** ********* Kafka Metrics Verbosity Configuration ***********/
+    public static final String METRICS_VERBOSITY_CONFIG = CommonClientConfigs.METRICS_VERBOSITY_CONFIG;
+    public static final String METRICS_VERBOSITY_DEFAULT = "[]";
+    public static final String METRICS_VERBOSITY_DOC = CommonClientConfigs.METRICS_VERBOSITY_DOC;
+
     /** ********* Kafka Client Telemetry Metrics Configuration ***********/
     public static final String CLIENT_TELEMETRY_MAX_BYTES_CONFIG = "telemetry.max.bytes";
     public static final int CLIENT_TELEMETRY_MAX_BYTES_DEFAULT = 1024 * 1024;
@@ -77,6 +82,9 @@ public class MetricConfigs {
             // Kafka Yammer Metrics Reporter Configuration
             .define(KAFKA_METRICS_REPORTER_CLASSES_CONFIG, LIST, KAFKA_METRIC_REPORTER_CLASSES_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, KAFKA_METRICS_REPORTER_CLASSES_DOC)
             .define(KAFKA_METRICS_POLLING_INTERVAL_SECONDS_CONFIG, INT, KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DEFAULT, atLeast(1), LOW, KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DOC)
+
+            // Kafka Metrics Verbosity Configuration
+            .define(METRICS_VERBOSITY_CONFIG, STRING, METRICS_VERBOSITY_DEFAULT, LOW, METRICS_VERBOSITY_DOC)
 
             // Kafka Client Telemetry Metrics Configuration
             .define(CLIENT_TELEMETRY_MAX_BYTES_CONFIG, INT, CLIENT_TELEMETRY_MAX_BYTES_DEFAULT, atLeast(1), LOW, CLIENT_TELEMETRY_MAX_BYTES_DOC);

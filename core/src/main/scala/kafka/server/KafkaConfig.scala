@@ -375,6 +375,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val metricNumSamples = getInt(MetricConfigs.METRIC_NUM_SAMPLES_CONFIG)
   val metricSampleWindowMs = getLong(MetricConfigs.METRIC_SAMPLE_WINDOW_MS_CONFIG)
   val metricRecordingLevel = getString(MetricConfigs.METRIC_RECORDING_LEVEL_CONFIG)
+  val metricVerbosity = getString(MetricConfigs.METRICS_VERBOSITY_CONFIG)
 
   /** ********* Kafka Client Telemetry Metrics Configuration ***********/
   val clientTelemetryMaxBytes: Int = getInt(MetricConfigs.CLIENT_TELEMETRY_MAX_BYTES_CONFIG)
