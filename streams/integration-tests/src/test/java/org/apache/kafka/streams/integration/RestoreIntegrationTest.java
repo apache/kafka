@@ -127,7 +127,7 @@ public class RestoreIntegrationTest {
     private static final int NUM_BROKERS = 2;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    
+
     private static Admin admin;
 
     @BeforeAll
@@ -197,7 +197,7 @@ public class RestoreIntegrationTest {
     public void shouldRestoreNullRecord(final boolean useNewProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final String applicationId = "restoration-test-app";
+        final String applicationId = appId;
         final String stateStoreName = "stateStore";
         final String inputTopic = "input";
         final String outputTopic = "output";
@@ -282,7 +282,9 @@ public class RestoreIntegrationTest {
         final int offsetLimitDelta = 1000;
         final int offsetCheckpointed = 1000;
         createStateForRestoration(inputStream, 0);
-        setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+        if (!useNewProtocol) {
+             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+        }
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
@@ -320,6 +322,27 @@ public class RestoreIntegrationTest {
         kafkaStreams.start();
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
+
+        if (useNewProtocol) {
+            // For new protocol, we need to stop the streams instance before altering offsets
+            kafkaStreams.close();
+            setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+            
+            // Restart the streams instance with a new startup latch
+            final CountDownLatch restartLatch = new CountDownLatch(1);
+            kafkaStreams = new KafkaStreams(topology, props);
+            kafkaStreams.setStateListener((newState, oldState) -> {
+                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                    restartLatch.countDown();
+                }
+            });
+            kafkaStreams.setGlobalStateRestoreListener(new TrackingStateRestoreListener(restored));
+            kafkaStreams.start();
+            
+            // Wait for the restarted instance to be running
+            assertTrue(restartLatch.await(30, TimeUnit.SECONDS));
+        }
+
         assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
@@ -347,7 +370,9 @@ public class RestoreIntegrationTest {
         final int offsetLimitDelta = 1000;
         final int offsetCheckpointed = 1000;
         createStateForRestoration(inputStream, 0);
-        setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+        if (!useNewProtocol) {
+            setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+        }
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
@@ -379,6 +404,28 @@ public class RestoreIntegrationTest {
         kafkaStreams.start();
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
+
+        if (useNewProtocol) {
+            // For new protocol, we need to stop the streams instance before altering offsets
+            kafkaStreams.close();
+            setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+
+            // Restart the streams instance with a new startup latch
+            final CountDownLatch restartLatch = new CountDownLatch(1);
+            kafkaStreams = new KafkaStreams(builder.build(props), props);
+            kafkaStreams.setStateListener((newState, oldState) -> {
+                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                    restartLatch.countDown();
+                }
+            });
+
+            kafkaStreams.setGlobalStateRestoreListener(new TrackingStateRestoreListener(restored));
+            kafkaStreams.start();
+
+            // Wait for the restarted instance to be running
+            assertTrue(restartLatch.await(30, TimeUnit.SECONDS));
+        }
+
         assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
 
         assertTrue(shutdownLatch.await(30, TimeUnit.SECONDS));
@@ -387,10 +434,10 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @CsvSource({
-            "true,true",
-            "true,false",
-            "false,true",
-            "false,false"
+        "true,true",
+        "true,false",
+        "false,true",
+        "false,false"
     })
     public void shouldRestoreStateFromChangelogTopic(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
         final String changelog = appId + "-store-changelog";
@@ -538,10 +585,10 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @CsvSource({
-            "true,true",
-            "true,false",
-            "false,true",
-            "false,false"
+        "true,true",
+        "true,false",
+        "false,true",
+        "false,false"
     })
     public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -595,7 +642,6 @@ public class RestoreIntegrationTest {
         // of where it started and make sure it doesn't happen more times from there
         final int initialStoreCloseCount = CloseCountingInMemoryStore.numStoresClosed();
         final long initialNunRestoredCount = restoreListener.totalNumRestored();
-
         transitionedStates1.clear();
         transitionedStates2.clear();
         try {
@@ -719,7 +765,7 @@ public class RestoreIntegrationTest {
                                            final boolean useNewProtocol) {
         final Properties streamsConfiguration = props(mkObjectProperties(extraConfiguration));
         if (useNewProtocol) {
-            streamsConfiguration.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), GroupProtocol.STREAMS.name());
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
         final KafkaStreams kafkaStreams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
@@ -936,6 +982,7 @@ public class RestoreIntegrationTest {
                     final long targetOffset = Math.max(0, endOffset - limitDelta);
                     offsetsToCommit.put(partition, new OffsetAndMetadata(targetOffset));
                 }
+
                 admin.alterStreamsGroupOffsets(appId, offsetsToCommit).all().get();
             } catch (final Exception e) {
                 throw new RuntimeException("Failed to set committed offsets", e);
