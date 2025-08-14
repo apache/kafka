@@ -4187,7 +4187,7 @@ public class DistributedHerderTest {
                 assignment = new ExtendedAssignment(
                         connectProtocolVersion, error, leader, leaderUrl, offset,
                         new ArrayList<>(assignedConnectors), new ArrayList<>(assignedTasks),
-                        List.of(), List.of(), 0);
+                        new ArrayList<>(), new ArrayList<>(), 0);
             } else {
                 assignment = new ExtendedAssignment(
                         connectProtocolVersion, error, leader, leaderUrl, offset,
