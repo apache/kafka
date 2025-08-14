@@ -73,7 +73,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 )
 public class EligibleLeaderReplicasIntegrationTest {
     private final ClusterInstance clusterInstance;
-    private String testTopicName;
 
     EligibleLeaderReplicasIntegrationTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
@@ -94,7 +93,7 @@ public class EligibleLeaderReplicasIntegrationTest {
                 ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()))) {
-            testTopicName = String.format("%s-%s", "testHighWatermarkShouldNotAdvanceIfUnderMinIsr", "ELR-test");
+            String testTopicName = String.format("%s-%s", "testHighWatermarkShouldNotAdvanceIfUnderMinIsr", "ELR-test");
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                     new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
@@ -126,7 +125,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(0).id());
             clusterInstance.shutdownBroker(initialReplicas.get(1).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 2 && elrSize == 1, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 2 && elrSize == 1, admin, testTopicName);
 
             // Now the partition is under min ISR. HWM should not advance.
             producer.send(new ProducerRecord<>(testTopicName, "1", "1")).get();
@@ -136,7 +135,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             // Restore the min ISR and the previous log should be visible.
             clusterInstance.startBroker(initialReplicas.get(1).id());
             clusterInstance.startBroker(initialReplicas.get(0).id());
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 4 && elrSize == 0, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 4 && elrSize == 0, admin, testTopicName);
 
             waitUntilOneMessageIsConsumed(consumer);
         }
@@ -159,7 +158,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testElrMemberCanBeElected() throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
-            testTopicName = String.format("%s-%s", "testElrMemberCanBeElected", "ELR-test");
+            String testTopicName = String.format("%s-%s", "testElrMemberCanBeElected", "ELR-test");
 
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
@@ -188,11 +187,11 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(1).id());
             clusterInstance.shutdownBroker(initialReplicas.get(2).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2, admin, testTopicName);
 
             clusterInstance.shutdownBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3, admin, testTopicName);
 
             topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -207,7 +206,7 @@ public class EligibleLeaderReplicasIntegrationTest {
                 .filter(node -> node.id() != expectLastKnownLeader).toList().get(0).id();
 
             clusterInstance.startBroker(expectLeader);
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2, admin, testTopicName);
 
             topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -218,7 +217,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             topicPartitionInfo.replicas().stream().filter(node -> node.id() != expectLeader).limit(2)
                 .forEach(node -> clusterInstance.startBroker(node.id()));
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 3 && elrSize == 0, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 3 && elrSize == 0, admin, testTopicName);
 
             topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -230,7 +229,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testElrMemberShouldBeKickOutWhenUncleanShutdown() throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
-            testTopicName = String.format("%s-%s", "testElrMemberShouldBeKickOutWhenUncleanShutdown", "ELR-test");
+            String testTopicName = String.format("%s-%s", "testElrMemberShouldBeKickOutWhenUncleanShutdown", "ELR-test");
 
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
@@ -260,7 +259,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(2).id());
             clusterInstance.shutdownBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3, admin, testTopicName);
             topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
 
@@ -276,7 +275,7 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             // After remove the clean shutdown file, the broker should report unclean shutdown during restart.
             clusterInstance.startBroker(brokerToBeUncleanShutdown);
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 2, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 2, admin, testTopicName);
             topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertNull(topicPartitionInfo.leader());
@@ -290,7 +289,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testLastKnownLeaderShouldBeElectedIfEmptyElr() throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
-            testTopicName = String.format("%s-%s", "testLastKnownLeaderShouldBeElectedIfEmptyElr", "ELR-test");
+            String testTopicName = String.format("%s-%s", "testLastKnownLeaderShouldBeElectedIfEmptyElr", "ELR-test");
 
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
@@ -321,7 +320,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             clusterInstance.shutdownBroker(initialReplicas.get(2).id());
             clusterInstance.shutdownBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3, admin, testTopicName);
             topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             int lastKnownLeader = topicPartitionInfo.lastKnownElr().get(0).id();
@@ -341,7 +340,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             topicPartitionInfo.replicas().forEach(replica -> {
                 if (replica.id() != lastKnownLeader) clusterInstance.startBroker(replica.id());
             });
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 1, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 1, admin, testTopicName);
             topicPartitionInfo = admin.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertNull(topicPartitionInfo.leader());
@@ -349,7 +348,7 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             // Now if the last known leader goes through unclean shutdown, it will still be elected.
             clusterInstance.startBroker(lastKnownLeader);
-            waitForIsrAndElr((isrSize, elrSize) -> isrSize > 0 && elrSize == 0, admin);
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize > 0 && elrSize == 0, admin, testTopicName);
             TestUtils.waitForCondition(
                 () -> {
                     try {
@@ -367,7 +366,7 @@ public class EligibleLeaderReplicasIntegrationTest {
         }
     }
 
-    void waitForIsrAndElr(BiFunction<Integer, Integer, Boolean> isIsrAndElrSizeSatisfied, Admin admin) throws InterruptedException {
+    void waitForIsrAndElr(BiFunction<Integer, Integer, Boolean> isIsrAndElrSizeSatisfied, Admin admin, String testTopicName) throws InterruptedException {
         TestUtils.waitForCondition(
             () -> {
                 try {
