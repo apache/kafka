@@ -35,7 +35,6 @@ public record MetadataProvenance(long lastContainedOffset, int lastContainedEpoc
     /**
      * Returns whether lastContainedOffset is the last offset in a record batch
      */
-    @Override
     public boolean isOffsetBatchAligned() {
         return isOffsetBatchAligned;
     }

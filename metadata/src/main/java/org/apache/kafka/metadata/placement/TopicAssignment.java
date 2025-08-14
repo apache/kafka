@@ -32,7 +32,6 @@ public record TopicAssignment(List<PartitionAssignment> assignments) {
     /**
      * @return The replica assignment for each partition, where the index in the list corresponds to different partition.
      */
-    @Override
     public List<PartitionAssignment> assignments() {
         return assignments;
     }
