@@ -20,10 +20,8 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -73,7 +71,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -174,7 +171,7 @@ public class RestoreIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
         streamsConfiguration.putAll(extraProperties);
 
         streamsConfigurations.add(streamsConfiguration);
@@ -192,8 +189,9 @@ public class RestoreIntegrationTest {
         streamsConfigurations.clear();
     }
 
-    @Test
-    public void shouldRestoreNullRecord() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldRestoreNullRecord(final boolean useNewProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String applicationId = "restoration-test-app";
@@ -209,6 +207,10 @@ public class RestoreIntegrationTest {
                 Serdes.IntegerSerde.class.getName(),
                 Serdes.BytesSerde.class.getName(),
                 props);
+
+        if (useNewProtocol) {
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
 
         CLUSTER.createTopics(inputTopic);
         CLUSTER.createTopics(outputTopic);
@@ -269,6 +271,9 @@ public class RestoreIntegrationTest {
         final Topology topology = new Topology();
 
         final Properties props = props(stateUpdaterEnabled);
+        if (useNewProtocol) {
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
@@ -331,6 +336,9 @@ public class RestoreIntegrationTest {
 
         final Properties props = props(stateUpdaterEnabled);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        if (useNewProtocol) {
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
@@ -375,8 +383,13 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldRestoreStateFromChangelogTopic(final boolean stateUpdaterEnabled) throws Exception {
+    @CsvSource({
+            "true,true",
+            "true,false",
+            "false,true",
+            "false,false"
+    })
+    public void shouldRestoreStateFromChangelogTopic(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
         final String changelog = appId + "-store-changelog";
         CLUSTER.createTopic(changelog, 2, 1);
 
@@ -384,6 +397,10 @@ public class RestoreIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties props = props(stateUpdaterEnabled);
+
+        if (useNewProtocol) {
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
@@ -427,8 +444,13 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
+    @CsvSource({
+        "true,true",
+        "true,false",
+        "false,true",
+        "false,false"
+    })
+    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, Integer> stream = builder.stream(inputStream);
@@ -440,7 +462,11 @@ public class RestoreIntegrationTest {
             );
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props(stateUpdaterEnabled));
+        final Properties props = props(stateUpdaterEnabled);
+        if (useNewProtocol) {
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
+        kafkaStreams = new KafkaStreams(builder.build(), props);
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
                 startupLatch.countDown();
@@ -453,8 +479,13 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
+    @CsvSource({
+        "true,true",
+        "true,false",
+        "false,true",
+        "false,false"
+    })
+    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                 asList(KeyValue.pair(1, 1),
                         KeyValue.pair(2, 2),
@@ -482,7 +513,12 @@ public class RestoreIntegrationTest {
 
         final Topology topology = streamsBuilder.build();
 
-        kafkaStreams = new KafkaStreams(topology, props(stateUpdaterEnabled));
+        final Properties props = props(stateUpdaterEnabled);
+
+        if (useNewProtocol) {
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
+        kafkaStreams = new KafkaStreams(topology, props);
 
         final CountDownLatch latch = new CountDownLatch(1);
         kafkaStreams.setStateListener((newState, oldState) -> {
@@ -498,8 +534,13 @@ public class RestoreIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean stateUpdaterEnabled) throws Exception {
+    @CsvSource({
+            "true,true",
+            "true,false",
+            "false,true",
+            "false,false"
+    })
+    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean stateUpdaterEnabled, final boolean useNewProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
                 inputStream,
@@ -510,12 +551,18 @@ public class RestoreIntegrationTest {
         final Properties props1 = props(stateUpdaterEnabled);
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
+        if (useNewProtocol) {
+            props1.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
         purgeLocalStreamsState(props1);
         final KafkaStreams streams1 = new KafkaStreams(builder.build(), props1);
 
         final Properties props2 = props(stateUpdaterEnabled);
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
+        if (useNewProtocol) {
+            props2.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        }
         purgeLocalStreamsState(props2);
         final KafkaStreams streams2 = new KafkaStreams(builder.build(), props2);
 
@@ -569,8 +616,9 @@ public class RestoreIntegrationTest {
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
     }
 
-    @Test
-    public void shouldInvokeUserDefinedGlobalStateRestoreListener() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldInvokeUserDefinedGlobalStateRestoreListener(final boolean useNewProtocol) throws Exception {
         final String inputTopic = "inputTopic";
         final String outputTopic = "outputTopic";
         CLUSTER.createTopic(inputTopic, 5, 1);
@@ -599,7 +647,7 @@ public class RestoreIntegrationTest {
 
         sendEvents(inputTopic, sampleData);
 
-        kafkaStreams = startKafkaStreams(builder, null, kafkaStreams1Configuration);
+        kafkaStreams = startKafkaStreams(builder, null, kafkaStreams1Configuration, useNewProtocol);
 
         validateReceivedMessages(sampleData, outputTopic);
 
@@ -608,7 +656,7 @@ public class RestoreIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfigurations);
 
         final TestStateRestoreListener kafkaStreams1StateRestoreListener = new TestStateRestoreListener("ks1", RESTORATION_DELAY);
-        kafkaStreams = startKafkaStreams(builder, kafkaStreams1StateRestoreListener, kafkaStreams1Configuration);
+        kafkaStreams = startKafkaStreams(builder, kafkaStreams1StateRestoreListener, kafkaStreams1Configuration, useNewProtocol);
 
         // Ensure all the restoring tasks are in active state before starting the new instance.
         // Otherwise, the tasks which assigned to first kafka streams won't encounter "restoring suspend" after being reassigned to the second instance.
@@ -624,7 +672,8 @@ public class RestoreIntegrationTest {
 
         try (final KafkaStreams kafkaStreams2 = startKafkaStreams(builder,
                                                                   kafkaStreams2StateRestoreListener,
-                                                                  kafkaStreams2Configuration)) {
+                                                                  kafkaStreams2Configuration,
+                                                                  useNewProtocol)) {
 
             waitForCondition(() -> State.RUNNING == kafkaStreams2.state(),
                              90_000,
@@ -663,8 +712,12 @@ public class RestoreIntegrationTest {
 
     private KafkaStreams startKafkaStreams(final StreamsBuilder streamsBuilder,
                                            final StateRestoreListener stateRestoreListener,
-                                           final Map<String, Object> extraConfiguration) {
+                                           final Map<String, Object> extraConfiguration,
+                                           final boolean useNewProtocol) {
         final Properties streamsConfiguration = props(mkObjectProperties(extraConfiguration));
+        if (useNewProtocol) {
+            streamsConfiguration.put(StreamsConfig.consumerPrefix(ConsumerConfig.GROUP_PROTOCOL_CONFIG), GroupProtocol.STREAMS.name());
+        }
         final KafkaStreams kafkaStreams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
         kafkaStreams.setGlobalStateRestoreListener(stateRestoreListener);
@@ -839,7 +892,7 @@ public class RestoreIntegrationTest {
     }
 
     private void setCommittedOffset(final String topic, final int limitDelta, final boolean useNewProtocol) {
-        if (useNewProtocol) {
+        if (!useNewProtocol) {
             final Properties consumerConfig = new Properties();
             consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
             consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, appId);
@@ -862,31 +915,28 @@ public class RestoreIntegrationTest {
 
                 consumer.commitSync();
             }
-        }
+        } else {
+            try {
+                final List<TopicPartition> partitions = asList(
+                        new TopicPartition(topic, 0),
+                        new TopicPartition(topic, 1));
 
-        try {
-            final List<TopicPartition> partitions = asList(
-                    new TopicPartition(topic, 0),
-                    new TopicPartition(topic, 1));
+                final Map<TopicPartition, OffsetSpec> offsetSpecs = partitions.stream()
+                        .collect(Collectors.toMap(tp -> tp, tp -> OffsetSpec.latest()));
 
-            final Map<TopicPartition, OffsetSpec> offsetSpecs = partitions.stream()
-                    .collect(Collectors.toMap(tp -> tp, tp -> OffsetSpec.latest()));
-            
-            final Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets = 
-                    admin.listOffsets(offsetSpecs).all().get();
+                final Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets =
+                        admin.listOffsets(offsetSpecs).all().get();
 
-            final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
-            for (final TopicPartition partition : partitions) {
-                final long endOffset = endOffsets.get(partition).offset();
-                final long targetOffset = Math.max(0, endOffset - limitDelta);
-                offsetsToCommit.put(partition, new OffsetAndMetadata(targetOffset));
+                final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+                for (final TopicPartition partition : partitions) {
+                    final long endOffset = endOffsets.get(partition).offset();
+                    final long targetOffset = Math.max(0, endOffset - limitDelta);
+                    offsetsToCommit.put(partition, new OffsetAndMetadata(targetOffset));
+                }
+                admin.alterStreamsGroupOffsets(appId, offsetsToCommit).all().get();
+            } catch (final Exception e) {
+                throw new RuntimeException("Failed to set committed offsets", e);
             }
-
-            // Use alterConsumerGroupOffsets for backward compatibility, 
-            // as alterStreamsGroupOffsets is just a wrapper around it
-            admin.alterConsumerGroupOffsets(appId, offsetsToCommit).all().get();
-        } catch (final Exception e) {
-            throw new RuntimeException("Failed to set committed offsets", e);
         }
     }
 
