@@ -1394,6 +1394,13 @@ class ReplicaManager(val config: KafkaConfig,
       val logStartOffset = onlinePartition(topicIdPartition.topicPartition()).map(_.logStartOffset).getOrElse(-1L)
       brokerTopicStats.topicStats(topicIdPartition.topic).failedProduceRequestRate.mark()
       brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
+      // Partition-level (KIP-977): failed produce requests
+      if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+        config,
+        org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.FAILED_PRODUCE_REQUESTS_PER_SEC,
+        topicIdPartition.topic)) {
+        brokerTopicStats.partitionStats(topicIdPartition.topic, topicIdPartition.partition).failedProduceRequestRate().mark()
+      }
       t match {
         case _: InvalidProducerEpochException =>
           info(s"Error processing append operation on partition $topicIdPartition", t)
@@ -1867,6 +1874,13 @@ class ReplicaManager(val config: KafkaConfig,
         case e: Throwable =>
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
+          // Partition-level (KIP-977): failed fetch requests
+          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+            config,
+            org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.FAILED_FETCH_REQUESTS_PER_SEC,
+            tp.topic)) {
+            brokerTopicStats.partitionStats(tp.topic, tp.partition).failedFetchRequestRate().mark()
+          }
 
           val fetchSource = FetchRequest.describeReplicaId(params.replicaId)
           error(s"Error processing fetch with max size $adjustedMaxBytes from $fetchSource " +

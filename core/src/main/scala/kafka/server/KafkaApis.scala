@@ -683,6 +683,15 @@ class KafkaApis(val requestChannel: RequestChannel,
                   val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
                   m.totalFetchRequestRate().mark()
                 }
+                // Partition-level (KIP-977): fetch/produce conversions per-partition if conversions detected
+                val conversionCount = data.recordConversionStats().numRecordsConverted()
+                if (conversionCount > 0) {
+                  if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+                    serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC, tp.topic)) {
+                    val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
+                    m.fetchMessageConversionsRate().mark(conversionCount)
+                  }
+                }
               }
             }
           }
