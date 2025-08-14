@@ -283,7 +283,7 @@ public class RestoreIntegrationTest {
         final int offsetCheckpointed = 1000;
         createStateForRestoration(inputStream, 0);
         if (!useNewProtocol) {
-             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
+            setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
         }
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
