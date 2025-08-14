@@ -141,7 +141,7 @@ public class TestLinearWriteSpeed {
         Compression.Builder<? extends Compression> compressionBuilder = Compression.of(compressionType);
         Integer compressionLevel = options.valueOf(compressionLevelOpt);
 
-        setupCompression(compressionType, compressionBuilder, compressionLevel);
+        if (compressionLevel != null) setupCompression(compressionType, compressionBuilder, compressionLevel);
         Compression compression = compressionBuilder.build();
 
         ThreadLocalRandom.current().nextBytes(buffer.array());
@@ -225,16 +225,13 @@ public class TestLinearWriteSpeed {
                                          Integer compressionLevel) {
         switch (compressionType) {
             case GZIP:
-                ((GzipCompression.Builder) compressionBuilder)
-                    .level(compressionLevel != null ? compressionLevel : CompressionType.GZIP.defaultLevel());
+                ((GzipCompression.Builder) compressionBuilder).level(compressionLevel);
                 break;
             case LZ4:
-                ((Lz4Compression.Builder) compressionBuilder)
-                    .level(compressionLevel != null ? compressionLevel : CompressionType.LZ4.defaultLevel());
+                ((Lz4Compression.Builder) compressionBuilder).level(compressionLevel);
                 break;
             case ZSTD:
-                ((ZstdCompression.Builder) compressionBuilder)
-                    .level(compressionLevel != null ? compressionLevel : CompressionType.ZSTD.defaultLevel());
+                ((ZstdCompression.Builder) compressionBuilder).level(compressionLevel);
                 break;
             default:
                 break;
