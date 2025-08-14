@@ -89,7 +89,7 @@ class AssignmentStateTest extends AbstractPartitionTest {
   def testPartitionAssignmentStatus(isr: Array[Int], replicas: Array[Int],
                                     adding: Array[Int], removing: Array[Int],
                                     original: util.List[Int], isUnderReplicated: Boolean): Unit = {
-    val partitionRegistrationBuilder = new PartitionRegistration.Builder()
+    val partitionRegistration = new PartitionRegistration.Builder()
       .setLeader(brokerId)
       .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
       .setLeaderEpoch(6)
@@ -97,22 +97,18 @@ class AssignmentStateTest extends AbstractPartitionTest {
       .setPartitionEpoch(1)
       .setReplicas(replicas)
       .setDirectories(DirectoryId.unassignedArray(replicas.length))
-    if (adding.nonEmpty)
-      partitionRegistrationBuilder.setAddingReplicas(adding)
-    if (removing.nonEmpty)
-      partitionRegistrationBuilder.setRemovingReplicas(removing)
-
-    val partitionRegistration = partitionRegistrationBuilder.build()
-    val isReassigning = !adding.isEmpty || !removing.isEmpty
+      .setAddingReplicas(adding)
+      .setRemovingReplicas(removing)
+      .build()
 
     // set the original replicas as the URP calculation will need them
     if (!original.isEmpty)
       partition.assignmentState = SimpleAssignmentState(original.asScala)
     // do the test
     partition.makeLeader(partitionRegistration, isNew = false, offsetCheckpoints, None)
+    val isReassigning = !adding.isEmpty || !removing.isEmpty
     assertEquals(isReassigning, partition.isReassigning)
-    if (adding.nonEmpty)
-      adding.foreach(r => assertTrue(partition.isAddingReplica(r)))
+    adding.foreach(r => assertTrue(partition.isAddingReplica(r)))
     if (adding.contains(brokerId))
       assertTrue(partition.isAddingLocalReplica)
     else

@@ -1266,7 +1266,7 @@ class ReplicaManagerTest {
 
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-      partition.makeLeader(makePartitionRegistration(leaderBrokerId, leaderEpoch, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+      partition.makeLeader(partitionRegistration(leaderBrokerId, leaderEpoch, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
         isNew = false,
         offsetCheckpoints,
         None)
@@ -2653,7 +2653,7 @@ class ReplicaManagerTest {
     (replicaManager, mockLogMgr)
   }
 
-  private def makePartitionRegistration(leader: Int,
+  private def partitionRegistration(leader: Int,
                                     leaderEpoch: Int,
                                     isr: Array[Int],
                                     partitionEpoch: Int,
@@ -4165,7 +4165,7 @@ class ReplicaManagerTest {
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
-      partition.makeLeader(makePartitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+      partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
         isNew = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava),
         None)
@@ -5725,7 +5725,7 @@ class ReplicaManagerTest {
     assertEquals(directoryIds.size, 2)
     val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
     val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
-    partition.makeLeader(makePartitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+    partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
       isNew = false,
       new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava),
       None)
@@ -5754,7 +5754,7 @@ class ReplicaManagerTest {
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
       val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
-    partition.makeLeader(makePartitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+    partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
       isNew = false,
       new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava),
       None)
