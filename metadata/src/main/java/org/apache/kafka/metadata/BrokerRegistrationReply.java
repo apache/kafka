@@ -19,9 +19,4 @@ package org.apache.kafka.metadata;
 
 
 public record BrokerRegistrationReply(long epoch) {
-
-    @Override
-    public String toString() {
-        return "BrokerRegistrationReply(epoch=" + epoch + ")";
-    }
 }

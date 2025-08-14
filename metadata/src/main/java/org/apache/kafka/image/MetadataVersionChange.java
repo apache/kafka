@@ -40,12 +40,4 @@ public record MetadataVersionChange(MetadataVersion oldVersion, MetadataVersion 
     public boolean isDowngrade() {
         return newVersion.isLessThan(oldVersion);
     }
-
-    @Override
-    public String toString() {
-        return "MetadataVersionChange(" +
-            "oldVersion=" + oldVersion +
-            ", newVersion=" + newVersion +
-            ")";
-    }
 }

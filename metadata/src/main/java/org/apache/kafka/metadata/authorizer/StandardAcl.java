@@ -97,17 +97,4 @@ public record StandardAcl(ResourceType resourceType, String resourceName, Patter
         result = permissionType.compareTo(other.permissionType);
         return result;
     }
-
-    @Override
-    public String toString() {
-        return "StandardAcl(" +
-            "resourceType=" + resourceType +
-            ", resourceName=" + resourceName +
-            ", patternType=" + patternType +
-            ", principal=" + principal +
-            ", host=" + host +
-            ", operation=" + operation +
-            ", permissionType=" + permissionType +
-            ")";
-    }
 }

@@ -26,13 +26,4 @@ import java.util.Optional;
  */
 @InterfaceStability.Unstable
 public record UsableBroker(int id, Optional<String> rack, boolean fenced) {
-
-    @Override
-    public String toString() {
-        return "UsableBroker" +
-            "(id=" + id +
-            ", rack=" + rack +
-            ", fenced=" + fenced +
-            ")";
-    }
 }

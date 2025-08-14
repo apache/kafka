@@ -36,11 +36,4 @@ public record TopicAssignment(List<PartitionAssignment> assignments) {
     public List<PartitionAssignment> assignments() {
         return assignments;
     }
-
-    @Override
-    public String toString() {
-        return "TopicAssignment" +
-            "(assignments=" + assignments +
-            ")";
-    }
 }

@@ -44,12 +44,4 @@ public record StandardAclWithId(Uuid id, StandardAcl acl) {
     public AclBinding toBinding() {
         return acl.toBinding();
     }
-
-    @Override
-    public String toString() {
-        return "StandardAclWithId(" +
-            "id=" + id +
-            ", acl=" + acl +
-            ")";
-    }
 }

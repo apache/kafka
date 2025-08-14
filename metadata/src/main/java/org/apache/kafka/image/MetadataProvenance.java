@@ -46,14 +46,4 @@ public record MetadataProvenance(long lastContainedOffset, int lastContainedEpoc
     public String snapshotName() {
         return String.format("snapshot %s", Snapshots.filenameFromSnapshotId(snapshotId()));
     }
-
-    @Override
-    public String toString() {
-        return "MetadataProvenance(" +
-            "lastContainedOffset=" + lastContainedOffset +
-            ", lastContainedEpoch=" + lastContainedEpoch +
-            ", lastContainedLogTimeMs=" + lastContainedLogTimeMs +
-            ", isOffsetBatchAligned=" + isOffsetBatchAligned +
-            ")";
-    }
 }

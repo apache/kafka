@@ -31,12 +31,4 @@ public record SnapshotManifest(MetadataProvenance provenance, long elapsedNs) im
     public LoaderManifestType type() {
         return LoaderManifestType.SNAPSHOT;
     }
-
-    @Override
-    public String toString() {
-        return "SnapshotManifest(" +
-            "provenance=" + provenance +
-            ", elapsedNs=" + elapsedNs +
-            ")";
-    }
 }

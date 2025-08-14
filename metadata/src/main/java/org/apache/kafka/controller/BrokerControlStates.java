@@ -18,8 +18,4 @@
 package org.apache.kafka.controller;
 
 record BrokerControlStates(BrokerControlState current, BrokerControlState next) {
-    @Override
-    public String toString() {
-        return "BrokerControlStates(current=" + current + ", next=" + next + ")";
-    }
 }

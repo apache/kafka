@@ -18,8 +18,4 @@
 package org.apache.kafka.controller;
 
 public record BrokerIdAndEpoch(int id, long epoch) {
-    @Override
-    public String toString() {
-        return "BrokerIdAndEpoch(id=" + id + ", epoch=" + epoch + ")";
-    }
 }

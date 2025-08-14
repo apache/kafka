@@ -93,10 +93,5 @@ public final class LocalReplicaChanges {
     }
 
     public record PartitionInfo(Uuid topicId, PartitionRegistration partition) {
-
-        @Override
-        public String toString() {
-            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
-        }
     }
 }

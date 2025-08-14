@@ -26,13 +26,4 @@ package org.apache.kafka.metadata;
  */
 public record BrokerHeartbeatReply(boolean isCaughtUp, boolean isFenced, boolean inControlledShutdown,
                                    boolean shouldShutDown) {
-
-    @Override
-    public String toString() {
-        return "BrokerHeartbeatReply(isCaughtUp=" + isCaughtUp +
-            ", isFenced=" + isFenced +
-            ", inControlledShutdown=" + inControlledShutdown +
-            ", shouldShutDown = " + shouldShutDown +
-            ")";
-    }
 }

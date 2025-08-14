@@ -24,13 +24,4 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  */
 @InterfaceStability.Unstable
 public record PlacementSpec(int startPartition, int numPartitions, short numReplicas) {
-
-    @Override
-    public String toString() {
-        return "PlacementSpec" +
-            "(startPartition=" + startPartition +
-            ", numPartitions=" + numPartitions +
-            ", numReplicas=" + numReplicas +
-            ")";
-    }
 }
