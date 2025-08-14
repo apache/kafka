@@ -51,7 +51,6 @@ import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
-import org.apache.kafka.server.metrics.MetricsVerbosityController;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.UnexpectedAppendOffsetException;
@@ -1203,12 +1202,6 @@ public class UnifiedLog implements AutoCloseable {
                                             brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
                                             brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
                                             
-                                            // Emit partition-level metrics if enabled
-                                            if (serverConfig != null && MetricsVerbosityController.shouldEmitPartitionMetric(
-                                                    serverConfig, BrokerTopicMetrics.BYTES_REJECTED_PER_SEC, topicPartition().topic())) {
-                                                brokerTopicStats.partitionStats(topicPartition().topic(), topicPartition().partition()).bytesRejectedRate().mark(records.sizeInBytes());
-                                            }
-                                            
                                             throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to" +
                                                     "partition " + topicPartition() + " which exceeds the maximum configured size of " + config().maxMessageSize() + ".");
                                         }
@@ -1591,12 +1584,6 @@ public class UnifiedLog implements AutoCloseable {
                 if (!ignoreRecordSize && batchSize > config().maxMessageSize()) {
                     brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
                     brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
-                    
-                    // Emit partition-level metrics if enabled
-                    if (serverConfig != null && MetricsVerbosityController.shouldEmitPartitionMetric(
-                            serverConfig, BrokerTopicMetrics.BYTES_REJECTED_PER_SEC, topicPartition().topic())) {
-                        brokerTopicStats.partitionStats(topicPartition().topic(), topicPartition().partition()).bytesRejectedRate().mark(records.sizeInBytes());
-                    }
                     
                     throw new RecordTooLargeException("The record batch size in the append to " + topicPartition() + " is " + batchSize + " bytes " +
                             "which exceeds the maximum configured value of " + config().maxMessageSize() + ").");

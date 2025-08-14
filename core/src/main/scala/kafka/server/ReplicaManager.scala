@@ -1464,7 +1464,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           (topicIdPartition, LogAppendResult(info, exception = None, hasCustomErrorMessage = false))
 
-        } catch {
+          } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
           // it is supposed to indicate un-expected failures of a broker in handling a produce request
           case e@ (_: UnknownTopicOrPartitionException |
@@ -1474,6 +1474,15 @@ class ReplicaManager(val config: KafkaConfig,
                    _: CorruptRecordException |
                    _: KafkaStorageException |
                    _: UnknownTopicIdException) =>
+            // Partition-level BytesRejectedPerSec when record(s) exceed max size (KIP-977), gated by metrics.verbosity
+            e match {
+              case _: RecordTooLargeException | _: RecordBatchTooLargeException =>
+                if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+                  config, BrokerTopicMetrics.BYTES_REJECTED_PER_SEC, topicIdPartition.topic)) {
+                  brokerTopicStats.partitionStats(topicIdPartition.topic, topicIdPartition.partition).bytesRejectedRate().mark(records.sizeInBytes)
+                }
+              case _ => // no-op
+            }
             (topicIdPartition, LogAppendResult(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, Some(e), hasCustomErrorMessage = false))
           case rve: RecordValidationException =>
             val logStartOffset = processFailedRecord(topicIdPartition, rve.invalidException)

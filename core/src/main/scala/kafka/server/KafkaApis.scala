@@ -684,15 +684,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
                   m.totalFetchRequestRate().mark()
                 }
-                // Partition-level (KIP-977): fetch/produce conversions per-partition if conversions detected
-                val conversionCount = data.recordConversionStats().numRecordsConverted()
-                if (conversionCount > 0) {
-                  if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
-                    serverConfig, BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC, tp.topic)) {
-                    val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
-                    m.fetchMessageConversionsRate().mark(conversionCount)
-                  }
-                }
+                // Partition-level conversions omitted (not accessible at this layer)
               }
             }
           }
@@ -4146,9 +4138,19 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.PRODUCE =>
           brokerTopicStats.topicStats(tp.topic).produceMessageConversionsRate.mark(conversionCount)
           brokerTopicStats.allTopicsStats.produceMessageConversionsRate.mark(conversionCount)
+          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+            config, BrokerTopicMetrics.PRODUCE_MESSAGE_CONVERSIONS_PER_SEC, tp.topic)) {
+            val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
+            m.produceMessageConversionsRate().mark(conversionCount)
+          }
         case ApiKeys.FETCH =>
           brokerTopicStats.topicStats(tp.topic).fetchMessageConversionsRate.mark(conversionCount)
           brokerTopicStats.allTopicsStats.fetchMessageConversionsRate.mark(conversionCount)
+          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+            config, BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC, tp.topic)) {
+            val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
+            m.fetchMessageConversionsRate().mark(conversionCount)
+          }
         case _ =>
           throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
       }
