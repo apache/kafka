@@ -93,7 +93,8 @@ class KafkaRequestHandler(
   val requestChannel: RequestChannel,
   apis: ApiRequestHandler,
   time: Time,
-  nodeName: String = "broker"
+  nodeName: String = "broker",
+  val isCombinedMode: Boolean = false,
 ) extends Runnable with Logging {
   this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId] "
   private val shutdownComplete = new CountDownLatch(1)
@@ -112,7 +113,7 @@ class KafkaRequestHandler(
       val req = requestChannel.receiveRequest(300)
       val endTime = time.nanoseconds
       val idleTime = endTime - startSelectTime
-      aggregateIdleMeter.mark(idleTime / totalHandlerThreads.get)
+      aggregateIdleMeter.mark(idleTime / (totalHandlerThreads.get * (if (isCombinedMode) 2 else 1)))
 
       req match {
         case RequestChannel.ShutdownRequest =>
@@ -199,7 +200,8 @@ class KafkaRequestHandlerPool(
   time: Time,
   numThreads: Int,
   requestHandlerAvgIdleMetricName: String,
-  nodeName: String = "broker"
+  nodeName: String = "broker",
+  isCombinedMode: Boolean = false,
 ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -214,7 +216,7 @@ class KafkaRequestHandlerPool(
   }
 
   def createHandler(id: Int): Unit = synchronized {
-    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time, nodeName)
+    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time, nodeName, isCombinedMode)
     KafkaThread.daemon("data-plane-kafka-request-handler-" + id, runnables(id)).start()
   }
 
@@ -223,14 +225,15 @@ class KafkaRequestHandlerPool(
     info(s"Resizing request handler thread pool size from $currentSize to $newSize")
     if (newSize > currentSize) {
       for (i <- currentSize until newSize) {
+        threadPoolSize.getAndIncrement()
         createHandler(i)
       }
     } else if (newSize < currentSize) {
       for (i <- 1 to (currentSize - newSize)) {
+        threadPoolSize.getAndDecrement()
         runnables.remove(currentSize - i).stop()
       }
     }
-    threadPoolSize.set(newSize)
   }
 
   def shutdown(): Unit = synchronized {

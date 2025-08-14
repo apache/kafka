@@ -52,6 +52,60 @@ class KafkaRequestHandlerTest {
   val allTopicMetrics: BrokerTopicMetrics = brokerTopicStats.allTopicsStats
 
   @Test
+  def testCombinedModeIdlePercent(): Unit = {
+    val time = Time.SYSTEM
+    val metricsBroker = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
+    val metricsController = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
+    val requestChannelBroker = new RequestChannel(10, time, metricsBroker)
+    val requestChannelController = new RequestChannel(10, time, metricsController)
+    val apiHandler = mock(classOf[ApiRequestHandler])
+
+    // Create both pools with 0 threads so we can wire a shared Meter before handlers are created
+    val brokerPool = new KafkaRequestHandlerPool(
+      0,
+      requestChannelBroker,
+      apiHandler,
+      time,
+      0,
+      "RequestHandlerAvgIdlePercent",
+      isCombinedMode = true
+    )
+
+    val controllerPool = new KafkaRequestHandlerPool(
+      0,
+      requestChannelController,
+      apiHandler,
+      time,
+      0,
+      "RequestHandlerAvgIdlePercent",
+      isCombinedMode = true
+    )
+
+    try {
+      val field = classOf[KafkaRequestHandlerPool].getDeclaredField("aggregateIdleMeter")
+      field.setAccessible(true)
+      val sharedMeter = field.get(brokerPool).asInstanceOf[Meter]
+      field.set(controllerPool, sharedMeter)
+
+      brokerPool.resizeThreadPool(4)
+      controllerPool.resizeThreadPool(4)
+
+      val deadline = System.currentTimeMillis() + 8000
+      var value = 0.0
+      while (System.currentTimeMillis() < deadline && value == 0.0) {
+        Thread.sleep(200)
+        value = sharedMeter.oneMinuteRate()
+      }
+      assertTrue(value >= 0.0 && value <= 1.05, s"idle percent should be within [0,1], got $value")
+    } finally {
+      controllerPool.shutdown()
+      brokerPool.shutdown()
+      metricsBroker.close()
+      metricsController.close()
+    }
+  }
+
+  @Test
   def testCallbackTiming(): Unit = {
     val time = new MockTime()
     val startTime = time.nanoseconds()
@@ -192,6 +246,38 @@ class KafkaRequestHandlerTest {
     // Verify that we do use the request local that we passed in.
     verify(originalRequestLocal, times(1)).bufferSupplier
     assertEquals(1, handledCount)
+  }
+
+  @Test
+  def testResizeThreadPoolUpdatesThreadPoolSize(): Unit = {
+    val time = Time.SYSTEM
+    val metrics = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
+    val requestChannel = new RequestChannel(10, time, metrics)
+    val apiHandler = mock(classOf[ApiRequestHandler])
+
+    // start with 3 threads
+    val pool = new KafkaRequestHandlerPool(
+      0,
+      requestChannel,
+      apiHandler,
+      time,
+      3,
+      "RequestHandlerAvgIdlePercent",
+    )
+    try {
+      assertEquals(3, pool.threadPoolSize.get)
+
+      // grow to 5
+      pool.resizeThreadPool(5)
+      assertEquals(5, pool.threadPoolSize.get)
+
+      // shrink to 2
+      pool.resizeThreadPool(2)
+      assertEquals(2, pool.threadPoolSize.get)
+    } finally {
+      pool.shutdown()
+      metrics.close()
+    }
   }
 
 

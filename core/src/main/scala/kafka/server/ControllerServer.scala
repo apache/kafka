@@ -288,7 +288,8 @@ class ControllerServer(
         time,
         config.numIoThreads,
         "RequestHandlerAvgIdlePercent",
-        "controller")
+        "controller",
+        config.isKRaftCombinedMode)
 
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)
