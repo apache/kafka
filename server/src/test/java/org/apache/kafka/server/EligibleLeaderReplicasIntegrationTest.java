@@ -156,7 +156,7 @@ public class EligibleLeaderReplicasIntegrationTest {
         );
     }
 
-    @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testElrMemberCanBeElected() throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
             testTopicName = String.format("%s-%s", "testElrMemberCanBeElected", "ELR-test");
@@ -227,7 +227,7 @@ public class EligibleLeaderReplicasIntegrationTest {
         }
     }
 
-    @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testElrMemberShouldBeKickOutWhenUncleanShutdown() throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
             testTopicName = String.format("%s-%s", "testElrMemberShouldBeKickOutWhenUncleanShutdown", "ELR-test");
@@ -287,7 +287,7 @@ public class EligibleLeaderReplicasIntegrationTest {
     /*
         This test is only valid for KIP-966 part 1. When the unclean recovery is implemented, it should be removed.
      */
-    @ClusterTest(metadataVersion = MetadataVersion.IBP_4_0_IV1)
+    @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testLastKnownLeaderShouldBeElectedIfEmptyElr() throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
             testTopicName = String.format("%s-%s", "testLastKnownLeaderShouldBeElectedIfEmptyElr", "ELR-test");
