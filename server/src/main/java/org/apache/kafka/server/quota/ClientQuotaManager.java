@@ -379,7 +379,7 @@ public class ClientQuotaManager {
         if (!quotasEnabled()) return Double.MAX_VALUE;
         var clientSensors = getOrCreateQuotaSensors(session, clientId);
         var limit = quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags());
-        if (limit != null) return limit * (config.numQuotaSamples - 1) * config.quotaWindowSizeSeconds;
+        if (limit != null) return limit * (config.numQuotaSamples() - 1) * config.quotaWindowSizeSeconds();
         return Double.MAX_VALUE;
     }
 
@@ -495,8 +495,8 @@ public class ClientQuotaManager {
 
     private MetricConfig getQuotaMetricConfig(double quotaLimit) {
         return new MetricConfig()
-                .timeWindow(config.quotaWindowSizeSeconds, TimeUnit.SECONDS)
-                .samples(config.numQuotaSamples)
+                .timeWindow(config.quotaWindowSizeSeconds(), TimeUnit.SECONDS)
+                .samples(config.numQuotaSamples())
                 .quota(new Quota(quotaLimit, true));
     }
 

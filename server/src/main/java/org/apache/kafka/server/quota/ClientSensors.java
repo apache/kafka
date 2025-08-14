@@ -38,13 +38,4 @@ public record ClientSensors(Map<String, String> metricTags, Sensor quotaSensor, 
         this.quotaSensor = Objects.requireNonNull(quotaSensor);
         this.throttleTimeSensor = Objects.requireNonNull(throttleTimeSensor);
     }
-
-    @Override
-    public String toString() {
-        return "ClientSensors{" +
-            "metricTags=" + metricTags +
-            ", quotaSensor=" + quotaSensor +
-            ", throttleTimeSensor=" + throttleTimeSensor +
-            '}';
-    }
 }

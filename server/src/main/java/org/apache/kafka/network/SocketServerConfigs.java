@@ -174,11 +174,11 @@ public class SocketServerConfigs {
         "^(.*)://\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(-?[0-9]+)");
 
     public static final Map<ListenerName, SecurityProtocol> DEFAULT_NAME_TO_SECURITY_PROTO =
-        Map.copyOf(Arrays.stream(SecurityProtocol.values())
-            .collect(Collectors.toMap(
+        Arrays.stream(SecurityProtocol.values())
+            .collect(Collectors.toUnmodifiableMap(
                 ListenerName::forSecurityProtocol,
                 Function.identity()
-            )));
+            ));
 
     public static List<Endpoint> listenerListToEndPoints(
         String input,
