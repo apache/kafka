@@ -67,6 +67,7 @@ import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, LogReadResult, 
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, OffsetResultHolder, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 
 import java.io.File
 import java.lang.{Long => JLong}
@@ -1397,7 +1398,7 @@ class ReplicaManager(val config: KafkaConfig,
       // Partition-level (KIP-977): failed produce requests
       if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
         config,
-        org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.FAILED_PRODUCE_REQUESTS_PER_SEC,
+        BrokerTopicMetrics.FAILED_PRODUCE_REQUESTS_PER_SEC,
         topicIdPartition.topic)) {
         brokerTopicStats.partitionStats(topicIdPartition.topic, topicIdPartition.partition).failedProduceRequestRate().mark()
       }
@@ -1442,17 +1443,17 @@ class ReplicaManager(val config: KafkaConfig,
           // Gate partition-level emission via metrics.verbosity
           val serverConfig = config
           if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
-            serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.BYTES_IN_PER_SEC, tp.topic())) {
+            serverConfig, BrokerTopicMetrics.BYTES_IN_PER_SEC, tp.topic())) {
             val partMetrics = brokerTopicStats.partitionStats(tp.topic(), tp.partition())
             partMetrics.bytesInRate().mark(records.sizeInBytes)
           }
           if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
-            serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.MESSAGE_IN_PER_SEC, tp.topic())) {
+            serverConfig, BrokerTopicMetrics.MESSAGE_IN_PER_SEC, tp.topic())) {
             val partMetrics = brokerTopicStats.partitionStats(tp.topic(), tp.partition())
             partMetrics.messagesInRate().mark(numAppendedMessages)
           }
           if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
-            serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.TOTAL_PRODUCE_REQUESTS_PER_SEC, tp.topic())) {
+            serverConfig, BrokerTopicMetrics.TOTAL_PRODUCE_REQUESTS_PER_SEC, tp.topic())) {
             val partMetrics = brokerTopicStats.partitionStats(tp.topic(), tp.partition())
             partMetrics.totalProduceRequestRate().mark()
           }
@@ -1877,7 +1878,7 @@ class ReplicaManager(val config: KafkaConfig,
           // Partition-level (KIP-977): failed fetch requests
           if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
             config,
-            org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.FAILED_FETCH_REQUESTS_PER_SEC,
+            BrokerTopicMetrics.FAILED_FETCH_REQUESTS_PER_SEC,
             tp.topic)) {
             brokerTopicStats.partitionStats(tp.topic, tp.partition).failedFetchRequestRate().mark()
           }

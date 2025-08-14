@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
@@ -50,6 +51,7 @@ import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+import org.apache.kafka.server.metrics.MetricsVerbosityController;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.UnexpectedAppendOffsetException;
@@ -1031,6 +1033,29 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     /**
+     * Append this message set to the active segment of the local log, assigning offsets and Partition Leader Epochs
+     * with support for partition-level metrics emission
+     *
+     * @param records The records to append
+     * @param leaderEpoch the epoch of the replica appending
+     * @param origin Declares the origin of the append which affects required validations
+     * @param requestLocal request local instance
+     * @param verificationGuard verification guard for transactional records
+     * @param serverConfig Server configuration for metrics verbosity control. If provided, partition-level metrics will be emitted when enabled.
+     * @throws KafkaStorageException If the append fails due to an I/O error.
+     * @return Information about the appended messages including the first and last offset.
+     */
+    public LogAppendInfo appendAsLeader(MemoryRecords records,
+                                        int leaderEpoch,
+                                        AppendOrigin origin,
+                                        RequestLocal requestLocal,
+                                        VerificationGuard verificationGuard,
+                                        AbstractConfig serverConfig) {
+        boolean validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER;
+        return append(records, origin, validateAndAssignOffsets, leaderEpoch, Optional.of(requestLocal), verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE, serverConfig);
+    }
+
+    /**
      * Even though we always write to disk with record version v2 since Apache Kafka 4.0, older record versions may have
      * been persisted to disk before that. In order to test such scenarios, we need the ability to append with older
      * record versions. This method exists for that purpose and hence it should only be used from test code.
@@ -1086,11 +1111,43 @@ public class UnifiedLog implements AutoCloseable {
                                  VerificationGuard verificationGuard,
                                  boolean ignoreRecordSize,
                                  byte toMagic) {
+        return append(records, origin, validateAndAssignOffsets, leaderEpoch, requestLocal, verificationGuard, ignoreRecordSize, toMagic, null);
+    }
+
+    /**
+     * Append this message set to the active segment of the local log, rolling over to a fresh segment if necessary.
+     *
+     * <p>This method will generally be responsible for assigning offsets to the messages,
+     * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
+     *
+     * @param records The log records to append
+     * @param origin Declares the origin of the append which affects required validations
+     * @param validateAndAssignOffsets Should the log assign offsets to this message set or blindly apply what it is given
+     * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
+     * @param requestLocal The request local instance if validateAndAssignOffsets is true
+     * @param verificationGuard verification guard for transactional records
+     * @param ignoreRecordSize true to skip validation of record size.
+     * @param toMagic the record version to use
+     * @param serverConfig Server configuration for metrics verbosity control. If provided, partition-level metrics will be emitted when enabled.
+     * @throws KafkaStorageException If the append fails due to an I/O error.
+     * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
+     * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
+     * @return Information about the appended messages including the first and last offset.
+     */
+    private LogAppendInfo append(MemoryRecords records,
+                                 AppendOrigin origin,
+                                 boolean validateAndAssignOffsets,
+                                 int leaderEpoch,
+                                 Optional<RequestLocal> requestLocal,
+                                 VerificationGuard verificationGuard,
+                                 boolean ignoreRecordSize,
+                                 byte toMagic,
+                                 AbstractConfig serverConfig) {
         // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
         // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
         maybeFlushMetadataFile();
 
-        LogAppendInfo appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, !validateAndAssignOffsets, leaderEpoch);
+        LogAppendInfo appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, !validateAndAssignOffsets, leaderEpoch, serverConfig);
 
         // return if we have no valid messages or if this is a duplicate of the last appended entry
         if (appendInfo.validBytes() <= 0) {
@@ -1145,6 +1202,13 @@ public class UnifiedLog implements AutoCloseable {
                                             // to be consistent with pre-compression bytesRejectedRate recording
                                             brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
                                             brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
+                                            
+                                            // Emit partition-level metrics if enabled
+                                            if (serverConfig != null && MetricsVerbosityController.shouldEmitPartitionMetric(
+                                                    serverConfig, BrokerTopicMetrics.BYTES_REJECTED_PER_SEC, topicPartition().topic())) {
+                                                brokerTopicStats.partitionStats(topicPartition().topic(), topicPartition().partition()).bytesRejectedRate().mark(records.sizeInBytes());
+                                            }
+                                            
                                             throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to" +
                                                     "partition " + topicPartition() + " which exceeds the maximum configured size of " + config().maxMessageSize() + ".");
                                         }
@@ -1437,6 +1501,36 @@ public class UnifiedLog implements AutoCloseable {
                                                     boolean ignoreRecordSize,
                                                     boolean requireOffsetsMonotonic,
                                                     int leaderEpoch) {
+        return analyzeAndValidateRecords(records, origin, ignoreRecordSize, requireOffsetsMonotonic, leaderEpoch, null);
+    }
+
+    /**
+     * Validate the following:
+     * <ol>
+     * <li> each message matches its CRC
+     * <li> each message size is valid (if ignoreRecordSize is false)
+     * <li> that the sequence numbers of the incoming record batches are consistent with the existing state and with each other
+     * <li> that the offsets are monotonically increasing (if requireOffsetsMonotonic is true)
+     * </ol>
+     *
+     * Also compute the following quantities:
+     * <ol>
+     * <li> First offset in the message set
+     * <li> Last offset in the message set
+     * <li> Number of messages
+     * <li> Number of valid bytes
+     * <li> Whether the offsets are monotonically increasing
+     * <li> Whether any compression codec is used (if many are used, then the last one is given)
+     * </ol>
+     *
+     * @param serverConfig Server configuration for metrics verbosity control. If null, partition-level metrics won't be emitted.
+     */
+    private LogAppendInfo analyzeAndValidateRecords(MemoryRecords records,
+                                                    AppendOrigin origin,
+                                                    boolean ignoreRecordSize,
+                                                    boolean requireOffsetsMonotonic,
+                                                    int leaderEpoch,
+                                                    AbstractConfig serverConfig) {
         int validBytesCount = 0;
         long firstOffset = UnifiedLog.UNKNOWN_OFFSET;
         long lastOffset = -1L;
@@ -1497,6 +1591,13 @@ public class UnifiedLog implements AutoCloseable {
                 if (!ignoreRecordSize && batchSize > config().maxMessageSize()) {
                     brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
                     brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
+                    
+                    // Emit partition-level metrics if enabled
+                    if (serverConfig != null && MetricsVerbosityController.shouldEmitPartitionMetric(
+                            serverConfig, BrokerTopicMetrics.BYTES_REJECTED_PER_SEC, topicPartition().topic())) {
+                        brokerTopicStats.partitionStats(topicPartition().topic(), topicPartition().partition()).bytesRejectedRate().mark(records.sizeInBytes());
+                    }
+                    
                     throw new RecordTooLargeException("The record batch size in the append to " + topicPartition() + " is " + batchSize + " bytes " +
                             "which exceeds the maximum configured value of " + config().maxMessageSize() + ").");
                 }

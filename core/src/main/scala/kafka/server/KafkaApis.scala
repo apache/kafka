@@ -71,6 +71,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPa
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 
 import java.time.Duration
 import java.util
@@ -674,12 +675,12 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val size = FetchResponse.recordsSize(data)
                 val serverConfig = config
                 if (size > 0 && org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
-                  serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.BYTES_OUT_PER_SEC, tp.topic)) {
+                  serverConfig, BrokerTopicMetrics.BYTES_OUT_PER_SEC, tp.topic)) {
                   val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
                   m.bytesOutRate().mark(size)
                 }
                 if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
-                  serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.TOTAL_FETCH_REQUESTS_PER_SEC, tp.topic)) {
+                  serverConfig, BrokerTopicMetrics.TOTAL_FETCH_REQUESTS_PER_SEC, tp.topic)) {
                   val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
                   m.totalFetchRequestRate().mark()
                 }
@@ -687,7 +688,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val conversionCount = data.recordConversionStats().numRecordsConverted()
                 if (conversionCount > 0) {
                   if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
-                    serverConfig, org.apache.kafka.storage.log.metrics.BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC, tp.topic)) {
+                    serverConfig, BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC, tp.topic)) {
                     val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
                     m.fetchMessageConversionsRate().mark(conversionCount)
                   }
