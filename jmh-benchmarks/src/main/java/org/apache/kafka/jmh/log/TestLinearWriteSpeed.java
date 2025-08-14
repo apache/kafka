@@ -120,8 +120,7 @@ public class TestLinearWriteSpeed {
         OptionSpec<Integer> compressionLevelOpt = parser.accepts("level", "The compression level to use")
             .withRequiredArg()
             .describedAs("level")
-            .ofType(Integer.class)
-            .defaultsTo(0);
+            .ofType(Integer.class);
 
         OptionSpec<Void> mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.");
         OptionSpec<Void> channelOpt = parser.accepts("channel", "Do writes to file channels.");
@@ -140,7 +139,7 @@ public class TestLinearWriteSpeed {
         long flushInterval = options.valueOf(flushIntervalOpt);
         CompressionType compressionType = CompressionType.forName(options.valueOf(compressionCodecOpt));
         Compression.Builder<? extends Compression> compressionBuilder = Compression.of(compressionType);
-        int compressionLevel = options.valueOf(compressionLevelOpt);
+        Integer compressionLevel = options.valueOf(compressionLevelOpt);
 
         setupCompression(compressionType, compressionBuilder, compressionLevel);
         Compression compression = compressionBuilder.build();
@@ -223,16 +222,19 @@ public class TestLinearWriteSpeed {
 
     private static void setupCompression(CompressionType compressionType,
                                          Compression.Builder<? extends Compression> compressionBuilder,
-                                         int compressionLevel) {
+                                         Integer compressionLevel) {
         switch (compressionType) {
             case GZIP:
-                ((GzipCompression.Builder) compressionBuilder).level(compressionLevel);
+                ((GzipCompression.Builder) compressionBuilder)
+                    .level(compressionLevel != null ? compressionLevel : CompressionType.GZIP.defaultLevel());
                 break;
             case LZ4:
-                ((Lz4Compression.Builder) compressionBuilder).level(compressionLevel);
+                ((Lz4Compression.Builder) compressionBuilder)
+                    .level(compressionLevel != null ? compressionLevel : CompressionType.LZ4.defaultLevel());
                 break;
             case ZSTD:
-                ((ZstdCompression.Builder) compressionBuilder).level(compressionLevel);
+                ((ZstdCompression.Builder) compressionBuilder)
+                    .level(compressionLevel != null ? compressionLevel : CompressionType.ZSTD.defaultLevel());
                 break;
             default:
                 break;
