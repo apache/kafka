@@ -30,12 +30,4 @@ public record LeaderAndEpoch(OptionalInt leaderId, int epoch) {
     public boolean isLeader(int nodeId) {
         return leaderId.isPresent() && leaderId.getAsInt() == nodeId;
     }
-
-    @Override
-    public String toString() {
-        return "LeaderAndEpoch(" +
-            "leaderId=" + leaderId +
-            ", epoch=" + epoch +
-            ')';
-    }
 }

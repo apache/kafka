@@ -627,29 +627,12 @@ public class MockLog implements ReplicatedLog {
     }
 
     record MockOffsetMetadata(long id) implements OffsetMetadata {
-
-        @Override
-        public String toString() {
-            return "MockOffsetMetadata(" +
-                "id=" + id +
-                ')';
-        }
     }
 
     record LogEntry(MockOffsetMetadata metadata, long offset, SimpleRecord record) {
 
         LogOffsetMetadata logOffsetMetadata() {
             return new LogOffsetMetadata(offset, Optional.of(metadata));
-        }
-
-        @Override
-        public String toString() {
-            return String.format(
-                "LogEntry(metadata=%s, offset=%s, record=%s)",
-                metadata,
-                offset,
-                record
-            );
         }
     }
 
@@ -696,18 +679,8 @@ public class MockLog implements ReplicatedLog {
             builder.close();
             return builder.buffer();
         }
-
-        @Override
-        public String toString() {
-            return String.format("LogBatch(entries=%s, epoch=%s, isControlBatch=%s)", entries, epoch, isControlBatch);
-        }
     }
 
     private record EpochStartOffset(int epoch, long startOffset) {
-
-        @Override
-        public String toString() {
-            return String.format("EpochStartOffset(epoch=%s, startOffset=%s)", epoch, startOffset);
-        }
     }
 }

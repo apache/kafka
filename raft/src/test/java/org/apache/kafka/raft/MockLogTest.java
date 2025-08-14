@@ -1026,11 +1026,6 @@ public class MockLogTest {
     }
 
     private record OffsetRange(long startOffset, long endOffset) {
-
-        @Override
-        public String toString() {
-            return String.format("OffsetRange(startOffset=%s, endOffset=%s)", startOffset, endOffset);
-        }
     }
 
     private void appendAsLeader(Collection<SimpleRecord> records, int epoch) {
