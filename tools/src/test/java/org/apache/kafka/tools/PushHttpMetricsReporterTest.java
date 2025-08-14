@@ -185,35 +185,35 @@ public class PushHttpMetricsReporterTest {
         KafkaMetric metric1 = new KafkaMetric(
                 new Object(),
                 new MetricName("name1", "group1", "desc1", Map.of("key1", "value1")),
-                (Gauge<Double>)(config, now) -> 1.0,
+                (Gauge<Double>) (config, now) -> 1.0,
                 null,
                 time
         );
         KafkaMetric newMetric1 = new KafkaMetric(
                 new Object(),
                 new MetricName("name1", "group1", "desc1", Map.of("key1", "value1")),
-                (Gauge<Double>)(config, now) -> -1.0,
+                (Gauge<Double>) (config, now) -> -1.0,
                 null,
                 time
         );
         KafkaMetric metric2 = new KafkaMetric(
                 new Object(),
                 new MetricName("name2", "group2", "desc2", Map.of("key2", "value2")),
-                (Gauge<Double>)(config, now) -> 2.0,
+                (Gauge<Double>) (config, now) -> 2.0,
                 null,
                 time
         );
         KafkaMetric metric3 = new KafkaMetric(
                 new Object(),
                 new MetricName("name3", "group3", "desc3", Map.of("key3", "value3")),
-                (Gauge<Double>)(config, now) -> 3.0,
+                (Gauge<Double>) (config, now) -> 3.0,
                 null,
                 time
         );
         KafkaMetric metric4 = new KafkaMetric(
             new Object(),
             new MetricName("name4", "group4", "desc4", Map.of("key4", "value4")),
-            (Gauge<String>)(config, now) -> "value4",
+            (Gauge<String>) (config, now) -> "value4",
             null,
             time
         );
