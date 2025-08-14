@@ -3363,10 +3363,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         } else {
             backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
         }
-        return Math.min(
-            backoffMs,
-            state.remainingUpdateVoterSetPeriodMs(currentTimeMs)
-        );
+        if (canBecomeVoter) {
+            return Math.min(
+                backoffMs,
+                state.remainingUpdateVoterSetPeriodMs(currentTimeMs)
+            );
+        } else {
+            return backoffMs;
+        }
     }
 
     private long maybeSendFetchToBestNode(FollowerState state, long currentTimeMs) {
