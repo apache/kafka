@@ -55,6 +55,7 @@ import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.metrics.MetricsVerbosityController
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchKey, DelayedShareFetchPartitionKey}
@@ -1396,7 +1397,7 @@ class ReplicaManager(val config: KafkaConfig,
       brokerTopicStats.topicStats(topicIdPartition.topic).failedProduceRequestRate.mark()
       brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
       // Partition-level (KIP-977): failed produce requests
-      if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+      if (MetricsVerbosityController.shouldEmitPartitionMetric(
         config,
         BrokerTopicMetrics.FAILED_PRODUCE_REQUESTS_PER_SEC,
         topicIdPartition.topic)) {
@@ -1442,17 +1443,17 @@ class ReplicaManager(val config: KafkaConfig,
           val tp = topicIdPartition.topicPartition()
           // Gate partition-level emission via metrics.verbosity
           val serverConfig = config
-          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+          if (MetricsVerbosityController.shouldEmitPartitionMetric(
             serverConfig, BrokerTopicMetrics.BYTES_IN_PER_SEC, tp.topic())) {
             val partMetrics = brokerTopicStats.partitionStats(tp.topic(), tp.partition())
             partMetrics.bytesInRate().mark(records.sizeInBytes)
           }
-          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+          if (MetricsVerbosityController.shouldEmitPartitionMetric(
             serverConfig, BrokerTopicMetrics.MESSAGE_IN_PER_SEC, tp.topic())) {
             val partMetrics = brokerTopicStats.partitionStats(tp.topic(), tp.partition())
             partMetrics.messagesInRate().mark(numAppendedMessages)
           }
-          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+          if (MetricsVerbosityController.shouldEmitPartitionMetric(
             serverConfig, BrokerTopicMetrics.TOTAL_PRODUCE_REQUESTS_PER_SEC, tp.topic())) {
             val partMetrics = brokerTopicStats.partitionStats(tp.topic(), tp.partition())
             partMetrics.totalProduceRequestRate().mark()
@@ -1476,8 +1477,8 @@ class ReplicaManager(val config: KafkaConfig,
                    _: UnknownTopicIdException) =>
             // Partition-level BytesRejectedPerSec when record(s) exceed max size (KIP-977), gated by metrics.verbosity
             e match {
-              case _: RecordTooLargeException | _: RecordBatchTooLargeException =>
-                if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+              case _: RecordTooLargeException =>
+                if (MetricsVerbosityController.shouldEmitPartitionMetric(
                   config, BrokerTopicMetrics.BYTES_REJECTED_PER_SEC, topicIdPartition.topic)) {
                   brokerTopicStats.partitionStats(topicIdPartition.topic, topicIdPartition.partition).bytesRejectedRate().mark(records.sizeInBytes)
                 }
@@ -1885,7 +1886,7 @@ class ReplicaManager(val config: KafkaConfig,
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
           // Partition-level (KIP-977): failed fetch requests
-          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+          if (MetricsVerbosityController.shouldEmitPartitionMetric(
             config,
             BrokerTopicMetrics.FAILED_FETCH_REQUESTS_PER_SEC,
             tp.topic)) {
