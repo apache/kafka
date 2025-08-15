@@ -50,7 +50,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -127,35 +126,36 @@ public class MetadataQuorumCommand {
                 Optional.ofNullable(namespace.getString("bootstrap_controller")));
             admin = Admin.create(props);
 
-            if (command.equals("describe")) {
-                if (namespace.getBoolean("status") && namespace.getBoolean("replication")) {
-                    throw new TerseException("Only one of --status or --replication should be specified with describe sub-command");
-                } else if (namespace.getBoolean("replication")) {
-                    boolean humanReadable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
-                    handleDescribeReplication(admin, humanReadable);
-                } else if (namespace.getBoolean("status")) {
-                    if (namespace.getBoolean("human_readable")) {
-                        throw new TerseException("The option --human-readable is only supported along with --replication");
+            switch (command) {
+                case "describe" -> {
+                    if (namespace.getBoolean("status") && namespace.getBoolean("replication")) {
+                        throw new TerseException("Only one of --status or --replication should be specified with describe sub-command");
+                    } else if (namespace.getBoolean("replication")) {
+                        boolean humanReadable = Optional.of(namespace.getBoolean("human_readable")).orElse(false);
+                        handleDescribeReplication(admin, humanReadable);
+                    } else if (namespace.getBoolean("status")) {
+                        if (namespace.getBoolean("human_readable")) {
+                            throw new TerseException("The option --human-readable is only supported along with --replication");
+                        }
+                        handleDescribeStatus(admin);
+                    } else {
+                        throw new TerseException("One of --status or --replication must be specified with describe sub-command");
                     }
-                    handleDescribeStatus(admin);
-                } else {
-                    throw new TerseException("One of --status or --replication must be specified with describe sub-command");
                 }
-            } else if (command.equals("add-controller")) {
-                if (optionalCommandConfig == null) {
-                    throw new TerseException("You must supply the configuration file of the controller you are " +
-                        "adding when using add-controller.");
+                case "add-controller" -> {
+                    if (optionalCommandConfig == null) {
+                        throw new TerseException("You must supply the configuration file of the controller you are " +
+                            "adding when using add-controller.");
+                    }
+                    handleAddController(admin,
+                        namespace.getBoolean("dry_run"),
+                        props);
                 }
-                handleAddController(admin,
-                    namespace.getBoolean("dry_run"),
-                    props);
-            } else if (command.equals("remove-controller")) {
-                handleRemoveController(admin,
+                case "remove-controller" -> handleRemoveController(admin,
                     namespace.getInt("controller_id"),
                     namespace.getString("controller_directory_id"),
                     namespace.getBoolean("dry_run"));
-            } else {
-                throw new IllegalStateException(format("Unknown command: %s", command));
+                default -> throw new IllegalStateException(format("Unknown command: %s", command));
             }
         } finally {
             if (admin != null)
@@ -231,7 +231,7 @@ public class MetadataQuorumCommand {
                 lastFetchTimestamp,
                 lastCaughtUpTimestamp,
                 status
-            ).map(r -> r.toString()).collect(Collectors.toList());
+            ).map(Object::toString).collect(Collectors.toList());
         }).collect(Collectors.toList());
     }
 
@@ -253,7 +253,7 @@ public class MetadataQuorumCommand {
         QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
         int leaderId = quorumInfo.leaderId();
         QuorumInfo.ReplicaState leader = quorumInfo.voters().stream().filter(voter -> voter.replicaId() == leaderId).findFirst().get();
-        QuorumInfo.ReplicaState maxLagFollower = quorumInfo.voters().stream().min(Comparator.comparingLong(qi -> qi.logEndOffset())).get();
+        QuorumInfo.ReplicaState maxLagFollower = quorumInfo.voters().stream().min(Comparator.comparingLong(QuorumInfo.ReplicaState::logEndOffset)).get();
         long maxFollowerLag = leader.logEndOffset() - maxLagFollower.logEndOffset();
 
         long maxFollowerLagTimeMs;
@@ -292,7 +292,7 @@ public class MetadataQuorumCommand {
         List<Node> currentVoterList = replicas.stream().map(voter -> new Node(
             voter.replicaId(),
             voter.replicaDirectoryId(),
-            getEndpoints(quorumInfo.nodes().get(voter.replicaId())))).collect(Collectors.toList());
+            getEndpoints(quorumInfo.nodes().get(voter.replicaId())))).toList();
         return currentVoterList.stream().map(Objects::toString).collect(Collectors.joining(", ", "[", "]"));
     }
 
@@ -378,7 +378,7 @@ public class MetadataQuorumCommand {
 
     static Uuid getMetadataDirectoryId(String metadataDirectory) throws Exception {
         MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
-            addLogDirs(Collections.singletonList(metadataDirectory)).
+            addLogDirs(List.of(metadataDirectory)).
             addMetadataLogDir(metadataDirectory).
             load();
         MetaProperties metaProperties = ensemble.logDirProps().get(metadataDirectory);

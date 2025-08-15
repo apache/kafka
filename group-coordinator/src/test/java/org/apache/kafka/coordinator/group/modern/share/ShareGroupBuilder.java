@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -62,7 +61,7 @@ public class ShareGroupBuilder {
         return this;
     }
 
-    public List<CoordinatorRecord> build(TopicsImage topicsImage) {
+    public List<CoordinatorRecord> build() {
         List<CoordinatorRecord> records = new ArrayList<>();
 
         // Add subscription records for members.

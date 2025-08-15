@@ -83,6 +83,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTes
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache, MockConfigRepository}
+import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
@@ -93,7 +94,7 @@ import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerC
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
-import org.apache.kafka.server.quota.ThrottleCallback
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ThrottleCallback}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.share.context.{FinalContext, ShareSessionContext}
 import org.apache.kafka.server.share.session.{ShareSession, ShareSessionKey}
@@ -153,6 +154,7 @@ class KafkaApisTest extends Logging {
   private val time = new MockTime
   private val clientId = ""
   private var kafkaApis: KafkaApis = _
+  private val brokerEpoch = 123L
 
   @AfterEach
   def tearDown(): Unit = {
@@ -209,7 +211,8 @@ class KafkaApisTest extends Logging {
       tokenManager = null,
       apiVersionManager = apiVersionManager,
       clientMetricsManager = clientMetricsManager,
-      groupConfigManager = groupConfigManager)
+      groupConfigManager = groupConfigManager,
+      brokerEpochSupplier = () => brokerEpoch)
   }
 
   private def setupFeatures(featureVersions: Seq[FeatureVersion]): Unit = {
@@ -650,7 +653,8 @@ class KafkaApisTest extends Logging {
     val expectedThrottleTimeMs = math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
 
     verify(clientRequestQuotaManager).throttle(
-      ArgumentMatchers.eq(request),
+      ArgumentMatchers.eq(request.header.clientId()),
+      ArgumentMatchers.eq(request.session),
       any[ThrottleCallback](),
       ArgumentMatchers.eq(expectedThrottleTimeMs)
     )
@@ -955,12 +959,15 @@ class KafkaApisTest extends Logging {
                                   request: RequestChannel.Request): ArgumentCaptor[Option[RequestContext]] = {
     val capturedRequest: ArgumentCaptor[Option[RequestContext]] = ArgumentCaptor.forClass(classOf[Option[RequestContext]])
     if (enableAutoTopicCreation) {
-      when(clientControllerQuotaManager.newPermissiveQuotaFor(ArgumentMatchers.eq(request)))
-        .thenReturn(UnboundedControllerMutationQuota)
+
+      when(clientControllerQuotaManager.newPermissiveQuotaFor(
+        ArgumentMatchers.eq(request.session),
+        ArgumentMatchers.eq(request.header.clientId())
+      )).thenReturn(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA)
 
       when(autoTopicCreationManager.createTopics(
         ArgumentMatchers.eq(Set(topicName)),
-        ArgumentMatchers.eq(UnboundedControllerMutationQuota),
+        ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA),
         capturedRequest.capture())).thenReturn(
         Seq(new MetadataResponseTopic()
         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
@@ -1885,7 +1892,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(epoch),
-        ArgumentMatchers.eq(Set(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))),
+        ArgumentMatchers.eq(util.Set.of(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))),
         responseCallback.capture(),
         ArgumentMatchers.eq(TransactionVersion.TV_0),
         ArgumentMatchers.eq(requestLocal)
@@ -1944,7 +1951,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(epoch),
-        ArgumentMatchers.eq(Set(topicPartition)),
+        ArgumentMatchers.eq(util.Set.of(topicPartition)),
         responseCallback.capture(),
         ArgumentMatchers.eq(TransactionVersion.TV_0),
         ArgumentMatchers.eq(requestLocal)
@@ -2150,7 +2157,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(transactionalId1),
       ArgumentMatchers.eq(producerId),
       ArgumentMatchers.eq(epoch),
-      ArgumentMatchers.eq(Set(tp0)),
+      ArgumentMatchers.eq(util.Set.of(tp0)),
       responseCallback.capture(),
       any[TransactionVersion],
       ArgumentMatchers.eq(requestLocal)
@@ -2160,7 +2167,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(transactionalId2),
       ArgumentMatchers.eq(producerId),
       ArgumentMatchers.eq(epoch),
-      ArgumentMatchers.eq(Set(tp1)),
+      ArgumentMatchers.eq(util.Set.of(tp1)),
       verifyPartitionsCallback.capture(),
     )).thenAnswer(_ => verifyPartitionsCallback.getValue.apply(AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, util.Map.of(tp1, Errors.PRODUCER_FENCED))))
     kafkaApis = createKafkaApis()
@@ -2402,7 +2409,7 @@ class KafkaApisTest extends Logging {
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+        any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
       val kafkaApis = createKafkaApis()
       try {
         kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
@@ -2418,6 +2425,332 @@ class KafkaApisTest extends Logging {
         kafkaApis.close()
       }
     }
+  }
+
+  @Test
+  def testHandleShareFetchRequestQuotaTagsVerification(): Unit = {
+    val topicName = "foo"
+    val topicId = Uuid.randomUuid()
+    val partitionIndex = 0
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    addTopicToMetadataCache(topicName, 1, topicId = topicId)
+    val memberId: Uuid = Uuid.randomUuid()
+    val groupId = "group"
+    
+    // Create test principal and client address to verify quota tags
+    val testPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user")
+    val testClientAddress = InetAddress.getByName("192.168.1.100")
+    val testClientId = "test-client-id"
+    
+    // Mock share partition manager responses
+    val records = memoryRecords(10, 0)
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
+      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
+          new ShareFetchResponseData.PartitionData()
+            .setErrorCode(Errors.NONE.code)
+            .setAcknowledgeErrorCode(Errors.NONE.code)
+            .setRecords(records)
+            .setAcquiredRecords(new util.ArrayList(util.List.of(
+              new ShareFetchResponseData.AcquiredRecords()
+                .setFirstOffset(0)
+                .setLastOffset(9)
+                .setDeliveryCount(1)
+            ))))))
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
+        new TopicIdPartition(topicId, partitionIndex, topicName)))
+    )
+
+    // Create argument captors to verify session information passed to quota managers
+    val sessionCaptorFetch = ArgumentCaptor.forClass(classOf[Session])
+    val clientIdCaptor = ArgumentCaptor.forClass(classOf[String])
+    val requestCaptor = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
+    
+    // Mock quota manager responses and capture arguments
+    when(quotas.fetch.maybeRecordAndGetThrottleTimeMs(
+      sessionCaptorFetch.capture(), clientIdCaptor.capture(), anyDouble, anyLong)).thenReturn(0)
+    when(quotas.request.maybeRecordAndGetThrottleTimeMs(
+      requestCaptor.capture(), anyLong)).thenReturn(0)
+
+    // Create ShareFetch request
+    val shareFetchRequestData = new ShareFetchRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId.toString)
+      .setShareSessionEpoch(0)
+      .setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(new ShareFetchRequestData.FetchTopic()
+        .setTopicId(topicId)
+        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+          new ShareFetchRequestData.FetchPartition()
+            .setPartitionIndex(partitionIndex)
+        ).iterator))
+      ).iterator))
+
+    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    
+    // Create request with custom principal and client address to test quota tags
+    val requestHeader = new RequestHeader(shareFetchRequest.apiKey, shareFetchRequest.version, testClientId, 0)
+    val request = buildRequest(shareFetchRequest, testPrincipal, testClientAddress, 
+      ListenerName.forSecurityProtocol(SecurityProtocol.SSL), fromPrivilegedListener = false, Some(requestHeader), requestChannelMetrics)
+    
+    // Test that the request itself contains the proper tags and information
+    assertEquals(testClientId, request.header.clientId)
+    assertEquals(testPrincipal, request.context.principal)
+    assertEquals(testClientAddress, request.context.clientAddress)
+    assertEquals(ApiKeys.SHARE_FETCH, request.header.apiKey)
+    assertEquals("1", request.context.connectionId)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleShareFetchRequest(request)
+    val response = verifyNoThrottling[ShareFetchResponse](request)
+    
+    // Verify response is successful
+    val responseData = response.data()
+    assertEquals(Errors.NONE.code, responseData.errorCode)
+    
+    // Verify that quota methods were called and captured session information
+    verify(quotas.fetch, times(1)).maybeRecordAndGetThrottleTimeMs(
+      any[Session](), anyString, anyDouble, anyLong)
+    verify(quotas.request, times(1)).maybeRecordAndGetThrottleTimeMs(
+      any[RequestChannel.Request](), anyLong)
+    
+    // Verify the Session data passed to fetch quota manager is exactly what was defined in the test
+    val capturedSession = sessionCaptorFetch.getValue
+    assertNotNull(capturedSession)
+    assertNotNull(capturedSession.principal)
+    assertEquals(KafkaPrincipal.USER_TYPE, capturedSession.principal.getPrincipalType)
+    assertEquals("test-user", capturedSession.principal.getName)
+    assertEquals(testClientAddress, capturedSession.clientAddress)
+    assertEquals("test-user", capturedSession.sanitizedUser)
+    
+    // Verify client ID passed to fetch quota manager matches what was defined
+    val capturedClientId = clientIdCaptor.getValue
+    assertEquals(testClientId, capturedClientId)
+    
+    // Verify the Request data passed to request quota manager is exactly what was defined
+    val capturedRequest = requestCaptor.getValue
+    assertNotNull(capturedRequest)
+    assertEquals(testClientId, capturedRequest.header.clientId)
+    assertEquals(testPrincipal, capturedRequest.context.principal)
+    assertEquals(testClientAddress, capturedRequest.context.clientAddress)
+    assertEquals(ApiKeys.SHARE_FETCH, capturedRequest.header.apiKey)
+  }
+
+  @Test
+  def testHandleShareAcknowledgeRequestQuotaTagsVerification(): Unit = {
+    val topicName = "foo"
+    val topicId = Uuid.randomUuid()
+    val partitionIndex = 0
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    addTopicToMetadataCache(topicName, 1, topicId = topicId)
+    val memberId: Uuid = Uuid.randomUuid()
+    val groupId = "group"
+    
+    // Create test principal and client address to verify quota tags
+    val testPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user")
+    val testClientAddress = InetAddress.getByName("192.168.1.100")
+    val testClientId = "test-client-id"
+    
+    // Mock share partition manager acknowledge response
+    when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
+      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(partitionIndex)
+            .setErrorCode(Errors.NONE.code))))
+
+    // Create argument captors to verify session information passed to quota managers
+    val requestCaptor = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
+    
+    // Mock quota manager responses and capture arguments
+    // For ShareAcknowledge, we only verify Request quota (not fetch quota)
+    when(quotas.request.maybeRecordAndGetThrottleTimeMs(
+      requestCaptor.capture(), anyLong)).thenReturn(0)
+
+    // Create ShareAcknowledge request
+    val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId.toString)
+      .setShareSessionEpoch(1)
+      .setTopics(new ShareAcknowledgeRequestData.AcknowledgeTopicCollection(
+        util.List.of(new ShareAcknowledgeRequestData.AcknowledgeTopic()
+          .setTopicId(topicId)
+          .setPartitions(new ShareAcknowledgeRequestData.AcknowledgePartitionCollection(
+            util.List.of(new ShareAcknowledgeRequestData.AcknowledgePartition()
+              .setPartitionIndex(partitionIndex)
+              .setAcknowledgementBatches(util.List.of(
+                new ShareAcknowledgeRequestData.AcknowledgementBatch()
+                  .setFirstOffset(0)
+                  .setLastOffset(9)
+                  .setAcknowledgeTypes(util.List.of(1.toByte))
+              ))
+            ).iterator))
+        ).iterator))
+
+    val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
+    
+    // Create request with custom principal and client address to test quota tags
+    val requestHeader = new RequestHeader(shareAcknowledgeRequest.apiKey, shareAcknowledgeRequest.version, testClientId, 0)
+    val request = buildRequest(shareAcknowledgeRequest, testPrincipal, testClientAddress,
+      ListenerName.forSecurityProtocol(SecurityProtocol.SSL), fromPrivilegedListener = false, Some(requestHeader), requestChannelMetrics)
+    
+    // Test that the request itself contains the proper tags and information
+    assertEquals(testClientId, request.header.clientId)
+    assertEquals(testPrincipal, request.context.principal)
+    assertEquals(testClientAddress, request.context.clientAddress)
+    assertEquals(ApiKeys.SHARE_ACKNOWLEDGE, request.header.apiKey)
+    assertEquals("1", request.context.connectionId)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleShareAcknowledgeRequest(request)
+    val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
+    
+    // Verify response is successful
+    val responseData = response.data()
+    assertEquals(Errors.NONE.code, responseData.errorCode)
+    
+    // Verify that request quota method was called
+    verify(quotas.request, times(1)).maybeRecordAndGetThrottleTimeMs(
+      any[RequestChannel.Request](), anyLong)
+    
+    // Verify that fetch quota method was NOT called (ShareAcknowledge only uses request quota)
+    verify(quotas.fetch, times(0)).maybeRecordAndGetThrottleTimeMs(
+      any[Session](), anyString, anyDouble, anyLong)
+    
+    // Verify the Request data passed to request quota manager is exactly what was defined
+    val capturedRequest = requestCaptor.getValue
+    assertNotNull(capturedRequest)
+    assertEquals(testClientId, capturedRequest.header.clientId)
+    assertEquals(testPrincipal, capturedRequest.context.principal)
+    assertEquals(testClientAddress, capturedRequest.context.clientAddress)
+    assertEquals(ApiKeys.SHARE_ACKNOWLEDGE, capturedRequest.header.apiKey)
+  }
+
+  @Test
+  def testHandleShareFetchWithAcknowledgementQuotaTagsVerification(): Unit = {
+    val topicName = "foo"
+    val topicId = Uuid.randomUuid()
+    val partitionIndex = 0
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+    addTopicToMetadataCache(topicName, 1, topicId = topicId)
+    val memberId: Uuid = Uuid.randomUuid()
+    val groupId = "group"
+    
+    // Create test principal and client address to verify quota tags
+    val testPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user")
+    val testClientAddress = InetAddress.getByName("192.168.1.100")
+    val testClientId = "test-client-id"
+    
+    // Mock share partition manager responses for both fetch and acknowledge
+    val records = memoryRecords(10, 0)
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
+      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
+          new ShareFetchResponseData.PartitionData()
+            .setErrorCode(Errors.NONE.code)
+            .setAcknowledgeErrorCode(Errors.NONE.code)
+            .setRecords(records)
+            .setAcquiredRecords(new util.ArrayList(util.List.of(
+              new ShareFetchResponseData.AcquiredRecords()
+                .setFirstOffset(0)
+                .setLastOffset(9)
+                .setDeliveryCount(1)
+            ))))))
+
+    when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
+      CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)),
+          new ShareAcknowledgeResponseData.PartitionData()
+            .setPartitionIndex(partitionIndex)
+            .setErrorCode(Errors.NONE.code))))
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 1), util.List.of(
+        new TopicIdPartition(topicId, partitionIndex, topicName)))
+    )
+
+    // Create argument captors to verify session information passed to quota managers
+    val sessionCaptorFetch = ArgumentCaptor.forClass(classOf[Session])
+    val clientIdCaptor = ArgumentCaptor.forClass(classOf[String])
+    val requestCaptor = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
+    
+    // Mock quota manager responses and capture arguments
+    when(quotas.fetch.maybeRecordAndGetThrottleTimeMs(
+      sessionCaptorFetch.capture(), clientIdCaptor.capture(), anyDouble, anyLong)).thenReturn(0)
+    when(quotas.request.maybeRecordAndGetThrottleTimeMs(
+      requestCaptor.capture(), anyLong)).thenReturn(0)
+
+    // Create ShareFetch request with acknowledgement data
+    val shareFetchRequestData = new ShareFetchRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId.toString)
+      .setShareSessionEpoch(1)
+      .setMaxWaitMs(100)
+      .setMinBytes(1)
+      .setMaxBytes(1000000)
+      .setTopics(new ShareFetchRequestData.FetchTopicCollection(util.List.of(new ShareFetchRequestData.FetchTopic()
+        .setTopicId(topicId)
+        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(util.List.of(
+          new ShareFetchRequestData.FetchPartition()
+            .setPartitionIndex(partitionIndex)
+            .setAcknowledgementBatches(util.List.of(
+              new ShareFetchRequestData.AcknowledgementBatch()
+                .setFirstOffset(0)
+                .setLastOffset(9)
+                .setAcknowledgeTypes(util.List.of(1.toByte))
+            ))
+        ).iterator))
+      ).iterator))
+
+    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    
+    // Create request with custom principal and client address to test quota tags
+    val requestHeader = new RequestHeader(shareFetchRequest.apiKey, shareFetchRequest.version, testClientId, 0)
+    val request = buildRequest(shareFetchRequest, testPrincipal, testClientAddress,
+      ListenerName.forSecurityProtocol(SecurityProtocol.SSL), fromPrivilegedListener = false, Some(requestHeader), requestChannelMetrics)
+    
+    // Test that the request itself contains the proper tags and information
+    assertEquals(testClientId, request.header.clientId)
+    assertEquals(testPrincipal, request.context.principal)
+    assertEquals(testClientAddress, request.context.clientAddress)
+    assertEquals(ApiKeys.SHARE_FETCH, request.header.apiKey)
+    assertEquals("1", request.context.connectionId)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleShareFetchRequest(request)
+    val response = verifyNoThrottling[ShareFetchResponse](request)
+    
+    // Verify response is successful
+    val responseData = response.data()
+    assertEquals(Errors.NONE.code, responseData.errorCode)
+    
+    // Verify that quota methods were called exactly once each (not twice despite having acknowledgements)
+    verify(quotas.fetch, times(1)).maybeRecordAndGetThrottleTimeMs(
+      any[Session](), anyString, anyDouble, anyLong)
+    verify(quotas.request, times(1)).maybeRecordAndGetThrottleTimeMs(
+      any[RequestChannel.Request](), anyLong)
+    
+    // Verify the Session data passed to fetch quota manager is exactly what was defined in the test
+    val capturedSession = sessionCaptorFetch.getValue
+    assertNotNull(capturedSession)
+    assertNotNull(capturedSession.principal)
+    assertEquals(KafkaPrincipal.USER_TYPE, capturedSession.principal.getPrincipalType)
+    assertEquals("test-user", capturedSession.principal.getName)
+    assertEquals(testClientAddress, capturedSession.clientAddress)
+    assertEquals("test-user", capturedSession.sanitizedUser)
+    
+    // Verify client ID passed to fetch quota manager matches what was defined
+    val capturedClientId = clientIdCaptor.getValue
+    assertEquals(testClientId, capturedClientId)
+    
+    // Verify the Request data passed to request quota manager is exactly what was defined
+    val capturedRequest = requestCaptor.getValue
+    assertNotNull(capturedRequest)
+    assertEquals(testClientId, capturedRequest.header.clientId)
+    assertEquals(testPrincipal, capturedRequest.context.principal)
+    assertEquals(testClientAddress, capturedRequest.context.clientAddress)
+    assertEquals(ApiKeys.SHARE_FETCH, capturedRequest.header.apiKey)
   }
 
   @Test
@@ -2474,7 +2807,7 @@ class KafkaApisTest extends Logging {
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
       kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -2543,7 +2876,7 @@ class KafkaApisTest extends Logging {
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+        any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
       kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -2615,7 +2948,7 @@ class KafkaApisTest extends Logging {
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+        any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
       when(metadataCache.contains(tp.topicPartition())).thenAnswer(_ => true)
       when(metadataCache.getLeaderAndIsr(tp.topic(), tp.partition())).thenAnswer(_ => Optional.empty())
       when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Optional.empty())
@@ -4012,7 +4345,7 @@ class KafkaApisTest extends Logging {
       any[util.Map[Uuid, String]])).thenReturn(fetchContext)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val fetchRequest = new FetchRequest.Builder(9, 9, -1, -1, 100, 0, fetchDataBuilder)
       .build()
@@ -4066,7 +4399,7 @@ class KafkaApisTest extends Logging {
     ).thenReturn(fetchContext)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     // If replicaId is -1 we will build a consumer request. Any non-negative replicaId will build a follower request.
     val replicaEpoch = if (replicaId < 0) -1 else 1
@@ -4135,7 +4468,7 @@ class KafkaApisTest extends Logging {
       any[util.Map[Uuid, String]])).thenReturn(fetchContext)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val fetchRequest = new FetchRequest.Builder(16, 16, -1, -1, 100, 0, fetchDataBuilder)
       .build()
@@ -4190,7 +4523,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
@@ -4261,7 +4594,7 @@ class KafkaApisTest extends Logging {
     )))
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     var shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -4366,7 +4699,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     var shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -4443,7 +4776,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
@@ -4507,7 +4840,7 @@ class KafkaApisTest extends Logging {
       )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -4566,7 +4899,7 @@ class KafkaApisTest extends Logging {
       )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -4624,7 +4957,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
@@ -4689,7 +5022,7 @@ class KafkaApisTest extends Logging {
     ).thenThrow(Errors.SHARE_SESSION_NOT_FOUND.exception)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     var shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -4776,7 +5109,7 @@ class KafkaApisTest extends Logging {
     ).thenThrow(Errors.INVALID_SHARE_SESSION_EPOCH.exception)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     var shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -4948,7 +5281,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     var shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -5258,7 +5591,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     var shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -6174,7 +6507,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
@@ -6311,7 +6644,7 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.ZERO_UUID
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
@@ -6379,7 +6712,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -6430,7 +6763,7 @@ class KafkaApisTest extends Logging {
     val groupId = "group"
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
@@ -6538,7 +6871,7 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.ZERO_UUID
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId("group").
@@ -6586,7 +6919,7 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.ZERO_UUID
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledgeSessionUpdate(any(), any())).thenThrow(
       Errors.INVALID_SHARE_SESSION_EPOCH.exception
@@ -6632,7 +6965,7 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.ZERO_UUID
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledgeSessionUpdate(any(), any())).thenThrow(
       Errors.SHARE_SESSION_NOT_FOUND.exception
@@ -6679,7 +7012,7 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.ZERO_UUID
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any())
 
@@ -6752,7 +7085,7 @@ class KafkaApisTest extends Logging {
     )))
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId("group").
@@ -6805,7 +7138,7 @@ class KafkaApisTest extends Logging {
     val groupId = "group"
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
@@ -6853,7 +7186,7 @@ class KafkaApisTest extends Logging {
     val groupId = "group"
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
@@ -6922,7 +7255,7 @@ class KafkaApisTest extends Logging {
     val groupId = "group"
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
@@ -7646,12 +7979,12 @@ class KafkaApisTest extends Logging {
 
   private def compareAcknowledgementBatches(baseOffset: Long,
                                             endOffset: Long,
-                                            acknowledgementType: Byte,
+                                            acknowledgeType: Byte,
                                             acknowledgementBatch: ShareAcknowledgementBatch
                                            ): Boolean = {
     if (baseOffset == acknowledgementBatch.firstOffset()
       && endOffset == acknowledgementBatch.lastOffset()
-      && acknowledgementType == acknowledgementBatch.acknowledgeTypes().get(0)) {
+      && acknowledgeType == acknowledgementBatch.acknowledgeTypes().get(0)) {
       return true
     }
     false
@@ -9487,6 +9820,17 @@ class KafkaApisTest extends Logging {
                            fromPrivilegedListener: Boolean = false,
                            requestHeader: Option[RequestHeader] = None,
                            requestMetrics: RequestChannelMetrics = requestChannelMetrics): RequestChannel.Request = {
+    buildRequest(request, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"), InetAddress.getLocalHost, listenerName,
+      fromPrivilegedListener, requestHeader, requestMetrics)
+  }
+
+    private def buildRequest(request: AbstractRequest,
+                             principal: KafkaPrincipal,
+                             clientAddress: InetAddress,
+                             listenerName: ListenerName,
+                             fromPrivilegedListener: Boolean,
+                             requestHeader: Option[RequestHeader],
+                             requestMetrics: RequestChannelMetrics): RequestChannel.Request = {
     val buffer = request.serializeWithHeader(
       requestHeader.getOrElse(new RequestHeader(request.apiKey, request.version, clientId, 0)))
 
@@ -9496,8 +9840,8 @@ class KafkaApisTest extends Logging {
     // and have a non KafkaPrincipal.ANONYMOUS principal. This test is done before the check
     // for forwarding because after forwarding the context will have a different context.
     // We validate the context authenticated failure case in other integration tests.
-    val context = new RequestContext(header, "1", InetAddress.getLocalHost, Optional.empty(),
-      new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"), listenerName, SecurityProtocol.SSL,
+    val context = new RequestContext(header, "1", clientAddress, Optional.empty(),
+      principal, listenerName, SecurityProtocol.SSL,
       ClientInformation.EMPTY, fromPrivilegedListener, Optional.of(kafkaPrincipalSerde))
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
       requestMetrics, envelope = None)
@@ -12863,10 +13207,18 @@ class KafkaApisTest extends Logging {
   def testDeleteShareGroupOffsetsRequestEmptyTopicsSuccess(): Unit = {
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
 
-    val deleteShareGroupOffsetsRequest = new DeleteShareGroupOffsetsRequestData()
+    val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
       .setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequest).build)
+    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequestData).build)
+
+    val groupCoordinatorResponse: DeleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
+      .setErrorCode(Errors.NONE.code())
+
+    when(groupCoordinator.deleteShareGroupOffsets(
+      requestChannelRequest.context,
+      deleteShareGroupOffsetsRequestData
+    )).thenReturn(CompletableFuture.completedFuture(groupCoordinatorResponse))
 
     val resultFuture = new CompletableFuture[DeleteShareGroupOffsetsResponseData]
     kafkaApis = createKafkaApis()
@@ -13353,6 +13705,392 @@ class KafkaApisTest extends Logging {
 
     val response = verifyNoThrottling[AlterShareGroupOffsetsResponse](requestChannelRequest)
     assertEquals(alterShareGroupOffsetsResponseData, response.data)
+  }
+
+  def verifyGetReplicaLogInfoRequest(builder: GetReplicaLogInfoRequest.Builder, validate: GetReplicaLogInfoResponseData => Unit): Unit = {
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER, Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    val request = buildRequest(builder.build())
+    kafkaApis.handleGetReplicaLogInfo(request)
+    validate(verifyNoThrottling[GetReplicaLogInfoResponse](request).data())
+  }
+
+  def verifyGetReplicaLogInfoRequestWithResponse(builder: GetReplicaLogInfoRequest.Builder, expectedResponseData: GetReplicaLogInfoResponseData): Unit = {
+    verifyGetReplicaLogInfoRequest(builder, { response =>
+      assertEquals(expectedResponseData, response)
+    })
+  }
+
+  @Test
+  def testUnauthorizedGetReplicaLogInfo(): Unit = {
+    val authorizedUuid = Uuid.randomUuid()
+    val unauthorizedUuid = Uuid.randomUuid()
+    val requestData = new GetReplicaLogInfoRequestData()
+    requestData.topicPartitions().add(
+      new GetReplicaLogInfoRequestData.TopicPartitions()
+        .setTopicId(authorizedUuid)
+        .setPartitions(util.List.of(0)))
+    requestData.topicPartitions().add(
+      new GetReplicaLogInfoRequestData.TopicPartitions()
+        .setTopicId(unauthorizedUuid)
+        .setPartitions(util.List.of(0)))
+    val builder = new GetReplicaLogInfoRequest.Builder(requestData)
+
+    metadataCache = mock(classOf[MetadataCache])
+    when(metadataCache.getTopicName(authorizedUuid)).thenReturn(Optional.of("authorized"))
+    when(metadataCache.getTopicName(unauthorizedUuid)).thenReturn(Optional.of("unauthorized"))
+
+    val log = mock(classOf[UnifiedLog])
+    when(log.logEndOffset).thenReturn(100L)
+    when(log.latestEpoch).thenReturn(Optional.of(10))
+    val partition = mock(classOf[Partition])
+    when(partition.log).thenReturn(Some(log))
+    when(partition.getLeaderEpoch).thenReturn(1)
+    when(partition.partitionId).thenReturn(0)
+    val valid = new TopicPartition("authorized", 0)
+    when(replicaManager.getPartitionOrError(valid)).thenReturn(Right(partition))
+
+    val expected = new GetReplicaLogInfoResponseData().setBrokerEpoch(brokerEpoch)
+    expected.topicPartitionLogInfoList().add(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+      .setTopicId(authorizedUuid)
+      .setPartitionLogInfo(util.List.of(new GetReplicaLogInfoResponseData.PartitionLogInfo()
+        .setPartition(0)
+        .setLogEndOffset(100L)
+        .setLastWrittenLeaderEpoch(10)
+        .setCurrentLeaderEpoch(1))))
+    expected.topicPartitionLogInfoList().add(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+      .setTopicId(unauthorizedUuid)
+      .setPartitionLogInfo(util.List.of(
+        new GetReplicaLogInfoResponseData.PartitionLogInfo()
+          .setPartition(0)
+          .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()))))
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER, Resource.CLUSTER_NAME, AuthorizationResult.DENIED)
+    authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TOPIC, "authorized", AuthorizationResult.ALLOWED)
+    authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TOPIC, "unauthorized", AuthorizationResult.DENIED)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    val request = buildRequest(builder.build())
+    kafkaApis.handleGetReplicaLogInfo(request)
+    val responseData = verifyNoThrottling[GetReplicaLogInfoResponse](request).data()
+    assertEquals(expected, responseData)
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints=Array(GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST, GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST+1))
+  def testGetReplicaLogInfoSingleTopicManyPartitionsHasMoreData(partitionCount: Int): Unit = {
+    val expectedMoreData = GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST < partitionCount
+    val uuid = Uuid.randomUuid()
+    val expected = new GetReplicaLogInfoResponseData().setBrokerEpoch(brokerEpoch).setHasMoreData(expectedMoreData)
+    val topicPartitionResponses = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+      .setTopicId(uuid)
+    expected.topicPartitionLogInfoList().add(topicPartitionResponses)
+    val topicPartitionRequests = new GetReplicaLogInfoRequestData.TopicPartitions()
+      .setTopicId(uuid)
+    val topicName = "topic1"
+    (1 to partitionCount).foreach { pid =>
+      topicPartitionRequests.partitions().add(pid)
+      // Now setup the request itself
+      when(replicaManager.getPartitionOrError(new TopicPartition(topicName, pid))).thenReturn(Left(Errors.UNKNOWN_TOPIC_ID))
+      topicPartitionResponses.partitionLogInfo().add(new GetReplicaLogInfoResponseData.PartitionLogInfo().setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
+      expected.topicPartitionLogInfoList().add(topicPartitionResponses)
+    }
+    val builder = new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData()
+      .setTopicPartitions(util.List.of(topicPartitionRequests)))
+    verifyGetReplicaLogInfoRequest(builder, { response =>
+      assertEquals(expectedMoreData, response.hasMoreData)
+    })
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints=Array(GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST, GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST+1))
+  def testGetReplicaLogInfoSingleTopicPartitionHasMoreData(topicCount: Int): Unit = {
+    val expectedMoreData = GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST < topicCount
+    val expected = new GetReplicaLogInfoResponseData().setBrokerEpoch(brokerEpoch).setHasMoreData(expectedMoreData)
+    val uuids = (1 to topicCount).map(_ => Uuid.randomUuid())
+    val topicName = "topic1"
+    val requestData = new GetReplicaLogInfoRequestData()
+    uuids.foreach { uuid =>
+      // setup response
+      val topicResponse = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo().setTopicId(uuid)
+      topicResponse.partitionLogInfo().add(new GetReplicaLogInfoResponseData.PartitionLogInfo().setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
+      expected.topicPartitionLogInfoList().add(topicResponse)
+      when(replicaManager.getPartitionOrError(new TopicPartition(topicName, 0))).thenReturn(Left(Errors.UNKNOWN_TOPIC_ID))
+
+      // setup request
+      requestData.topicPartitions().add(
+        new GetReplicaLogInfoRequestData.TopicPartitions()
+          .setTopicId(uuid)
+          .setPartitions(util.List.of(0)))
+    }
+    val builder = new GetReplicaLogInfoRequest.Builder(requestData)
+    // Tests a specific edge case; when we have exactly 1000 results we should return hasMoreData=false
+    verifyGetReplicaLogInfoRequest(builder, { response =>
+      assertEquals(expectedMoreData, response.hasMoreData)
+    })
+  }
+
+  @Test
+  def testGetReplicaLogInfoMixOfSuccessAndFailure(): Unit = {
+    // 1 succesful case and 3 failing topic partitions with different error codes, returned in same request.
+    val uuids = (1 to 4).map(_ => Uuid.randomUuid()).toList
+    val tps = uuids.map(new GetReplicaLogInfoRequestData.TopicPartitions()
+      .setTopicId(_)
+      .setPartitions(util.List.of(1)))
+
+    def mockTopicName(uuid: Uuid, idx: Int): String = s"topic-idx-$idx-with-uuid-$uuid"
+
+    metadataCache = mock(classOf[MetadataCache])
+    uuids.zipWithIndex.foreach { case (uuid, idx) =>
+      val name = mockTopicName(uuid, idx)
+      when(metadataCache.getTopicName(uuid)).thenReturn(Optional.of(name))
+    }
+
+    val log = mock(classOf[UnifiedLog])
+    when(log.logEndOffset).thenReturn(100L)
+    when(log.latestEpoch).thenReturn(Optional.of(10))
+    val partition = mock(classOf[Partition])
+    when(partition.log).thenReturn(Some(log))
+    when(partition.getLeaderEpoch).thenReturn(1)
+    when(partition.partitionId).thenReturn(1)
+    val valid = new TopicPartition(mockTopicName(uuids.head, 0), 1)
+    when(replicaManager.getPartitionOrError(valid)).thenReturn(Right(partition))
+
+    val expected = new GetReplicaLogInfoResponseData().setBrokerEpoch(brokerEpoch)
+    expected.topicPartitionLogInfoList().add(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+      .setTopicId(uuids.head)
+      .setPartitionLogInfo(util.List.of(new GetReplicaLogInfoResponseData.PartitionLogInfo()
+        .setPartition(1)
+        .setLogEndOffset(100L)
+        .setLastWrittenLeaderEpoch(10)
+        .setCurrentLeaderEpoch(1))))
+
+    var idx = 1
+    List(Errors.KAFKA_STORAGE_ERROR, Errors.NOT_LEADER_OR_FOLLOWER, Errors.UNKNOWN_TOPIC_OR_PARTITION).foreach { err =>
+      val uuid = uuids(idx)
+      val name = mockTopicName(uuid, idx)
+      val invalid = new TopicPartition(name, 1)
+      when(replicaManager.getPartitionOrError(invalid)).thenReturn(Left(err))
+      expected.topicPartitionLogInfoList().add(new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+        .setTopicId(uuid)
+        .setPartitionLogInfo(util.List.of(new GetReplicaLogInfoResponseData.PartitionLogInfo()
+          .setErrorCode(err.code())
+          .setPartition(1))))
+      idx += 1
+    }
+
+
+    val builder = new GetReplicaLogInfoRequest.Builder(
+      new GetReplicaLogInfoRequestData().setTopicPartitions(tps asJava)
+    )
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
+  }
+
+  @Test
+  def testGetReplicaLogInfoLogDirNotFoundError(): Unit = {
+    // Handles case where an online LogDir is not found.
+    val topic = new GetReplicaLogInfoRequestData.TopicPartitions()
+      .setTopicId(Uuid.randomUuid())
+      .setPartitions(util.List.of(2))
+    val builder = new GetReplicaLogInfoRequest.Builder(List(topic) asJava)
+
+    metadataCache = mock(classOf[MetadataCache])
+    when(metadataCache.getTopicName(topic.topicId())).thenReturn(Optional.of("topic2"))
+
+    val partition = mock(classOf[Partition])
+    when(partition.log).thenReturn(None)
+    when(partition.getLeaderEpoch).thenReturn(2)
+    when(partition.partitionId).thenReturn(2)
+
+    val tp = new TopicPartition("topic2", 2)
+    when(replicaManager.getPartitionOrError(tp)).thenReturn(Right(partition))
+
+    val expected = new GetReplicaLogInfoResponseData()
+      .setTopicPartitionLogInfoList(List(
+        new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+          .setTopicId(topic.topicId())
+          .setPartitionLogInfo(util.List.of(
+            new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
+          ))) asJava)
+      .setBrokerEpoch(brokerEpoch)
+
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
+  }
+
+  @Test
+  def testGetReplicaLogInfoUnknownTopic(): Unit = {
+    val unknownTopicUuid = Uuid.randomUuid()
+    val knownTopicUuid = Uuid.randomUuid()
+    val builder = new GetReplicaLogInfoRequest.Builder(new GetReplicaLogInfoRequestData()
+      .setTopicPartitions(
+        util.List.of(
+          new GetReplicaLogInfoRequestData.TopicPartitions()
+            .setTopicId(unknownTopicUuid)
+            .setPartitions(util.List.of(1)),
+          new GetReplicaLogInfoRequestData.TopicPartitions()
+            .setTopicId(knownTopicUuid)
+            .setPartitions(util.List.of(1)))))
+    metadataCache = mock(classOf[MetadataCache])
+    when(metadataCache.getTopicName(unknownTopicUuid)).thenReturn(Optional.empty())
+    when(metadataCache.getTopicName(knownTopicUuid)).thenReturn(Optional.of("topic1"))
+
+    val log = mock(classOf[UnifiedLog])
+    when(log.logEndOffset).thenReturn(100L)
+    when(log.latestEpoch).thenReturn(Optional.of(10))
+    val partition = mock(classOf[Partition])
+    when(partition.log).thenReturn(Some(log))
+    when(partition.getLeaderEpoch).thenReturn(1)
+    when(partition.partitionId).thenReturn(1)
+    val valid = new TopicPartition("topic1", 1)
+    when(replicaManager.getPartitionOrError(valid)).thenReturn(Right(partition))
+
+    val expected = new GetReplicaLogInfoResponseData()
+      .setBrokerEpoch(brokerEpoch)
+      .setTopicPartitionLogInfoList(util.List.of(
+        new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+          .setTopicId(unknownTopicUuid)
+          .setPartitionLogInfo(util.List.of(
+            new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setPartition(1)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code())
+          )),
+          new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+            .setTopicId(knownTopicUuid)
+            .setPartitionLogInfo(util.List.of(
+              new GetReplicaLogInfoResponseData.PartitionLogInfo()
+                .setPartition(1)
+                .setLogEndOffset(100L)
+                .setCurrentLeaderEpoch(1)
+                .setLastWrittenLeaderEpoch(10)))))
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
+  }
+
+  @Test
+  def testGetReplicaLogInfoRequestTooManyTopics(): Unit = {
+    // 100 topics, 20 partitions per topic = 2k topic-partitions
+    // only first 1000 should be sent back and HasMoreData = true
+    val numberUuids = 100
+    val numberPartitions = 20
+    val uuids: List[Uuid] = (1 to numberUuids).map(_ => Uuid.randomUuid()).toList
+    val tps = uuids.map(new GetReplicaLogInfoRequestData.TopicPartitions()
+      .setTopicId(_)
+      .setPartitions((1 to numberPartitions).map(new Integer(_)).asJava))
+    val builder = new GetReplicaLogInfoRequest.Builder(
+      new GetReplicaLogInfoRequestData().setTopicPartitions(tps asJava))
+    val expectedLogEndOffset = 10L
+    val expectedLeaderEpoch = 2
+    val expectedLatestEpoch = 3
+
+    def mockTopicName(uuid: Uuid, idx: Int): String = s"topic-idx-$idx-with-uuid-$uuid"
+
+    // We instrument every-topic partition so that the failure happens at the verifyGetReplicaLogInfoRequest assertion.
+    metadataCache = mock(classOf[MetadataCache])
+    uuids.zipWithIndex.foreach { case (uuid, idx) =>
+      when(metadataCache.getTopicName(uuid)).thenReturn(Optional.of(mockTopicName(uuid, idx)))
+    }
+
+    val expected =
+      new GetReplicaLogInfoResponseData().setHasMoreData(true).setBrokerEpoch(brokerEpoch)
+    // Since each topic has 20 partitions, we only return the first 50 to reach topic-partition limit of 1000.
+    uuids.take(50).zipWithIndex.foreach { case (uuid, idx) =>
+      val tpli = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+        .setTopicId(uuid)
+      val topicName = mockTopicName(uuid, idx)
+      val log = mock(classOf[UnifiedLog])
+      when(log.logEndOffset).thenReturn(expectedLogEndOffset)
+      when(log.latestEpoch).thenReturn(Optional.of(expectedLatestEpoch))
+      (1 to numberPartitions).foreach { pid =>
+        val partition = mock(classOf[Partition])
+        when(partition.log).thenReturn(Some(log))
+        when(partition.getLeaderEpoch).thenReturn(expectedLeaderEpoch)
+        when(partition.partitionId).thenReturn(pid)
+        when(replicaManager.getPartitionOrError(new TopicPartition(topicName, pid))).thenReturn(Right(partition))
+        tpli.partitionLogInfo().add(new GetReplicaLogInfoResponseData.PartitionLogInfo()
+          .setPartition(pid)
+          .setLogEndOffset(expectedLogEndOffset)
+          .setLastWrittenLeaderEpoch(expectedLatestEpoch)
+          .setCurrentLeaderEpoch(expectedLeaderEpoch))
+      }
+      expected.topicPartitionLogInfoList().add(tpli)
+    }
+
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
+  }
+
+  @Test
+  def testGetReplicaInfoRequestHappyTrail(): Unit = {
+    // Return multiple successful topic-partitions. The first topic has 2 partitions, the second has 1.
+    val topic1 = new GetReplicaLogInfoRequestData.TopicPartitions()
+      .setTopicId(Uuid.randomUuid())
+      .setPartitions(util.List.of(1, 2))
+    val topic2 = new GetReplicaLogInfoRequestData.TopicPartitions()
+      .setTopicId(Uuid.randomUuid())
+      .setPartitions(util.List.of(3))
+    val builder = new GetReplicaLogInfoRequest.Builder(List(topic1, topic2) asJava)
+
+    metadataCache = mock(classOf[MetadataCache])
+    when(metadataCache.getTopicName(topic1.topicId())).thenReturn(Optional.of("topic1"))
+    when(metadataCache.getTopicName(topic2.topicId())).thenReturn(Optional.of("topic2"))
+
+    val log1 = mock(classOf[UnifiedLog])
+    when(log1.logEndOffset).thenReturn(100L)
+    when(log1.latestEpoch).thenReturn(Optional.of(10))
+    val partition1 = mock(classOf[Partition])
+    when(partition1.log).thenReturn(Some(log1))
+    when(partition1.getLeaderEpoch).thenReturn(1)
+    when(partition1.partitionId).thenReturn(1)
+
+    val log2 = mock(classOf[UnifiedLog])
+    when(log2.logEndOffset).thenReturn(200L)
+    when(log2.latestEpoch).thenReturn(Optional.of(20))
+    val partition2 = mock(classOf[Partition])
+    when(partition2.log).thenReturn(Some(log2))
+    when(partition2.getLeaderEpoch).thenReturn(2)
+    when(partition2.partitionId).thenReturn(2)
+
+    val log3 = mock(classOf[UnifiedLog])
+    when(log3.logEndOffset).thenReturn(300L)
+    when(log3.latestEpoch).thenReturn(Optional.of(30))
+    val partition3 = mock(classOf[Partition])
+    when(partition3.log).thenReturn(Some(log3))
+    when(partition3.getLeaderEpoch).thenReturn(3)
+    when(partition3.partitionId).thenReturn(3)
+
+    val tp1 = new TopicPartition("topic1", 1)
+    when(replicaManager.getPartitionOrError(tp1)).thenReturn(Right(partition1))
+    val tp2 = new TopicPartition("topic1", 2)
+    when(replicaManager.getPartitionOrError(tp2)).thenReturn(Right(partition2))
+    val tp3 = new TopicPartition("topic2", 3)
+    when(replicaManager.getPartitionOrError(tp3)).thenReturn(Right(partition3))
+
+    val expected = new GetReplicaLogInfoResponseData()
+      .setTopicPartitionLogInfoList(List(
+        new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+          .setTopicId(topic1.topicId())
+          .setPartitionLogInfo(util.List.of(
+            new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setPartition(1)
+              .setLogEndOffset(100L)
+              .setLastWrittenLeaderEpoch(10)
+              .setCurrentLeaderEpoch(1),
+            new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setPartition(2)
+              .setLogEndOffset(200L)
+              .setLastWrittenLeaderEpoch(20)
+              .setCurrentLeaderEpoch(2))),
+        new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
+          .setTopicId(topic2.topicId())
+          .setPartitionLogInfo(util.List.of(
+            new GetReplicaLogInfoResponseData.PartitionLogInfo()
+              .setPartition(3)
+              .setLogEndOffset(300L)
+              .setLastWrittenLeaderEpoch(30)
+              .setCurrentLeaderEpoch(3)
+          ))) asJava)
+      .setBrokerEpoch(brokerEpoch)
+    verifyGetReplicaLogInfoRequestWithResponse(builder, expected)
   }
 
   def getShareGroupDescribeResponse(groupIds: util.List[String], enableShareGroups: Boolean = true,

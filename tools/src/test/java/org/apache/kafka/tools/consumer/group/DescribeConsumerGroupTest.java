@@ -47,11 +47,11 @@ import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,11 +59,11 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -104,7 +104,7 @@ public class DescribeConsumerGroupTest {
 
         for (List<String> describeType : DESCRIBE_TYPES) {
             // note the group to be queried is a different (non-existing) group
-            List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup));
+            List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup));
             cgcArgs.addAll(describeType);
             try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))) {
                 service.describeGroups();
@@ -128,7 +128,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  // note the group to be queried is a different (non-existing) group
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup})
             ) {
@@ -149,7 +149,7 @@ public class DescribeConsumerGroupTest {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
             createTopic(topic);
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  // note the group to be queried is a different (non-existing) group
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup})
             ) {
@@ -170,7 +170,7 @@ public class DescribeConsumerGroupTest {
             String topic = TOPIC_PREFIX + groupProtocol.name();
             String group = GROUP_PREFIX + groupProtocol.name();
             createTopic(topic);
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  // note the group to be queried is a different (non-existing) group
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", missingGroup})
             ) {
@@ -293,7 +293,7 @@ public class DescribeConsumerGroupTest {
             );
 
             try (AutoCloseable consumerConsumer = consumerGroupClosable(GroupProtocol.CONSUMER, group, topic, Map.of(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId));
-                 ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]));
+                 ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))
             ) {
                 TestUtils.waitForCondition(() -> {
                     Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
@@ -376,14 +376,14 @@ public class DescribeConsumerGroupTest {
                 List<String> groups = new ArrayList<>();
                 for (List<String> describeType : DESCRIBE_TYPES) {
                     String group = GROUP_PREFIX + groupProtocol.name() + "." + String.join("", describeType);
-                    groups.addAll(Arrays.asList("--group", group));
-                    protocolConsumerGroupExecutors.add(consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap()));
+                    groups.addAll(List.of("--group", group));
+                    protocolConsumerGroupExecutors.add(consumerGroupClosable(groupProtocol, group, topic, Map.of()));
                 }
 
                 int expectedNumLines = DESCRIBE_TYPES.size() * 2;
 
                 for (List<String> describeType : DESCRIBE_TYPES) {
-                    List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe"));
+                    List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe"));
                     cgcArgs.addAll(groups);
                     cgcArgs.addAll(describeType);
                     try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))) {
@@ -418,7 +418,7 @@ public class DescribeConsumerGroupTest {
                 for (List<String> describeType : DESCRIBE_TYPES) {
                     String group = GROUP_PREFIX + groupProtocol.name() + "." + String.join("", describeType);
                     groups.add(group);
-                    protocolConsumerGroupExecutors.add(consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap()));
+                    protocolConsumerGroupExecutors.add(consumerGroupClosable(groupProtocol, group, topic, Map.of()));
                 }
                 int expectedNumLines = DESCRIBE_TYPES.size() * 2;
                 for (List<String> describeType : DESCRIBE_TYPES) {
@@ -454,7 +454,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -494,12 +494,12 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group});
-                 Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))
+                 Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))
             ) {
                 TestUtils.waitForCondition(() -> {
-                    ConsumerGroupDescription consumerGroupDescription = admin.describeConsumerGroups(Collections.singleton(group)).describedGroups().get(group).get();
+                    ConsumerGroupDescription consumerGroupDescription = admin.describeConsumerGroups(Set.of(group)).describedGroups().get(group).get();
                     return consumerGroupDescription.members().size() == 1 && consumerGroupDescription.members().iterator().next().assignment().topicPartitions().size() == 1;
                 }, "Expected a 'Stable' group status, rows and valid member information for group " + group + ".");
 
@@ -521,7 +521,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.singletonMap(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, groupProtocol == GroupProtocol.CONSUMER ? "range" : ""));
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, groupProtocol == GroupProtocol.CONSUMER ? "range" : ""));
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -548,10 +548,10 @@ public class DescribeConsumerGroupTest {
             try {
                 String expectedName;
                 if (groupProtocol.equals(GroupProtocol.CONSUMER)) {
-                    protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CONSUMER, group, topic, Collections.singletonMap(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "range"));
+                    protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CONSUMER, group, topic, Map.of(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "range"));
                     expectedName = RangeAssignor.RANGE_ASSIGNOR_NAME;
                 } else {
-                    protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, topic, Collections.singletonMap(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RoundRobinAssignor.class.getName()));
+                    protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, topic, Map.of(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RoundRobinAssignor.class.getName()));
                     expectedName = RoundRobinAssignor.ROUNDROBIN_ASSIGNOR_NAME;
                 }
 
@@ -585,7 +585,7 @@ public class DescribeConsumerGroupTest {
                 List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group));
                 cgcArgs.addAll(describeType);
                 // run one consumer in the group consuming from a single-partition topic
-                try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+                try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                      ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))
                 ) {
                     TestUtils.waitForCondition(() -> {
@@ -613,7 +613,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -629,7 +629,7 @@ public class DescribeConsumerGroupTest {
                     Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> offsets = service.collectGroupOffsets(group);
                     Optional<GroupState> state = offsets.getKey();
                     Optional<Collection<PartitionAssignmentState>> assignments = offsets.getValue();
-                    List<PartitionAssignmentState> testGroupAssignments = assignments.get().stream().filter(a -> Objects.equals(a.group, group)).collect(Collectors.toList());
+                    List<PartitionAssignmentState> testGroupAssignments = assignments.get().stream().filter(a -> Objects.equals(a.group, group)).toList();
                     PartitionAssignmentState assignment = testGroupAssignments.get(0);
                     return state.map(s -> s.equals(GroupState.EMPTY)).orElse(false) &&
                             testGroupAssignments.size() == 1 &&
@@ -650,7 +650,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -679,7 +679,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -710,10 +710,10 @@ public class DescribeConsumerGroupTest {
 
             for (List<String> describeType : DESCRIBE_TYPES) {
                 String group = GROUP_PREFIX + groupProtocol.name() + String.join("", describeType);
-                List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group));
+                List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group));
                 cgcArgs.addAll(describeType);
                 // run two consumers in the group consuming from a single-partition topic
-                try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap(), 2);
+                try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
                      ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))
                 ) {
                     TestUtils.waitForCondition(() -> {
@@ -737,7 +737,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run two consumers in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap(), 2);
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -760,7 +760,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run two consumers in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap(), 2);
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -790,7 +790,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run two consumers in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap(), 2);
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -810,10 +810,10 @@ public class DescribeConsumerGroupTest {
 
             for (List<String> describeType : DESCRIBE_TYPES) {
                 String group = GROUP_PREFIX + groupProtocol.name() + String.join("", describeType);
-                List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group));
+                List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group));
                 cgcArgs.addAll(describeType);
                 // run two consumers in the group consuming from a two-partition topic
-                try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap(), 2);
+                try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
                      ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))
                 ) {
                     TestUtils.waitForCondition(() -> {
@@ -837,7 +837,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic, 2);
 
             // run two consumers in the group consuming from a two-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap(), 2);
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -861,7 +861,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic, 2);
 
             // run two consumers in the group consuming from a two-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap(), 2);
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -889,7 +889,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic, 2);
 
             // run two consumers in the group consuming from a two-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap(), 2);
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(), 2);
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -909,7 +909,7 @@ public class DescribeConsumerGroupTest {
             String group = GROUP_PREFIX + groupProtocol.name();
             createTopic(topic, 2);
 
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1)), Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1)), Map.of());
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -934,11 +934,11 @@ public class DescribeConsumerGroupTest {
             String group = GROUP_PREFIX + groupProtocol.name() + String.join("", describeType);
 
             // set the group initialization timeout too low for the group to stabilize
-            List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--timeout", "1", "--group", group));
+            List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--timeout", "1", "--group", group));
             cgcArgs.addAll(describeType);
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))
             ) {
                 ExecutionException e = assertThrows(ExecutionException.class, service::describeGroups);
@@ -959,7 +959,7 @@ public class DescribeConsumerGroupTest {
             // complete before the timeout expires
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  // set the group initialization timeout too low for the group to stabilize
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
             ) {
@@ -981,7 +981,7 @@ public class DescribeConsumerGroupTest {
             // complete before the timeout expires
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  // set the group initialization timeout too low for the group to stabilize
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
             ) {
@@ -1005,7 +1005,7 @@ public class DescribeConsumerGroupTest {
             // complete before the timeout expires
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.emptyMap());
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of());
                  // set the group initialization timeout too low for the group to stabilize
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--timeout", "1"})
             ) {
@@ -1024,7 +1024,7 @@ public class DescribeConsumerGroupTest {
             createTopic(topic);
 
             // run one consumer in the group consuming from a single-partition topic
-            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Collections.singletonMap(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false"));
+            try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, group, topic, Map.of(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false"));
                  ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group})
             ) {
                 TestUtils.waitForCondition(() -> {
@@ -1052,6 +1052,64 @@ public class DescribeConsumerGroupTest {
             }
         }
     }
+
+    /**
+     * The config `OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG` needs to be set to a value greater than 1 to ensure the
+     * normal invocation of APIs such as `FIND_COORDINATOR` when a broker has shutdown
+     */
+    @Timeout(60)
+    @ClusterTest(brokers = 3, serverProperties = {@ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")})
+    public void testDescribeConsumerGroupWithoutLeaders(ClusterInstance clusterInstance) throws Exception {
+        int brokerNum = 3;
+        this.clusterInstance = clusterInstance;
+
+        // define topic and group, then send 5 records to each partition
+        String topic = TOPIC_PREFIX + UUID.randomUUID();
+        String group = GROUP_PREFIX + UUID.randomUUID();
+        clusterInstance.createTopic(topic, brokerNum, (short) 1);
+        for (int i = 0; i < brokerNum; i++) {
+            sendRecords(topic, i, 5);
+        }
+
+        // append the command
+        List<String> cgcArgs = List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--group", group, "--all-topics");
+
+        try (AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, group, topic, Map.of());
+             ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]));
+             Admin admin = clusterInstance.admin()
+        ) {
+            // shutdown the target broker
+            int noneLeaderPartition = 2;
+            int shutdownBrokerId = clusterInstance.getLeaderBrokerId(new TopicPartition(topic, noneLeaderPartition));
+            clusterInstance.shutdownBroker(shutdownBrokerId);
+
+            TestUtils.waitForCondition(() -> {
+                Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                String[] lines = res.getKey().trim().split("\n");
+                if (lines.length != 4 || !res.getValue().isEmpty()) {
+                    return false;
+                }
+
+                // get the client data, such as `consumerId,host,clientId`, to append the expected output
+                ConsumerGroupDescription consumerGroupDescription = admin.describeConsumerGroups(Set.of(group)).describedGroups().get(group).get();
+                MemberDescription memberDescription = consumerGroupDescription.members().iterator().next();
+                String consumerId = memberDescription.consumerId();
+                String host = memberDescription.host();
+                String clientId = memberDescription.clientId();
+
+                // the expected output
+                List<String> partition0content = List.of(group, topic, "0", "5", "5", "0", consumerId, host, clientId);
+                List<String> partition1content = List.of(group, topic, "1", "5", "5", "0", consumerId, host, clientId);
+                List<String> partition2content = List.of(group, topic, "2", "-", "-", "-", consumerId, host, clientId);
+
+                return checkArgsHeaderOutput(cgcArgs, lines[0])
+                        && Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(partition0content)
+                        && Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(partition1content)
+                        && Arrays.stream(lines[3].trim().split("\\s+")).toList().equals(partition2content);
+            }, "Expected 3 data rows excluding the header and no error in describe groups when a broker shutdown.");
+        }
+    }
+
 
     @Test
     public void testDescribeWithUnrecognizedNewConsumerOption() {
@@ -1115,7 +1173,7 @@ public class DescribeConsumerGroupTest {
     private static ConsumerGroupCommand.ConsumerGroupService consumerGroupService(String[] args) {
         return new ConsumerGroupCommand.ConsumerGroupService(
                 ConsumerGroupCommandOptions.fromArgs(args),
-                Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+                Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
     }
 
@@ -1124,20 +1182,20 @@ public class DescribeConsumerGroupTest {
     }
 
     private void createTopic(String topic, int numPartitions) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(Collections.singletonList(new NewTopic(topic, numPartitions, (short) 1))).topicId(topic).get());
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic(topic, numPartitions, (short) 1))).topicId(topic).get());
         }
     }
 
     private void deleteConsumerGroups(Collection<String> groupIds) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             Assertions.assertDoesNotThrow(() -> admin.deleteConsumerGroups(groupIds).all().get());
         }
     }
 
     private void deleteTopic(String topic) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.deleteTopics(Collections.singletonList(topic)).topicNameValues().get(topic).get());
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            Assertions.assertDoesNotThrow(() -> admin.deleteTopics(List.of(topic)).topicNameValues().get(topic).get());
         }
     }
 

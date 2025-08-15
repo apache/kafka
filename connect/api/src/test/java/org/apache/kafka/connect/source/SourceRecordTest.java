@@ -25,7 +25,6 @@ import org.apache.kafka.connect.header.Headers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,8 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SourceRecordTest {
 
-    private static final Map<String, ?> SOURCE_PARTITION = Collections.singletonMap("src", "abc");
-    private static final Map<String, ?> SOURCE_OFFSET = Collections.singletonMap("offset", "1");
+    private static final Map<String, ?> SOURCE_PARTITION = Map.of("src", "abc");
+    private static final Map<String, ?> SOURCE_OFFSET = Map.of("offset", "1");
     private static final String TOPIC_NAME = "myTopic";
     private static final Integer PARTITION_NUMBER = 0;
     private static final Long KAFKA_TIMESTAMP = 0L;
