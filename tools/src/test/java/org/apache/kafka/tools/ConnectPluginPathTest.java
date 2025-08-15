@@ -568,7 +568,7 @@ public class ConnectPluginPathTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        return new WorkerConfig(path, Arrays.asList(pluginPathElements));
+        return new WorkerConfig(path, List.of(pluginPathElements));
     }
 
     private static class CommandResult {
