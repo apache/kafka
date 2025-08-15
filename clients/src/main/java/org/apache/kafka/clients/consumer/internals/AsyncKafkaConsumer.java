@@ -357,8 +357,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final int requestTimeoutMs;
     private final Duration defaultApiTimeoutMs;
     private final boolean autoCommitEnabled;
-    private final AtomicBoolean cachedIsReconciliationInProgress = new AtomicBoolean();
-    private final AtomicBoolean cachedHasInflightCommit = new AtomicBoolean();
+    private final AtomicBoolean reconciliationInProgress = new AtomicBoolean();
+    private final AtomicBoolean hasInflightCommit = new AtomicBoolean();
     private volatile boolean closed = false;
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
@@ -496,8 +496,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker,
                     memberStateListener,
                     streamsRebalanceData,
-                    cachedHasInflightCommit,
-                    cachedIsReconciliationInProgress
+                hasInflightCommit,
+                reconciliationInProgress
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -684,8 +684,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetCommitCallbackInvoker,
             memberStateListener,
             Optional.empty(),
-            cachedHasInflightCommit,
-            cachedIsReconciliationInProgress
+            hasInflightCommit,
+            reconciliationInProgress
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -872,7 +872,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // the interval time or reconciling new assignments
             applicationEventHandler.add(event);
 
-            if (cachedIsReconciliationInProgress.get() || cachedHasInflightCommit.get()) {
+            if (reconciliationInProgress.get() || hasInflightCommit.get()) {
                 // Wait for reconciliation and auto-commit to be triggered, to ensure all commit requests
                 // retrieve the positions to commit before proceeding with fetching new records
                 ConsumerUtils.getResult(event.reconcileAndAutoCommit(), defaultApiTimeoutMs.toMillis());
@@ -1908,7 +1908,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private void sendFetches(Timer timer) {
         try {
-            applicationEventHandler.add(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
+            applicationEventHandler.addAndGet(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
         } catch (TimeoutException swallow) {
             // Can be ignored, per above comments.
         }
