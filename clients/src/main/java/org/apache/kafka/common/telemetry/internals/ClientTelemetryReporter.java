@@ -41,7 +41,6 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
@@ -382,25 +381,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
             } finally {
                 lock.readLock().unlock();
             }
-            
-            try {
-                if (localState == ClientTelemetryState.SUBSCRIPTION_NEEDED) {
-                    return createSubscriptionRequest(localSubscription);
-                } else if (localState == ClientTelemetryState.PUSH_NEEDED || localState == ClientTelemetryState.TERMINATING_PUSH_NEEDED) {
-                    return createPushRequest(localSubscription);
-                }
-                log.warn("Cannot make telemetry request as telemetry is in state: {}", localState);
-            } catch (RuntimeException e) {
-                // Transition to TERMINATED state to prevent further attempts
-                lock.writeLock().lock();
-                try {
-                    state = ClientTelemetryState.TERMINATED;
-                } finally {
-                    lock.writeLock().unlock();
-                }
-                log.error("Fatal telemetry error encountered, disabling telemetry permanently: {}", e.getMessage());
+
+            if (localState == ClientTelemetryState.SUBSCRIPTION_NEEDED) {
+                return createSubscriptionRequest(localSubscription);
+            } else if (localState == ClientTelemetryState.PUSH_NEEDED || localState == ClientTelemetryState.TERMINATING_PUSH_NEEDED) {
+                return createPushRequest(localSubscription);
             }
 
+            log.warn("Cannot make telemetry request as telemetry is in state: {}", localState);
             return Optional.empty();
         }
 
@@ -731,17 +719,23 @@ public class ClientTelemetryReporter implements MetricsReporter {
             ByteBuffer compressedPayload;
             try {
                 compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
-            } catch (Throwable e) { 
-                if (e instanceof IOException || e instanceof NoClassDefFoundError || 
-                        e.getCause() instanceof NoClassDefFoundError ||
-                        e.getCause() instanceof IOException) {
-                    log.debug("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
-                    unsupportedCompressionTypes.add(compressionType);
-                    compressedPayload = ByteBuffer.wrap(payload.toByteArray());
-                    compressionType = CompressionType.NONE;
-                } else {
-                    throw new RuntimeException("Unexpected compression error", e);
+            } catch (Throwable e) {
+                // None of compression algorithms passed, so disabling telemetry to prevent repeated failed push telemetry calls.
+                if (localSubscription.acceptedCompressionTypes().size() == unsupportedCompressionTypes.size()) {
+                    lock.writeLock().lock();
+                    try {
+                        state = ClientTelemetryState.TERMINATED;
+                    } finally {
+                        lock.writeLock().unlock();
+                    }
+                    log.debug("Unexpected error occurred while compressing telemetry payload for compression: {}, stopping client telemetry", compressionType, e);
+                    throw new KafkaException("Unexpected compression error", e);
                 }
+
+                log.debug("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType, e);
+                unsupportedCompressionTypes.add(compressionType);
+                compressedPayload = ByteBuffer.wrap(payload.toByteArray());
+                compressionType = CompressionType.NONE;
             }
 
             AbstractRequest.Builder<?> requestBuilder = new PushTelemetryRequest.Builder(
