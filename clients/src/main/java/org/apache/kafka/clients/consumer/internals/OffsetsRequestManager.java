@@ -498,7 +498,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * next call to this function.
      */
     void validatePositionsIfNeeded() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = commitOffsetsSharedState.getPartitionsToValidate();
+        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = offsetFetcherUtils.getPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
             return;
         }
