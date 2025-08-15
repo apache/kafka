@@ -494,7 +494,7 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
-    public void testCreateRequestPushCompressionFallbackProgression() {
+    public void testCreateRequestPushCompressionFallbackAndTermination() {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
 
@@ -502,23 +502,17 @@ public class ClientTelemetryReporterTest {
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
-        // Set up subscription with multiple compression types including NONE
+        // Set up subscription with ZSTD compression type
         ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
-            uuid, 1234, 20000, List.of(CompressionType.ZSTD, CompressionType.SNAPPY), true, null);
+            uuid, 1234, 20000, List.of(CompressionType.ZSTD, CompressionType.LZ4), true, null);
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
-            // Set up compression failures for each type
+            
+            // === Test 1: NoClassDefFoundError fallback (recoverable) ===
             mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.ZSTD)))
                     .thenThrow(new NoClassDefFoundError("com/github/luben/zstd/BufferPool"));
             
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.SNAPPY)))
-                    .thenThrow(new NoClassDefFoundError("com/github/luben/snappy/BufferPool"));
-            
-            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.NONE)))
-                    .thenThrow(new OutOfMemoryError("NONE compression failed"));
-            
-            // === REQUEST 1: ZSTD fails → fallback to NONE succeeds ===
             assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
             
             Optional<AbstractRequest.Builder<?>> request1 = telemetrySender.createRequest();
@@ -532,36 +526,21 @@ public class ClientTelemetryReporterTest {
             // Reset state (simulate successful response handling)
             assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
             
-            // === REQUEST 2: SNAPPY fails → fallback to NONE succeeds ===
-            assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
+            // === Test 2: OutOfMemoryError causes termination (non-recoverable Error) ===
+            mockedCompress.reset();
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.LZ4)))
+                    .thenThrow(new OutOfMemoryError("Out of memory during compression"));
             
-            Optional<AbstractRequest.Builder<?>> request2 = telemetrySender.createRequest();
-            assertNotNull(request2);
-            assertTrue(request2.isPresent());
-            assertInstanceOf(PushTelemetryRequest.class, request2.get().build());
-            PushTelemetryRequest pushRequest2 = (PushTelemetryRequest) request2.get().build();
-            assertEquals(CompressionType.NONE.id, pushRequest2.data().compressionType()); // Fallback to NONE
-            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
-            
-            // Reset state (simulate successful response handling)
-            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
-            
-            // === REQUEST 3: NONE compression fails → throws error → sets to TERMINATED ===
             assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
 
             assertThrows(KafkaException.class, () -> telemetrySender.createRequest());
             assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state());
             
-            // === REQUEST 4: No response → state is still TERMINATED ===
-            Optional<AbstractRequest.Builder<?>> request4 = telemetrySender.createRequest();
-            assertNotNull(request4);
-            assertFalse(request4.isPresent()); // No request created
+            // === Test 3: After termination, no more requests ===
+            Optional<AbstractRequest.Builder<?>> request3 = telemetrySender.createRequest();
+            assertNotNull(request3);
+            assertFalse(request3.isPresent()); // No request created
             assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state()); // State remains TERMINATED
-            
-            // Verify compression attempts
-            mockedCompress.verify(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.ZSTD)), Mockito.times(1));
-            mockedCompress.verify(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.SNAPPY)), Mockito.times(1));
-            mockedCompress.verify(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.NONE)), Mockito.times(1));
         }
     }
 

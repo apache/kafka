@@ -720,15 +720,16 @@ public class ClientTelemetryReporter implements MetricsReporter {
             try {
                 compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
             } catch (Throwable e) {
-                // None of compression algorithms passed, so disabling telemetry to prevent repeated failed push telemetry calls.
-                if (localSubscription.acceptedCompressionTypes().size() == unsupportedCompressionTypes.size()) {
+                // Distinguish between recoverable errors (NoClassDefFoundError for missing compression libs) 
+                // and fatal errors (OutOfMemoryError, etc.) that should terminate telemetry.
+                if (e instanceof Error && !(e instanceof NoClassDefFoundError) && !(e.getCause() instanceof NoClassDefFoundError)) {
                     lock.writeLock().lock();
                     try {
                         state = ClientTelemetryState.TERMINATED;
                     } finally {
                         lock.writeLock().unlock();
                     }
-                    log.debug("Unexpected error occurred while compressing telemetry payload for compression: {}, stopping client telemetry", compressionType, e);
+                    log.error("Unexpected error occurred while compressing telemetry payload for compression: {}, stopping client telemetry", compressionType, e);
                     throw new KafkaException("Unexpected compression error", e);
                 }
 
