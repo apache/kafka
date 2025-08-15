@@ -22,6 +22,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterRequestDataJsonConverter;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestDataJsonConverter;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
@@ -42,6 +43,7 @@ import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotRequestDataJsonConverter;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseDataJsonConverter;
+import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteRequestDataJsonConverter;
 import org.apache.kafka.common.message.VoteResponseData;
@@ -93,6 +95,10 @@ public class RaftUtilTest {
                 RaftUtil.errorResponse(ApiKeys.FETCH, Errors.NONE));
         assertEquals(new FetchSnapshotResponseData().setErrorCode(Errors.NONE.code()),
                 RaftUtil.errorResponse(ApiKeys.FETCH_SNAPSHOT, Errors.NONE));
+        assertEquals(new AddRaftVoterResponseData().setErrorCode(Errors.NONE.code()),
+            RaftUtil.errorResponse(ApiKeys.ADD_RAFT_VOTER, Errors.NONE));
+        assertEquals(new RemoveRaftVoterResponseData().setErrorCode(Errors.NONE.code()),
+            RaftUtil.errorResponse(ApiKeys.REMOVE_RAFT_VOTER, Errors.NONE));
         assertThrows(IllegalArgumentException.class, () -> RaftUtil.errorResponse(ApiKeys.PRODUCE, Errors.NONE));
     }
 
