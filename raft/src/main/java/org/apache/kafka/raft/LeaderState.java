@@ -717,7 +717,7 @@ public class LeaderState<T> implements EpochState {
         ArrayList<ReplicaState> followersByDescendingFetchOffset = followersByDescendingFetchOffset()
             .collect(Collectors.toCollection(ArrayList::new));
 
-        int indexOfHw = (currentVoterStates.size() / 2) + 1;
+        int indexOfHw = currentVoterStates.size() / 2;
         Optional<LogOffsetMetadata> highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
 
         if (highWatermarkUpdateOpt.isPresent()) {
