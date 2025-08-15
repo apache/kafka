@@ -297,8 +297,8 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </tr>
           <tr class="row-even"><td>commit.interval.ms</td>
             <td>Low</td>
-            <td colspan="2">The frequency in milliseconds with which to save the position (offsets in source topics) of tasks. Note that if exactly-once processing is enabled, then the default changes to <code class="docutils literal"><span class="pre">100</span></code></td>
-            <td><code class="docutils literal"><span class="pre">30000</span></code> (30 seconds)</td>
+            <td colspan="2">The frequency in milliseconds with which to save the position (offsets in source topics) of tasks.</td>
+            <td><code class="docutils literal"><span class="pre">30000</span></code> (30 seconds) (at-least-once) / <code class="docutils literal"><span class="pre">100</span></code> (exactly-once)</td>
           </tr>
           <tr class="row-odd"><td>default.deserialization.exception.handler (Deprecated. Use deserialization.exception.handler instead.)</td>
             <td>Medium</td>
