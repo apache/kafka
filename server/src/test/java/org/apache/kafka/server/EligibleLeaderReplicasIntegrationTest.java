@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -97,8 +98,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                     new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions()
-            );
+                new UpdateFeaturesOptions()).all().get();
 
             admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
             clusterInstance.waitTopicCreation(testTopicName, 1);
@@ -129,8 +129,10 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             // Now the partition is under min ISR. HWM should not advance.
             producer.send(new ProducerRecord<>(testTopicName, "1", "1")).get();
+            // We use a short sleep here to give the broker time to process the ISR change.
+            // To ensure the consumer sees the correct HWM state to avoid flakiness.
             TimeUnit.MILLISECONDS.sleep(100);
-            assertEquals(0, consumer.poll(Duration.ofSeconds(1L)).count());
+            assertEquals(0L, consumer.currentLag(new TopicPartition(testTopicName, 0)).orElse(-1L));
 
             // Restore the min ISR and the previous log should be visible.
             clusterInstance.startBroker(initialReplicas.get(1).id());
@@ -163,8 +165,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                     new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions()
-            );
+                new UpdateFeaturesOptions()).all().get();
             admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
             clusterInstance.waitTopicCreation(testTopicName, 1);
 
@@ -234,8 +235,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                     new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions()
-            );
+                new UpdateFeaturesOptions()).all().get();
             admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
             clusterInstance.waitTopicCreation(testTopicName, 1);
 
@@ -294,8 +294,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                     new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions()
-            );
+                new UpdateFeaturesOptions()).all().get();
             admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
             clusterInstance.waitTopicCreation(testTopicName, 1);
 
