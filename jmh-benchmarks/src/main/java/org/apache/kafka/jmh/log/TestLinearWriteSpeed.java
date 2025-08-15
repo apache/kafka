@@ -81,13 +81,13 @@ public class TestLinearWriteSpeed {
             .describedAs("num_bytes")
             .ofType(Integer.class);
 
-        OptionSpec<Integer> messageSizeOpt = parser.accepts("message-size", "REQUIRED: The size of each message in the message set.")
+        OptionSpec<Integer> messageSizeOpt = parser.accepts("message-size", "The size of each message in the message set.")
             .withRequiredArg()
             .describedAs("num_bytes")
             .ofType(Integer.class)
             .defaultsTo(1024);
 
-        OptionSpec<Integer> filesOpt = parser.accepts("files", "REQUIRED: The number of logs or files.")
+        OptionSpec<Integer> filesOpt = parser.accepts("files", "The number of logs or files.")
             .withRequiredArg()
             .describedAs("num_files")
             .ofType(Integer.class)
@@ -126,7 +126,7 @@ public class TestLinearWriteSpeed {
         OptionSpec<Void> channelOpt = parser.accepts("channel", "Do writes to file channels.");
         OptionSpec<Void> logOpt = parser.accepts("log", "Do writes to kafka logs.");
         OptionSet options = parser.parse(args);
-        CommandLineUtils.checkRequiredArgs(parser, options, bytesOpt, sizeOpt, filesOpt);
+        CommandLineUtils.checkRequiredArgs(parser, options, bytesOpt, sizeOpt);
 
         long bytesToWrite = options.valueOf(bytesOpt);
         int bufferSize = options.valueOf(sizeOpt);
