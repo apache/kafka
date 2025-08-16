@@ -1098,7 +1098,9 @@ public class StreamsMembershipManager implements RequestManager {
 
         final SortedSet<TopicPartition> partitionsToRevoke = topicPartitionsForActiveTasks(activeTasksToRevoke);
         log.debug("Marking partitions pending for revocation: {}", partitionsToRevoke);
-        subscriptionState.markPendingRevocation(partitionsToRevoke);
+        // If topic is missing and it is in reconciliation state,
+        // Subscription State already may not have TopicPartition for revoked tasks.
+        subscriptionState.markPendingRevocationIfPresentTopicPartitions(partitionsToRevoke);
 
         CompletableFuture<Void> tasksRevoked = new CompletableFuture<>();
         CompletableFuture<Void> onTasksRevokedCallbackExecuted = requestOnTasksRevokedCallbackInvocation(activeTasksToRevoke);

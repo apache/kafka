@@ -909,6 +909,12 @@ public class SubscriptionState {
         tps.forEach(tp -> assignedState(tp).markPendingRevocation());
     }
 
+    public synchronized void markPendingRevocationIfPresentTopicPartitions(Set<TopicPartition> tps) {
+        tps.stream()
+           .filter(tp -> this.assignment.stateValue(tp) != null)
+           .forEach(tp -> assignedState(tp).markPendingRevocation());
+    }
+
     // Visible for testing
     synchronized void markPendingOnAssignedCallback(Collection<TopicPartition> tps,
                                                     boolean pendingOnAssignedCallback) {
