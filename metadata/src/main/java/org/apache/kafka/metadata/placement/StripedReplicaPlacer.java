@@ -335,9 +335,6 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         }
 
         List<Integer> place(int replicationFactor) {
-            throwInvalidReplicationFactorIfNonPositive(replicationFactor);
-            throwInvalidReplicationFactorIfTooFewBrokers(replicationFactor, numTotalBrokers());
-            throwInvalidReplicationFactorIfZero(numUnfencedBrokers());
             // If we have returned as many assignments as there are unfenced brokers in
             // the cluster, shuffle the rack list and broker lists to try to avoid
             // repeating the same assignments again.
