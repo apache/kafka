@@ -3315,10 +3315,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         return Math.min(
             backoffMs,
-            Math.min(
-                state.remainingFetchTimeMs(currentTimeMs),
-                state.remainingUpdateVoterSetPeriodMs(currentTimeMs)
-            )
+            state.remainingFetchTimeMs(currentTimeMs)
         );
     }
 
@@ -3333,11 +3330,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
         GracefulShutdown shutdown = this.shutdown.get();
-        final long backoffMs;
         if (shutdown != null) {
             // If we are an observer, then we can shutdown immediately. We want to
             // skip potentially sending any add or remove voter RPCs.
-            backoffMs = 0;
+            return 0;
         } else if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
             final var localReplicaKey = quorum.localReplicaKeyOrThrow();
             final var voters = partitionState.lastVoterSet();
@@ -3356,17 +3352,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             }
-            backoffMs = sendResult.timeToWaitMs();
             if (sendResult.requestSent()) {
                 state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
+            return sendResult.timeToWaitMs();
         } else {
-            backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
+            return maybeSendFetchToBestNode(state, currentTimeMs);
         }
-        return Math.min(
-            backoffMs,
-            state.remainingUpdateVoterSetPeriodMs(currentTimeMs)
-        );
     }
 
     private long maybeSendFetchToBestNode(FollowerState state, long currentTimeMs) {

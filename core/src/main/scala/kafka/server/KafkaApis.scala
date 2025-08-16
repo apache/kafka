@@ -1970,7 +1970,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
         val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
-        val authorizedPartitions = mutable.Set[TopicPartition]()
+        val authorizedPartitions = new util.HashSet[TopicPartition]()
 
         // Only request versions less than 4 need write authorization since they come from clients.
         val authorizedTopics =
@@ -1992,7 +1992,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           // partitions which failed, and an 'OPERATION_NOT_ATTEMPTED' error code for the partitions which succeeded
           // the authorization check to indicate that they were not added to the transaction.
           val partitionErrors = unauthorizedTopicErrors ++ nonExistingTopicErrors ++
-            authorizedPartitions.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)
+            authorizedPartitions.asScala.map(_ -> Errors.OPERATION_NOT_ATTEMPTED)
           addResultAndMaybeSendResponse(AddPartitionsToTxnResponse.resultForTransaction(transactionalId, partitionErrors.asJava))
         } else {
           def sendResponseCallback(error: Errors): Unit = {
@@ -2071,7 +2071,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
         addOffsetsToTxnRequest.data.producerId,
         addOffsetsToTxnRequest.data.producerEpoch,
-        Set(offsetTopicPartition),
+        util.Set.of(offsetTopicPartition),
         sendResponseCallback,
         TransactionVersion.TV_0, // This request will always come from the client not using TV 2.
         requestLocal)
