@@ -493,8 +493,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </tr>
           <tr class="row-odd"><td>repartition.purge.interval.ms</td>
             <td>Low</td>
-            <td colspan="2">The frequency in milliseconds with which to delete fully consumed records from repartition topics. Purging will occur after at least this value since the last purge, but may be delayed until later.
-              (Note, unlike <code class="docutils literal"><span class="pre">commit.interval.ms</span></code>, the default for this value remains unchanged when <code class="docutils literal"><span class="pre">processing.guarantee</span></code> is set to <code class="docutils literal"><span class="pre">exactly_once_v2</span></code>)</td>
+            <td colspan="2">The frequency in milliseconds with which to delete fully consumed records from repartition topics. Purging will occur after at least this value since the last purge, but may be delayed until later.</td>
             <td><code class="docutils literal"><span class="pre">30000</span></code> (30 seconds)</td>
           </tr>
           <tr class="row-even"><td>retry.backoff.ms</td>
