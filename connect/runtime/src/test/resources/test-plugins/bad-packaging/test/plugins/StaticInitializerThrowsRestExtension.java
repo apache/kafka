@@ -18,14 +18,10 @@
 package test.plugins;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
-import org.apache.kafka.connect.sink.SinkConnector;
 
 /**
  * Fake plugin class for testing classloading isolation.

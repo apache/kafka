@@ -27,11 +27,7 @@ import java.util.HashMap;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigChangeCallback;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
-import org.apache.kafka.connect.storage.HeaderConverter;
 
 /**
  * Fake plugin class for testing classloading isolation.

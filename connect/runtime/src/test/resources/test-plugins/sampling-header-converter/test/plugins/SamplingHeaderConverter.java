@@ -26,7 +26,6 @@ import java.util.HashMap;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 import org.apache.kafka.connect.storage.HeaderConverter;
 

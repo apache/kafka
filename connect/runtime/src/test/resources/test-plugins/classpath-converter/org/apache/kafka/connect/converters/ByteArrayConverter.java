@@ -19,17 +19,14 @@ package org.apache.kafka.connect.converters;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
-import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.HeaderConverter;
 
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Map;
 
 public class ByteArrayConverter implements Converter, HeaderConverter, Versioned {
