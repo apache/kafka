@@ -41,7 +41,10 @@ plugins {
   id 'org.scoverage' version '8.0.3' apply false
   id 'com.gradleup.shadow' version '8.3.6' apply false
   id 'com.diffplug.spotless' version "6.25.0"
+  id "org.openrewrite.rewrite" version "7.12.1"
 }
+
+apply from: "gradle/.qa/rewrite.gradle"
 
 ext {
   gradleVersion = versions.gradle
