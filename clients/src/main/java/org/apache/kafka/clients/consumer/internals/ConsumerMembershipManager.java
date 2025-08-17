@@ -152,7 +152,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      BackgroundEventHandler backgroundEventHandler,
                                      Time time,
                                      Metrics metrics,
-                                     boolean autoCommitEnabled,
+                                     AutoCommitState autoCommitState,
                                      AtomicBoolean reconciliationInProgress) {
         this(groupId,
             groupInstanceId,
@@ -166,7 +166,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             backgroundEventHandler,
             time,
             new ConsumerRebalanceMetricsManager(metrics),
-            autoCommitEnabled,
+            autoCommitState,
             reconciliationInProgress);
     }
 
@@ -183,7 +183,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                               BackgroundEventHandler backgroundEventHandler,
                               Time time,
                               RebalanceMetricsManager metricsManager,
-                              boolean autoCommitEnabled,
+                              AutoCommitState autoCommitState,
                               AtomicBoolean reconciliationInProgress) {
         super(groupId,
             subscriptions,
@@ -191,7 +191,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             logContext.logger(ConsumerMembershipManager.class),
             time,
             metricsManager,
-            autoCommitEnabled,
+            autoCommitState,
             reconciliationInProgress);
         this.groupInstanceId = groupInstanceId;
         this.rackId = rackId;

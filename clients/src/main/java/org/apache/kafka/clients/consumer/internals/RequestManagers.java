@@ -262,7 +262,7 @@ public class RequestManagers implements Closeable {
                             backgroundEventHandler,
                             time,
                             metrics,
-                            config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
+                            autoCommitState,
                             cachedReconciliationInProgress);
 
                         // Update the group member ID label in the client telemetry reporter.

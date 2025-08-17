@@ -136,6 +136,13 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     private LocalAssignment currentTargetAssignment;
 
     /**
+     * If there is a reconciliation running (triggering commit, callbacks) for the
+     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile(boolean)} has been triggered
+     * after receiving a heartbeat response, or a metadata update.
+     */
+    private final AtomicBoolean reconciliationInProgress;
+
+    /**
      * True if a reconciliation is in progress and the member rejoined the group since the start
      * of the reconciliation. Used to know that the reconciliation in progress should be
      * interrupted and not be applied.
@@ -172,13 +179,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     private final Time time;
 
     /**
-     * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile(boolean)} has been triggered
-     * after receiving a heartbeat response, or a metadata update.
-     */
-    private final AtomicBoolean reconciliationInProgress;
-
-    /**
      * AtomicBoolean to track whether the subscription is updated.
      * If it's true and subscription state is UNSUBSCRIBED, the next {@link #onConsumerPoll()} will change member state to JOINING.
      */
@@ -192,7 +192,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private boolean isPollTimerExpired;
 
-    private final boolean autoCommitEnabled;
+    private final AutoCommitState autoCommitState;
 
     /**
      * Indicate the operation on consumer group membership that the consumer will perform when leaving the group.
@@ -208,7 +208,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                               Logger log,
                               Time time,
                               RebalanceMetricsManager metricsManager,
-                              boolean autoCommitEnabled,
+                              AutoCommitState autoCommitState,
                               AtomicBoolean reconciliationInProgress) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
@@ -221,7 +221,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         this.stateUpdatesListeners = new ArrayList<>();
         this.time = time;
         this.metricsManager = metricsManager;
-        this.autoCommitEnabled = autoCommitEnabled;
+        this.autoCommitState = autoCommitState;
         this.reconciliationInProgress = reconciliationInProgress;
     }
 
@@ -852,7 +852,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
-        if (autoCommitEnabled && !canCommit) return;
+        if (autoCommitState.isAutoCommitEnabled() && !canCommit) return;
         markReconciliationInProgress();
 
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are

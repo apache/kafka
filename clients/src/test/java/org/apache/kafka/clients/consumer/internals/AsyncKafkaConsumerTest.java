@@ -277,7 +277,7 @@ public class AsyncKafkaConsumerTest {
             requestTimeoutMs,
             defaultApiTimeoutMs,
             groupId,
-            autoCommitEnabled ? AutoCommitState.whenEnabled(logContext, time, 5000) : AutoCommitState.whenDisabled());
+            autoCommitEnabled ? AutoCommitState.enabled(logContext, time) : AutoCommitState.disabled());
     }
 
     @Test

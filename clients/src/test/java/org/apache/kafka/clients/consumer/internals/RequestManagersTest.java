@@ -68,7 +68,7 @@ public class RequestManagersTest {
             mock(OffsetCommitCallbackInvoker.class),
             listener,
             Optional.empty(),
-            AutoCommitState.whenDisabled(),
+            AutoCommitState.disabled(),
             new AtomicBoolean()
         ).get();
         assertTrue(requestManagers.consumerMembershipManager.isPresent());
@@ -110,7 +110,7 @@ public class RequestManagersTest {
             mock(OffsetCommitCallbackInvoker.class),
             listener,
             Optional.of(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of())),
-            AutoCommitState.whenDisabled(),
+            AutoCommitState.disabled(),
             new AtomicBoolean()
         ).get();
         assertTrue(requestManagers.streamsMembershipManager.isPresent());

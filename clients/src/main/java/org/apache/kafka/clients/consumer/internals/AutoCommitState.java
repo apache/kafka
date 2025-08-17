@@ -24,6 +24,8 @@ import org.slf4j.Logger;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_AUTO_COMMIT_INTERVAL_MS;
+
 /**
  * Encapsulates the state of auto-committing and manages the auto-commit timer.
  */
@@ -58,13 +60,17 @@ public interface AutoCommitState {
 
     void setInflightCommitStatus(final boolean inflightCommitStatus);
 
-    static AutoCommitState whenEnabled(final LogContext logContext,
-                                       final Time time,
-                                       final long autoCommitInterval) {
+    static AutoCommitState enabled(final LogContext logContext,
+                                   final Time time,
+                                   final long autoCommitInterval) {
         return new AutoCommitStateEnabled(logContext, time, autoCommitInterval);
     }
 
-    static AutoCommitState whenDisabled() {
+    static AutoCommitState enabled(final LogContext logContext, final Time time) {
+        return enabled(logContext, time, DEFAULT_AUTO_COMMIT_INTERVAL_MS);
+    }
+
+    static AutoCommitState disabled() {
         return new AutoCommitStateDisabled();
     }
 
@@ -73,9 +79,9 @@ public interface AutoCommitState {
                                        final Time time) {
         if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             final long interval = Integer.toUnsignedLong(config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-            return whenEnabled(logContext, time, interval);
+            return enabled(logContext, time, interval);
         } else {
-            return whenDisabled();
+            return disabled();
         }
     }
 
