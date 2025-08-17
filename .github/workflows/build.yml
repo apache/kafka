@@ -141,6 +141,9 @@ jobs:
         # --no-scan:      For public fork PRs, we won't attempt to publish the scan
         run: |
           ./gradlew --build-cache --info $SCAN_ARG check releaseTarGz -x test
+      - name: owasp:dependencyCheckAnalyze
+        run: ./gradlew dependencyCheckAnalyze --build-cache
+        timeout-minutes: 30
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
