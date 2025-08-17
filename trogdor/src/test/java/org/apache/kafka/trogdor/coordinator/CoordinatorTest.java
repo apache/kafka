@@ -57,7 +57,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -370,7 +369,7 @@ public class CoordinatorTest {
     private static List<List<String>> createPartitionLists(String[][] array) {
         List<List<String>> list = new ArrayList<>();
         for (String[] a : array) {
-            list.add(Arrays.asList(a));
+            list.add(List.of(a));
         }
         return list;
     }
@@ -486,7 +485,7 @@ public class CoordinatorTest {
             assertEquals(0, coordinatorClient.tasks(
                 new TasksRequest(null, 10, 0, 10, 0, Optional.empty())).tasks().size());
             TasksResponse resp1 = coordinatorClient.tasks(
-                new TasksRequest(Arrays.asList("foo", "baz"), 0, 0, 0, 0, Optional.empty()));
+                new TasksRequest(List.of("foo", "baz"), 0, 0, 0, 0, Optional.empty()));
             assertTrue(resp1.tasks().containsKey("foo"));
             assertFalse(resp1.tasks().containsKey("bar"));
             assertEquals(1, resp1.tasks().size());
