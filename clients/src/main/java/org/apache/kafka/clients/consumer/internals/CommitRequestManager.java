@@ -154,8 +154,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.pendingRequests = new PendingRequests();
-        this.coordinatorRequestManager = coordinatorRequestManager;
         this.autoCommitState = autoCommitState;
+        this.coordinatorRequestManager = coordinatorRequestManager;
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
         this.subscriptions = subscriptions;
@@ -272,7 +272,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             // Reset timer to the interval (even if no request was generated), but ensure that if
             // the request completes with a retriable error, the timer is reset to send the next
             // auto-commit after the backoff expires.
-            autoCommitState.resetTimer();
+            resetAutoCommitTimer();
             maybeResetTimerWithBackoff(result);
         }
     }
@@ -285,7 +285,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (error != null) {
                 if (error instanceof RetriableCommitFailedException) {
                     log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error.", offsets, error);
-                    autoCommitState.resetTimer(retryBackoffMs);
+                    resetAutoCommitTimer(retryBackoffMs);
                 } else {
                     log.debug("Asynchronous auto-commit of offsets {} failed: {}", offsets, error.getMessage());
                 }
