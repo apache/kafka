@@ -356,9 +356,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final long retryBackoffMs;
     private final int requestTimeoutMs;
     private final Duration defaultApiTimeoutMs;
-    private final boolean autoCommitEnabled;
     private final AtomicBoolean reconciliationInProgress = new AtomicBoolean();
-    private final AtomicBoolean hasInflightCommit = new AtomicBoolean();
+    private final AutoCommitState autoCommitState;
     private volatile boolean closed = false;
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
@@ -425,7 +424,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 GroupRebalanceConfig.ProtocolType.CONSUMER
             );
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-            this.autoCommitEnabled = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.backgroundEventQueue = backgroundEventQueue;
             this.log = logContext.logger(getClass());
@@ -480,6 +478,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
+            this.autoCommitState = AutoCommitState.newInstance(logContext, config, time);
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
                     backgroundEventHandler,
@@ -496,8 +495,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker,
                     memberStateListener,
                     streamsRebalanceData,
-                hasInflightCommit,
-                reconciliationInProgress
+                    autoCommitState,
+                    reconciliationInProgress
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -568,7 +567,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        int requestTimeoutMs,
                        int defaultApiTimeoutMs,
                        String groupId,
-                       boolean autoCommitEnabled) {
+                       AutoCommitState autoCommitState) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -591,7 +590,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.applicationEventHandler = applicationEventHandler;
         this.kafkaConsumerMetrics = new AsyncConsumerMetrics(metrics);
         this.clientTelemetryReporter = Optional.empty();
-        this.autoCommitEnabled = autoCommitEnabled;
+        this.autoCommitState = autoCommitState;
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
         this.backgroundEventHandler = new BackgroundEventHandler(
             backgroundEventQueue,
@@ -611,7 +610,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
-        this.autoCommitEnabled = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
         this.fetchBuffer = new FetchBuffer(logContext);
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.time = time;
@@ -667,6 +665,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             kafkaConsumerMetrics
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
+        this.autoCommitState = AutoCommitState.newInstance(logContext, config, time);
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,
@@ -684,7 +683,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetCommitCallbackInvoker,
             memberStateListener,
             Optional.empty(),
-            hasInflightCommit,
+            autoCommitState,
             reconciliationInProgress
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
@@ -872,7 +871,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // the interval time or reconciling new assignments
             applicationEventHandler.add(event);
 
-            if (reconciliationInProgress.get() || hasInflightCommit.get()) {
+            if (reconciliationInProgress.get() || autoCommitState.shouldAutoCommit()) {
                 // Wait for reconciliation and auto-commit to be triggered, to ensure all commit requests
                 // retrieve the positions to commit before proceeding with fetching new records
                 ConsumerUtils.getResult(event.reconcileAndAutoCommit(), defaultApiTimeoutMs.toMillis());
@@ -1524,7 +1523,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (groupMetadata.get().isEmpty())
             return;
 
-        if (autoCommitEnabled)
+        if (autoCommitState.isAutoCommitEnabled())
             commitSyncAllConsumed(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());

@@ -71,7 +71,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -118,7 +117,6 @@ public class CommitRequestManagerTest {
     private OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final Metrics metrics = new Metrics();
     private Properties props;
-    private final AtomicBoolean cachedHasInflightCommit = new AtomicBoolean();
     private final int defaultApiTimeoutMs = 60000;
 
 
@@ -139,7 +137,7 @@ public class CommitRequestManagerTest {
     @Test
     public void testOffsetFetchRequestStateToStringBase() {
         ConsumerConfig config = mock(ConsumerConfig.class);
-
+        AutoCommitState autoCommitState = AutoCommitState.newInstance(logContext, config, time);
         CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
                 logContext,
@@ -154,7 +152,7 @@ public class CommitRequestManagerTest {
                 OptionalDouble.of(0),
                 metrics,
                 metadata,
-                cachedHasInflightCommit);
+                autoCommitState);
 
         commitRequestManager.onMemberEpochUpdated(Optional.of(1), Uuid.randomUuid().toString());
         Set<TopicPartition> requestedPartitions = Collections.singleton(new TopicPartition("topic-1", 1));
@@ -1567,11 +1565,14 @@ public class CommitRequestManagerTest {
         if (autoCommitEnabled)
             props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));
 
+        ConsumerConfig config = new ConsumerConfig(props);
+        AutoCommitState autoCommitState = AutoCommitState.newInstance(logContext, config, time);
+
         return spy(new CommitRequestManager(
                 this.time,
                 this.logContext,
                 this.subscriptionState,
-                new ConsumerConfig(props),
+                config,
                 this.coordinatorRequestManager,
                 this.offsetCommitCallbackInvoker,
                 DEFAULT_GROUP_ID,
@@ -1581,7 +1582,7 @@ public class CommitRequestManagerTest {
                 OptionalDouble.of(0),
                 metrics,
                 metadata,
-                cachedHasInflightCommit));
+                autoCommitState));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(

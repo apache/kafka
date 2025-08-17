@@ -65,7 +65,6 @@ import java.util.OptionalDouble;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -79,7 +78,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final ConsumerMetadata metadata;
     private final LogContext logContext;
     private final Logger log;
-    private final Optional<AutoCommitState> autoCommitState;
+    private final AutoCommitState autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final OffsetCommitMetricsManager metricsManager;
@@ -117,7 +116,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final Optional<String> groupInstanceId,
         final Metrics metrics,
         final ConsumerMetadata metadata,
-        final AtomicBoolean hasInflightCommit) {
+        final AutoCommitState autoCommitState) {
         this(time,
             logContext,
             subscriptions,
@@ -131,7 +130,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             OptionalDouble.empty(),
             metrics,
             metadata,
-            hasInflightCommit);
+            autoCommitState);
     }
 
     // Visible for testing
@@ -149,20 +148,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final OptionalDouble jitter,
         final Metrics metrics,
         final ConsumerMetadata metadata,
-        final AtomicBoolean hasInflightCommit) {
+        final AutoCommitState autoCommitState) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.time = time;
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.pendingRequests = new PendingRequests();
-        if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
-            final long autoCommitInterval =
-                Integer.toUnsignedLong(config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-            this.autoCommitState = Optional.of(new AutoCommitState(time, autoCommitInterval, logContext, hasInflightCommit));
-        } else {
-            this.autoCommitState = Optional.empty();
-        }
         this.coordinatorRequestManager = coordinatorRequestManager;
+        this.autoCommitState = autoCommitState;
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
         this.subscriptions = subscriptions;
@@ -182,6 +175,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
+        autoCommitState.updateTimer(currentTimeMs);
+
         // poll when the coordinator node is known and fatal error is not present
         if (coordinatorRequestManager.coordinator().isEmpty()) {
             pendingRequests.maybeFailOnCoordinatorFatalError();
@@ -216,7 +211,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
-        return autoCommitState.map(ac -> ac.remainingMs(currentTimeMs)).orElse(Long.MAX_VALUE);
+        return autoCommitState.remainingMs(currentTimeMs);
     }
 
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
@@ -243,12 +238,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * failed.
      */
     private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> requestAutoCommit(final OffsetCommitRequestState requestState) {
-        AutoCommitState autocommit = autoCommitState.get();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result;
         if (requestState.offsets.isEmpty()) {
             result = CompletableFuture.completedFuture(Collections.emptyMap());
         } else {
-            autocommit.setInflightCommitStatus(true);
+            autoCommitState.setInflightCommitStatus(true);
             OffsetCommitRequestState request = pendingRequests.addOffsetCommitRequest(requestState);
             result = request.future;
             result.whenComplete(autoCommitCallback(request.offsets));
@@ -270,7 +264,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * response for the in-flight is received.
      */
     private void maybeAutoCommitAsync() {
-        if (autoCommitEnabled() && autoCommitState.get().shouldAutoCommit()) {
+        if (autoCommitState.shouldAutoCommit()) {
             OffsetCommitRequestState requestState = createOffsetCommitRequest(
                 subscriptions.allConsumed(),
                 Long.MAX_VALUE);
@@ -278,7 +272,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             // Reset timer to the interval (even if no request was generated), but ensure that if
             // the request completes with a retriable error, the timer is reset to send the next
             // auto-commit after the backoff expires.
-            resetAutoCommitTimer();
+            autoCommitState.resetTimer();
             maybeResetTimerWithBackoff(result);
         }
     }
@@ -291,7 +285,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (error != null) {
                 if (error instanceof RetriableCommitFailedException) {
                     log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error.", offsets, error);
-                    resetAutoCommitTimer(retryBackoffMs);
+                    autoCommitState.resetTimer(retryBackoffMs);
                 } else {
                     log.debug("Asynchronous auto-commit of offsets {} failed: {}", offsets, error.getMessage());
                 }
@@ -323,7 +317,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * timeout expires.
      */
     public CompletableFuture<Void> maybeAutoCommitSyncBeforeRebalance(final long deadlineMs) {
-        if (!autoCommitEnabled()) {
+        if (!autoCommitState.isAutoCommitEnabled()) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -370,7 +364,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     private BiConsumer<? super Map<TopicPartition, OffsetAndMetadata>, ? super Throwable> autoCommitCallback(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
         return (response, throwable) -> {
-            autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
+            autoCommitState.setInflightCommitStatus(false);
             if (throwable == null) {
                 offsetCommitCallbackInvoker.enqueueInterceptorInvocation(allConsumedOffsets);
                 log.debug("Completed auto-commit of offsets {}", allConsumedOffsets);
@@ -570,7 +564,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     private void updateAutoCommitTimer(final long currentTimeMs) {
-        this.autoCommitState.ifPresent(t -> t.updateTimer(currentTimeMs));
+        this.autoCommitState.updateTimer(currentTimeMs);
     }
 
     // Visible for testing
@@ -604,7 +598,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * @return True if auto-commit is enabled as defined in the config {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG}
      */
     public boolean autoCommitEnabled() {
-        return autoCommitState.isPresent();
+        return autoCommitState.isAutoCommitEnabled();
     }
 
     /**
@@ -613,7 +607,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * perform no action.
      */
     public void resetAutoCommitTimer() {
-        autoCommitState.ifPresent(AutoCommitState::resetTimer);
+        autoCommitState.resetTimer();
     }
 
     /**
@@ -621,7 +615,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * sent out then. If auto-commit is not enabled this will perform no action.
      */
     public void resetAutoCommitTimer(long retryBackoffMs) {
-        autoCommitState.ifPresent(s -> s.resetTimer(retryBackoffMs));
+        autoCommitState.resetTimer(retryBackoffMs);
     }
 
     /**
@@ -1302,59 +1296,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     clearAll();
                 }
             );
-        }
-    }
-
-    /**
-     * Encapsulates the state of auto-committing and manages the auto-commit timer.
-     */
-    private static class AutoCommitState {
-        private final Timer timer;
-        private final long autoCommitInterval;
-        private final AtomicBoolean hasInflightCommit;
-        private final Logger log;
-
-        public AutoCommitState(
-                final Time time,
-                final long autoCommitInterval,
-                final LogContext logContext,
-                final AtomicBoolean hasInflightCommit) {
-            this.autoCommitInterval = autoCommitInterval;
-            this.timer = time.timer(autoCommitInterval);
-            this.hasInflightCommit = hasInflightCommit;
-            this.log = logContext.logger(getClass());
-        }
-
-        public boolean shouldAutoCommit() {
-            if (!this.timer.isExpired()) {
-                return false;
-            }
-            if (this.hasInflightCommit.get()) {
-                log.trace("Skipping auto-commit on the interval because a previous one is still in-flight.");
-                return false;
-            }
-            return true;
-        }
-
-        public void resetTimer() {
-            this.timer.reset(autoCommitInterval);
-        }
-
-        public void resetTimer(long retryBackoffMs) {
-            this.timer.reset(retryBackoffMs);
-        }
-
-        public long remainingMs(final long currentTimeMs) {
-            this.timer.update(currentTimeMs);
-            return this.timer.remainingMs();
-        }
-
-        public void updateTimer(final long currentTimeMs) {
-            this.timer.update(currentTimeMs);
-        }
-
-        public void setInflightCommitStatus(final boolean inflightCommitStatus) {
-            this.hasInflightCommit.set(inflightCommitStatus);
         }
     }
 

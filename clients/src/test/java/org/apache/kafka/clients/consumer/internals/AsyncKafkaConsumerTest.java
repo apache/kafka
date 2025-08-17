@@ -257,8 +257,9 @@ public class AsyncKafkaConsumerTest {
         long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
+        LogContext logContext = new LogContext();
         return new AsyncKafkaConsumer<>(
-            new LogContext(),
+            logContext,
             clientId,
             new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics),
             fetchBuffer,
@@ -276,7 +277,7 @@ public class AsyncKafkaConsumerTest {
             requestTimeoutMs,
             defaultApiTimeoutMs,
             groupId,
-            autoCommitEnabled);
+            autoCommitEnabled ? AutoCommitState.whenEnabled(logContext, time, 5000) : AutoCommitState.whenDisabled());
     }
 
     @Test

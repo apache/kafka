@@ -169,7 +169,7 @@ public class RequestManagers implements Closeable {
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener,
                                                      final Optional<StreamsRebalanceData> streamsRebalanceData,
-                                                     final AtomicBoolean cachedHasInflightCommit,
+                                                     final AutoCommitState autoCommitState,
                                                      final AtomicBoolean cachedReconciliationInProgress
     ) {
         return new CachedSupplier<>() {
@@ -220,7 +220,7 @@ public class RequestManagers implements Closeable {
                         groupRebalanceConfig.groupInstanceId,
                         metrics,
                         metadata,
-                        cachedHasInflightCommit);
+                        autoCommitState);
                     if (streamsRebalanceData.isPresent()) {
                         streamsMembershipManager = new StreamsMembershipManager(
                             groupRebalanceConfig.groupId,
