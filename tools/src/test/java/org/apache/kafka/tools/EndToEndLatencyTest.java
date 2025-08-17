@@ -120,7 +120,9 @@ public class EndToEndLatencyTest {
     }
 
     private void testUnexpectedArgsWithLegacyFormat() {
-        assertThrows(TerseException.class, () -> EndToEndLatency.execute(LEGACY_INVALID_ARGS_UNEXPECTED));
+        String expectedMsg = "Invalid number of arguments. Expected 5 or 6 positional arguments, but got 7.";
+        TerseException terseException = assertThrows(TerseException.class, () -> EndToEndLatency.execute(LEGACY_INVALID_ARGS_UNEXPECTED));
+        assertTrue(terseException.getMessage().contains(expectedMsg));
     }
 
     private void testInvalidNumRecords() {
@@ -179,6 +181,7 @@ public class EndToEndLatencyTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testConvertLegacyArgs() throws Exception {
         String[] legacyArgs = {"localhost:9092", "test", "100", "1", "200"};
         String[] convertedArgs = EndToEndLatency.convertLegacyArgsIfNeeded(legacyArgs);
