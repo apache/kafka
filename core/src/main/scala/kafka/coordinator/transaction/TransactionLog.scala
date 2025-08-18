@@ -25,8 +25,6 @@ import org.apache.kafka.coordinator.transaction.{TransactionMetadata, Transactio
 import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordType, TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
-import java.util
-
 import scala.jdk.CollectionConverters._
 
 /**
@@ -124,7 +122,6 @@ object TransactionLog {
           RecordBatch.NO_PRODUCER_EPOCH,
           value.transactionTimeoutMs,
           TransactionState.fromId(value.transactionStatus),
-          util.Set.of(),
           value.transactionStartTimestampMs,
           value.transactionLastUpdateTimestampMs,
           TransactionVersion.fromFeatureLevel(value.clientTransactionVersion))
