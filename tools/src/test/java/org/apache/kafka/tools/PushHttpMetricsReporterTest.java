@@ -20,7 +20,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetric;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
@@ -186,35 +185,35 @@ public class PushHttpMetricsReporterTest {
         KafkaMetric metric1 = new KafkaMetric(
                 new Object(),
                 new MetricName("name1", "group1", "desc1", Map.of("key1", "value1")),
-                new ImmutableValue<>(1.0),
+                (Gauge<Double>) (config, now) -> 1.0,
                 null,
                 time
         );
         KafkaMetric newMetric1 = new KafkaMetric(
                 new Object(),
                 new MetricName("name1", "group1", "desc1", Map.of("key1", "value1")),
-                new ImmutableValue<>(-1.0),
+                (Gauge<Double>) (config, now) -> -1.0,
                 null,
                 time
         );
         KafkaMetric metric2 = new KafkaMetric(
                 new Object(),
                 new MetricName("name2", "group2", "desc2", Map.of("key2", "value2")),
-                new ImmutableValue<>(2.0),
+                (Gauge<Double>) (config, now) -> 2.0,
                 null,
                 time
         );
         KafkaMetric metric3 = new KafkaMetric(
                 new Object(),
                 new MetricName("name3", "group3", "desc3", Map.of("key3", "value3")),
-                new ImmutableValue<>(3.0),
+                (Gauge<Double>) (config, now) -> 3.0,
                 null,
                 time
         );
         KafkaMetric metric4 = new KafkaMetric(
             new Object(),
             new MetricName("name4", "group4", "desc4", Map.of("key4", "value4")),
-            new ImmutableValue<>("value4"),
+            (Gauge<String>) (config, now) -> "value4",
             null,
             time
         );
@@ -332,18 +331,5 @@ public class PushHttpMetricsReporterTest {
         verify(httpOut).write(httpPayloadCaptor.capture());
         verify(httpOut).flush();
         verify(httpOut).close();
-    }
-
-    static class ImmutableValue<T> implements Gauge<T> {
-        private final T value;
-
-        public ImmutableValue(T value) {
-            this.value = value;
-        }
-
-        @Override
-        public T value(MetricConfig config, long now) {
-            return value;
-        }
     }
 }
