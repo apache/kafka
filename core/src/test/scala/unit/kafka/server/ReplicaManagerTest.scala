@@ -43,7 +43,6 @@ import org.apache.kafka.common.metrics.Monitorable
 import org.apache.kafka.common.metrics.PluginMetrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.{PartitionState => JPartitionState}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
@@ -56,7 +55,7 @@ import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
-import org.apache.kafka.metadata.MetadataCache
+import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
@@ -77,7 +76,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetsListener, LogOffsetSnapshot, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -98,7 +97,7 @@ import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, Cou
 import java.util.function.{BiConsumer, Consumer}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, OptionalLong, Properties}
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.{mutable, Map, Seq}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
@@ -135,7 +134,7 @@ class ReplicaManagerTest {
   private val quotaAvailableThrottleTime = 0
 
   // Constants defined for readability
-  private val zkVersion = 0
+  private val partitionEpoch = 0
   private val brokerEpoch = 0L
 
   // These metrics are static and once we remove them after each test, they won't be created and verified anymore
@@ -1253,7 +1252,7 @@ class ReplicaManagerTest {
     val leaderBrokerId = 1
     val leaderEpoch = 1
     val leaderEpochIncrement = 2
-    val aliveBrokerIds = Seq[Integer](followerBrokerId, leaderBrokerId)
+    val aliveBrokerIds = Array(followerBrokerId, leaderBrokerId)
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
@@ -1267,8 +1266,8 @@ class ReplicaManagerTest {
 
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
-      partition.makeLeader(
-        leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds),
+      partition.makeLeader(partitionRegistration(leaderBrokerId, leaderEpoch, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+        isNew = false,
         offsetCheckpoints,
         None)
 
@@ -2654,20 +2653,21 @@ class ReplicaManagerTest {
     (replicaManager, mockLogMgr)
   }
 
-  private def leaderAndIsrPartitionState(topicPartition: TopicPartition,
-                                         leaderEpoch: Int,
-                                         leaderBrokerId: Int,
-                                         aliveBrokerIds: Seq[Integer],
-                                         isNew: Boolean = false): JPartitionState = {
-    new JPartitionState()
-      .setTopicName(topic)
-      .setPartitionIndex(topicPartition.partition)
-      .setLeader(leaderBrokerId)
+  private def partitionRegistration(leader: Int,
+                                    leaderEpoch: Int,
+                                    isr: Array[Int],
+                                    partitionEpoch: Int,
+                                    replicas: Array[Int]): PartitionRegistration = {
+    new PartitionRegistration.Builder()
+      .setLeader(leader)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
       .setLeaderEpoch(leaderEpoch)
-      .setIsr(aliveBrokerIds.asJava)
-      .setPartitionEpoch(zkVersion)
-      .setReplicas(aliveBrokerIds.asJava)
-      .setIsNew(isNew)
+      .setIsr(isr)
+      .setPartitionEpoch(partitionEpoch)
+      .setReplicas(replicas)
+      .setDirectories(DirectoryId.unassignedArray(replicas.length))
+      .build()
+
   }
 
   private class CallbackResult[T] {
@@ -4157,6 +4157,7 @@ class ReplicaManagerTest {
     val localId = 1
     val topicPartition0 = new TopicIdPartition(FOO_UUID, 0, "foo")
     val directoryEventHandler = mock(classOf[DirectoryEventHandler])
+    val aliveBrokerIds = Array(1, 2)
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
     try {
@@ -4164,7 +4165,8 @@ class ReplicaManagerTest {
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, true, partitions = List(0), directoryIds = directoryIds)
       val (partition: Partition, isNewWhenCreatedForFirstTime: Boolean) = replicaManager.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
-      partition.makeLeader(leaderAndIsrPartitionState(topicPartition0.topicPartition(), 1, localId, Seq(1, 2)),
+      partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+        isNew = false,
         new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava),
         None)
 
@@ -5716,13 +5718,15 @@ class ReplicaManagerTest {
     val localId = 1
     val topicPartition0 = new TopicIdPartition(FOO_UUID, 0, Topic.GROUP_METADATA_TOPIC_NAME)
     val directoryEventHandler = mock(classOf[DirectoryEventHandler])
+    val aliveBrokerIds = Array(1, 2)
 
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
     val directoryIds = rm.logManager.directoryIdsSet.toList
     assertEquals(directoryIds.size, 2)
     val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
     val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
-    partition.makeLeader(leaderAndIsrPartitionState(topicPartition0.topicPartition(), 1, localId, Seq(1, 2)),
+    partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+      isNew = false,
       new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava),
       None)
 
@@ -5743,15 +5747,17 @@ class ReplicaManagerTest {
     val localId = 1
     val topicPartition0 = new TopicIdPartition(FOO_UUID, 0, Topic.GROUP_METADATA_TOPIC_NAME)
     val directoryEventHandler = mock(classOf[DirectoryEventHandler])
+    val aliveBrokerIds = Array(1, 2)
 
     val rm = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
       val directoryIds = rm.logManager.directoryIdsSet.toList
       assertEquals(directoryIds.size, 2)
       val leaderTopicsDelta: TopicsDelta = topicsCreateDelta(localId, isStartIdLeader = true, directoryIds = directoryIds)
       val (partition: Partition, _) = rm.getOrCreatePartition(topicPartition0.topicPartition(), leaderTopicsDelta, FOO_UUID).get
-      partition.makeLeader(leaderAndIsrPartitionState(topicPartition0.topicPartition(), 1, localId, Seq(1, 2)),
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava),
-        None)
+    partition.makeLeader(partitionRegistration(localId, 1, aliveBrokerIds, partitionEpoch, aliveBrokerIds),
+      isNew = false,
+      new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava),
+      None)
 
     def callback(responseStatus: Map[TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult]): Unit = {
       assert(responseStatus.values.head.errorCode == Errors.NONE.code)
