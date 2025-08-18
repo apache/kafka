@@ -372,7 +372,7 @@ public class FetchCollector<K, V> {
             throw new KafkaException("Encountered corrupt message when fetching offset "
                     + fetchOffset
                     + " for topic-partition "
-                    + tp);
+                    + tp, error.exception());
         } else {
             throw new IllegalStateException("Unexpected error code "
                     + error.code()
