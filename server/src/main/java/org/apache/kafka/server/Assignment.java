@@ -54,14 +54,4 @@ record Assignment(TopicIdPartition topicIdPartition, Uuid directoryId, long subm
         // Check if this broker is still a replica.
         return Replicas.contains(partition.replicas, nodeId);
     }
-
-    @Override
-    public String toString() {
-        return "Assignment" +
-            "(topicIdPartition=" + topicIdPartition +
-            ", directoryId=" + directoryId +
-            ", submissionTimeNs=" + submissionTimeNs +
-            ", successCallback=" + successCallback +
-            ")";
-    }
 }
