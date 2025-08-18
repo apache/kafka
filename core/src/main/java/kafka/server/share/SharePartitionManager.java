@@ -774,6 +774,7 @@ public class SharePartitionManager implements AutoCloseable {
         if (sharePartition != null) {
             sharePartition.markFenced();
             replicaManager.removeListener(sharePartitionKey.topicIdPartition().topicPartition(), sharePartition.listener());
+            replicaManager.completeDelayedShareFetchRequest(new DelayedShareFetchGroupKey(sharePartitionKey.groupId(), sharePartitionKey.topicIdPartition()));
         }
     }
 

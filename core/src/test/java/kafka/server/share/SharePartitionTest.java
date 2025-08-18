@@ -7878,6 +7878,105 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask());
     }
 
+    @Test
+    public void testRecordArchivedWithWriteStateRPCFailure() throws InterruptedException {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .build();
+
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 2), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 7), 5);
+
+        // Futures which will be completed later, so the batch state has ongoing transition.
+        CompletableFuture<WriteShareGroupStateResult> future1 = new CompletableFuture<>();
+        CompletableFuture<WriteShareGroupStateResult> future2 = new CompletableFuture<>();
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(future1).thenReturn(future2);
+
+        // Acknowledge batches.
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(3, 3, List.of(AcknowledgeType.ACCEPT.id))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(7, 11, List.of(AcknowledgeType.ACCEPT.id))));
+
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(2L).offsetState().get(3L).state());
+        assertEquals(1, sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(7L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(7L).batchDeliveryCount());
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
+
+        future1.complete(writeShareGroupStateResult);
+        assertEquals(12, sharePartition.nextFetchOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).offsetState().get(3L).state());
+        assertEquals(1, sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(7L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(7L).batchDeliveryCount());
+
+        future2.complete(writeShareGroupStateResult);
+        assertEquals(12L, sharePartition.nextFetchOffset());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(2L).offsetState().get(3L).state());
+        assertEquals(1, sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(7L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(7L).batchDeliveryCount());
+
+        // Allowing acquisition lock to expire. This will also ensure that acquisition lock timeout task
+        // is run successfully post write state RPC failure.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.cachedState().get(2L).offsetState().get(3L).state() == RecordState.AVAILABLE  &&
+                sharePartition.cachedState().get(7L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount() == 1 &&
+                sharePartition.cachedState().get(7L).batchDeliveryCount() == 1 &&
+                sharePartition.timer().size() == 0,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(2L, List.of(3L), 7L, List.of())));
+        // Acquisition lock timeout task has run already and next fetch offset is moved to 2.
+        assertEquals(2, sharePartition.nextFetchOffset());
+        // Send the same batches again.
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 2), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 7), 5);
+
+        future1 = new CompletableFuture<>();
+        future2 = new CompletableFuture<>();
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(future1).thenReturn(future2);
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(3, 3, List.of(AcknowledgeType.ACCEPT.id))));
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(7, 11, List.of(AcknowledgeType.ACCEPT.id))));
+
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        // Verify the timer tasks have run and the state is archived for the offsets which are not acknowledged,
+        // but the acquisition lock timeout task should be just expired for acknowledged offsets, though
+        // the state should not be archived.
+        TestUtils.waitForCondition(
+            () -> sharePartition.cachedState().get(2L).offsetState().get(2L).state() == RecordState.ARCHIVED  &&
+                sharePartition.cachedState().get(2L).offsetState().get(3L).state() == RecordState.ACKNOWLEDGED  &&
+                sharePartition.cachedState().get(2L).offsetState().get(3L).acquisitionLockTimeoutTask().hasExpired() &&
+                sharePartition.cachedState().get(7L).batchState() == RecordState.ACKNOWLEDGED &&
+                sharePartition.cachedState().get(7L).batchAcquisitionLockTimeoutTask().hasExpired(),
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(2L, List.of(3L), 7L, List.of())));
+
+        future1.complete(writeShareGroupStateResult);
+        // Now the state should be archived for the offsets despite the write state RPC failure, as the
+        // delivery count has reached the max delivery count and the acquisition lock timeout task
+        // has already expired for the offsets which were acknowledged.
+        assertEquals(12, sharePartition.nextFetchOffset());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(2L).offsetState().get(3L).state());
+        assertEquals(2, sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(7L).batchState());
+        assertEquals(2, sharePartition.cachedState().get(7L).batchDeliveryCount());
+
+        future2.complete(writeShareGroupStateResult);
+        assertEquals(12L, sharePartition.nextFetchOffset());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(7L).batchState());
+        assertEquals(2, sharePartition.cachedState().get(7L).batchDeliveryCount());
+    }
+
     /**
      * This function produces transactional data of a given no. of records followed by a transactional marker (COMMIT/ABORT).
      */
