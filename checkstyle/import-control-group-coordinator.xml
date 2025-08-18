@@ -40,6 +40,8 @@
 
     <!-- anyone can use public classes -->
     <allow pkg="org.apache.kafka.common" exact-match="true" />
+    <allow pkg="org.apache.kafka.common.acl" />
+    <allow pkg="org.apache.kafka.common.resource" />
     <allow pkg="org.apache.kafka.common.security" />
     <allow pkg="org.apache.kafka.common.serialization" />
     <allow pkg="org.apache.kafka.common.utils" />
@@ -49,6 +51,7 @@
 
     <subpackage name="coordinator">
         <subpackage name="group">
+            <allow pkg="net.jpountz.xxhash" />
             <allow pkg="org.apache.kafka.clients.consumer" />
             <allow pkg="org.apache.kafka.common.annotation" />
             <allow pkg="org.apache.kafka.common.config" />
@@ -63,6 +66,7 @@
             <allow pkg="org.apache.kafka.coordinator.group" />
             <allow pkg="org.apache.kafka.deferred" />
             <allow pkg="org.apache.kafka.image"/>
+            <allow pkg="org.apache.kafka.server.authorizer"/>
             <allow pkg="org.apache.kafka.server.common"/>
             <allow pkg="org.apache.kafka.server.record"/>
             <allow pkg="org.apache.kafka.server.share.persister"/>
@@ -73,6 +77,7 @@
             <allow pkg="org.apache.kafka.coordinator.common" />
             <allow pkg="org.apache.kafka.coordinator.common.runtime" />
             <allow pkg="com.google.re2j" />
+            <allow pkg="com.dynatrace.hash4j.hashing" />
             <allow pkg="org.apache.kafka.metadata" />
             <subpackage name="metrics">
                 <allow pkg="com.yammer.metrics"/>

@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -26,8 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class CoordinatorResultTest {
     @Test
     public void testAttributes() {
-        CoordinatorResult<String, CoordinatorRecord> result = new CoordinatorResult<>(Collections.emptyList(), "response");
-        assertEquals(Collections.emptyList(), result.records());
+        CoordinatorResult<String, CoordinatorRecord> result = new CoordinatorResult<>(List.of(), "response");
+        assertEquals(List.of(), result.records());
         assertEquals("response", result.response());
     }
 
@@ -38,8 +38,8 @@ public class CoordinatorResultTest {
 
     @Test
     public void testEquals() {
-        CoordinatorResult<String, CoordinatorRecord> result1 = new CoordinatorResult<>(Collections.emptyList(), "response");
-        CoordinatorResult<String, CoordinatorRecord> result2 = new CoordinatorResult<>(Collections.emptyList(), "response");
+        CoordinatorResult<String, CoordinatorRecord> result1 = new CoordinatorResult<>(List.of(), "response");
+        CoordinatorResult<String, CoordinatorRecord> result2 = new CoordinatorResult<>(List.of(), "response");
         assertEquals(result1, result2);
     }
 }

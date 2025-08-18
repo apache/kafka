@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -30,11 +34,11 @@ import java.util.stream.Collectors;
  * An immutable tuple containing active, standby and warm-up tasks.
  *
  * @param activeTasks           Active tasks.
- *                              The key of the map is the subtopology ID and the value is the set of partition IDs.
+ *                              The key of the map is the subtopology ID, and the value is the set of partition IDs.
  * @param standbyTasks          Standby tasks.
- *                              The key of the map is the subtopology ID and the value is the set of partition IDs.
+ *                              The key of the map is the subtopology ID, and the value is the set of partition IDs.
  * @param warmupTasks           Warm-up tasks.
- *                              The key of the map is the subtopology ID and the value is the set of partition IDs.
+ *                              The key of the map is the subtopology ID, and the value is the set of partition IDs.
  */
 public record TasksTuple(Map<String, Set<Integer>> activeTasks,
                          Map<String, Set<Integer>> standbyTasks,
@@ -50,9 +54,9 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
      * An empty task tuple.
      */
     public static final TasksTuple EMPTY = new TasksTuple(
-        Collections.emptyMap(),
-        Collections.emptyMap(),
-        Collections.emptyMap()
+        Map.of(),
+        Map.of(),
+        Map.of()
     );
 
     /**
@@ -88,7 +92,7 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
     /**
      * Checks if this task tuple contains any of the tasks in another task tuple.
      *
-     * @param other The other task tuple.
+     * @param other Another task tuple.
      * @return true if there is at least one active, standby or warm-up task that is present in both tuples.
      */
     public boolean containsAny(TasksTuple other) {
@@ -129,5 +133,64 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
                     )
                 )
         );
+    }
+
+    public String toString() {
+        return "(active=" + taskAssignmentToString(activeTasks) +
+            ", standby=" + taskAssignmentToString(standbyTasks) +
+            ", warmup=" + taskAssignmentToString(warmupTasks) +
+            ')';
+    }
+
+    public static TasksTuple fromHeartbeatRequest(final List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks,
+                                                  final List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
+                                                  final List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks) {
+        return new TasksTuple(
+            ownedActiveTasks.stream()
+                .collect(Collectors.toMap(
+                    StreamsGroupHeartbeatRequestData.TaskIds::subtopologyId,
+                        taskId -> new HashSet<>(taskId.partitions())
+                    )
+                ),
+            ownedStandbyTasks.stream()
+                .collect(Collectors.toMap(
+                    StreamsGroupHeartbeatRequestData.TaskIds::subtopologyId,
+                        taskId -> new HashSet<>(taskId.partitions())
+                    )
+                ),
+            ownedWarmupTasks.stream()
+                .collect(Collectors.toMap(
+                    StreamsGroupHeartbeatRequestData.TaskIds::subtopologyId,
+                        taskId -> new HashSet<>(taskId.partitions())
+                    )
+                )
+        );
+    }
+
+    /**
+     * @return The provided assignment as a String.
+     *
+     * Example:
+     * [subtopologyID1-0, subtopologyID1-1, subtopologyID2-0, subtopologyID2-1]
+     */
+    private static String taskAssignmentToString(
+        Map<String, Set<Integer>> assignment
+    ) {
+        StringBuilder builder = new StringBuilder("[");
+        Iterator<Entry<String, Set<Integer>>> subtopologyIterator = assignment.entrySet().iterator();
+        while (subtopologyIterator.hasNext()) {
+            Map.Entry<String, Set<Integer>> entry = subtopologyIterator.next();
+            Iterator<Integer> partitionsIterator = entry.getValue().iterator();
+            while (partitionsIterator.hasNext()) {
+                builder.append(entry.getKey());
+                builder.append("-");
+                builder.append(partitionsIterator.next());
+                if (partitionsIterator.hasNext() || subtopologyIterator.hasNext()) {
+                    builder.append(", ");
+                }
+            }
+        }
+        builder.append("]");
+        return builder.toString();
     }
 }

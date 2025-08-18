@@ -17,8 +17,6 @@
 
 package kafka.server.share;
 
-import kafka.server.MetadataCache;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -26,6 +24,7 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 
@@ -34,9 +33,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
-
-import scala.jdk.javaapi.CollectionConverters;
-import scala.jdk.javaapi.OptionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -186,7 +182,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             eq(false),
             eq(false)
         )).thenReturn(
-            CollectionConverters.asScala(List.of())
+            List.of()
         );
 
         assertEquals(
@@ -209,10 +205,10 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             eq(false),
             eq(false)
         )).thenReturn(
-            CollectionConverters.asScala(List.of(
+            List.of(
                 new MetadataResponseData.MetadataResponseTopic()
                     .setErrorCode(Errors.BROKER_NOT_AVAILABLE.code())
-            ))
+            )
         );
 
         assertEquals(
@@ -251,7 +247,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             eq(false),
             eq(false)
         )).thenReturn(
-            CollectionConverters.asScala(List.of(
+            List.of(
                 new MetadataResponseData.MetadataResponseTopic()
                     .setErrorCode(Errors.NONE.code())
                     .setPartitions(List.of(
@@ -259,7 +255,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
                             .setPartitionIndex(0)
                             .setLeaderId(1)
                     ))
-            ))
+            )
         );
 
         // get alive broker node throws exception
@@ -267,7 +263,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             eq(1),
             eq(mockListenerName)
         )).thenReturn(
-            OptionConverters.toScala(Optional.empty())
+            Optional.empty()
         );
 
         assertEquals(
@@ -307,7 +303,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             eq(false),
             eq(false)
         )).thenReturn(
-            CollectionConverters.asScala(List.of(
+            List.of(
                 new MetadataResponseData.MetadataResponseTopic()
                     .setErrorCode(Errors.NONE.code())
                     .setPartitions(List.of(
@@ -315,7 +311,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
                             .setPartitionIndex(0)
                             .setLeaderId(1)
                     ))
-            ))
+            )
         );
 
         // get alive broker node throws exception
@@ -363,7 +359,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             eq(false),
             eq(false)
         )).thenReturn(
-            CollectionConverters.asScala(List.of(
+            List.of(
                 new MetadataResponseData.MetadataResponseTopic()
                     .setErrorCode(Errors.NONE.code())
                     .setPartitions(List.of(
@@ -371,7 +367,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
                             .setPartitionIndex(0)
                             .setLeaderId(1)
                     ))
-            ))
+            )
         );
 
         // get alive broker node throws exception
@@ -380,7 +376,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
             eq(1),
             eq(mockListenerName)
         )).thenReturn(
-            OptionConverters.toScala(Optional.of(node))
+            Optional.of(node)
         );
 
         assertEquals(
@@ -444,9 +440,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         when(mockMetadataCache.getAliveBrokerNodes(
             eq(mockListenerName)
         )).thenReturn(
-            CollectionConverters.asScala(
-                nodes
-            )
+            nodes
         );
 
         assertEquals(

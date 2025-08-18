@@ -21,34 +21,15 @@ import java.util.List;
 
 /**
  * The ShareAcknowledgementBatch containing the fields required to acknowledge the fetched records.
- * The class abstracts the acknowledgment request for <code>SharePartition</code> class constructed
+ * The class abstracts the acknowledgement request for <code>SharePartition</code> class constructed
  * from {@link org.apache.kafka.common.message.ShareFetchRequestData.AcknowledgementBatch} and
  * {@link org.apache.kafka.common.message.ShareAcknowledgeRequestData.AcknowledgementBatch} classes.
  */
-public class ShareAcknowledgementBatch {
-
-    private final long firstOffset;
-    private final long lastOffset;
-    private final List<Byte> acknowledgeTypes;
-
-    public ShareAcknowledgementBatch(long firstOffset, long lastOffset, List<Byte> acknowledgeTypes) {
-        this.firstOffset = firstOffset;
-        this.lastOffset = lastOffset;
-        this.acknowledgeTypes = acknowledgeTypes;
-    }
-
-    public long firstOffset() {
-        return firstOffset;
-    }
-
-    public long lastOffset() {
-        return lastOffset;
-    }
-
-    public List<Byte> acknowledgeTypes() {
-        return acknowledgeTypes;
-    }
-
+public record ShareAcknowledgementBatch(
+    long firstOffset,
+    long lastOffset,
+    List<Byte> acknowledgeTypes
+) {
     @Override
     public String toString() {
         return "ShareAcknowledgementBatch(" +

@@ -26,10 +26,6 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
@@ -44,24 +40,14 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
 
-    private static final Logger log = LoggerFactory.getLogger(GroupCoordinatorMetricsShard.class);
-
     /**
      * This class represents a gauge counter for this shard. The TimelineLong object represents a gauge backed by
      * the snapshot registry. Once we commit to a certain offset in the snapshot registry, we write the given
      * TimelineLong's value to the AtomicLong. This AtomicLong represents the actual gauge counter that is queried
      * when reporting the value to {@link GroupCoordinatorMetrics}.
      */
-    private static class TimelineGaugeCounter {
+    private record TimelineGaugeCounter(TimelineLong timelineLong, AtomicLong atomicLong) {
 
-        final TimelineLong timelineLong;
-
-        final AtomicLong atomicLong;
-
-        public TimelineGaugeCounter(TimelineLong timelineLong, AtomicLong atomicLong) {
-            this.timelineLong = timelineLong;
-            this.atomicLong = atomicLong;
-        }
     }
     /**
      * Classic group size gauge counters keyed by the metric name.
@@ -112,10 +98,10 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         numOffsetsTimelineGaugeCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
         numClassicGroupsTimelineCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
 
-        this.classicGroupGauges = Collections.emptyMap();
-        this.consumerGroupGauges = Collections.emptyMap();
-        this.streamsGroupGauges = Collections.emptyMap();
-        this.shareGroupGauges = Collections.emptyMap();
+        this.classicGroupGauges = Map.of();
+        this.consumerGroupGauges = Map.of();
+        this.streamsGroupGauges = Map.of();
+        this.shareGroupGauges = Map.of();
 
         this.globalSensors = Objects.requireNonNull(globalSensors);
         this.topicPartition = Objects.requireNonNull(topicPartition);

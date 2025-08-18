@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -74,7 +73,7 @@ public class CopartitionedTopicsEnforcer {
                                         final Set<String> flexibleRepartitionTopics) throws StreamsInvalidTopologyException {
         if (copartitionedTopics.isEmpty()) {
             log.debug("Ignoring unexpected empty copartitioned topics set.");
-            return Collections.emptyMap();
+            return Map.of();
         }
         final Map<String, Integer> returnedPartitionCounts = new HashMap<>();
 

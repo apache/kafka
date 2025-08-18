@@ -22,7 +22,20 @@ package org.apache.kafka.common.errors;
  * The request can be modified or updated with fresh metadata before being retried.
  */
 public abstract class RefreshRetriableException extends RetriableException {
+    private static final long serialVersionUID = 1L;
+
+    public RefreshRetriableException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
     public RefreshRetriableException(String message) {
         super(message);
+    }
+
+    public RefreshRetriableException(Throwable cause) {
+        super(cause);
+    }
+
+    public RefreshRetriableException() {
     }
 }

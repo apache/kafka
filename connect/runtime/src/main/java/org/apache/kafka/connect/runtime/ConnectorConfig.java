@@ -362,7 +362,7 @@ public class ConnectorConfig extends AbstractConfig {
      * {@link Transformation transformations} and {@link Predicate predicates}
      * as they are specified in the {@link #TRANSFORMS_CONFIG} and {@link #PREDICATES_CONFIG}
      */
-    public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages(ConnectorTaskId connectorTaskId, ConnectMetrics metrics) {
+    public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages(Plugins plugins, ConnectorTaskId connectorTaskId, ConnectMetrics metrics) {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
 
         final List<TransformationStage<R>> transformations = new ArrayList<>(transformAliases.size());
@@ -370,22 +370,38 @@ public class ConnectorConfig extends AbstractConfig {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
 
             try {
-                @SuppressWarnings("unchecked")
-                final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
+                final String typeConfig = prefix + "type";
+                final String versionConfig = prefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
+                final Transformation<R> transformation = getTransformationOrPredicate(plugins, typeConfig, versionConfig);
                 Map<String, Object> configs = originalsWithPrefix(prefix);
-                Object predicateAlias = configs.remove(TransformationStage.PREDICATE_CONFIG);
+                String predicateAlias = (String) configs.remove(TransformationStage.PREDICATE_CONFIG);
                 Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
                 transformation.configure(configs);
                 Plugin<Transformation<R>> transformationPlugin = metrics.wrap(transformation, connectorTaskId, alias);
                 if (predicateAlias != null) {
                     String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
-                    @SuppressWarnings("unchecked")
-                    Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
+                    final String predicateTypeConfig = predicatePrefix + "type";
+                    final String predicateVersionConfig = predicatePrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
+                    Predicate<R> predicate = getTransformationOrPredicate(plugins, predicateTypeConfig, predicateVersionConfig);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
-                    Plugin<Predicate<R>> predicatePlugin = metrics.wrap(predicate, connectorTaskId, (String) predicateAlias);
-                    transformations.add(new TransformationStage<>(predicatePlugin, negate != null && Boolean.parseBoolean(negate.toString()), transformationPlugin));
+                    Plugin<Predicate<R>> predicatePlugin = metrics.wrap(predicate, connectorTaskId, predicateAlias);
+                    transformations.add(new TransformationStage<>(
+                        predicatePlugin,
+                        predicateAlias,
+                        plugins.pluginVersion(predicate.getClass().getName(), predicate.getClass().getClassLoader(), PluginType.PREDICATE),
+                        negate != null && Boolean.parseBoolean(negate.toString()),
+                        transformationPlugin,
+                        alias,
+                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                        plugins.safeLoaderSwapper())
+                    );
                 } else {
-                    transformations.add(new TransformationStage<>(transformationPlugin));
+                    transformations.add(new TransformationStage<>(
+                        transformationPlugin,
+                        alias,
+                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                        plugins.safeLoaderSwapper())
+                    );
                 }
             } catch (Exception e) {
                 throw new ConnectException(e);
@@ -393,6 +409,17 @@ public class ConnectorConfig extends AbstractConfig {
         }
 
         return transformations;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T getTransformationOrPredicate(Plugins plugins, String classConfig, String versionConfig) {
+        try {
+            VersionRange range = PluginUtils.connectorVersionRequirement(getString(versionConfig));
+            VersionRange connectorRange = PluginUtils.connectorVersionRequirement(getString(CONNECTOR_VERSION));
+            return (T) plugins.newPlugin(getClass(classConfig).getName(), range, plugins.pluginLoader(getString(CONNECTOR_CLASS_CONFIG), connectorRange));
+        } catch (Exception e) {
+            throw new ConnectException(e);
+        }
     }
 
     /**
@@ -767,22 +794,7 @@ public class ConnectorConfig extends AbstractConfig {
         }
     }
 
-    private static class ConverterDefaults {
-        private final String type;
-        private final String version;
-
-        public ConverterDefaults(String type, String version) {
-            this.type = type;
-            this.version = version;
-        }
-
-        public String type() {
-            return type;
-        }
-
-        public String version() {
-            return version;
-        }
+    private record ConverterDefaults(String type, String version) {
     }
 
     public static class PluginVersionValidator implements ConfigDef.Validator {

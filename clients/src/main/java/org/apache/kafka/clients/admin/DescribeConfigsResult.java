@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Collection;
@@ -28,10 +27,7 @@ import java.util.concurrent.ExecutionException;
 
 /**
  * The result of the {@link KafkaAdminClient#describeConfigs(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeConfigsResult {
 
     private final Map<ConfigResource, KafkaFuture<Config>> futures;

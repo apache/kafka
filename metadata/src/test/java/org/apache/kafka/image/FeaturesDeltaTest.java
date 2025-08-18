@@ -18,12 +18,15 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionTestUtils;
 
 import org.junit.jupiter.api.Test;
 
-import static java.util.Collections.emptyMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -31,7 +34,7 @@ class FeaturesDeltaTest {
 
     @Test
     public void testReplayWithUnsupportedFeatureLevel() {
-        var featuresDelta = new FeaturesDelta(new FeaturesImage(emptyMap(), MetadataVersion.MINIMUM_VERSION));
+        var featuresDelta = new FeaturesDelta(new FeaturesImage(Map.of(), MetadataVersion.MINIMUM_VERSION));
         var exception = assertThrows(IllegalArgumentException.class, () -> featuresDelta.replay(new FeatureLevelRecord()
             .setName(MetadataVersion.FEATURE_NAME)
             .setFeatureLevel(MetadataVersionTestUtils.IBP_3_3_IV2_FEATURE_LEVEL)));
@@ -40,4 +43,10 @@ class FeaturesDeltaTest {
             "Expected substring missing from exception message: " + exception.getMessage());
     }
 
+    @Test
+    public void testReplayKraftVersionFeatureLevel() {
+        var featuresDelta = new FeaturesDelta(new FeaturesImage(Map.of(), MetadataVersion.MINIMUM_VERSION));
+        featuresDelta.replay(new FeatureLevelRecord().setName(KRaftVersion.FEATURE_NAME).setFeatureLevel(KRaftVersion.LATEST_PRODUCTION.featureLevel()));
+        assertEquals(Map.of(), featuresDelta.changes());
+    }
 }

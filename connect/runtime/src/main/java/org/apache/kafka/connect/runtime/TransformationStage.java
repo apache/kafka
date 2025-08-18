@@ -20,8 +20,12 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+
+import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Wrapper for a {@link Transformation} and corresponding optional {@link Predicate}
@@ -36,15 +40,40 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
     private final Plugin<Predicate<R>> predicatePlugin;
     private final Plugin<Transformation<R>> transformationPlugin;
     private final boolean negate;
+    private final String transformAlias;
+    private final String predicateAlias;
+    private final String transformVersion;
+    private final String predicateVersion;
+    private final Function<ClassLoader, LoaderSwap> pluginLoaderSwapper;
 
-    TransformationStage(Plugin<Transformation<R>> transformationPlugin) {
-        this(null, false, transformationPlugin);
+
+    TransformationStage(
+        Plugin<Transformation<R>> transformationPlugin,
+        String transformAlias,
+        String transformVersion,
+        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
+    ) {
+        this(null, null, null, false, transformationPlugin, transformAlias, transformVersion, pluginLoaderSwapper);
     }
 
-    TransformationStage(Plugin<Predicate<R>> predicatePlugin, boolean negate, Plugin<Transformation<R>> transformationPlugin) {
+    TransformationStage(
+        Plugin<Predicate<R>> predicatePlugin,
+        String predicateAlias,
+        String predicateVersion,
+        boolean negate,
+        Plugin<Transformation<R>> transformationPlugin,
+        String transformAlias,
+        String transformVersion,
+        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
+    ) {
         this.predicatePlugin = predicatePlugin;
         this.negate = negate;
         this.transformationPlugin = transformationPlugin;
+        this.pluginLoaderSwapper = pluginLoaderSwapper;
+        this.transformAlias = transformAlias;
+        this.predicateAlias = predicateAlias;
+        this.transformVersion = transformVersion;
+        this.predicateVersion = predicateVersion;
     }
 
     public Class<? extends Transformation<R>> transformClass() {
@@ -54,8 +83,17 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
     }
 
     public R apply(R record) {
-        if (predicatePlugin == null || predicatePlugin.get() == null || negate ^ predicatePlugin.get().test(record)) {
-            return transformationPlugin.get().apply(record);
+        Predicate<R> predicate = predicatePlugin != null ? predicatePlugin.get() : null;
+        boolean shouldTransform = predicate == null;
+        if (predicate != null) {
+            try (LoaderSwap swap = pluginLoaderSwapper.apply(predicate.getClass().getClassLoader())) {
+                shouldTransform = negate ^ predicate.test(record);
+            }
+        }
+        if (shouldTransform) {
+            try (LoaderSwap swap = pluginLoaderSwapper.apply(transformationPlugin.get().getClass().getClassLoader())) {
+                record = transformationPlugin.get().apply(record);
+            }
         }
         return record;
     }
@@ -73,5 +111,33 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
                 ", transformation=" + transformationPlugin.get() +
                 ", negate=" + negate +
                 '}';
+    }
+
+    public record AliasedPluginInfo(String alias, String className, String version) {
+        public AliasedPluginInfo {
+            Objects.requireNonNull(alias, "alias cannot be null");
+            Objects.requireNonNull(className, "className cannot be null");
+        }
+    }
+
+
+    public record StageInfo(AliasedPluginInfo transform, AliasedPluginInfo predicate) {
+        public StageInfo {
+            Objects.requireNonNull(transform, "transform cannot be null");
+        }
+    }
+
+
+    public StageInfo transformationStageInfo() {
+        AliasedPluginInfo transformInfo = new AliasedPluginInfo(
+            transformAlias,
+            transformationPlugin.get().getClass().getName(),
+            transformVersion
+        );
+        AliasedPluginInfo predicateInfo = predicatePlugin != null ? new AliasedPluginInfo(
+            predicateAlias,
+            predicatePlugin.get().getClass().getName(), predicateVersion
+        ) : null;
+        return new StageInfo(transformInfo, predicateInfo);
     }
 }

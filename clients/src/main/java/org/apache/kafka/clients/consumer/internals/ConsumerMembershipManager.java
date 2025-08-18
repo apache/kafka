@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -43,8 +44,10 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
@@ -108,6 +111,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     protected final Optional<String> groupInstanceId;
 
+    private final Optional<String> rackId;
+
     /**
      * Rebalance timeout. To be used as time limit for the commit request issued
      * when a new assignment is received, that is retried until it succeeds, fails with a
@@ -136,6 +141,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
 
     public ConsumerMembershipManager(String groupId,
                                      Optional<String> groupInstanceId,
+                                     Optional<String> rackId,
                                      int rebalanceTimeoutMs,
                                      Optional<String> serverAssignor,
                                      SubscriptionState subscriptions,
@@ -148,6 +154,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      boolean autoCommitEnabled) {
         this(groupId,
             groupInstanceId,
+            rackId,
             rebalanceTimeoutMs,
             serverAssignor,
             subscriptions,
@@ -163,6 +170,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     // Visible for testing
     ConsumerMembershipManager(String groupId,
                               Optional<String> groupInstanceId,
+                              Optional<String> rackId,
                               int rebalanceTimeoutMs,
                               Optional<String> serverAssignor,
                               SubscriptionState subscriptions,
@@ -181,6 +189,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             metricsManager,
             autoCommitEnabled);
         this.groupInstanceId = groupInstanceId;
+        this.rackId = rackId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.serverAssignor = serverAssignor;
         this.commitRequestManager = commitRequestManager;
@@ -193,6 +202,10 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
+    }
+
+    public Optional<String> rackId() {
+        return rackId;
     }
 
     /**
@@ -214,7 +227,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                     "already leaving the group.", memberId, memberEpoch);
             return;
         }
-        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
+        if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
                     "to leave the group and completed the leave operation. ", memberId, memberEpoch);
             return;
@@ -222,6 +235,13 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
                     " so it's not a member of the group. ", memberId, state);
+            return;
+        }
+        if (responseData.memberEpoch() < 0) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
+                    "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
+                    responseData.memberEpoch());
+            maybeCompleteLeaveInProgress();
             return;
         }
 
@@ -394,8 +414,28 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(partitionsToRevoke);
         if (!revokePausedPartitions.isEmpty()) {
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", revokePausedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+            log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
         }
+    }
+
+    @Override
+    public boolean isLeavingGroup() {
+        CloseOptions.GroupMembershipOperation leaveGroupOperation = leaveGroupOperation();
+        if (REMAIN_IN_GROUP == leaveGroupOperation) {
+            return false;
+        }
+
+        MemberState state = state();
+        boolean isLeavingState = state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
+
+        // Default operation: both static and dynamic consumers will send a leave heartbeat
+        boolean hasLeaveOperation = DEFAULT == leaveGroupOperation ||
+            // Leave operation: both static and dynamic consumers will send a leave heartbeat
+            LEAVE_GROUP == leaveGroupOperation ||
+            // Remain in group: only static consumers will send a leave heartbeat, while dynamic members will not
+            groupInstanceId().isPresent();
+
+        return isLeavingState && hasLeaveOperation;
     }
 
     /**
@@ -469,8 +509,16 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     @Override
     public int leaveGroupEpoch() {
-        return groupInstanceId.isPresent() ?
-                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
-                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        boolean isStaticMember = groupInstanceId.isPresent();
+        // Currently, the server doesn't have a mechanism for static members to permanently leave the group.
+        // Therefore, we use LEAVE_GROUP_MEMBER_EPOCH to force the GroupMetadataManager to fence
+        // this member, effectively removing it from the group.
+        if (LEAVE_GROUP == leaveGroupOperation) {
+            return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        }
+
+        return isStaticMember ?
+            ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
+            ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
     }
 }

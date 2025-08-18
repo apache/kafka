@@ -12,13 +12,12 @@
  */
 package kafka.api
 
-import kafka.log.UnifiedLog
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, ConsumerGroupDescription}
 import org.apache.kafka.clients.consumer.{Consumer, GroupProtocol, OffsetAndMetadata}
-import org.apache.kafka.common.errors.GroupIdNotFoundException
-import org.apache.kafka.common.{ConsumerGroupState, GroupType, KafkaFuture, TopicPartition}
+import org.apache.kafka.common.errors.{GroupIdNotFoundException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.{ConsumerGroupState, GroupType, KafkaFuture, TopicCollection, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
@@ -27,11 +26,13 @@ import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs
+import org.apache.kafka.storage.internals.log.UnifiedLog
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Timeout
 
 import java.time.Duration
-import java.util.Collections
 import java.util.concurrent.TimeUnit
+import scala.concurrent.ExecutionException
 
 @Timeout(120)
 class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
@@ -47,9 +48,9 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
   )
   def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(): Unit = {
     withConsumer(groupId = "group", groupProtocol = GroupProtocol.CLASSIC) { consumer =>
-      consumer.commitSync(Map(
-        new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")
-      ).asJava)
+      consumer.commitSync(java.util.Map.of(
+        new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0), new OffsetAndMetadata(10, "")
+      ))
 
       val logManager = cluster.brokers().asScala.head._2.logManager
       def getGroupMetadataLogOpt: Option[UnifiedLog] =
@@ -85,7 +86,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       // Create a consumer group grp1 with one member. The member subscribes to foo and leaves. This creates
       // a mix of group records with tombstones to delete the member.
       withConsumer(groupId = "grp1", groupProtocol = GroupProtocol.CONSUMER) { consumer =>
-        consumer.subscribe(List("foo").asJava)
+        consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
           consumer.assignment.asScala.nonEmpty
@@ -105,7 +106,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     // group coordinator won't be available.
     withAdmin { admin =>
       val groups = admin
-        .describeConsumerGroups(List("grp1").asJava)
+        .describeConsumerGroups(java.util.List.of("grp1"))
         .describedGroups()
         .asScala
         .toMap
@@ -134,14 +135,14 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       // and ensure that all the offset commit records are before the consumer group records due to the
       // rebalance after the commit sync.
       withConsumer(groupId = "grp2", groupProtocol = GroupProtocol.CONSUMER, enableAutoCommit = false) { consumer =>
-        consumer.subscribe(List("foo").asJava)
+        consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
           consumer.assignment().asScala.nonEmpty
         }, msg = "Consumer did not get an non empty assignment")
         consumer.commitSync()
         consumer.unsubscribe()
-        consumer.subscribe(List("foo").asJava)
+        consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
           consumer.assignment().asScala.nonEmpty
@@ -161,7 +162,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     // group coordinator won't be available.
     withAdmin { admin =>
       val groups = admin
-        .describeConsumerGroups(List("grp2").asJava)
+        .describeConsumerGroups(java.util.List.of("grp2"))
         .describedGroups()
         .asScala
         .toMap
@@ -188,7 +189,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       // Create a consumer group grp3 with one member. The member subscribes to foo and leaves the group. Then
       // the group is deleted. This creates tombstones to delete the member, the group and the offsets.
       withConsumer(groupId = "grp3", groupProtocol = GroupProtocol.CONSUMER) { consumer =>
-        consumer.subscribe(List("foo").asJava)
+        consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
           consumer.assignment().asScala.nonEmpty
@@ -196,7 +197,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       }
 
       admin
-        .deleteConsumerGroups(List("grp3").asJava)
+        .deleteConsumerGroups(java.util.List.of("grp3"))
         .deletedGroups()
         .get("grp3")
         .get(10, TimeUnit.SECONDS)
@@ -214,7 +215,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     // group coordinator won't be available.
     withAdmin { admin =>
       val groups = admin
-        .describeConsumerGroups(List("grp3").asJava)
+        .describeConsumerGroups(java.util.List.of("grp3"))
         .describedGroups()
         .asScala
         .toMap
@@ -241,7 +242,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       // Create a classic group grp4 with one member. Upgrades the group to the consumer
       // protocol.
       withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CLASSIC) { consumer =>
-        consumer.subscribe(List("foo").asJava)
+        consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
           consumer.assignment().asScala.nonEmpty
@@ -249,7 +250,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
       }
 
       withConsumer(groupId = "grp4", groupProtocol = GroupProtocol.CONSUMER) { consumer =>
-        consumer.subscribe(List("foo").asJava)
+        consumer.subscribe(java.util.List.of("foo"))
         TestUtils.waitUntilTrue(() => {
           consumer.poll(Duration.ofMillis(50))
           consumer.assignment().asScala.nonEmpty
@@ -269,7 +270,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     // group coordinator won't be available.
     withAdmin { admin =>
       val groups = admin
-        .describeConsumerGroups(List("grp4").asJava)
+        .describeConsumerGroups(java.util.List.of("grp4"))
         .describedGroups()
         .asScala
         .toMap
@@ -278,12 +279,64 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     }
   }
 
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    )
+  )
+  def testRecreatingConsumerOffsetsTopic(): Unit = {
+    withAdmin { admin =>
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      withConsumer(groupId = "group", groupProtocol = GroupProtocol.CONSUMER) { consumer =>
+        consumer.subscribe(List("foo").asJava)
+        TestUtils.waitUntilTrue(() => {
+          consumer.poll(Duration.ofMillis(50))
+          consumer.assignment().asScala.nonEmpty
+        }, msg = "Consumer did not get an non empty assignment")
+      }
+
+      admin
+        .deleteTopics(TopicCollection.ofTopicNames(List(Topic.GROUP_METADATA_TOPIC_NAME).asJava))
+        .all()
+        .get()
+
+      TestUtils.waitUntilTrue(() => {
+        try {
+          admin
+            .describeTopics(TopicCollection.ofTopicNames(List(Topic.GROUP_METADATA_TOPIC_NAME).asJava))
+            .topicNameValues()
+            .get(Topic.GROUP_METADATA_TOPIC_NAME)
+            .get(JTestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS)
+          false
+        } catch {
+          case e: ExecutionException =>
+            e.getCause.isInstanceOf[UnknownTopicOrPartitionException]
+        }
+      }, msg = s"${Topic.GROUP_METADATA_TOPIC_NAME} was not deleted")
+
+      withConsumer(groupId = "group", groupProtocol = GroupProtocol.CONSUMER) { consumer =>
+        consumer.subscribe(List("foo").asJava)
+        TestUtils.waitUntilTrue(() => {
+          consumer.poll(Duration.ofMillis(50))
+          consumer.assignment().asScala.nonEmpty
+        }, msg = "Consumer did not get an non empty assignment")
+      }
+    }
+  }
+
   private def rollAndCompactConsumerOffsets(): Unit = {
     val tp = new TopicPartition("__consumer_offsets", 0)
     val broker = cluster.brokers.asScala.head._2
     val log = broker.logManager.getLog(tp).get
     log.roll()
-    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, 0))
+    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, 0, 60000L))
   }
 
   private def withAdmin(f: Admin => Unit): Unit = {
@@ -324,7 +377,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     assertEquals(groupId, group.groupId)
     assertEquals(groupType, group.`type`)
     assertEquals(state, group.state)
-    assertEquals(Collections.emptyList, group.members)
+    assertEquals(java.util.List.of, group.members)
   }
 
   private def assertDescribedDeadGroup(

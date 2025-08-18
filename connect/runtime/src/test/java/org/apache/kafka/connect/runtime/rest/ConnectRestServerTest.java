@@ -64,6 +64,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -402,7 +403,7 @@ public class ConnectRestServerTest {
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
-            metricName = metrics.metricName("name", "description", Map.of());
+            metricName = metrics.metricName("name", "description", new LinkedHashMap<>());
             metrics.addMetric(metricName, (Gauge<Boolean>) (config, now) -> called);
         }
     }
@@ -463,7 +464,7 @@ public class ConnectRestServerTest {
 
     private String executePut(URI serverUrl, String endpoint, String jsonBody) throws IOException {
         HttpPut request = new HttpPut(endpoint);
-        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8.name());
+        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8);
         entity.setContentType("application/json");
         request.setEntity(entity);
         HttpResponse response = executeRequest(serverUrl, request);

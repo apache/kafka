@@ -26,8 +26,8 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -88,7 +88,7 @@ public class MetadataImageTest {
         // A metadata version is required for writing, so the expected image is not actually empty
         var expectedImage = new MetadataImage(
             MetadataProvenance.EMPTY,
-            new FeaturesImage(Collections.emptyMap(), metadataVersion),
+            new FeaturesImage(Map.of(), metadataVersion),
             ClusterImage.EMPTY,
             TopicsImage.EMPTY,
             ConfigurationsImage.EMPTY,

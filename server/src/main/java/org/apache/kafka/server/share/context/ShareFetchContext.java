@@ -25,8 +25,8 @@ import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
 import org.apache.kafka.server.share.session.ShareSession;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 
 /**
  * The context for every share fetch request. The context is responsible for tracking the topic partitions present in
@@ -49,8 +49,8 @@ public abstract class ShareFetchContext {
      * @return - An empty throttled response.
      */
     public ShareFetchResponse throttleResponse(int throttleTimeMs) {
-        return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
-                Collections.emptyIterator(), Collections.emptyList()));
+        return ShareFetchResponse.of(Errors.NONE, throttleTimeMs,
+                new LinkedHashMap<>(), List.of(), 0);
     }
 
     /**

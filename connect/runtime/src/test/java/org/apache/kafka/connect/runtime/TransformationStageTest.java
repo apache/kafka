@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
@@ -60,8 +61,14 @@ public class TransformationStageTest {
         }
         TransformationStage<SourceRecord> stage = new TransformationStage<>(
                 predicatePlugin,
+                "testPredicate",
+                null,
                 negate,
-                transformationPlugin);
+                transformationPlugin,
+                "testTransformation",
+                null,
+                TestPlugins.noOpLoaderSwap()
+        );
 
         assertEquals(expectedResult, stage.apply(initial));
 

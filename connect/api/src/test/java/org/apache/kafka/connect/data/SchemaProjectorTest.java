@@ -24,8 +24,6 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,12 +76,12 @@ public class SchemaProjectorTest {
 
         Object[] values = {(byte) 127, (short) 255, 32767, 327890L, 1.2F, 1.2345};
         Map<Object, List<?>> expectedProjected = new HashMap<>();
-        expectedProjected.put(values[0], Arrays.asList((byte) 127, (short) 127, 127, 127L, 127.F, 127.));
-        expectedProjected.put(values[1], Arrays.asList((short) 255, 255, 255L, 255.F, 255.));
-        expectedProjected.put(values[2], Arrays.asList(32767, 32767L, 32767.F, 32767.));
-        expectedProjected.put(values[3], Arrays.asList(327890L, 327890.F, 327890.));
-        expectedProjected.put(values[4], Arrays.asList(1.2F, 1.2));
-        expectedProjected.put(values[5], Collections.singletonList(1.2345));
+        expectedProjected.put(values[0], List.of((byte) 127, (short) 127, 127, 127L, 127.F, 127.));
+        expectedProjected.put(values[1], List.of((short) 255, 255, 255L, 255.F, 255.));
+        expectedProjected.put(values[2], List.of(32767, 32767L, 32767.F, 32767.));
+        expectedProjected.put(values[3], List.of(327890L, 327890.F, 327890.));
+        expectedProjected.put(values[4], List.of(1.2F, 1.2));
+        expectedProjected.put(values[5], List.of(1.2345));
 
         Object promoted;
         for (int i = 0; i < promotableSchemas.length; ++i) {
@@ -298,16 +296,16 @@ public class SchemaProjectorTest {
         Struct sourceNestedStruct = new Struct(sourceNestedSchema);
         sourceNestedStruct.put("first", 1);
         sourceNestedStruct.put("second", "abc");
-        sourceNestedStruct.put("array", Arrays.asList(1, 2));
-        sourceNestedStruct.put("map", Collections.singletonMap(5, "def"));
+        sourceNestedStruct.put("array", List.of(1, 2));
+        sourceNestedStruct.put("map", Map.of(5, "def"));
         sourceNestedStruct.put("nested", sourceFlatStruct);
 
         Struct targetNestedStruct = (Struct) SchemaProjector.project(sourceNestedSchema, sourceNestedStruct,
                                                                      targetNestedSchema);
         assertEquals(1, targetNestedStruct.get("first"));
         assertEquals("abc", targetNestedStruct.get("second"));
-        assertEquals(Arrays.asList(1, 2), targetNestedStruct.get("array"));
-        assertEquals(Collections.singletonMap(5, "def"), targetNestedStruct.get("map"));
+        assertEquals(List.of(1, 2), targetNestedStruct.get("array"));
+        assertEquals(Map.of(5, "def"), targetNestedStruct.get("map"));
 
         Struct projectedStruct = (Struct) targetNestedStruct.get("nested");
         assertEquals(113, projectedStruct.get("field"));
@@ -360,22 +358,22 @@ public class SchemaProjectorTest {
     public void testArrayProjection() {
         Schema source = SchemaBuilder.array(Schema.INT32_SCHEMA).build();
 
-        Object projected = SchemaProjector.project(source, Arrays.asList(1, 2, 3), source);
-        assertEquals(Arrays.asList(1, 2, 3), projected);
+        Object projected = SchemaProjector.project(source, List.of(1, 2, 3), source);
+        assertEquals(List.of(1, 2, 3), projected);
 
         Schema optionalSource = SchemaBuilder.array(Schema.INT32_SCHEMA).optional().build();
-        Schema target = SchemaBuilder.array(Schema.INT32_SCHEMA).defaultValue(Arrays.asList(1, 2, 3)).build();
-        projected = SchemaProjector.project(optionalSource, Arrays.asList(4, 5), target);
-        assertEquals(Arrays.asList(4, 5), projected);
+        Schema target = SchemaBuilder.array(Schema.INT32_SCHEMA).defaultValue(List.of(1, 2, 3)).build();
+        projected = SchemaProjector.project(optionalSource, List.of(4, 5), target);
+        assertEquals(List.of(4, 5), projected);
         projected = SchemaProjector.project(optionalSource, null, target);
-        assertEquals(Arrays.asList(1, 2, 3), projected);
+        assertEquals(List.of(1, 2, 3), projected);
 
-        Schema promotedTarget = SchemaBuilder.array(Schema.INT64_SCHEMA).defaultValue(Arrays.asList(1L, 2L, 3L)).build();
-        projected = SchemaProjector.project(optionalSource, Arrays.asList(4, 5), promotedTarget);
-        List<Long> expectedProjected = Arrays.asList(4L, 5L);
+        Schema promotedTarget = SchemaBuilder.array(Schema.INT64_SCHEMA).defaultValue(List.of(1L, 2L, 3L)).build();
+        projected = SchemaProjector.project(optionalSource, List.of(4, 5), promotedTarget);
+        List<Long> expectedProjected = List.of(4L, 5L);
         assertEquals(expectedProjected, projected);
         projected = SchemaProjector.project(optionalSource, null, promotedTarget);
-        assertEquals(Arrays.asList(1L, 2L, 3L), projected);
+        assertEquals(List.of(1L, 2L, 3L), projected);
 
         Schema noDefaultValueTarget = SchemaBuilder.array(Schema.INT32_SCHEMA).build();
         assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(optionalSource, null,
@@ -391,18 +389,18 @@ public class SchemaProjectorTest {
     public void testMapProjection() {
         Schema source = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).optional().build();
 
-        Schema target = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).defaultValue(Collections.singletonMap(1, 2)).build();
-        Object projected = SchemaProjector.project(source, Collections.singletonMap(3, 4), target);
-        assertEquals(Collections.singletonMap(3, 4), projected);
+        Schema target = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).defaultValue(Map.of(1, 2)).build();
+        Object projected = SchemaProjector.project(source, Map.of(3, 4), target);
+        assertEquals(Map.of(3, 4), projected);
         projected = SchemaProjector.project(source, null, target);
-        assertEquals(Collections.singletonMap(1, 2), projected);
+        assertEquals(Map.of(1, 2), projected);
 
         Schema promotedTarget = SchemaBuilder.map(Schema.INT64_SCHEMA, Schema.FLOAT32_SCHEMA).defaultValue(
-                Collections.singletonMap(3L, 4.5F)).build();
-        projected = SchemaProjector.project(source, Collections.singletonMap(3, 4), promotedTarget);
-        assertEquals(Collections.singletonMap(3L, 4.F), projected);
+                Map.of(3L, 4.5F)).build();
+        projected = SchemaProjector.project(source, Map.of(3, 4), promotedTarget);
+        assertEquals(Map.of(3L, 4.F), projected);
         projected = SchemaProjector.project(source, null, promotedTarget);
-        assertEquals(Collections.singletonMap(3L, 4.5F), projected);
+        assertEquals(Map.of(3L, 4.5F), projected);
 
         Schema noDefaultValueTarget = SchemaBuilder.map(Schema.INT32_SCHEMA, Schema.INT32_SCHEMA).build();
         assertThrows(SchemaProjectorException.class,
@@ -424,7 +422,7 @@ public class SchemaProjectorTest {
             () ->  SchemaProjector.project(source, 12, target),
             "Source name and target name mismatch.");
 
-        Schema targetWithParameters = SchemaBuilder.int32().parameters(Collections.singletonMap("key", "value"));
+        Schema targetWithParameters = SchemaBuilder.int32().parameters(Map.of("key", "value"));
         assertThrows(SchemaProjectorException.class,
             () ->  SchemaProjector.project(source, 34, targetWithParameters),
             "Source parameters and target parameters mismatch.");

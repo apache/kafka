@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.metrics.Measurable;
@@ -183,16 +184,11 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         configSnapshot = configStorage.snapshot();
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
         ExtendedWorkerState workerState = new ExtendedWorkerState(restUrl, configSnapshot.offset(), localAssignmentSnapshot);
-        switch (protocolCompatibility) {
-            case EAGER:
-                return ConnectProtocol.metadataRequest(workerState);
-            case COMPATIBLE:
-                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false);
-            case SESSIONED:
-                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true);
-            default:
-                throw new IllegalStateException("Unknown Connect protocol compatibility mode " + protocolCompatibility);
-        }
+        return switch (protocolCompatibility) {
+            case EAGER -> ConnectProtocol.metadataRequest(workerState);
+            case COMPATIBLE -> IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false);
+            case SESSIONED -> IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true);
+        };
     }
 
     @Override
@@ -233,9 +229,10 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         if (skipAssignment)
             throw new IllegalStateException("Can't skip assignment because Connect does not support static membership.");
 
-        return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
-               ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
-               : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
+        ConnectProtocolCompatibility protocolCompatibility = ConnectProtocolCompatibility.fromProtocol(protocol);
+        return protocolCompatibility == EAGER
+               ? eagerAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this)
+               : incrementalAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this);
     }
 
     @Override
@@ -271,7 +268,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     @Override
     protected void handlePollTimeoutExpiry() {
         listener.onPollTimeoutExpiry();
-        maybeLeaveGroup("worker poll timeout has expired.");
+        maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "worker poll timeout has expired.");
     }
 
     /**

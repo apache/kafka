@@ -27,8 +27,8 @@ import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -98,13 +98,13 @@ public class OffsetCheckpointFileWithFailureHandlerTest {
         OffsetCheckpointFile checkpoint = new OffsetCheckpointFile(TestUtils.tempFile(), null);
 
         //Then
-        assertEquals(Collections.emptyMap(), checkpoint.read());
+        assertEquals(Map.of(), checkpoint.read());
 
         //When
-        checkpoint.write(Collections.emptyMap());
+        checkpoint.write(Map.of());
 
         //Then
-        assertEquals(Collections.emptyMap(), checkpoint.read());
+        assertEquals(Map.of(), checkpoint.read());
     }
 
     @Test
@@ -113,7 +113,7 @@ public class OffsetCheckpointFileWithFailureHandlerTest {
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(10);
         CheckpointFileWithFailureHandler<OffsetCheckpointFile.TopicPartitionOffset> checkpointFile = new CheckpointFileWithFailureHandler<>(file, OffsetCheckpointFile.CURRENT_VERSION + 1,
                 new OffsetCheckpointFile.Formatter(), logDirFailureChannel, file.getParent());
-        checkpointFile.write(Collections.singletonList(new OffsetCheckpointFile.TopicPartitionOffset(new TopicPartition("foo", 5), 10L)));
+        checkpointFile.write(List.of(new OffsetCheckpointFile.TopicPartitionOffset(new TopicPartition("foo", 5), 10L)));
         assertThrows(KafkaStorageException.class, () -> new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read());
     }
 
@@ -122,7 +122,7 @@ public class OffsetCheckpointFileWithFailureHandlerTest {
         String logDir = "/tmp/kafka-logs";
         OffsetCheckpointFile mockCheckpointFile = Mockito.mock(OffsetCheckpointFile.class);
 
-        LazyOffsetCheckpoints lazyCheckpoints = new LazyOffsetCheckpoints(Collections.singletonMap(logDir, mockCheckpointFile));
+        LazyOffsetCheckpoints lazyCheckpoints = new LazyOffsetCheckpoints(Map.of(logDir, mockCheckpointFile));
         Mockito.verify(mockCheckpointFile, Mockito.never()).read();
 
         TopicPartition partition0 = new TopicPartition("foo", 0);
@@ -147,7 +147,7 @@ public class OffsetCheckpointFileWithFailureHandlerTest {
     public void testLazyOffsetCheckpointFileInvalidLogDir() {
         String logDir = "/tmp/kafka-logs";
         OffsetCheckpointFile mockCheckpointFile = Mockito.mock(OffsetCheckpointFile.class);
-        LazyOffsetCheckpoints lazyCheckpoints = new LazyOffsetCheckpoints(Collections.singletonMap(logDir, mockCheckpointFile));
+        LazyOffsetCheckpoints lazyCheckpoints = new LazyOffsetCheckpoints(Map.of(logDir, mockCheckpointFile));
         assertThrows(IllegalArgumentException.class, () -> lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0)));
     }
 
@@ -160,6 +160,6 @@ public class OffsetCheckpointFileWithFailureHandlerTest {
                 LeaderEpochCheckpointFile.FORMATTER, logDirFailureChannel, file.getParent());
 
         assertTrue(dir.renameTo(new File(dir.getAbsolutePath() + "-renamed")));
-        checkpointFile.writeIfDirExists(Collections.singletonList(new EpochEntry(1, 42)));
+        checkpointFile.writeIfDirExists(List.of(new EpochEntry(1, 42)));
     }
 }

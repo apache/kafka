@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,9 +41,9 @@ public class TasksTupleTest {
 
     @Test
     public void testTasksCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TasksTuple(null, Collections.emptyMap(), Collections.emptyMap()));
-        assertThrows(NullPointerException.class, () -> new TasksTuple(Collections.emptyMap(), null, Collections.emptyMap()));
-        assertThrows(NullPointerException.class, () -> new TasksTuple(Collections.emptyMap(), Collections.emptyMap(), null));
+        assertThrows(NullPointerException.class, () -> new TasksTuple(null, Map.of(), Map.of()));
+        assertThrows(NullPointerException.class, () -> new TasksTuple(Map.of(), null, Map.of()));
+        assertThrows(NullPointerException.class, () -> new TasksTuple(Map.of(), Map.of(), null));
     }
 
     @Test
@@ -61,11 +60,11 @@ public class TasksTupleTest {
         TasksTuple tuple = new TasksTuple(activeTasks, standbyTasks, warmupTasks);
 
         assertEquals(activeTasks, tuple.activeTasks());
-        assertThrows(UnsupportedOperationException.class, () -> tuple.activeTasks().put("not allowed", Collections.emptySet()));
+        assertThrows(UnsupportedOperationException.class, () -> tuple.activeTasks().put("not allowed", Set.of()));
         assertEquals(standbyTasks, tuple.standbyTasks());
-        assertThrows(UnsupportedOperationException.class, () -> tuple.standbyTasks().put("not allowed", Collections.emptySet()));
+        assertThrows(UnsupportedOperationException.class, () -> tuple.standbyTasks().put("not allowed", Set.of()));
         assertEquals(warmupTasks, tuple.warmupTasks());
-        assertThrows(UnsupportedOperationException.class, () -> tuple.warmupTasks().put("not allowed", Collections.emptySet()));
+        assertThrows(UnsupportedOperationException.class, () -> tuple.warmupTasks().put("not allowed", Set.of()));
     }
 
     @Test

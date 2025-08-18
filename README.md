@@ -13,7 +13,7 @@
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with 17 and 23. The `release` parameter in javac is set to `11` for the clients 
+We build and test Apache Kafka with 17 and 24. The `release` parameter in javac is set to `11` for the clients 
 and streams modules, and `17` for the rest, ensuring compatibility with their respective
 minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
 for the rest.
@@ -42,6 +42,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
+    ./gradlew test -Pkafka.test.run.flaky=true  # runs tests that are marked as flaky
 
     
 ### Force re-running tests without code change ###
@@ -98,6 +99,8 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
+See [Apache Kafka Message Definitions](clients/src/main/resources/common/message/README.md) for details on Apache Kafka message protocol.
+
 ### Running a Kafka broker
 
 Using compiled files:
@@ -108,7 +111,9 @@ Using compiled files:
 
 Using docker image:
 
-    docker run -p 9092:9092 apache/kafka:3.7.0
+    docker run -p 9092:9092 apache/kafka:latest
+
+See [docker/README.md](docker/README.md) for detailed information.
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -262,9 +267,19 @@ default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more det
 
 See [tests/README.md](tests/README.md).
 
+### Using Trogdor for testing ###
+
+We use Trogdor as a test framework for Apache Kafka. You can use it to run benchmarks and other workloads.
+
+See [trogdor/README.md](trogdor/README.md).
+
 ### Running in Vagrant ###
 
 See [vagrant/README.md](vagrant/README.md).
+
+### Kafka client examples ###
+
+See [examples/README.md](examples/README.md).
 
 ### Contribution ###
 

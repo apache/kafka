@@ -24,6 +24,7 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class MonitorableSinkConnector extends TestableSinkConnector {
@@ -35,7 +36,7 @@ public class MonitorableSinkConnector extends TestableSinkConnector {
     public void start(Map<String, String> props) {
         super.start(props);
         PluginMetrics pluginMetrics = context.pluginMetrics();
-        metricsName = pluginMetrics.metricName("start", "description", Map.of());
+        metricsName = pluginMetrics.metricName("start", "description", new LinkedHashMap<>());
         pluginMetrics.addMetric(metricsName, (Gauge<Object>) (config, now) -> VALUE);
     }
 
@@ -53,16 +54,14 @@ public class MonitorableSinkConnector extends TestableSinkConnector {
         public void start(Map<String, String> props) {
             super.start(props);
             PluginMetrics pluginMetrics = context.pluginMetrics();
-            metricsName = pluginMetrics.metricName("put", "description", Map.of());
+            metricsName = pluginMetrics.metricName("put", "description", new LinkedHashMap<>());
             pluginMetrics.addMetric(metricsName, (Measurable) (config, now) -> count);
         }
 
         @Override
         public void put(Collection<SinkRecord> records) {
             super.put(records);
-            for (SinkRecord ignore : records) {
-                count++;
-            }
+            count += records.size();
         }
 
     }

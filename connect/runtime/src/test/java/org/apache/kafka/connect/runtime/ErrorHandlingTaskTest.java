@@ -44,6 +44,7 @@ import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -425,9 +426,9 @@ public class ErrorHandlingTaskTest {
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        Plugin<Transformation<SinkRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SinkRecord>(), taskId, "");
+        Plugin<Transformation<SinkRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SinkRecord>(), taskId, "test");
         TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> sinkTransforms =
-                new TransformationChain<>(singletonList(new TransformationStage<>(transformationPlugin)), retryWithToleranceOperator);
+                new TransformationChain<>(singletonList(new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
 
         Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
         Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
@@ -437,7 +438,7 @@ public class ErrorHandlingTaskTest {
             ClusterConfigState.EMPTY, metrics, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics,
                 headerConverterPlugin, sinkTransforms, consumer, pluginLoader, time,
             retryWithToleranceOperator, workerErrantRecordReporter,
-                statusBackingStore, () -> errorReporters);
+                statusBackingStore, () -> errorReporters, null, TestPlugins.noOpLoaderSwap());
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, List<ErrorReporter<SourceRecord>> errorReporters) {
@@ -461,9 +462,9 @@ public class ErrorHandlingTaskTest {
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                                   List<ErrorReporter<SourceRecord>> errorReporters, Converter converter) {
-        Plugin<Transformation<SourceRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SourceRecord>(), taskId, "");
+        Plugin<Transformation<SourceRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SourceRecord>(), taskId, "test");
         TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(
-                new TransformationStage<>(transformationPlugin)), retryWithToleranceOperator);
+                new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
 
         Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
         Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
@@ -476,7 +477,7 @@ public class ErrorHandlingTaskTest {
                 offsetReader, offsetWriter, offsetStore, workerConfig,
                 ClusterConfigState.EMPTY, metrics, pluginLoader, time,
                 retryWithToleranceOperator,
-                statusBackingStore, Runnable::run, () -> errorReporters));
+                statusBackingStore, Runnable::run, () -> errorReporters, null, TestPlugins.noOpLoaderSwap()));
 
     }
 

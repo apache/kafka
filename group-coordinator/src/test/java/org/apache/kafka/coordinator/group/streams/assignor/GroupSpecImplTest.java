@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -39,13 +38,13 @@ public class GroupSpecImplTest {
         members.put("test-member", new AssignmentMemberSpec(
             Optional.of("test-instance"),
             Optional.of("test-rack"),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
             "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+            Map.of(),
+            Map.of(),
+            Map.of()
         ));
 
         groupSpec = new GroupSpecImpl(

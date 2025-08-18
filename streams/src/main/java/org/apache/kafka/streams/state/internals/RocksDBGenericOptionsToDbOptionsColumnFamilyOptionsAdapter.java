@@ -574,15 +574,18 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return dbOptions.compactionReadaheadSize();
     }
 
-    @Override
-    public Options setRandomAccessMaxBufferSize(final long randomAccessMaxBufferSize) {
-        dbOptions.setRandomAccessMaxBufferSize(randomAccessMaxBufferSize);
+    @Deprecated(since = "4.2", forRemoval = true)
+    public Options setRandomAccessMaxBufferSize(final long ignored) {
+        log.warn("random_access_max_buffer_size has been removed in RocksDB v9.11.1." +
+                " See https://github.com/facebook/rocksdb/pull/13288");
         return this;
     }
 
-    @Override
+    @Deprecated(since = "4.2", forRemoval = true)
     public long randomAccessMaxBufferSize() {
-        return dbOptions.randomAccessMaxBufferSize();
+        log.warn("random_access_max_buffer_size has been removed in RocksDB v9.11.1." +
+                " See https://github.com/facebook/rocksdb/pull/13288");
+        return 0;
     }
 
     @Override
@@ -794,8 +797,11 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return this;
     }
 
+    @Deprecated(since = "4.2", forRemoval = true)
     @Override
     public Options setRateLimiter(final RateLimiter rateLimiter) {
+        log.warn("rate_limiter has been deprecated in RocksDB v7.6.0." +
+                " See https://github.com/facebook/rocksdb/pull/10378");
         dbOptions.setRateLimiter(rateLimiter);
         return this;
     }
@@ -1761,6 +1767,17 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public int blobFileStartingLevel() {
         return columnFamilyOptions.blobFileStartingLevel();
+    }
+
+    @Override
+    public Options setDailyOffpeakTimeUTC(final String offpeakTimeUTC) {
+        dbOptions.setDailyOffpeakTimeUTC(offpeakTimeUTC);
+        return this;
+    }
+
+    @Override
+    public String dailyOffpeakTimeUTC() {
+        return dbOptions.dailyOffpeakTimeUTC();
     }
 
     //

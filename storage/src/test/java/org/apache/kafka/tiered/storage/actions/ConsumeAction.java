@@ -25,15 +25,14 @@ import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
+import org.apache.kafka.tiered.storage.specs.FetchCountAndOp;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchSpec;
 
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_OFFSET_INDEX;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
@@ -79,7 +78,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
         // The latest event at the time of invocation for the interaction of type "FETCH_SEGMENT" between the
         // given broker and the second-tier storage is retrieved. It can be empty if an interaction of this
         // type has yet to happen.
-        LocalTieredStorageHistory history = context.tieredStorageHistory(remoteFetchSpec.getSourceBrokerId());
+        LocalTieredStorageHistory history = context.tieredStorageHistory(remoteFetchSpec.sourceBrokerId());
         Optional<LocalTieredStorageEvent> latestEventSoFar = history.latestEvent(FETCH_SEGMENT, topicPartition);
         Optional<LocalTieredStorageEvent> latestOffsetIdxEventSoFar = history.latestEvent(FETCH_OFFSET_INDEX, topicPartition);
         Optional<LocalTieredStorageEvent> latestTimeIdxEventSoFar = history.latestEvent(FETCH_TIME_INDEX, topicPartition);
@@ -128,61 +127,69 @@ public final class ConsumeAction implements TieredStorageTestAction {
         assertThat(storedRecords, correspondTo(readRecords, topicPartition, serde, serde));
 
         // (B) Assessment of the interactions between the source broker and the second-tier storage.
-        for (LocalTieredStorageEvent.EventType eventType : Arrays.asList(FETCH_SEGMENT, FETCH_OFFSET_INDEX, FETCH_TIME_INDEX, FETCH_TRANSACTION_INDEX)) {
-            Optional<LocalTieredStorageEvent> latestEvent;
-            switch (eventType) {
-                case FETCH_SEGMENT:
-                    latestEvent = latestEventSoFar;
-                    break;
-                case FETCH_OFFSET_INDEX:
-                    latestEvent = latestOffsetIdxEventSoFar;
-                    break;
-                case FETCH_TIME_INDEX:
-                    latestEvent = latestTimeIdxEventSoFar;
-                    break;
-                case FETCH_TRANSACTION_INDEX:
-                    latestEvent = latestTxnIdxEventSoFar;
-                    break;
-                default:
-                    latestEvent = Optional.empty();
-            }
+        for (LocalTieredStorageEvent.EventType eventType : List.of(FETCH_SEGMENT, FETCH_OFFSET_INDEX, FETCH_TIME_INDEX, FETCH_TRANSACTION_INDEX)) {
+            Optional<LocalTieredStorageEvent> latestEvent = switch (eventType) {
+                case FETCH_SEGMENT -> latestEventSoFar;
+                case FETCH_OFFSET_INDEX -> latestOffsetIdxEventSoFar;
+                case FETCH_TIME_INDEX -> latestTimeIdxEventSoFar;
+                case FETCH_TRANSACTION_INDEX -> latestTxnIdxEventSoFar;
+                default -> Optional.empty();
+            };
 
             List<LocalTieredStorageEvent> events = history.getEvents(eventType, topicPartition);
             List<LocalTieredStorageEvent> eventsInScope = latestEvent
-                    .map(e -> events.stream().filter(event -> event.isAfter(e)).collect(Collectors.toList()))
+                    .map(e -> events.stream().filter(event -> event.isAfter(e)).toList())
                     .orElse(events);
 
-            RemoteFetchCount remoteFetchCount = remoteFetchSpec.getRemoteFetchCount();
-            RemoteFetchCount.FetchCountAndOp expectedCountAndOp;
-            switch (eventType) {
-                case FETCH_SEGMENT:
-                    expectedCountAndOp = remoteFetchCount.getSegmentFetchCountAndOp();
-                    break;
-                case FETCH_OFFSET_INDEX:
-                    expectedCountAndOp = remoteFetchCount.getOffsetIdxFetchCountAndOp();
-                    break;
-                case FETCH_TIME_INDEX:
-                    expectedCountAndOp = remoteFetchCount.getTimeIdxFetchCountAndOp();
-                    break;
-                case FETCH_TRANSACTION_INDEX:
-                    expectedCountAndOp = remoteFetchCount.getTxnIdxFetchCountAndOp();
-                    break;
-                default:
-                    expectedCountAndOp = new RemoteFetchCount.FetchCountAndOp(-1, RemoteFetchCount.OperationType.EQUALS_TO);
-            }
+            RemoteFetchCount remoteFetchCount = remoteFetchSpec.remoteFetchCount();
+            FetchCountAndOp expectedCountAndOp = switch (eventType) {
+                case FETCH_SEGMENT -> remoteFetchCount.getSegmentFetchCountAndOp();
+                case FETCH_OFFSET_INDEX -> remoteFetchCount.getOffsetIdxFetchCountAndOp();
+                case FETCH_TIME_INDEX -> remoteFetchCount.getTimeIdxFetchCountAndOp();
+                case FETCH_TRANSACTION_INDEX -> remoteFetchCount.getTxnIdxFetchCountAndOp();
+                default -> new FetchCountAndOp(-1, RemoteFetchCount.OperationType.EQUALS_TO);
+            };
 
-            String message = String.format("Number of %s requests from broker %d to the tier storage does not match the expected value for topic-partition %s",
-                    eventType, remoteFetchSpec.getSourceBrokerId(), remoteFetchSpec.getTopicPartition());
-            if (expectedCountAndOp.getCount() != -1) {
-                if (expectedCountAndOp.getOperationType() == RemoteFetchCount.OperationType.EQUALS_TO) {
-                    assertEquals(expectedCountAndOp.getCount(), eventsInScope.size(), message);
-                } else if (expectedCountAndOp.getOperationType() == RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO) {
-                    assertTrue(eventsInScope.size() <= expectedCountAndOp.getCount(), message);
+            RemoteFetchCount.OperationType exceptedOperationType = expectedCountAndOp.operationType();
+            int exceptedCount = expectedCountAndOp.count();
+            int actualCount = eventsInScope.size();
+            String message = errorMessage(eventType, actualCount, exceptedOperationType, exceptedCount);
+            if (exceptedCount != -1) {
+                if (exceptedOperationType == RemoteFetchCount.OperationType.EQUALS_TO) {
+                    assertEquals(exceptedCount, actualCount, message);
+                } else if (exceptedOperationType == RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO) {
+                    assertTrue(actualCount <= exceptedCount, message);
                 } else {
-                    assertTrue(eventsInScope.size() >= expectedCountAndOp.getCount(), message);
+                    assertTrue(actualCount >= exceptedCount, message);
                 }
             }
         }
+    }
+
+    private String errorMessage(
+        LocalTieredStorageEvent.EventType eventType,
+        int actualCount,
+        RemoteFetchCount.OperationType exceptedOperationType,
+        int exceptedCount
+    ) {
+        return String.format(
+            "Expected %s requests count from broker %d to tiered storage for topic-partition %s to be %s %d, " +
+                    "but actual count was %d.",
+            eventType,
+            remoteFetchSpec.sourceBrokerId(),
+            remoteFetchSpec.topicPartition(),
+            operationTypeToString(exceptedOperationType),
+            exceptedCount,
+            actualCount
+        );
+    }
+
+    private String operationTypeToString(RemoteFetchCount.OperationType operationType) {
+        return switch (operationType) {
+            case EQUALS_TO -> "equal to";
+            case LESS_THAN_OR_EQUALS_TO -> "less than or equal to";
+            case GREATER_THAN_OR_EQUALS_TO -> "greater than or equal to";
+        };
     }
 
     @Override

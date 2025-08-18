@@ -24,7 +24,7 @@ import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.DescribeAclsRequestData;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -111,8 +111,8 @@ public class DescribeAclsRequest extends AbstractRequest {
         return new DescribeAclsResponse(response, version());
     }
 
-    public static DescribeAclsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeAclsRequest(new DescribeAclsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DescribeAclsRequest parse(Readable readable, short version) {
+        return new DescribeAclsRequest(new DescribeAclsRequestData(readable, version), version);
     }
 
     public AclBindingFilter filter() {

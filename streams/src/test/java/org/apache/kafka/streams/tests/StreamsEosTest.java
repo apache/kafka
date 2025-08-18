@@ -76,10 +76,10 @@ public class StreamsEosTest {
                 new EosTestClient(streamsProperties, true).start();
                 break;
             case "verify":
-                EosTestDriver.verify(kafka, false);
+                EosTestDriver.verify(kafka, false, streamsProperties.getProperty("group.protocol"));
                 break;
             case "verify-complex":
-                EosTestDriver.verify(kafka, true);
+                EosTestDriver.verify(kafka, true, streamsProperties.getProperty("group.protocol"));
                 break;
             default:
                 System.out.println("unknown command: " + command);

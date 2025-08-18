@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
@@ -30,7 +31,6 @@ import java.util.Optional;
  * Represents changes to the cluster in the metadata image.
  */
 public final class FeaturesDelta {
-    private static final short MINIMUM_PERSISTED_FEATURE_LEVEL = 4;
     private final FeaturesImage image;
 
     private final Map<String, Optional<Short>> changes = new HashMap<>();
@@ -66,6 +66,10 @@ public final class FeaturesDelta {
                         + "please ensure the metadata version is set to " + MetadataVersion.MINIMUM_VERSION + " (or higher) before "
                         + "updating the software version. The metadata version can be updated via the `kafka-features` command-line tool.", e);
             }
+        } else if (record.name().equals(KRaftVersion.FEATURE_NAME)) {
+            // KAFKA-18979 - Skip any feature level record for kraft.version. This has two benefits:
+            // 1. It removes from snapshots any FeatureLevelRecord for kraft.version that was incorrectly written to the log
+            // 2. Allows ApiVersions to report the correct finalized kraft.version
         } else {
             if (record.featureLevel() == 0) {
                 changes.put(record.name(), Optional.empty());

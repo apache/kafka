@@ -17,17 +17,20 @@
 package kafka.server;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
+import org.apache.kafka.server.quota.ClientQuotaManager;
+import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
 import org.apache.kafka.server.quota.QuotaType;
 
 import java.util.Optional;
 
-import scala.Option;
 
 public class QuotaFactory {
 
@@ -48,85 +51,58 @@ public class QuotaFactory {
         }
     };
 
-    public static class QuotaManagers {
-        private final ClientQuotaManager fetch;
-        private final ClientQuotaManager produce;
-        private final ClientRequestQuotaManager request;
-        private final ControllerMutationQuotaManager controllerMutation;
-        private final ReplicationQuotaManager leader;
-        private final ReplicationQuotaManager follower;
-        private final ReplicationQuotaManager alterLogDirs;
-        private final Optional<ClientQuotaCallback> clientQuotaCallback;
-
-        public QuotaManagers(ClientQuotaManager fetch, ClientQuotaManager produce, ClientRequestQuotaManager request,
-                             ControllerMutationQuotaManager controllerMutation, ReplicationQuotaManager leader,
-                             ReplicationQuotaManager follower, ReplicationQuotaManager alterLogDirs,
-                             Optional<ClientQuotaCallback> clientQuotaCallback) {
-            this.fetch = fetch;
-            this.produce = produce;
-            this.request = request;
-            this.controllerMutation = controllerMutation;
-            this.leader = leader;
-            this.follower = follower;
-            this.alterLogDirs = alterLogDirs;
-            this.clientQuotaCallback = clientQuotaCallback;
-        }
-
-        public ClientQuotaManager fetch() {
-            return fetch;
-        }
-
-        public ClientQuotaManager produce() {
-            return produce;
-        }
-
-        public ClientRequestQuotaManager request() {
-            return request;
-        }
-
-        public ControllerMutationQuotaManager controllerMutation() {
-            return controllerMutation;
-        }
-
-        public ReplicationQuotaManager leader() {
-            return leader;
-        }
-
-        public ReplicationQuotaManager follower() {
-            return follower;
-        }
-
-        public ReplicationQuotaManager alterLogDirs() {
-            return alterLogDirs;
-        }
-
-        public Optional<ClientQuotaCallback> clientQuotaCallback() {
-            return clientQuotaCallback;
-        }
+    public record QuotaManagers(ClientQuotaManager fetch,
+                                ClientQuotaManager produce,
+                                ClientRequestQuotaManager request,
+                                ControllerMutationQuotaManager controllerMutation,
+                                ReplicationQuotaManager leader,
+                                ReplicationQuotaManager follower,
+                                ReplicationQuotaManager alterLogDirs,
+                                Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin) {
 
         public void shutdown() {
             fetch.shutdown();
             produce.shutdown();
             request.shutdown();
             controllerMutation.shutdown();
-            clientQuotaCallback.ifPresent(ClientQuotaCallback::close);
+            clientQuotaCallbackPlugin.ifPresent(plugin -> Utils.closeQuietly(plugin, "client quota callback plugin"));
         }
     }
 
-    public static QuotaManagers instantiate(KafkaConfig cfg, Metrics metrics, Time time, String threadNamePrefix) {
-        ClientQuotaCallback clientQuotaCallback = cfg.getConfiguredInstance(
-            QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, ClientQuotaCallback.class);
+    public static QuotaManagers instantiate(
+        KafkaConfig cfg,
+        Metrics metrics,
+        Time time,
+        String threadNamePrefix,
+        String role
+    ) {
+        Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin = createClientQuotaCallback(cfg, metrics, role);
 
         return new QuotaManagers(
-            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.FETCH, time, threadNamePrefix, Option.apply(clientQuotaCallback)),
-            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.PRODUCE, time, threadNamePrefix, Option.apply(clientQuotaCallback)),
-            new ClientRequestQuotaManager(clientConfig(cfg), metrics, time, threadNamePrefix, Optional.ofNullable(clientQuotaCallback)),
-            new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time, threadNamePrefix, Option.apply(clientQuotaCallback)),
+            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.FETCH, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.PRODUCE, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ClientRequestQuotaManager(clientConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
+            new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
             new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.LEADER_REPLICATION, time),
             new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.FOLLOWER_REPLICATION, time),
             new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, QuotaType.ALTER_LOG_DIRS_REPLICATION, time),
-            Optional.ofNullable(clientQuotaCallback)
+            clientQuotaCallbackPlugin
         );
+    }
+
+    private static Optional<Plugin<ClientQuotaCallback>> createClientQuotaCallback(
+        KafkaConfig cfg, 
+        Metrics metrics, 
+        String role
+    ) {
+        ClientQuotaCallback clientQuotaCallback = cfg.getConfiguredInstance(
+            QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, ClientQuotaCallback.class);
+        return clientQuotaCallback == null ? Optional.empty() : Optional.of(Plugin.wrapInstance(
+            clientQuotaCallback,
+            metrics,
+            QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
+            "role", role
+        ));
     }
 
     private static ClientQuotaManagerConfig clientConfig(KafkaConfig cfg) {

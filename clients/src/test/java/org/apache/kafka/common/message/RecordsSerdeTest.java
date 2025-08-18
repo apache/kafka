@@ -70,7 +70,7 @@ public class RecordsSerdeTest {
     }
 
     private void testRoundTrip(SimpleRecordsMessageData message, short version) {
-        ByteBuffer buf = MessageUtil.toByteBuffer(message, version);
+        ByteBuffer buf = MessageUtil.toByteBufferAccessor(message, version).buffer();
         SimpleRecordsMessageData message2 = deserialize(buf.duplicate(), version);
         assertEquals(message, message2);
         assertEquals(message.hashCode(), message2.hashCode());

@@ -19,7 +19,8 @@ package org.apache.kafka.coordinator.group.modern.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -31,7 +32,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -178,7 +177,7 @@ public class ConsumerGroupMemberTest {
             .maybeUpdateRackId(Optional.of("new-rack-id"))
             .maybeUpdateInstanceId(Optional.of("new-instance-id"))
             .maybeUpdateServerAssignorName(Optional.of("new-assignor"))
-            .maybeUpdateSubscribedTopicNames(Optional.of(Collections.singletonList("zar")))
+            .maybeUpdateSubscribedTopicNames(Optional.of(List.of("zar")))
             .maybeUpdateSubscribedTopicRegex(Optional.of("new-regex"))
             .maybeUpdateRebalanceTimeoutMs(OptionalInt.of(6000))
             .build();
@@ -231,10 +230,10 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+            .setAssignedPartitions(List.of(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId1)
                 .setPartitions(Arrays.asList(0, 1, 2))))
-            .setPartitionsPendingRevocation(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+            .setPartitionsPendingRevocation(List.of(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId2)
                 .setPartitions(Arrays.asList(3, 4, 5))));
 
@@ -266,10 +265,10 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
             .setMemberEpoch(epoch)
             .setPreviousMemberEpoch(epoch - 1)
-            .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+            .setAssignedPartitions(List.of(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId1)
                 .setPartitions(assignedPartitions)))
-            .setPartitionsPendingRevocation(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+            .setPartitionsPendingRevocation(List.of(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId2)
                 .setPartitions(Arrays.asList(3, 4, 5))));
         String memberId = Uuid.randomUuid().toString();
@@ -294,7 +293,7 @@ public class ConsumerGroupMemberTest {
                 .setSupportedProtocols(toClassicProtocolCollection("range")) : null)
             .build();
 
-        ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, metadataImage.topics());
+        ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, new KRaftCoordinatorMetadataImage(metadataImage));
         ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
             .setMemberId(memberId)
             .setMemberEpoch(epoch)
@@ -306,7 +305,7 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .setAssignment(
                 new ConsumerGroupDescribeResponseData.Assignment()
-                    .setTopicPartitions(Collections.singletonList(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                    .setTopicPartitions(List.of(new ConsumerGroupDescribeResponseData.TopicPartitions()
                         .setTopicId(topicId1)
                         .setTopicName("topic1")
                         .setPartitions(assignedPartitions)
@@ -319,7 +318,7 @@ public class ConsumerGroupMemberTest {
                             .setTopicId(item.getKey())
                             .setTopicName("topic4")
                             .setPartitions(new ArrayList<>(item.getValue()))
-                    ).collect(Collectors.toList()))
+                    ).toList())
             )
             .setMemberType(withClassicMemberMetadata ? (byte) 0 : (byte) 1);
 
@@ -332,7 +331,7 @@ public class ConsumerGroupMemberTest {
             .build();
 
         ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember(
-            null, new MetadataImageBuilder().build().topics());
+            null, new KRaftCoordinatorMetadataImage(new MetadataImageBuilder().build()));
 
         assertEquals(new ConsumerGroupDescribeResponseData.Assignment(), consumerGroupDescribeMember.targetAssignment());
     }
@@ -341,7 +340,7 @@ public class ConsumerGroupMemberTest {
     public void testAsConsumerGroupDescribeWithTopicNameNotFound() {
         Uuid memberId = Uuid.randomUuid();
         ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
-            .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+            .setAssignedPartitions(List.of(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(Arrays.asList(0, 1, 2))));
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId.toString())
@@ -353,9 +352,9 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicRegex("")
             .setMemberType((byte) 1);
         ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(null,
-            new MetadataImageBuilder()
+            new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
                 .addTopic(Uuid.randomUuid(), "foo", 3)
-                .build().topics()
+                .build())
         );
         assertEquals(expected, actual);
     }

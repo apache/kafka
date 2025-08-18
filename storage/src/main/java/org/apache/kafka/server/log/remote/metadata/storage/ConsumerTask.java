@@ -85,11 +85,11 @@ class ConsumerTask implements Runnable, Closeable {
     private final Object assignPartitionsLock = new Object();
 
     // Remote log metadata topic partitions that consumer is assigned to.
-    private volatile Set<Integer> assignedMetadataPartitions = Collections.emptySet();
+    private volatile Set<Integer> assignedMetadataPartitions = Set.of();
 
     // User topic partitions that this broker is a leader/follower for.
-    private volatile Map<TopicIdPartition, UserTopicIdPartition> assignedUserTopicIdPartitions = Collections.emptyMap();
-    private volatile Set<TopicIdPartition> processedAssignmentOfUserTopicIdPartitions = Collections.emptySet();
+    private volatile Map<TopicIdPartition, UserTopicIdPartition> assignedUserTopicIdPartitions = Map.of();
+    private volatile Set<TopicIdPartition> processedAssignmentOfUserTopicIdPartitions = Set.of();
 
     private long uninitializedAt;
     private boolean isAllUserTopicPartitionsInitialized;
@@ -154,6 +154,7 @@ class ConsumerTask implements Runnable, Closeable {
     }
 
     // visible for testing
+    @SuppressWarnings("deprecation")
     void closeConsumer() {
         try {
             consumer.close(Duration.ofSeconds(30));
@@ -299,11 +300,11 @@ class ConsumerTask implements Runnable, Closeable {
     }
 
     void addAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
-        updateAssignments(Objects.requireNonNull(partitions), Collections.emptySet());
+        updateAssignments(Objects.requireNonNull(partitions), Set.of());
     }
 
     void removeAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
-        updateAssignments(Collections.emptySet(), Objects.requireNonNull(partitions));
+        updateAssignments(Set.of(), Objects.requireNonNull(partitions));
     }
 
     private void updateAssignments(final Set<TopicIdPartition> addedPartitions,

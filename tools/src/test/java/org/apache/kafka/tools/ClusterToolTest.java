@@ -18,7 +18,6 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
@@ -30,12 +29,9 @@ import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,10 +70,10 @@ public class ClusterToolTest {
 
     @ClusterTest(brokers = 2, types = {Type.KRAFT, Type.CO_KRAFT})
     public void testListEndpointsArgumentWithBootstrapServer(ClusterInstance clusterInstance) {
-        List<Integer> brokerIds = clusterInstance.brokerIds().stream().collect(Collectors.toList());
+        List<Integer> brokerIds = clusterInstance.brokerIds().stream().toList();
         clusterInstance.shutdownBroker(brokerIds.get(0));
 
-        List<String> ports = Arrays.stream(clusterInstance.bootstrapServers().split(",")).map(b ->  b.split(":")[1]).collect(Collectors.toList());
+        List<String> ports = Arrays.stream(clusterInstance.bootstrapServers().split(",")).map(b ->  b.split(":")[1]).toList();
         String format = "%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-6s";
         String expected = String.format(format,
                 "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE",
@@ -102,13 +98,7 @@ public class ClusterToolTest {
         brokerIds.removeAll(clusterInstance.controllerIds());
         int brokerId = assertDoesNotThrow(() -> brokerIds.stream().findFirst().get());
         clusterInstance.shutdownBroker(brokerId);
-        ExecutionException exception =
-                assertThrows(ExecutionException.class,
-                        () -> ClusterTool.execute("unregister", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--id", String.valueOf(brokerId)));
-        assertNotNull(exception.getCause());
-        assertEquals(UnsupportedEndpointTypeException.class, exception.getCause().getClass());
-        assertEquals("This Admin API is not yet supported when communicating directly with " +
-                "the controller quorum.", exception.getCause().getMessage());
+        assertDoesNotThrow(() -> ClusterTool.execute("unregister", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--id", String.valueOf(brokerId)));
     }
 
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
@@ -119,7 +109,7 @@ public class ClusterToolTest {
         int id = clusterInstance.controllerIds().iterator().next();
         String format = "%-10s %-9s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s";
         String expected = String.format(format, "ID", "HOST", "PORT", "RACK", "ENDPOINT_TYPE", id, "localhost", port, "null", "controller");
-        assertTrue(output.equals(expected));
+        assertEquals(expected, output);
     }
 
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})

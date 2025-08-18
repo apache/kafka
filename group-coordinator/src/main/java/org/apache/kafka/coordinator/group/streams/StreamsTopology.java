@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
@@ -80,5 +81,18 @@ public record StreamsTopology(int topologyEpoch,
             record.epoch(),
             record.subtopologies().stream().collect(Collectors.toMap(Subtopology::subtopologyId, x -> x))
         );
+    }
+
+    /**
+     * Creates an instance of StreamsTopology from a StreamsGroupHeartbeatRequestData request.
+     *
+     * @param topology The topology supplied in the request.
+     * @return The instance of StreamsTopology created from the request.
+     */
+    public static StreamsTopology fromHeartbeatRequest(StreamsGroupHeartbeatRequestData.Topology topology) {
+        StreamsGroupTopologyValue recordValue = StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology);
+        final Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = recordValue.subtopologies().stream()
+            .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
+        return new StreamsTopology(topology.epoch(), subtopologyMap);
     }
 }

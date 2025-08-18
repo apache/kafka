@@ -20,10 +20,8 @@ import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class HeartbeatRequest extends AbstractRequest {
 
@@ -66,8 +64,8 @@ public class HeartbeatRequest extends AbstractRequest {
         return new HeartbeatResponse(responseData);
     }
 
-    public static HeartbeatRequest parse(ByteBuffer buffer, short version) {
-        return new HeartbeatRequest(new HeartbeatRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static HeartbeatRequest parse(Readable readable, short version) {
+        return new HeartbeatRequest(new HeartbeatRequestData(readable, version), version);
     }
 
     @Override

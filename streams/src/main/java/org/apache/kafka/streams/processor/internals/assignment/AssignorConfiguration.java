@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
@@ -37,7 +36,6 @@ import java.util.Optional;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
     private final String internalTaskAssignorClass;
@@ -60,6 +58,8 @@ public final class AssignorConfiguration {
         logPrefix = String.format("stream-thread [%s] ", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
+
+        validateUpgradeFrom();
 
         {
             final Object o = configs.get(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR);
@@ -94,7 +94,9 @@ public final class AssignorConfiguration {
         return referenceContainer;
     }
 
-    public RebalanceProtocol rebalanceProtocol() {
+    // cooperative rebalancing was introduced in 2.4 and the old protocol (eager rebalancing) was removed
+    // in 4.0, meaning live upgrades from 2.3 or below to 4.0+ are no longer possible without a bridge release
+    public void validateUpgradeFrom() {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
             switch (UpgradeFromValues.fromString(upgradeFrom)) {
@@ -108,104 +110,18 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_21:
                 case UPGRADE_FROM_22:
                 case UPGRADE_FROM_23:
-                    // ATTENTION: The following log messages is used for verification in system test
-                    // streams/streams_cooperative_rebalance_upgrade_test.py::StreamsCooperativeRebalanceUpgradeTest.test_upgrade_to_cooperative_rebalance
-                    // If you change it, please do also change the system test accordingly and
-                    // verify whether the test passes.
-                    log.info("Eager rebalancing protocol is enabled now for upgrade from {}.x", upgradeFrom);
-                    log.warn("The eager rebalancing protocol is deprecated and will stop being supported in a future release." +
-                        " Please be prepared to remove the 'upgrade.from' config soon.");
-                    return RebalanceProtocol.EAGER;
-                case UPGRADE_FROM_24:
-                case UPGRADE_FROM_25:
-                case UPGRADE_FROM_26:
-                case UPGRADE_FROM_27:
-                case UPGRADE_FROM_28:
-                case UPGRADE_FROM_30:
-                case UPGRADE_FROM_31:
-                case UPGRADE_FROM_32:
-                case UPGRADE_FROM_33:
-                case UPGRADE_FROM_34:
-                case UPGRADE_FROM_35:
-                case UPGRADE_FROM_36:
-                case UPGRADE_FROM_37:
-                case UPGRADE_FROM_38:
-                case UPGRADE_FROM_39:
-                    // we need to add new version when new "upgrade.from" values become available
+                    final String errMsg = String.format(
+                        "The eager rebalancing protocol is no longer supported in 4.0 which means live upgrades from 2.3 or below are not possible."
+                            + " Please see the Streams upgrade guide for the bridge releases and recommended upgrade path. Got upgrade.from='%s'", upgradeFrom);
+                    log.error(errMsg);
+                    throw new ConfigException(errMsg);
 
-                    // This config is for explicitly sending FK response to a requested partition
-                    // and should not affect the rebalance protocol
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-        // ATTENTION: The following log messages is used for verification in system test
-        // streams/streams_cooperative_rebalance_upgrade_test.py::StreamsCooperativeRebalanceUpgradeTest.test_upgrade_to_cooperative_rebalance
-        // If you change it, please do also change the system test accordingly and
-        // verify whether the test passes.
-        log.info("Cooperative rebalancing protocol is enabled now");
-        return RebalanceProtocol.COOPERATIVE;
     }
 
     public String logPrefix() {
         return logPrefix;
-    }
-
-    public int configuredMetadataVersion(final int priorVersion) {
-        final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
-        if (upgradeFrom != null) {
-            switch (UpgradeFromValues.fromString(upgradeFrom)) {
-                case UPGRADE_FROM_0100:
-                    log.info(
-                        "Downgrading metadata.version from {} to 1 for upgrade from 0.10.0.x.",
-                        LATEST_SUPPORTED_VERSION
-                    );
-                    return 1;
-                case UPGRADE_FROM_0101:
-                case UPGRADE_FROM_0102:
-                case UPGRADE_FROM_0110:
-                case UPGRADE_FROM_10:
-                case UPGRADE_FROM_11:
-                    log.info(
-                        "Downgrading metadata.version from {} to 2 for upgrade from {}.x.",
-                        LATEST_SUPPORTED_VERSION,
-                        upgradeFrom
-                    );
-                    return 2;
-                case UPGRADE_FROM_20:
-                case UPGRADE_FROM_21:
-                case UPGRADE_FROM_22:
-                case UPGRADE_FROM_23:
-                    // These configs are for cooperative rebalancing and should not affect the metadata version
-                    break;
-                case UPGRADE_FROM_24:
-                case UPGRADE_FROM_25:
-                case UPGRADE_FROM_26:
-                case UPGRADE_FROM_27:
-                case UPGRADE_FROM_28:
-                case UPGRADE_FROM_30:
-                case UPGRADE_FROM_31:
-                case UPGRADE_FROM_32:
-                case UPGRADE_FROM_33:
-                case UPGRADE_FROM_34:
-                case UPGRADE_FROM_35:
-                case UPGRADE_FROM_36:
-                case UPGRADE_FROM_37:
-                case UPGRADE_FROM_38:
-                case UPGRADE_FROM_39:
-                    // we need to add new version when new "upgrade.from" values become available
-
-                    // This config is for explicitly sending FK response to a requested partition
-                    // and should not affect the metadata version
-                    break;
-                default:
-                    throw new IllegalArgumentException(
-                        "Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom
-                    );
-            }
-        }
-        return priorVersion;
     }
 
     public String userEndPoint() {

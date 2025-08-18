@@ -19,17 +19,15 @@ package org.apache.kafka.coordinator.group.modern.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,11 +60,11 @@ public class ConsumerGroupMember extends ModernGroupMember {
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
-        private Set<String> subscribedTopicNames = Collections.emptySet();
+        private Set<String> subscribedTopicNames = Set.of();
         private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
-        private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
-        private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
+        private Map<Uuid, Set<Integer>> assignedPartitions = Map.of();
+        private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Map.of();
         private ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata = null;
 
         public Builder(String memberId) {
@@ -386,22 +384,22 @@ public class ConsumerGroupMember extends ModernGroupMember {
 
     /**
      * @param targetAssignment The target assignment of this member in the corresponding group.
-     *
+     * @param image
      * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
      */
     public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(
         Assignment targetAssignment,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, image)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromMap(
-                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap(),
-                    topicsImage
+                    targetAssignment != null ? targetAssignment.partitions() : Map.of(),
+                    image
                 )))
             .setClientHost(clientHost)
             .setClientId(clientId)
@@ -414,17 +412,14 @@ public class ConsumerGroupMember extends ModernGroupMember {
 
     private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
         Map<Uuid, Set<Integer>> partitions,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            if (topicImage != null) {
-                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                    .setTopicId(topicId)
-                    .setTopicName(topicImage.name())
-                    .setPartitions(new ArrayList<>(partitionSet)));
-            }
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                .setTopicId(topicId)
+                .setTopicName(topicMetadata.name())
+                .setPartitions(new ArrayList<>(partitionSet))));
         });
         return topicPartitions;
     }

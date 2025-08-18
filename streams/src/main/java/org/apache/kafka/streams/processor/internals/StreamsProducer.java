@@ -70,7 +70,6 @@ public class StreamsProducer {
     private Producer<byte[], byte[]> producer;
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
-    private boolean closed = false;
     private double oldProducerTotalBlockedTime = 0;
     // we have a single `StreamsProducer` per thread, and thus a single `sendException` instance,
     // which we share across all tasks, ie, all `RecordCollectorImpl`
@@ -97,10 +96,6 @@ public class StreamsProducer {
 
     boolean transactionInFlight() {
         return transactionInFlight;
-    }
-
-    boolean isClosed() {
-        return closed;
     }
 
     /**
@@ -252,6 +247,22 @@ public class StreamsProducer {
         maybeBeginTransaction();
         try {
             producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
+        } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException | InvalidPidMappingException error) {
+            throw new TaskMigratedException(
+                formatException("Producer got fenced trying to add offsets to a transaction"),
+                error
+            );
+        } catch (final TimeoutException timeoutException) {
+            // re-throw to trigger `task.timeout.ms`
+            throw timeoutException;
+        } catch (final KafkaException error) {
+            throw new StreamsException(
+                formatException("Error encountered trying to add offsets to a transaction"),
+                error
+            );
+        }
+
+        try {
             producer.commitTransaction();
             transactionInFlight = false;
         } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException | InvalidPidMappingException error) {
@@ -325,7 +336,6 @@ public class StreamsProducer {
 
     void close() {
         producer.close();
-        closed = true;
         transactionInFlight = false;
         transactionInitialized = false;
     }

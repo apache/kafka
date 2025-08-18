@@ -97,7 +97,7 @@ public class ActivationRecordsGeneratorTest {
     }
 
     @Test
-    public void testActivationMessageForEmptyLogAtMv3_6WithTransactionAndElr() {
+    public void testActivationMessageForEmptyLogAtMv4_0WithTransactionAndElr() {
         ControllerResult<Void> result = ActivationRecordsGenerator.recordsForEmptyLog(
             logMsg -> assertEquals("Performing controller activation. Aborting partial bootstrap records " +
                 "transaction at offset 0. Re-appending 2 bootstrap record(s) in new metadata transaction at " +

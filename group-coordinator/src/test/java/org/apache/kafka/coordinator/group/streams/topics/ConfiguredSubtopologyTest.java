@@ -20,8 +20,6 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,10 +35,11 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullSourceTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
+                2,
                 null,
-                Collections.emptyMap(),
-                Collections.emptySet(),
-                Collections.emptyMap()
+                Map.of(),
+                Set.of(),
+                Map.of()
             )
         );
     }
@@ -49,10 +48,11 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullRepartitionSourceTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
-                Collections.emptySet(),
+                2,
+                Set.of(),
                 null,
-                Collections.emptySet(),
-                Collections.emptyMap()
+                Set.of(),
+                Map.of()
             )
         );
     }
@@ -61,10 +61,11 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullRepartitionSinkTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
-                Collections.emptySet(),
-                Collections.emptyMap(),
+                2,
+                Set.of(),
+                Map.of(),
                 null,
-                Collections.emptyMap()
+                Map.of()
             )
         );
     }
@@ -73,10 +74,24 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullStateChangelogTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
-                Collections.emptySet(),
-                Collections.emptyMap(),
-                Collections.emptySet(),
+                2,
+                Set.of(),
+                Map.of(),
+                Set.of(),
                 null
+            )
+        );
+    }
+
+    @Test
+    public void testConstructorWithNegativeTaskCount() {
+        assertThrows(IllegalArgumentException.class,
+            () -> new ConfiguredSubtopology(
+                -1,
+                Set.of(),
+                Map.of(),
+                Set.of(),
+                Map.of()
             )
         );
     }
@@ -84,15 +99,15 @@ public class ConfiguredSubtopologyTest {
     @Test
     public void testAsStreamsGroupDescribeSubtopology() {
         String subtopologyId = "subtopology1";
-        Set<String> sourceTopics = new HashSet<>(Set.of("sourceTopic1", "sourceTopic2"));
-        Set<String> repartitionSinkTopics = new HashSet<>(Set.of("repartitionSinkTopic1", "repartitionSinkTopic2"));
+        Set<String> sourceTopics = Set.of("sourceTopic1", "sourceTopic2");
+        Set<String> repartitionSinkTopics = Set.of("repartitionSinkTopic1", "repartitionSinkTopic2");
         ConfiguredInternalTopic internalTopicMock = mock(ConfiguredInternalTopic.class);
         StreamsGroupDescribeResponseData.TopicInfo topicInfo = new StreamsGroupDescribeResponseData.TopicInfo();
         when(internalTopicMock.asStreamsGroupDescribeTopicInfo()).thenReturn(topicInfo);
         Map<String, ConfiguredInternalTopic> repartitionSourceTopics = Map.of("repartitionSourceTopic1", internalTopicMock);
         Map<String, ConfiguredInternalTopic> stateChangelogTopics = Map.of("stateChangelogTopic1", internalTopicMock);
         ConfiguredSubtopology configuredSubtopology = new ConfiguredSubtopology(
-            sourceTopics, repartitionSourceTopics, repartitionSinkTopics, stateChangelogTopics);
+            1, sourceTopics, repartitionSourceTopics, repartitionSinkTopics, stateChangelogTopics);
 
         StreamsGroupDescribeResponseData.Subtopology subtopology = configuredSubtopology.asStreamsGroupDescribeSubtopology(subtopologyId);
 

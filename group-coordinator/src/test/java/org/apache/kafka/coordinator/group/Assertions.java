@@ -30,7 +30,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAs
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.opentest4j.AssertionFailedError;
@@ -41,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,7 +60,7 @@ public class Assertions {
         ConsumerGroupPartitionMetadataValue.class, Assertions::assertConsumerGroupPartitionMetadataValue,
         GroupMetadataValue.class, Assertions::assertGroupMetadataValue,
         ConsumerGroupTargetAssignmentMemberValue.class, Assertions::assertConsumerGroupTargetAssignmentMemberValue,
-        ShareGroupPartitionMetadataValue.class, Assertions::assertShareGroupPartitionMetadataValue
+        ShareGroupStatePartitionMetadataValue.class, Assertions::assertShareGroupStatePartitionMetadataValue
     );
 
     public static void assertResponseEquals(
@@ -115,12 +114,12 @@ public class Assertions {
                     slice
                         .stream()
                         .sorted(Comparator.comparing(Object::toString))
-                        .collect(Collectors.toList()),
+                        .toList(),
                     actualRecords
                         .subList(j, j + slice.size())
                         .stream()
                         .sorted(Comparator.comparing(Object::toString))
-                        .collect(Collectors.toList())
+                        .toList()
                 );
 
                 j += slice.size();
@@ -263,21 +262,25 @@ public class Assertions {
         assertEquals(expected, actual);
     }
 
-    private static void assertShareGroupPartitionMetadataValue(
+    private static void assertShareGroupStatePartitionMetadataValue(
         ApiMessage exp,
         ApiMessage act
     ) {
-        // The order of the racks stored in the PartitionMetadata of the ShareGroupPartitionMetadataValue
-        // is not always guaranteed. Therefore, we need a special comparator.
-        ShareGroupPartitionMetadataValue expected = (ShareGroupPartitionMetadataValue) exp.duplicate();
-        ShareGroupPartitionMetadataValue actual = (ShareGroupPartitionMetadataValue) act.duplicate();
+        ShareGroupStatePartitionMetadataValue expected = (ShareGroupStatePartitionMetadataValue) exp.duplicate();
+        ShareGroupStatePartitionMetadataValue actual = (ShareGroupStatePartitionMetadataValue) act.duplicate();
 
-        Consumer<ShareGroupPartitionMetadataValue> normalize = message -> {
-            message.topics().sort(Comparator.comparing(ShareGroupPartitionMetadataValue.TopicMetadata::topicId));
-            message.topics().forEach(topic -> {
-                topic.partitionMetadata().sort(Comparator.comparing(ShareGroupPartitionMetadataValue.PartitionMetadata::partition));
-                topic.partitionMetadata().forEach(partition -> partition.racks().sort(String::compareTo));
-            });
+        Consumer<ShareGroupStatePartitionMetadataValue> normalize = message -> {
+            message.initializedTopics().sort(Comparator.comparing(ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo::topicId));
+            message.initializedTopics().forEach(topic ->
+                topic.partitions().sort(Comparator.naturalOrder())
+            );
+
+            message.initializingTopics().sort(Comparator.comparing(ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo::topicId));
+            message.initializingTopics().forEach(topic ->
+                topic.partitions().sort(Comparator.naturalOrder())
+            );
+
+            message.deletingTopics().sort(Comparator.comparing(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId));
         };
 
         normalize.accept(expected);

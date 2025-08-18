@@ -311,7 +311,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
             final long dataStartTime = System.currentTimeMillis() - timeSpan;
             final long dataEndTime = System.currentTimeMillis();
 
-            // Explicitly create a seed so we can we can log.
+            // Explicitly create a seed so we can log.
             // If we are debugging a failed run, we can deterministically produce the same dataset
             // by plugging in the seed from that run.
             final long seed = new Random().nextLong();
@@ -368,7 +368,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
          * data distribution: Zipfian and Normal, while also being efficient to generate.
          */
         private static Iterator<Integer> zipfNormal(final Random random, final int keySpace) {
-            return new Iterator<Integer>() {
+            return new Iterator<>() {
                 @Override
                 public boolean hasNext() {
                     return true;
@@ -635,6 +635,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                                            final String application,
                                            final String id,
                                            final String processingGuarantee,
+                                           final String groupProtocol,
                                            final String stateDir) {
             final Properties properties =
                 mkProperties(
@@ -644,7 +645,8 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                         mkEntry(StreamsConfig.CLIENT_ID_CONFIG, id),
                         mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
                         mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
-                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
+                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir),
+                        mkEntry(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
                     )
                 );
             properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
@@ -656,9 +658,10 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                                              final String application,
                                              final String id,
                                              final String processingGuarantee,
+                                             final String groupProtocol,
                                              final String stateDir) throws InterruptedException {
             final KafkaStreams kafkaStreams =
-                new KafkaStreams(getTopology(), getConfig(broker, application, id, processingGuarantee, stateDir));
+                new KafkaStreams(getTopology(), getConfig(broker, application, id, processingGuarantee, groupProtocol, stateDir));
             final CountDownLatch startUpLatch = new CountDownLatch(1);
             kafkaStreams.setStateListener((newState, oldState) -> {
                 if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
@@ -672,8 +675,6 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         }
 
         public static boolean verifySync(final String broker, final Instant deadline) throws InterruptedException {
-            final Deserializer<Integer> keyDeserializer = intSerde.deserializer();
-
             final Deserializer<Article> articleDeserializer = new Article.ArticleDeserializer();
 
             final Deserializer<AugmentedArticle> augmentedArticleDeserializer =
@@ -831,13 +832,13 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 pass,
                 report,
                 "Expected 1 article, got " + consumedArticles.size(),
-                consumedArticles.size() > 0
+                !consumedArticles.isEmpty()
             );
             assertThat(
                 pass,
                 report,
                 "Expected 1 comment, got " + consumedComments.size(),
-                consumedComments.size() > 0
+                !consumedComments.isEmpty()
             );
 
             assertThat(
@@ -991,8 +992,9 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 case "application": {
                     final String nodeId = args[2];
                     final String processingGuarantee = args[3];
-                    final String stateDir = args[4];
-                    App.startSync(kafka, UUID.randomUUID().toString(), nodeId, processingGuarantee, stateDir);
+                    final String groupProtocol = args[4];
+                    final String stateDir = args[5];
+                    App.startSync(kafka, UUID.randomUUID().toString(), nodeId, processingGuarantee, groupProtocol, stateDir);
                     break;
                 }
                 default:

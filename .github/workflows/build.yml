@@ -36,7 +36,8 @@ jobs:
     name: Configure Workflow
     outputs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
-      test-catalog-days: ${{ steps.test-catalog.outputs.days }}
+      test-catalog-days: ${{ steps.configure-outputs.outputs.days }}
+      sha: ${{ steps.configure-outputs.outputs.sha }}
     steps:
       - name: Env
         run: printenv
@@ -48,13 +49,15 @@ jobs:
           github.event_name == 'pull_request' && 
           github.event.pull_request.draft
         run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
-      - name: Test Catalog Age
-        id: test-catalog
+      - name: Configure Outputs
+        id: configure-outputs
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "days=0" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
           else
             echo "days=7" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
   load-catalog:
@@ -108,7 +111,7 @@ jobs:
   validate:
     needs: [configure]
     runs-on: ubuntu-latest
-    name: Compile and Check Java
+    name: Compile and Check (Merge Ref)
     steps:
       - name: Env
         run: printenv
@@ -118,12 +121,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}  # this is the default, just being explicit.
       - name: Setup Python
         uses: ./.github/actions/setup-python
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
-          java-version: 23
+          java-version: 24
           gradle-cache-read-only: ${{ !inputs.is-trunk }}
           gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
@@ -136,7 +140,7 @@ jobs:
         # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
         # --no-scan:      For public fork PRs, we won't attempt to publish the scan
         run: |
-          ./gradlew --build-cache --info $SCAN_ARG check siteDocTar -x test
+          ./gradlew --build-cache --info $SCAN_ARG check releaseTarGz -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -166,6 +170,8 @@ jobs:
             find ./site-docs/generated -type f -exec grep -L "." {} \; >&2
             exit 1
           fi
+      - name: Verify license file
+        run: python committer-tools/verify_license.py --skip-build
 
   test:
     needs: [configure, validate, load-catalog]
@@ -175,7 +181,7 @@ jobs:
       fail-fast: false
       matrix:
         # If we change these, make sure to adjust ci-complete.yml
-        java: [ 23, 17 ]
+        java: [ 24, 17 ]
         run-flaky: [ true, false ]
         run-new: [ true, false ]
         exclude:
@@ -189,6 +195,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ needs.configure.outputs.sha }}
       - name: Setup Python
         uses: ./.github/actions/setup-python
       - name: Setup Gradle
@@ -263,7 +270,7 @@ jobs:
           python .github/scripts/junit.py \
            --path build/junit-xml >> $GITHUB_STEP_SUMMARY
 
-  # This job downloads all the JUnit XML files and thread dumps from the JDK 23 test runs.
+  # This job downloads all the JUnit XML files and thread dumps from the JDK 24 test runs.
   # If any test job fails, we will not run this job. Also, if any thread dump artifacts
   # are present, this means there was a timeout in the tests and so we will not proceed
   # with catalog creation.
@@ -281,7 +288,7 @@ jobs:
       - name: Download Thread Dumps
         uses: actions/download-artifact@v4
         with:
-          pattern: junit-thread-dumps-23-*
+          pattern: junit-thread-dumps-24-*
           path: thread-dumps
           merge-multiple: true
       - name: Check For Thread Dump
@@ -295,7 +302,7 @@ jobs:
       - name: Download JUnit XMLs
         uses: actions/download-artifact@v4
         with:
-          pattern: junit-xml-23-*  # Only look at JDK 23 tests for the test catalog
+          pattern: junit-xml-24-*  # Only look at JDK 24 tests for the test catalog
           path: junit-xml
           merge-multiple: true
       - name: Collate Test Catalog
@@ -355,3 +362,28 @@ jobs:
           git add test-catalog
           git diff --quiet && git diff --staged --quiet || git commit -m "$COMMIT_MSG"
           git push
+
+  checks-complete:
+    name: "CI checks completed"
+    needs: [configure, validate, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Fail if Draft
+        if: ${{ needs.configure.outputs.is-draft }}
+        run: |
+          echo "Cannot merge a draft PR"
+          exit 1
+      - name: Check Dependency Outcomes
+        run: |
+          if [[ "${{ needs.validate.result }}" == "success" && "${{ needs.test.result }}" == "success" ]]; then
+            echo "Required jobs completed successfully!"
+            exit 0
+          else
+            echo "Required jobs did not complete successfully"
+            exit 1
+          fi

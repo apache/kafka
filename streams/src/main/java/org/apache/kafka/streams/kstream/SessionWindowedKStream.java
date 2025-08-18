@@ -131,7 +131,7 @@ public interface SessionWindowedKStream<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
-     * Sting queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
+     * String queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
      * StoreQueryParameters<ReadOnlySessionStore<String, Long>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.sessionStore());
      * ReadOnlySessionStore<String,Long> sessionStore = streams.store(storeQueryParams);
      * String key = "some-key";
@@ -178,7 +178,7 @@ public interface SessionWindowedKStream<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
-     * Sting queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
+     * String queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
      * StoreQueryParameters<ReadOnlySessionStore<String, Long>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.sessionStore());
      * ReadOnlySessionStore<String,Long> sessionStore = streams.store(storeQueryParams);
      * String key = "some-key";
@@ -332,7 +332,7 @@ public interface SessionWindowedKStream<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
-     * Sting queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
+     * String queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
      * StoreQueryParameters<ReadOnlySessionStore<String, Long>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.sessionStore());
      * ReadOnlySessionStore<String,Long> sessionStore = streams.store(storeQueryParams);
      * String key = "some-key";
@@ -393,7 +393,7 @@ public interface SessionWindowedKStream<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters)}  KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // compute sum
-     * Sting queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
+     * String queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
      * StoreQueryParameters<ReadOnlySessionStore<String, Long>> storeQueryParams = StoreQueryParameters.fromNameAndType(QueryableStoreTypes.sessionStore());
      * ReadOnlySessionStore<String,Long> sessionStore = streams.store(storeQueryParams);
      * String key = "some-key";
@@ -552,7 +552,7 @@ public interface SessionWindowedKStream<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double
-     * Sting queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
+     * String queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
      * StoreQueryParameters<ReadOnlySessionStore<String, Long>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.sessionStore());
      * ReadOnlySessionStore<String,Long> sessionStore = streams.store(storeQueryParams);
      * String key = "some-key";
@@ -614,7 +614,7 @@ public interface SessionWindowedKStream<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double
-     * Sting queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
+     * String queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
      * StoreQueryParameters<ReadOnlySessionStore<String, Long>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.sessionStore());
      * ReadOnlySessionStore<String,Long> sessionStore = streams.store(storeQueryParams);
      * String key = "some-key";

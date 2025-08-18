@@ -19,16 +19,12 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
 /**
  * The result of the {@link Admin#deleteRecords(Map)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DeleteRecordsResult {
 
     private final Map<TopicPartition, KafkaFuture<DeletedRecords>> futures;

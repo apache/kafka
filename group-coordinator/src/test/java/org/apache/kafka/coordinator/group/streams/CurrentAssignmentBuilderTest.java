@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.util.Collections;
+import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
@@ -63,8 +63,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .build();
 
         assertEquals(
@@ -108,8 +108,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 3, 4)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .build();
 
         assertEquals(
@@ -150,8 +150,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 3, 4, 7)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .build();
 
         assertEquals(
@@ -191,8 +191,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 4, 5)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .build();
 
         assertEquals(
@@ -235,8 +235,8 @@ public class CurrentAssignmentBuilderTest {
             .withTargetAssignment(memberEpoch + 1, TasksTuple.EMPTY)
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .build();
 
         assertEquals(
@@ -278,8 +278,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 3, 4, 7)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .build();
 
         assertEquals(
@@ -321,8 +321,8 @@ public class CurrentAssignmentBuilderTest {
                 SUBTOPOLOGY_ID2.equals(subtopologyId) ? PROCESS_ID : null
             )
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .withOwnedAssignment(mkTasksTuple(taskRole))
             .build();
 
@@ -365,8 +365,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .withOwnedAssignment(mkTasksTuple(taskRole,
                 mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
@@ -412,9 +412,9 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 6)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
             .withCurrentWarmupTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet());
+                (subtopologyId, partitionId) -> Set.of());
 
         assertEquals(
             member,
@@ -511,8 +511,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .withOwnedAssignment(mkTasksTuple(taskRole,
                 mkTasks(SUBTOPOLOGY_ID1, 2, 3),
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6))
@@ -556,9 +556,9 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.singleton(PROCESS_ID))
+                (subtopologyId, partitionId) -> Set.of(PROCESS_ID))
             .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) ->
-                Collections.singleton(PROCESS_ID))
+                Set.of(PROCESS_ID))
             .build();
 
         assertEquals(
@@ -598,8 +598,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .build();
 
         assertEquals(
@@ -639,9 +639,9 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 5, 6, 7)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.singleton(PROCESS_ID))
+                (subtopologyId, partitionId) -> Set.of(PROCESS_ID))
             .withCurrentWarmupTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.singleton(PROCESS_ID))
+                (subtopologyId, partitionId) -> Set.of(PROCESS_ID))
             .build();
 
         assertEquals(member, updatedMember);
@@ -671,10 +671,10 @@ public class CurrentAssignmentBuilderTest {
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> null)
             .withCurrentStandbyTaskProcessIds(
                 (subtopologyId, partitionId) -> (taskRole == TaskRole.STANDBY)
-                    ? Collections.emptySet() : Collections.singleton(PROCESS_ID))
+                    ? Set.of() : Set.of(PROCESS_ID))
             .withCurrentWarmupTaskProcessIds(
                 (subtopologyId, partitionId) -> (taskRole == TaskRole.STANDBY)
-                    ? Collections.singleton(PROCESS_ID) : Collections.emptySet())
+                    ? Set.of(PROCESS_ID) : Set.of())
             .build();
 
         assertEquals(member, updatedMember);
@@ -716,9 +716,9 @@ public class CurrentAssignmentBuilderTest {
                 (subtopologyId.equals(SUBTOPOLOGY_ID1) && partitionId == 4) ? "anyOtherProcess"
                     : null)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
             .withCurrentWarmupTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
             .build();
 
         assertEquals(expectedMember, updatedMember);
@@ -748,8 +748,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 6)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .build();
 
         assertEquals(
@@ -803,8 +803,8 @@ public class CurrentAssignmentBuilderTest {
                 mkTasks(SUBTOPOLOGY_ID2, 6)))
             .withCurrentActiveTaskProcessId((subtopologyId, partitionId) -> PROCESS_ID)
             .withCurrentStandbyTaskProcessIds(
-                (subtopologyId, partitionId) -> Collections.emptySet())
-            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Collections.emptySet())
+                (subtopologyId, partitionId) -> Set.of())
+            .withCurrentWarmupTaskProcessIds((subtopologyId, partitionId) -> Set.of())
             .withOwnedAssignment(mkTasksTuple(taskRole))
             .build();
 

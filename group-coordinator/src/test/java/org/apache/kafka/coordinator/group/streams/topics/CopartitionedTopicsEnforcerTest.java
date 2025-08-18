@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -49,7 +48,7 @@ public class CopartitionedTopicsEnforcerTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
-        final Map<String, Integer> topicPartitionCounts = Collections.emptyMap();
+        final Map<String, Integer> topicPartitionCounts = Map.of();
         final CopartitionedTopicsEnforcer enforcer =
             new CopartitionedTopicsEnforcer(LOG_CONTEXT, topicPartitionProvider(topicPartitionCounts));
 

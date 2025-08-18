@@ -33,6 +33,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
@@ -40,10 +41,12 @@ import org.apache.kafka.connect.util.LoggingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -78,6 +81,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
     protected final RetryWithToleranceOperator<T> retryWithToleranceOperator;
     protected final TransformationChain<T, R> transformationChain;
     private final Supplier<List<ErrorReporter<T>>> errorReportersSupplier;
+    protected final Function<ClassLoader, LoaderSwap> pluginLoaderSwapper;
     protected final PluginMetricsImpl pluginMetrics;
 
     public WorkerTask(ConnectorTaskId id,
@@ -90,9 +94,11 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                       TransformationChain<T, R> transformationChain,
                       Supplier<List<ErrorReporter<T>>> errorReportersSupplier,
                       Time time,
-                      StatusBackingStore statusBackingStore) {
+                      StatusBackingStore statusBackingStore,
+                      TaskPluginsMetadata pluginsMetadata,
+                      Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         this.id = id;
-        this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
+        this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener, pluginsMetadata);
         this.errorMetrics = errorMetrics;
         this.statusListener = taskMetricsGroup;
         this.loader = loader;
@@ -106,6 +112,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         this.errorReportersSupplier = errorReportersSupplier;
         this.time = time;
         this.statusBackingStore = statusBackingStore;
+        this.pluginLoaderSwapper = pluginLoaderSwapper;
         this.pluginMetrics = connectMetrics.taskPluginMetrics(id);
     }
 
@@ -190,6 +197,8 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
     protected abstract void execute();
 
     protected abstract void close();
+
+    protected abstract String taskVersion();
 
     protected boolean isFailed() {
         return failed;
@@ -392,14 +401,25 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
     static class TaskMetricsGroup implements TaskStatus.Listener {
         private final TaskStatus.Listener delegateListener;
         private final MetricGroup metricGroup;
+        private final List<MetricGroup> transformationGroups = new ArrayList<>();
+        private final List<MetricGroup> predicateGroups = new ArrayList<>();
         private final Time time;
         private final StateTracker taskStateTimer;
         private final Sensor commitTime;
         private final Sensor batchSize;
         private final Sensor commitAttempts;
+        private final ConnectMetrics connectMetrics;
+        private final ConnectorTaskId id;
 
         public TaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics, TaskStatus.Listener statusListener) {
+            this(id, connectMetrics, statusListener, null);
+        }
+
+        public TaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics, TaskStatus.Listener statusListener, TaskPluginsMetadata pluginsMetadata) {
             delegateListener = statusListener;
+            this.connectMetrics = connectMetrics;
+            this.id = id;
+
             time = connectMetrics.time();
             taskStateTimer = new StateTracker();
             ConnectMetricsRegistry registry = connectMetrics.registry();
@@ -429,6 +449,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             Frequencies commitFrequencies = Frequencies.forBooleanValues(offsetCommitFailures, offsetCommitSucceeds);
             commitAttempts = metricGroup.sensor("offset-commit-completion");
             commitAttempts.add(commitFrequencies);
+            addPluginInfoMetric(pluginsMetadata);
         }
 
         private void addRatioMetric(final State matchingState, MetricNameTemplate template) {
@@ -437,8 +458,52 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                     taskStateTimer.durationRatio(matchingState, now));
         }
 
+        private void addPluginInfoMetric(TaskPluginsMetadata pluginsMetadata) {
+            if (pluginsMetadata == null) {
+                return;
+            }
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup.addValueMetric(registry.taskConnectorClass, now -> pluginsMetadata.connectorClass());
+            metricGroup.addValueMetric(registry.taskConnectorClassVersion, now -> pluginsMetadata.connectorVersion());
+            metricGroup.addValueMetric(registry.taskConnectorType, now -> pluginsMetadata.connectorType());
+            metricGroup.addValueMetric(registry.taskClass, now -> pluginsMetadata.taskClass());
+            metricGroup.addValueMetric(registry.taskVersion, now -> pluginsMetadata.taskVersion());
+            metricGroup.addValueMetric(registry.taskKeyConverterClass, now -> pluginsMetadata.keyConverterClass());
+            metricGroup.addValueMetric(registry.taskKeyConverterVersion, now -> pluginsMetadata.keyConverterVersion());
+            metricGroup.addValueMetric(registry.taskValueConverterClass, now -> pluginsMetadata.valueConverterClass());
+            metricGroup.addValueMetric(registry.taskValueConverterVersion, now -> pluginsMetadata.valueConverterVersion());
+            metricGroup.addValueMetric(registry.taskHeaderConverterClass, now -> pluginsMetadata.headerConverterClass());
+            metricGroup.addValueMetric(registry.taskHeaderConverterVersion, now -> pluginsMetadata.headerConverterVersion());
+
+            if (!pluginsMetadata.transformations().isEmpty()) {
+                for (TransformationStage.AliasedPluginInfo entry : pluginsMetadata.transformations()) {
+                    MetricGroup transformationGroup = connectMetrics.group(registry.transformsGroupName(),
+                            registry.connectorTagName(), id.connector(),
+                            registry.taskTagName(), Integer.toString(id.task()),
+                            registry.transformsTagName(), entry.alias());
+                    transformationGroup.addValueMetric(registry.transformClass, now -> entry.className());
+                    transformationGroup.addValueMetric(registry.transformVersion, now -> entry.version());
+                    this.transformationGroups.add(transformationGroup);
+                }
+            }
+
+            if (!pluginsMetadata.predicates().isEmpty()) {
+                for (TransformationStage.AliasedPluginInfo entry : pluginsMetadata.predicates()) {
+                    MetricGroup predicateGroup = connectMetrics.group(registry.predicatesGroupName(),
+                            registry.connectorTagName(), id.connector(),
+                            registry.taskTagName(), Integer.toString(id.task()),
+                            registry.predicateTagName(), entry.alias());
+                    predicateGroup.addValueMetric(registry.predicateClass, now -> entry.className());
+                    predicateGroup.addValueMetric(registry.predicateVersion, now -> entry.version());
+                    this.predicateGroups.add(predicateGroup);
+                }
+            }
+        }
+
         void close() {
             metricGroup.close();
+            transformationGroups.forEach(MetricGroup::close);
+            predicateGroups.forEach(MetricGroup::close);
         }
 
         void recordCommit(long duration, boolean success) {

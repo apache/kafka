@@ -48,6 +48,7 @@ import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -228,7 +229,7 @@ public class WorkerSinkTaskTest {
                 taskId, task, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, connectMetrics,
                 keyConverterPlugin, valueConverterPlugin, errorMetrics, headerConverterPlugin,
                 transformationChain, consumer, loader, time,
-                retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier);
+                retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier, null, TestPlugins.noOpLoaderSwap());
     }
 
     @AfterEach
@@ -482,7 +483,7 @@ public class WorkerSinkTaskTest {
         workerTask.initializeAndStart();
         verifyInitializeTask();
 
-        Set<TopicPartition> newAssignment = new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3));
+        Set<TopicPartition> newAssignment = Set.of(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
 
         when(consumer.assignment())
                 .thenReturn(INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT)
@@ -637,8 +638,8 @@ public class WorkerSinkTaskTest {
                 .thenReturn(INITIAL_ASSIGNMENT)
                 .thenReturn(Collections.singleton(TOPIC_PARTITION2))
                 .thenReturn(Collections.singleton(TOPIC_PARTITION2))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
                 .thenReturn(INITIAL_ASSIGNMENT)
                 .thenReturn(INITIAL_ASSIGNMENT)
                 .thenReturn(INITIAL_ASSIGNMENT);
@@ -709,12 +710,12 @@ public class WorkerSinkTaskTest {
 
         when(consumer.assignment())
                 .thenReturn(INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT)
-                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)));
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3));
 
         INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
         when(consumer.position(TOPIC_PARTITION3)).thenReturn(FIRST_OFFSET);

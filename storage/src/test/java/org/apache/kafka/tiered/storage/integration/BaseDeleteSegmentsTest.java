@@ -20,9 +20,9 @@ import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 
@@ -35,12 +35,12 @@ public abstract class BaseDeleteSegmentsTest extends TieredStorageTestHarness {
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
+        final int broker0 = 0;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 1;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int partitionCount = 1;
+        final int replicationFactor = 1;
+        final int maxBatchCountPerSegment = 1;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
         final int beginEpoch = 0;
@@ -55,9 +55,11 @@ public abstract class BaseDeleteSegmentsTest extends TieredStorageTestHarness {
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 2, new KeyValueSpec("k2", "v2"))
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 3L)
                 .produceWithTimestamp(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
-                        new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3", System.currentTimeMillis()))
+                        // DeleteSegmentsByRetentionTimeTest uses a tiny retention time, which could cause the active 
+                        // segment to be rolled and deleted. We use a future timestamp to prevent that from happening.
+                        new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3", System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1)))
                 // update the topic config such that it triggers the deletion of segments
-                .updateTopicConfig(topicA, configsToBeAdded(), Collections.emptyList())
+                .updateTopicConfig(topicA, configsToBeAdded(), List.of())
                 // expect that the three offloaded remote log segments are deleted
                 .expectDeletionInRemoteStorage(broker0, topicA, p0, DELETE_SEGMENT, 3)
                 .waitForRemoteLogSegmentDeletion(topicA)

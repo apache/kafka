@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.EndpointType
 import java.net.InetAddress
 import java.util
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.{DescribeClusterRequestData, DescribeClusterResponseData}
 import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -71,6 +72,7 @@ class AuthHelperTest {
   @Test
   def testAuthorize(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
 
     val operation = AclOperation.WRITE
     val resourceType = ResourceType.TOPIC
@@ -88,7 +90,7 @@ class AuthHelperTest {
     when(authorizer.authorize(requestContext, expectedActions.asJava))
       .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val result = new AuthHelper(Some(authorizer)).authorize(
+    val result = new AuthHelper(Some(authorizerPlugin)).authorize(
       requestContext, operation, resourceType, resourceName)
 
     verify(authorizer).authorize(requestContext, expectedActions.asJava)
@@ -99,6 +101,7 @@ class AuthHelperTest {
   @Test
   def testFilterByAuthorized(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
 
     val operation = AclOperation.WRITE
     val resourceType = ResourceType.TOPIC
@@ -132,7 +135,7 @@ class AuthHelperTest {
       }.asJava
     }
 
-    val result = new AuthHelper(Some(authorizer)).filterByAuthorized(
+    val result = new AuthHelper(Some(authorizerPlugin)).filterByAuthorized(
       requestContext,
       operation,
       resourceType,
@@ -149,7 +152,9 @@ class AuthHelperTest {
 
   @Test
   def testComputeDescribeClusterResponseV1WithUnknownEndpointType(): Unit = {
-    val authHelper = new AuthHelper(Some(mock(classOf[Authorizer])))
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
     val request = newMockDescribeClusterRequest(
       new DescribeClusterRequestData().setEndpointType(123.toByte), 1)
     val responseData = authHelper.computeDescribeClusterResponse(request,
@@ -164,7 +169,9 @@ class AuthHelperTest {
 
   @Test
   def testComputeDescribeClusterResponseV0WithUnknownEndpointType(): Unit = {
-    val authHelper = new AuthHelper(Some(mock(classOf[Authorizer])))
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
     val request = newMockDescribeClusterRequest(
       new DescribeClusterRequestData().setEndpointType(123.toByte), 0)
     val responseData = authHelper.computeDescribeClusterResponse(request,
@@ -179,7 +186,9 @@ class AuthHelperTest {
 
   @Test
   def testComputeDescribeClusterResponseV1WithUnexpectedEndpointType(): Unit = {
-    val authHelper = new AuthHelper(Some(mock(classOf[Authorizer])))
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
     val request = newMockDescribeClusterRequest(
       new DescribeClusterRequestData().setEndpointType(EndpointType.BROKER.id()), 1)
     val responseData = authHelper.computeDescribeClusterResponse(request,
@@ -194,7 +203,9 @@ class AuthHelperTest {
 
   @Test
   def testComputeDescribeClusterResponseV0WithUnexpectedEndpointType(): Unit = {
-    val authHelper = new AuthHelper(Some(mock(classOf[Authorizer])))
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
     val request = newMockDescribeClusterRequest(
       new DescribeClusterRequestData().setEndpointType(EndpointType.BROKER.id()), 0)
     val responseData = authHelper.computeDescribeClusterResponse(request,
@@ -209,7 +220,9 @@ class AuthHelperTest {
 
   @Test
   def testComputeDescribeClusterResponseWhereControllerIsNotFound(): Unit = {
-    val authHelper = new AuthHelper(Some(mock(classOf[Authorizer])))
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
     val request = newMockDescribeClusterRequest(
       new DescribeClusterRequestData().setEndpointType(EndpointType.CONTROLLER.id()), 1)
     val responseData = authHelper.computeDescribeClusterResponse(request,
@@ -226,7 +239,9 @@ class AuthHelperTest {
 
   @Test
   def testComputeDescribeClusterResponseSuccess(): Unit = {
-    val authHelper = new AuthHelper(Some(mock(classOf[Authorizer])))
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    val authHelper = new AuthHelper(Some(authorizerPlugin))
     val request = newMockDescribeClusterRequest(
       new DescribeClusterRequestData().setEndpointType(EndpointType.CONTROLLER.id()), 1)
     val nodes = new DescribeClusterBrokerCollection(

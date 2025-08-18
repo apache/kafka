@@ -155,7 +155,7 @@ public class StreamsGroupMemberTest {
             .setUserEndpoint(USER_ENDPOINT)
             .setClientTags(CLIENT_TAGS.entrySet().stream()
                 .map(e -> new KeyValue().setKey(e.getKey()).setValue(e.getValue()))
-                .collect(Collectors.toList()));
+                .toList());
 
         StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
             .updateWith(record)

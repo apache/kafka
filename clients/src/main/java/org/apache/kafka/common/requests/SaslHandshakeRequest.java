@@ -20,9 +20,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 /**
  * Request from SASL client containing client SASL mechanism.
@@ -73,7 +71,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
         return new SaslHandshakeResponse(response);
     }
 
-    public static SaslHandshakeRequest parse(ByteBuffer buffer, short version) {
-        return new SaslHandshakeRequest(new SaslHandshakeRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static SaslHandshakeRequest parse(Readable readable, short version) {
+        return new SaslHandshakeRequest(new SaslHandshakeRequestData(readable, version), version);
     }
 }

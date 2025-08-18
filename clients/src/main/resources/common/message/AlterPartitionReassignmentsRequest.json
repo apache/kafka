@@ -18,11 +18,14 @@
   "type": "request",
   "listeners": ["broker", "controller"],
   "name": "AlterPartitionReassignmentsRequest",
-  "validVersions": "0",
+  // Version 1 adds the ability to allow/disallow changing the replication factor as part of the request.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "TimeoutMs", "type": "int32", "versions": "0+", "default": "60000",
       "about": "The time in ms to wait for the request to complete." },
+    { "name": "AllowReplicationFactorChange", "type": "bool", "versions": "1+", "default": "true",
+      "about": "The option indicating whether changing the replication factor of any given partition as part of this request is a valid move." },
     { "name": "Topics", "type": "[]ReassignableTopic", "versions": "0+",
       "about": "The topics to reassign.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",

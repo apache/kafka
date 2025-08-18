@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 
@@ -42,33 +41,30 @@ public class CachedSharePartition implements ImplicitLinkedHashCollection.Elemen
     private final Uuid topicId;
     private final int partition;
     private final Optional<Integer> leaderEpoch;
-    private int maxBytes;
     private boolean requiresUpdateInResponse;
 
     private int cachedNext = ImplicitLinkedHashCollection.INVALID_INDEX;
     private int cachedPrev = ImplicitLinkedHashCollection.INVALID_INDEX;
 
-    private CachedSharePartition(String topic, Uuid topicId, int partition, int maxBytes, Optional<Integer> leaderEpoch,
+    private CachedSharePartition(String topic, Uuid topicId, int partition, Optional<Integer> leaderEpoch,
                                  boolean requiresUpdateInResponse) {
         this.topic = topic;
         this.topicId = topicId;
         this.partition = partition;
-        this.maxBytes = maxBytes;
         this.leaderEpoch = leaderEpoch;
         this.requiresUpdateInResponse = requiresUpdateInResponse;
     }
 
     public CachedSharePartition(String topic, Uuid topicId, int partition, boolean requiresUpdateInResponse) {
-        this(topic, topicId, partition, -1, Optional.empty(), requiresUpdateInResponse);
+        this(topic, topicId, partition, Optional.empty(), requiresUpdateInResponse);
     }
 
     public CachedSharePartition(TopicIdPartition topicIdPartition) {
         this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition(), false);
     }
 
-    public CachedSharePartition(TopicIdPartition topicIdPartition, ShareFetchRequest.SharePartitionData reqData,
-                                boolean requiresUpdateInResponse) {
-        this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition(), reqData.maxBytes,
+    public CachedSharePartition(TopicIdPartition topicIdPartition, boolean requiresUpdateInResponse) {
+        this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition(),
                 Optional.empty(), requiresUpdateInResponse);
     }
 
@@ -82,15 +78,6 @@ public class CachedSharePartition implements ImplicitLinkedHashCollection.Elemen
 
     public int partition() {
         return partition;
-    }
-
-    public ShareFetchRequest.SharePartitionData reqData() {
-        return new ShareFetchRequest.SharePartitionData(topicId, maxBytes);
-    }
-
-    public void updateRequestParams(ShareFetchRequest.SharePartitionData reqData) {
-        // Update our cached request parameters.
-        maxBytes = reqData.maxBytes;
     }
 
     /**
@@ -128,7 +115,6 @@ public class CachedSharePartition implements ImplicitLinkedHashCollection.Elemen
         return  "CachedSharePartition(topic=" + topic +
                 ", topicId=" + topicId +
                 ", partition=" + partition +
-                ", maxBytes=" + maxBytes +
                 ", leaderEpoch=" + leaderEpoch +
                 ")";
     }

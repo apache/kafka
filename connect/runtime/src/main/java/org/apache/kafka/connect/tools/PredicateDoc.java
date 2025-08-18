@@ -23,7 +23,6 @@ import org.apache.kafka.connect.transforms.predicates.Predicate;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class PredicateDoc {
 
@@ -50,7 +49,7 @@ public class PredicateDoc {
             }
         })
         .sorted(Comparator.comparing(docInfo -> docInfo.predicateName))
-        .collect(Collectors.toList());
+        .toList();
 
     private static String toHtml() {
         StringBuilder b = new StringBuilder();

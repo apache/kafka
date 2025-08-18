@@ -21,16 +21,15 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordValidationStats;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.OptionalInt;
+import java.util.Optional;
 
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log.
  */
 public class LogAppendInfo {
 
-    public static final LogAppendInfo UNKNOWN_LOG_APPEND_INFO = new LogAppendInfo(-1, -1, OptionalInt.empty(),
+    public static final LogAppendInfo UNKNOWN_LOG_APPEND_INFO = new LogAppendInfo(-1, -1, Optional.empty(),
             RecordBatch.NO_TIMESTAMP, RecordBatch.NO_TIMESTAMP, -1L,
             RecordValidationStats.EMPTY, CompressionType.NONE, -1, -1L);
 
@@ -41,7 +40,7 @@ public class LogAppendInfo {
     private long logStartOffset;
     private RecordValidationStats recordValidationStats;
 
-    private final OptionalInt lastLeaderEpoch;
+    private final Optional<Integer> lastLeaderEpoch;
     private final CompressionType sourceCompression;
     private final int validBytes;
     private final long lastOffsetOfFirstBatch;
@@ -65,7 +64,7 @@ public class LogAppendInfo {
      */
     public LogAppendInfo(long firstOffset,
                          long lastOffset,
-                         OptionalInt lastLeaderEpoch,
+                         Optional<Integer> lastLeaderEpoch,
                          long maxTimestamp,
                          long logAppendTime,
                          long logStartOffset,
@@ -74,7 +73,7 @@ public class LogAppendInfo {
                          int validBytes,
                          long lastOffsetOfFirstBatch) {
         this(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, logAppendTime, logStartOffset,
-            recordValidationStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, Collections.emptyList(),
+            recordValidationStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, List.of(),
                 LeaderHwChange.NONE);
     }
 
@@ -98,7 +97,7 @@ public class LogAppendInfo {
      */
     public LogAppendInfo(long firstOffset,
                          long lastOffset,
-                         OptionalInt lastLeaderEpoch,
+                         Optional<Integer> lastLeaderEpoch,
                          long maxTimestamp,
                          long logAppendTime,
                          long logStartOffset,
@@ -138,7 +137,7 @@ public class LogAppendInfo {
         this.lastOffset = lastOffset;
     }
 
-    public OptionalInt lastLeaderEpoch() {
+    public Optional<Integer> lastLeaderEpoch() {
         return lastLeaderEpoch;
     }
 
@@ -224,7 +223,7 @@ public class LogAppendInfo {
     }
 
     public static LogAppendInfo unknownLogAppendInfoWithLogStartOffset(long logStartOffset) {
-        return new LogAppendInfo(-1, -1, OptionalInt.empty(), RecordBatch.NO_TIMESTAMP, RecordBatch.NO_TIMESTAMP, logStartOffset,
+        return new LogAppendInfo(-1, -1, Optional.empty(), RecordBatch.NO_TIMESTAMP, RecordBatch.NO_TIMESTAMP, logStartOffset,
                 RecordValidationStats.EMPTY, CompressionType.NONE, -1, -1L);
     }
 
@@ -234,7 +233,7 @@ public class LogAppendInfo {
      * in unknownLogAppendInfoWithLogStartOffset, but with additional fields recordErrors
      */
     public static LogAppendInfo unknownLogAppendInfoWithAdditionalInfo(long logStartOffset, List<RecordError> recordErrors) {
-        return new LogAppendInfo(-1, -1, OptionalInt.empty(), RecordBatch.NO_TIMESTAMP, RecordBatch.NO_TIMESTAMP, logStartOffset,
+        return new LogAppendInfo(-1, -1, Optional.empty(), RecordBatch.NO_TIMESTAMP, RecordBatch.NO_TIMESTAMP, logStartOffset,
                 RecordValidationStats.EMPTY, CompressionType.NONE, -1, -1L, recordErrors, LeaderHwChange.NONE);
     }
 
