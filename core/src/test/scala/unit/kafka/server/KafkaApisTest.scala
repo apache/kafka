@@ -1893,7 +1893,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(epoch),
-        ArgumentMatchers.eq(Set(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))),
+        ArgumentMatchers.eq(util.Set.of(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))),
         responseCallback.capture(),
         ArgumentMatchers.eq(TransactionVersion.TV_0),
         ArgumentMatchers.eq(requestLocal)
@@ -1952,7 +1952,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(epoch),
-        ArgumentMatchers.eq(Set(topicPartition)),
+        ArgumentMatchers.eq(util.Set.of(topicPartition)),
         responseCallback.capture(),
         ArgumentMatchers.eq(TransactionVersion.TV_0),
         ArgumentMatchers.eq(requestLocal)
@@ -2158,7 +2158,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(transactionalId1),
       ArgumentMatchers.eq(producerId),
       ArgumentMatchers.eq(epoch),
-      ArgumentMatchers.eq(Set(tp0)),
+      ArgumentMatchers.eq(util.Set.of(tp0)),
       responseCallback.capture(),
       any[TransactionVersion],
       ArgumentMatchers.eq(requestLocal)
@@ -2168,7 +2168,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(transactionalId2),
       ArgumentMatchers.eq(producerId),
       ArgumentMatchers.eq(epoch),
-      ArgumentMatchers.eq(Set(tp1)),
+      ArgumentMatchers.eq(util.Set.of(tp1)),
       verifyPartitionsCallback.capture(),
     )).thenAnswer(_ => verifyPartitionsCallback.getValue.apply(AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, util.Map.of(tp1, Errors.PRODUCER_FENCED))))
     kafkaApis = createKafkaApis()
