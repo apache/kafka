@@ -87,6 +87,7 @@ public final class AddVoterHandler {
         LeaderState<?> leaderState,
         ReplicaKey voterKey,
         Endpoints voterEndpoints,
+        boolean ackWhenCommitted,
         long currentTimeMs
     ) {
         // Check if there are any pending voter change requests
@@ -184,6 +185,7 @@ public final class AddVoterHandler {
         AddVoterHandlerState state = new AddVoterHandlerState(
             voterKey,
             voterEndpoints,
+            ackWhenCommitted,
             time.timer(timeout.getAsLong())
         );
         leaderState.resetAddVoterHandlerState(
@@ -321,7 +323,11 @@ public final class AddVoterHandler {
                 )
             );
         current.setLastOffset(leaderState.appendVotersRecord(newVoters, currentTimeMs));
-
+        if (!current.ackWhenCommitted()) {
+            // complete the future to send response, but do not reset the state,
+            // since the new voter set is not yet committed
+            current.future().complete(RaftUtil.addVoterResponse(Errors.NONE, null));
+        }
         return true;
     }
 

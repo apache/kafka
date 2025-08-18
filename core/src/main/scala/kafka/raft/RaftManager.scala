@@ -24,7 +24,6 @@ import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 import java.util.{Map => JMap}
 import java.util.{Collection => JCollection}
-import kafka.log.LogManager
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.Logging
@@ -48,7 +47,7 @@ import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
-import org.apache.kafka.storage.internals.log.UnifiedLog
+import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
@@ -62,7 +61,7 @@ object KafkaRaftManager {
   }
 
   private def lockDataDir(dataDir: File): FileLock = {
-    val lock = new FileLock(new File(dataDir, LogManager.LockFileName))
+    val lock = new FileLock(new File(dataDir, LogManager.LOCK_FILE_NAME))
 
     if (!lock.tryLock()) {
       throw new KafkaException(
@@ -80,6 +79,7 @@ object KafkaRaftManager {
   private def hasDifferentLogDir(config: KafkaConfig): Boolean = {
     !config
       .logDirs
+      .asScala
       .map(Paths.get(_).toAbsolutePath)
       .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
   }
@@ -236,11 +236,9 @@ class KafkaRaftManager[T](
   }
 
   private def buildNetworkClient(): (ListenerName, NetworkClient) = {
-    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(
-      controllerListenerName,
-      SecurityProtocol.forName(controllerListenerName.value())
-    )
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.get(0))
+    val controllerSecurityProtocol = Option(config.effectiveListenerSecurityProtocolMap.get(controllerListenerName))
+      .getOrElse(SecurityProtocol.forName(controllerListenerName.value()))
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       controllerSecurityProtocol,
       JaasContext.Type.SERVER,

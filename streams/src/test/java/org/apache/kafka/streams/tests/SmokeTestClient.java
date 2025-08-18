@@ -174,7 +174,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         final KTable<Windowed<String>, Integer> smallWindowSum = groupedData
             .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(2), Duration.ofSeconds(30)).advanceBy(Duration.ofSeconds(1)))
-            .reduce((l, r) -> l + r);
+            .reduce(Integer::sum);
 
         streamify(smallWindowSum, "sws-raw");
         streamify(smallWindowSum.suppress(untilWindowCloses(BufferConfig.unbounded())), "sws-suppressed");

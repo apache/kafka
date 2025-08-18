@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
@@ -75,9 +76,9 @@ public class TargetAssignmentBuilder {
     private Map<String, StreamsGroupMember> members = Map.of();
 
     /**
-     * The partition metadata.
+     * The metadata image.
      */
-    private Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> partitionMetadata = Map.of();
+    private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
      * The existing target assignment.
@@ -157,15 +158,15 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the partition metadata to use.
+     * Adds the metadata image to use.
      *
-     * @param partitionMetadata The partition metadata.
+     * @param metadataImage The metadata image.
      * @return This object.
      */
-    public TargetAssignmentBuilder withPartitionMetadata(
-        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> partitionMetadata
+    public TargetAssignmentBuilder withMetadataImage(
+        CoordinatorMetadataImage metadataImage
     ) {
-        this.partitionMetadata = partitionMetadata;
+        this.metadataImage = metadataImage;
         return this;
     }
 
@@ -273,7 +274,7 @@ public class TargetAssignmentBuilder {
                     Collections.unmodifiableMap(memberSpecs),
                     assignmentConfigs
                 ),
-                new TopologyMetadata(partitionMetadata, topology.subtopologies().get())
+                new TopologyMetadata(metadataImage, topology.subtopologies().get())
             );
         } else {
             newGroupAssignment = new GroupAssignment(

@@ -104,11 +104,12 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        Runnable preProducerCheck,
                                        Runnable postProducerCheck,
                                        Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+                                       TaskPluginsMetadata pluginsMetadata,
                                        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
                 buildTransactionContext(sourceConfig),
                 producer, admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics,
-                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, pluginLoaderSwapper);
+                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, pluginsMetadata, pluginLoaderSwapper);
 
         this.transactionOpen = false;
         this.committableRecords = new LinkedHashMap<>();

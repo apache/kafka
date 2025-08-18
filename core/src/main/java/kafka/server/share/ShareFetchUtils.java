@@ -27,8 +27,9 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
@@ -83,7 +84,7 @@ public class ShareFetchUtils {
 
             if (fetchPartitionData.error.code() != Errors.NONE.code()) {
                 partitionData
-                    .setRecords(null)
+                    .setRecords(MemoryRecords.EMPTY)
                     .setErrorCode(fetchPartitionData.error.code())
                     .setErrorMessage(fetchPartitionData.error.message())
                     .setAcquiredRecords(List.of());
@@ -123,7 +124,7 @@ public class ShareFetchUtils {
                 // if we want parallel requests for the same share partition or not.
                 if (shareAcquiredRecords.acquiredRecords().isEmpty()) {
                     partitionData
-                        .setRecords(null)
+                        .setRecords(MemoryRecords.EMPTY)
                         .setAcquiredRecords(List.of());
                 } else {
                     partitionData
@@ -204,20 +205,17 @@ public class ShareFetchUtils {
      *
      * @param records The records to be sliced.
      * @param shareAcquiredRecords The share acquired records containing the non-empty acquired records.
-     * @return The sliced records, if the records are of type FileRecords and the acquired records are a subset
-     *        of the fetched records. Otherwise, the original records are returned.
+     * @return The sliced records, if the acquired records are a subset of the fetched records. Otherwise,
+     *         the original records are returned.
      */
     static Records maybeSliceFetchRecords(Records records, ShareAcquiredRecords shareAcquiredRecords) {
-        if (!(records instanceof FileRecords fileRecords)) {
-            return records;
-        }
         // The acquired records should be non-empty, do not check as the method is called only when the
         // acquired records are non-empty.
         List<AcquiredRecords> acquiredRecords = shareAcquiredRecords.acquiredRecords();
         try {
-            final Iterator<FileChannelRecordBatch> iterator = fileRecords.batchIterator();
+            final Iterator<? extends RecordBatch> iterator = records.batchIterator();
             // Track the first overlapping batch with the first acquired offset.
-            FileChannelRecordBatch firstOverlapBatch = iterator.next();
+            RecordBatch firstOverlapBatch = iterator.next();
             // If there exists single fetch batch, then return the original records.
             if (!iterator.hasNext()) {
                 return records;
@@ -229,7 +227,7 @@ public class ShareFetchUtils {
             int size = 0;
             // Start iterating from the second batch.
             while (iterator.hasNext()) {
-                FileChannelRecordBatch batch = iterator.next();
+                RecordBatch batch = iterator.next();
                 // Iterate until finds the first overlap batch with the first acquired offset. All the
                 // batches before this first overlap batch should be sliced hence increment the start
                 // position.
@@ -248,10 +246,10 @@ public class ShareFetchUtils {
             // acquired offset.
             size += firstOverlapBatch.sizeInBytes();
             // Check if we do not need slicing i.e. neither start position nor size changed.
-            if (startPosition == 0 && size == fileRecords.sizeInBytes()) {
+            if (startPosition == 0 && size == records.sizeInBytes()) {
                 return records;
             }
-            return fileRecords.slice(startPosition, size);
+            return records.slice(startPosition, size);
         } catch (Exception e) {
             log.error("Error while checking batches for acquired records: {}, skipping slicing.", acquiredRecords, e);
             // If there is an exception while slicing, return the original records so that the fetch

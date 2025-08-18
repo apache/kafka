@@ -26,9 +26,9 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.raft.LogOffsetMetadata;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 import org.apache.kafka.raft.ReplicaKey;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.util.List;
 import java.util.OptionalLong;

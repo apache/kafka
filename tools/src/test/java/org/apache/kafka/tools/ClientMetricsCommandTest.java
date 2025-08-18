@@ -24,7 +24,7 @@ import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeConfigsResult;
-import org.apache.kafka.clients.admin.ListClientMetricsResourcesResult;
+import org.apache.kafka.clients.admin.ListConfigResourcesResult;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Exit;
@@ -33,8 +33,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -208,7 +208,7 @@ public class ClientMetricsCommandTest {
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
 
         ConfigResource cr = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName);
-        Config cfg = new Config(Collections.singleton(new ConfigEntry("metrics", "org.apache.kafka.producer.")));
+        Config cfg = new Config(Set.of(new ConfigEntry("metrics", "org.apache.kafka.producer.")));
         DescribeConfigsResult describeResult = AdminClientTestUtils.describeConfigsResult(cr, cfg);
         when(adminClient.describeConfigs(any())).thenReturn(describeResult);
         AlterConfigsResult alterResult = AdminClientTestUtils.alterConfigsResult(cr);
@@ -232,7 +232,11 @@ public class ClientMetricsCommandTest {
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
 
         ConfigResource cr = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName);
-        Config cfg = new Config(Collections.singleton(new ConfigEntry("metrics", "org.apache.kafka.producer.")));
+        ListConfigResourcesResult listConfigResourcesResult = AdminClientTestUtils.listConfigResourcesResult(Map.of(
+            ConfigResource.Type.CLIENT_METRICS, Set.of(clientMetricsName)
+        ));
+        when(adminClient.listConfigResources(any(), any())).thenReturn(listConfigResourcesResult);
+        Config cfg = new Config(Set.of(new ConfigEntry("metrics", "org.apache.kafka.producer.")));
         DescribeConfigsResult describeResult = AdminClientTestUtils.describeConfigsResult(cr, cfg);
         when(adminClient.describeConfigs(any())).thenReturn(describeResult);
 
@@ -250,14 +254,36 @@ public class ClientMetricsCommandTest {
     }
 
     @Test
+    public void testDescribeNonExistentClientMetric() {
+        Admin adminClient = mock(Admin.class);
+        ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
+
+        ListConfigResourcesResult listConfigResourcesResult = AdminClientTestUtils.listConfigResourcesResult(Map.of(
+            ConfigResource.Type.CLIENT_METRICS, Set.of()
+        ));
+        when(adminClient.listConfigResources(any(), any())).thenReturn(listConfigResourcesResult);
+
+        String capturedOutput = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                service.describeClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
+                    new String[]{"--bootstrap-server", bootstrapServer, "--describe",
+                        "--name", clientMetricsName}));
+            } catch (Throwable t) {
+                fail(t);
+            }
+        });
+        assertTrue(capturedOutput.contains("The client metric resource " + clientMetricsName + " doesn't exist and doesn't have dynamic config."));
+    }
+
+    @Test
     public void testDescribeAll() {
         Admin adminClient = mock(Admin.class);
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
 
-        ListClientMetricsResourcesResult result = AdminClientTestUtils.listClientMetricsResourcesResult(clientMetricsName);
-        when(adminClient.listClientMetricsResources()).thenReturn(result);
+        ListConfigResourcesResult result = AdminClientTestUtils.listConfigResourcesResult(clientMetricsName);
+        when(adminClient.listConfigResources(any(), any())).thenReturn(result);
         ConfigResource cr = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName);
-        Config cfg = new Config(Collections.singleton(new ConfigEntry("metrics", "org.apache.kafka.producer.")));
+        Config cfg = new Config(Set.of(new ConfigEntry("metrics", "org.apache.kafka.producer.")));
         DescribeConfigsResult describeResult = AdminClientTestUtils.describeConfigsResult(cr, cfg);
         when(adminClient.describeConfigs(any())).thenReturn(describeResult);
 
@@ -278,8 +304,8 @@ public class ClientMetricsCommandTest {
         Admin adminClient = mock(Admin.class);
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
 
-        ListClientMetricsResourcesResult result = AdminClientTestUtils.listClientMetricsResourcesResult("one", "two");
-        when(adminClient.listClientMetricsResources()).thenReturn(result);
+        ListConfigResourcesResult result = AdminClientTestUtils.listConfigResourcesResult("one", "two");
+        when(adminClient.listConfigResources(any(), any())).thenReturn(result);
 
         String capturedOutput = ToolsTestUtils.captureStandardOut(() -> {
             try {
@@ -296,10 +322,10 @@ public class ClientMetricsCommandTest {
         Admin adminClient = mock(Admin.class);
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
 
-        ListClientMetricsResourcesResult result = AdminClientTestUtils.listClientMetricsResourcesResult(Errors.UNSUPPORTED_VERSION.exception());
-        when(adminClient.listClientMetricsResources()).thenReturn(result);
+        ListConfigResourcesResult result = AdminClientTestUtils.listConfigResourcesResult(Errors.UNSUPPORTED_VERSION.exception());
+        when(adminClient.listConfigResources(any(), any())).thenReturn(result);
 
-        assertThrows(ExecutionException.class, () -> service.listClientMetrics());
+        assertThrows(ExecutionException.class, service::listClientMetrics);
     }
 
     private void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {

@@ -30,6 +30,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -280,7 +281,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+                                        METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG, 
+                                        ConfigDef.Type.LIST,
+                                        List.of(), 
+                                        ConfigDef.Importance.LOW, 
+                                        CONFIG_PROVIDERS_DOC);
     }
 
     @Override

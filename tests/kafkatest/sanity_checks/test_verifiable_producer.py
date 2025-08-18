@@ -71,7 +71,7 @@ class TestVerifiableProducer(Test):
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
              err_msg="Producer failed to start in a reasonable amount of time.")
 
-        assert is_version(node, [node.version.vstring], logger=self.logger)
+        assert is_version(node, [node.version.vstring], proc_grep_string=VerifiableProducer.__qualname__, logger=self.logger)
 
         self.producer.wait()
         num_produced = self.producer.num_acked
@@ -113,8 +113,8 @@ class TestVerifiableProducer(Test):
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
              err_msg="Producer failed to start in a reasonable amount of time.")
 
-        # See above comment above regarding use of version.vstring (distutils.version.LooseVersion)
-        assert is_version(node, [node.version.vstring], logger=self.logger)
+        # See comment above regarding use of version.vstring (distutils.version.LooseVersion)
+        assert is_version(node, [node.version.vstring], proc_grep_string=VerifiableProducer.__qualname__, logger=self.logger)
 
         self.producer.wait()
         num_produced = self.producer.num_acked
@@ -144,8 +144,8 @@ class TestVerifiableProducer(Test):
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
              err_msg="Producer failed to start in a reasonable amount of time.")
 
-        # See above comment above regarding use of version.vstring (distutils.version.LooseVersion)
-        assert is_version(node, [node.version.vstring], logger=self.logger)
+        # See comment above regarding use of version.vstring (distutils.version.LooseVersion)
+        assert is_version(node, [node.version.vstring], proc_grep_string=VerifiableProducer.__qualname__, logger=self.logger)
 
         self.producer.wait()
         num_produced = self.producer.num_acked

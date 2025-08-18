@@ -19,23 +19,13 @@ package org.apache.kafka.tiered.storage.specs;
 import java.util.Objects;
 
 public class RemoteFetchCount {
-    private FetchCountAndOp segmentFetchCountAndOp;
+    private final FetchCountAndOp segmentFetchCountAndOp;
     private FetchCountAndOp offsetIdxFetchCountAndOp = new FetchCountAndOp(-1);
     private FetchCountAndOp timeIdxFetchCountAndOp = new FetchCountAndOp(-1);
     private FetchCountAndOp txnIdxFetchCountAndOp = new FetchCountAndOp(-1);
 
     public RemoteFetchCount(int segmentFetchCountAndOp) {
         this.segmentFetchCountAndOp = new FetchCountAndOp(segmentFetchCountAndOp);
-    }
-
-    public RemoteFetchCount(int segmentFetchCountAndOp,
-                            int offsetIdxFetchCountAndOp,
-                            int timeIdxFetchCountAndOp,
-                            int txnIdxFetchCountAndOp) {
-        this.segmentFetchCountAndOp = new FetchCountAndOp(segmentFetchCountAndOp);
-        this.offsetIdxFetchCountAndOp = new FetchCountAndOp(offsetIdxFetchCountAndOp);
-        this.timeIdxFetchCountAndOp = new FetchCountAndOp(timeIdxFetchCountAndOp);
-        this.txnIdxFetchCountAndOp = new FetchCountAndOp(txnIdxFetchCountAndOp);
     }
 
     public RemoteFetchCount(FetchCountAndOp segmentFetchCountAndOp,
@@ -52,32 +42,16 @@ public class RemoteFetchCount {
         return segmentFetchCountAndOp;
     }
 
-    public void setSegmentFetchCountAndOp(FetchCountAndOp segmentFetchCountAndOp) {
-        this.segmentFetchCountAndOp = segmentFetchCountAndOp;
-    }
-
     public FetchCountAndOp getOffsetIdxFetchCountAndOp() {
         return offsetIdxFetchCountAndOp;
-    }
-
-    public void setOffsetIdxFetchCountAndOp(FetchCountAndOp offsetIdxFetchCountAndOp) {
-        this.offsetIdxFetchCountAndOp = offsetIdxFetchCountAndOp;
     }
 
     public FetchCountAndOp getTimeIdxFetchCountAndOp() {
         return timeIdxFetchCountAndOp;
     }
 
-    public void setTimeIdxFetchCountAndOp(FetchCountAndOp timeIdxFetchCountAndOp) {
-        this.timeIdxFetchCountAndOp = timeIdxFetchCountAndOp;
-    }
-
     public FetchCountAndOp getTxnIdxFetchCountAndOp() {
         return txnIdxFetchCountAndOp;
-    }
-
-    public void setTxnIdxFetchCountAndOp(FetchCountAndOp txnIdxFetchCountAndOp) {
-        this.txnIdxFetchCountAndOp = txnIdxFetchCountAndOp;
     }
 
     @Override
@@ -110,36 +84,5 @@ public class RemoteFetchCount {
         EQUALS_TO,
         GREATER_THAN_OR_EQUALS_TO,
         LESS_THAN_OR_EQUALS_TO
-    }
-
-    public static class FetchCountAndOp {
-        private final int count;
-        private final OperationType operationType;
-
-        public FetchCountAndOp(int count) {
-            this.count = count;
-            this.operationType = OperationType.EQUALS_TO;
-        }
-
-        public FetchCountAndOp(int count, OperationType operationType) {
-            this.count = count;
-            this.operationType = operationType;
-        }
-
-        public int getCount() {
-            return count;
-        }
-
-        public OperationType getOperationType() {
-            return operationType;
-        }
-
-        @Override
-        public String toString() {
-            return "FetchCountAndOp{" +
-                    "count=" + count +
-                    ", operationType=" + operationType +
-                    '}';
-        }
     }
 }

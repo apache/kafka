@@ -86,7 +86,7 @@ class OffsetsForLeaderEpochTest {
 
     //Then
     assertEquals(
-      Seq(newOffsetForLeaderTopicResult(tp, Errors.NONE, offsetAndEpoch.leaderEpoch, offsetAndEpoch.offset)),
+      Seq(newOffsetForLeaderTopicResult(tp, Errors.NONE, offsetAndEpoch.epoch(), offsetAndEpoch.offset)),
       response)
   }
 

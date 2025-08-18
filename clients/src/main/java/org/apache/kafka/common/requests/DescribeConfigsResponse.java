@@ -20,10 +20,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
@@ -248,8 +247,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static DescribeConfigsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeConfigsResponse(new DescribeConfigsResponseData(new ByteBufferAccessor(buffer), version));
+    public static DescribeConfigsResponse parse(Readable readable, short version) {
+        return new DescribeConfigsResponse(new DescribeConfigsResponseData(readable, version));
     }
 
     @Override

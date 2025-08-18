@@ -22,13 +22,13 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -111,9 +111,9 @@ public class LeaveGroupResponseTest {
                 .setThrottleTimeMs(throttleTimeMs);
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             LeaveGroupResponse primaryResponse = LeaveGroupResponse.parse(
-                MessageUtil.toByteBufferAccessor(responseData, version).buffer(), version);
+                MessageUtil.toByteBufferAccessor(responseData, version), version);
             LeaveGroupResponse secondaryResponse = LeaveGroupResponse.parse(
-                MessageUtil.toByteBufferAccessor(responseData, version).buffer(), version);
+                MessageUtil.toByteBufferAccessor(responseData, version), version);
 
             assertEquals(primaryResponse, primaryResponse);
             assertEquals(primaryResponse, secondaryResponse);
@@ -130,7 +130,7 @@ public class LeaveGroupResponseTest {
             .setThrottleTimeMs(throttleTimeMs);
 
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
-            ByteBuffer buffer = MessageUtil.toByteBufferAccessor(data, version).buffer();
+            Readable buffer = MessageUtil.toByteBufferAccessor(data, version);
             LeaveGroupResponse leaveGroupResponse = LeaveGroupResponse.parse(buffer, version);
             assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
 

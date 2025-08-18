@@ -33,73 +33,69 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MaskFieldTest {
 
     private static final Schema SCHEMA = SchemaBuilder.struct()
-            .field("magic", Schema.INT32_SCHEMA)
-            .field("bool", Schema.BOOLEAN_SCHEMA)
-            .field("byte", Schema.INT8_SCHEMA)
-            .field("short", Schema.INT16_SCHEMA)
-            .field("int", Schema.INT32_SCHEMA)
-            .field("long", Schema.INT64_SCHEMA)
-            .field("float", Schema.FLOAT32_SCHEMA)
-            .field("double", Schema.FLOAT64_SCHEMA)
-            .field("string", Schema.STRING_SCHEMA)
-            .field("date", org.apache.kafka.connect.data.Date.SCHEMA)
-            .field("time", Time.SCHEMA)
-            .field("timestamp", Timestamp.SCHEMA)
-            .field("decimal", Decimal.schema(0))
-            .field("array", SchemaBuilder.array(Schema.INT32_SCHEMA))
-            .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA))
-            .field("withDefault", SchemaBuilder.string().optional().defaultValue("default").build())
-            .build();
-    private static final Map<String, Object> VALUES = new HashMap<>();
-    private static final Struct VALUES_WITH_SCHEMA = new Struct(SCHEMA);
+        .field("magic", Schema.INT32_SCHEMA)
+        .field("bool", Schema.BOOLEAN_SCHEMA)
+        .field("byte", Schema.INT8_SCHEMA)
+        .field("short", Schema.INT16_SCHEMA)
+        .field("int", Schema.INT32_SCHEMA)
+        .field("long", Schema.INT64_SCHEMA)
+        .field("float", Schema.FLOAT32_SCHEMA)
+        .field("double", Schema.FLOAT64_SCHEMA)
+        .field("string", Schema.STRING_SCHEMA)
+        .field("date", org.apache.kafka.connect.data.Date.SCHEMA)
+        .field("time", Time.SCHEMA)
+        .field("timestamp", Timestamp.SCHEMA)
+        .field("decimal", Decimal.schema(0))
+        .field("array", SchemaBuilder.array(Schema.INT32_SCHEMA))
+        .field("map", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA))
+        .field("withDefault", SchemaBuilder.string().optional().defaultValue("default").build())
+        .build();
 
-    static {
-        VALUES.put("magic", 42);
-        VALUES.put("bool", true);
-        VALUES.put("byte", (byte) 42);
-        VALUES.put("short", (short) 42);
-        VALUES.put("int", 42);
-        VALUES.put("long", 42L);
-        VALUES.put("float", 42f);
-        VALUES.put("double", 42d);
-        VALUES.put("string", "55.121.20.20");
-        VALUES.put("date", new Date());
-        VALUES.put("bigint", new BigInteger("42"));
-        VALUES.put("bigdec", new BigDecimal("42.0"));
-        VALUES.put("list", singletonList(42));
-        VALUES.put("map", Collections.singletonMap("key", "value"));
+    private static final Map<String, Object> VALUES = Map.ofEntries(
+        Map.entry("magic", 42),
+        Map.entry("bool", true),
+        Map.entry("byte", (byte) 42),
+        Map.entry("short", (short) 42),
+        Map.entry("int", 42),
+        Map.entry("long", 42L),
+        Map.entry("float", 42f),
+        Map.entry("double", 42d),
+        Map.entry("string", "55.121.20.20"),
+        Map.entry("date", new Date()),
+        Map.entry("bigint", new BigInteger("42")),
+        Map.entry("bigdec", new BigDecimal("42.0")),
+        Map.entry("list", List.of(42)),
+        Map.entry("map", Map.of("key", "value"))
+    );
 
-        VALUES_WITH_SCHEMA.put("magic", 42);
-        VALUES_WITH_SCHEMA.put("bool", true);
-        VALUES_WITH_SCHEMA.put("byte", (byte) 42);
-        VALUES_WITH_SCHEMA.put("short", (short) 42);
-        VALUES_WITH_SCHEMA.put("int", 42);
-        VALUES_WITH_SCHEMA.put("long", 42L);
-        VALUES_WITH_SCHEMA.put("float", 42f);
-        VALUES_WITH_SCHEMA.put("double", 42d);
-        VALUES_WITH_SCHEMA.put("string", "hmm");
-        VALUES_WITH_SCHEMA.put("date", new Date());
-        VALUES_WITH_SCHEMA.put("time", new Date());
-        VALUES_WITH_SCHEMA.put("timestamp", new Date());
-        VALUES_WITH_SCHEMA.put("decimal", new BigDecimal(42));
-        VALUES_WITH_SCHEMA.put("array", Arrays.asList(1, 2, 3));
-        VALUES_WITH_SCHEMA.put("map", Collections.singletonMap("what", "what"));
-        VALUES_WITH_SCHEMA.put("withDefault", null);
-    }
+    private static final Struct VALUES_WITH_SCHEMA = new Struct(SCHEMA)
+        .put("magic", 42)
+        .put("bool", true)
+        .put("byte", (byte) 42)
+        .put("short", (short) 42)
+        .put("int", 42)
+        .put("long", 42L)
+        .put("float", 42f)
+        .put("double", 42d)
+        .put("string", "hmm")
+        .put("date", new Date())
+        .put("time", new Date())
+        .put("timestamp", new Date())
+        .put("decimal", new BigDecimal(42))
+        .put("array", List.of(1, 2, 3))
+        .put("map", Map.of("what", "what"))
+        .put("withDefault", null);
 
     private static MaskField<SinkRecord> transform(List<String> fields, String replacement) {
         final MaskField<SinkRecord> xform = new MaskField.Value<>();
@@ -117,20 +113,20 @@ public class MaskFieldTest {
 
     private static void checkReplacementWithSchema(String maskField, Object replacement) {
         SinkRecord record = record(SCHEMA, VALUES_WITH_SCHEMA);
-        final Struct updatedValue = (Struct) transform(singletonList(maskField), String.valueOf(replacement)).apply(record).value();
+        final Struct updatedValue = (Struct) transform(List.of(maskField), String.valueOf(replacement)).apply(record).value();
         assertEquals(replacement, updatedValue.get(maskField), "Invalid replacement for " + maskField + " value");
     }
 
     private static void checkReplacementSchemaless(String maskField, Object replacement) {
-        checkReplacementSchemaless(singletonList(maskField), replacement);
+        checkReplacementSchemaless(List.of(maskField), replacement);
     }
 
     @SuppressWarnings("unchecked")
     private static void checkReplacementSchemaless(List<String> maskFields, Object replacement) {
         SinkRecord record = record(null, VALUES);
         final Map<String, Object> updatedValue = (Map) transform(maskFields, String.valueOf(replacement))
-                .apply(record)
-                .value();
+            .apply(record)
+            .value();
         for (String maskField : maskFields) {
             assertEquals(replacement, updatedValue.get(maskField), "Invalid replacement for " + maskField + " value");
         }
@@ -154,8 +150,8 @@ public class MaskFieldTest {
         assertEquals(new Date(0), updatedValue.get("date"));
         assertEquals(BigInteger.ZERO, updatedValue.get("bigint"));
         assertEquals(BigDecimal.ZERO, updatedValue.get("bigdec"));
-        assertEquals(Collections.emptyList(), updatedValue.get("list"));
-        assertEquals(Collections.emptyMap(), updatedValue.get("map"));
+        assertEquals(List.of(), updatedValue.get("list"));
+        assertEquals(Map.of(), updatedValue.get("map"));
     }
 
     @Test
@@ -182,8 +178,8 @@ public class MaskFieldTest {
         assertEquals(new Date(0), updatedValue.get("time"));
         assertEquals(new Date(0), updatedValue.get("timestamp"));
         assertEquals(BigDecimal.ZERO, updatedValue.get("decimal"));
-        assertEquals(Collections.emptyList(), updatedValue.get("array"));
-        assertEquals(Collections.emptyMap(), updatedValue.get("map"));
+        assertEquals(List.of(), updatedValue.get("array"));
+        assertEquals(Map.of(), updatedValue.get("map"));
         assertEquals(null, updatedValue.getWithoutDefault("withDefault"));
     }
 
@@ -206,10 +202,10 @@ public class MaskFieldTest {
         Class<DataException> exClass = DataException.class;
 
         assertThrows(exClass, () -> checkReplacementSchemaless("date", new Date()), exMessage);
-        assertThrows(exClass, () -> checkReplacementSchemaless(Arrays.asList("int", "date"), new Date()), exMessage);
+        assertThrows(exClass, () -> checkReplacementSchemaless(List.of("int", "date"), new Date()), exMessage);
         assertThrows(exClass, () -> checkReplacementSchemaless("bool", false), exMessage);
-        assertThrows(exClass, () -> checkReplacementSchemaless("list", singletonList("123")), exMessage);
-        assertThrows(exClass, () -> checkReplacementSchemaless("map", Collections.singletonMap("123", "321")), exMessage);
+        assertThrows(exClass, () -> checkReplacementSchemaless("list", List.of("123")), exMessage);
+        assertThrows(exClass, () -> checkReplacementSchemaless("map", Map.of("123", "321")), exMessage);
     }
 
     @Test
@@ -231,7 +227,7 @@ public class MaskFieldTest {
 
         assertThrows(exClass, () -> checkReplacementWithSchema("time", new Date()), exMessage);
         assertThrows(exClass, () -> checkReplacementWithSchema("timestamp", new Date()), exMessage);
-        assertThrows(exClass, () -> checkReplacementWithSchema("array", singletonList(123)), exMessage);
+        assertThrows(exClass, () -> checkReplacementWithSchema("array", List.of(123)), exMessage);
     }
 
     @Test
@@ -249,7 +245,7 @@ public class MaskFieldTest {
         assertThrows(exClass, () -> checkReplacementSchemaless("bigdec", "foo"), exMessage);
         assertThrows(exClass, () -> checkReplacementSchemaless("int", new Date()), exMessage);
         assertThrows(exClass, () -> checkReplacementSchemaless("int", new Object()), exMessage);
-        assertThrows(exClass, () -> checkReplacementSchemaless(Arrays.asList("string", "int"), "foo"), exMessage);
+        assertThrows(exClass, () -> checkReplacementSchemaless(List.of("string", "int"), "foo"), exMessage);
     }
 
     @Test
@@ -259,17 +255,17 @@ public class MaskFieldTest {
 
     @Test
     public void testNullListAndMapReplacementsAreMutable() {
-        final List<String> maskFields = Arrays.asList("array", "map");
+        final List<String> maskFields = List.of("array", "map");
         final Struct updatedValue = (Struct) transform(maskFields, null).apply(record(SCHEMA, VALUES_WITH_SCHEMA)).value();
         @SuppressWarnings("unchecked") List<Integer> actualList = (List<Integer>) updatedValue.get("array");
-        assertEquals(Collections.emptyList(), actualList);
+        assertEquals(List.of(), actualList);
         actualList.add(0);
-        assertEquals(Collections.singletonList(0), actualList);
+        assertEquals(List.of(0), actualList);
 
         @SuppressWarnings("unchecked") Map<String, String> actualMap = (Map<String, String>) updatedValue.get("map");
-        assertEquals(Collections.emptyMap(), actualMap);
+        assertEquals(Map.of(), actualMap);
         actualMap.put("k", "v");
-        assertEquals(Collections.singletonMap("k", "v"), actualMap);
+        assertEquals(Map.of("k", "v"), actualMap);
     }
 
     @Test

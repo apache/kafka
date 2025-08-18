@@ -38,7 +38,9 @@
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The response is
   // the same as version 8 but can return STALE_MEMBER_EPOCH and UNKNOWN_MEMBER_ID errors when the new consumer group
   // protocol is used.
-  "validVersions": "1-9",
+  //
+  // Version 10 adds support for topic ids and removes support for topic names (KIP-848).
+  "validVersions": "1-10",
   "flexibleVersions": "6+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -49,6 +51,7 @@
   // - UNSTABLE_OFFSET_COMMIT (version 7+)
   // - UNKNOWN_MEMBER_ID (version 9+)
   // - STALE_MEMBER_EPOCH (version 9+)
+  // - UNKNOWN_TOPIC_ID (version 10+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -78,8 +81,10 @@
         "about": "The group ID." },
       { "name": "Topics", "type": "[]OffsetFetchResponseTopics", "versions": "8+",
         "about": "The responses per topic.", "fields": [
-        { "name": "Name", "type": "string", "versions": "8+", "entityType": "topicName",
+        { "name": "Name", "type": "string", "versions": "8-9", "entityType": "topicName", "ignorable": true,
           "about": "The topic name." },
+        { "name":  "TopicId", "type": "uuid", "versions": "10+", "ignorable": true,
+          "about": "The topic ID." },
         { "name": "Partitions", "type": "[]OffsetFetchResponsePartitions", "versions": "8+",
           "about": "The responses per partition.", "fields": [
           { "name": "PartitionIndex", "type": "int32", "versions": "8+",

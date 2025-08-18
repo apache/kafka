@@ -32,7 +32,7 @@ import javax.net.ssl.SSLException;
  *   <li>{@link SslAuthenticationException} if SSL handshake failed due to any {@link SSLException}.
  * </ul>
  */
-public class AuthenticationException extends ApiException {
+public class AuthenticationException extends InvalidConfigurationException {
 
     private static final long serialVersionUID = 1L;
 
