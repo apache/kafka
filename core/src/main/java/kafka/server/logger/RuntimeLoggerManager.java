@@ -104,6 +104,7 @@ public class RuntimeLoggerManager {
                     }
                     break;
                 default:
+                    log.error("Invalid log4j configOperation: {}. Valid operations are: {}", op.configOperation(), OpType.allOpTypes());
                     throw new IllegalArgumentException(
                         "Invalid log4j configOperation: " + op.configOperation());
             }
@@ -157,6 +158,7 @@ public class RuntimeLoggerManager {
                     throw new InvalidRequestException(OpType.SUBTRACT +
                         " operation is not allowed for the " + BROKER_LOGGER + " resource");
                 default:
+                    log.error("Invalid log4j configOperation: {}. Valid operations are: {}", op.configOperation(), OpType.allOpTypes());
                     throw new InvalidRequestException("Unknown operation type " +
                         (int) op.configOperation() + " is not allowed for the " +
                         BROKER_LOGGER + " resource");

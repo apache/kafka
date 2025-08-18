@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
@@ -68,6 +69,11 @@ public class AlterConfigOp {
 
         public static OpType forId(final byte id) {
             return OP_TYPES.get(id);
+        }
+
+        public static String allOpTypes() {
+            List<String> opTypes = OP_TYPES.values().stream().map(op -> String.valueOf(op.id())).collect(Collectors.toList());
+            return String.join(", ", opTypes);
         }
     }
 
