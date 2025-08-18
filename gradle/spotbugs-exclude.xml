@@ -573,7 +573,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.streams.state.internals.ThreadCache"/>
             <Class name="org.apache.kafka.connect.runtime.WorkerSinkTask"/>
             <Class name="org.apache.kafka.tools.VerifiableProducer"/>
-            <Class name="kafka.coordinator.transaction.TransactionMetadata"/>
+            <Class name="org.apache.kafka.coordinator.transaction.TransactionMetadata"/>
             <Class name="org.apache.kafka.tools.VerifiableShareConsumer"/>
             <Class name="org.apache.kafka.server.quota.ClientQuotaManager"/>
             <Class name="kafka.log.LogManager"/>
@@ -606,7 +606,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer"/>
             <Class name="org.apache.kafka.connect.runtime.WorkerSinkTask"/>
             <Class name="org.apache.kafka.tools.ConsumerPerformance$ConsumerPerfRebListener"/>
-            <Class name="kafka.coordinator.transaction.TransactionMetadata"/>
+            <Class name="org.apache.kafka.coordinator.transaction.TransactionMetadata"/>
             <Class name="kafka.server.BrokerLifecycleManager"/>
             <Class name="kafka.server.CachedPartition"/>
             <Class name="kafka.server.ControllerRegistrationManager"/>
@@ -670,7 +670,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.connect.runtime.distributed.WorkerGroupMember"/>
             <Class name="org.apache.kafka.connect.util.KafkaBasedLog"/>
             <Class name="org.apache.kafka.tools.VerifiableProducer"/>
-            <Class name="kafka.coordinator.transaction.TransactionMetadata"/>
+            <Class name="org.apache.kafka.coordinator.transaction.TransactionMetadata"/>
             <Class name="kafka.network.Acceptor"/>
             <Class name="kafka.network.Processor"/>
             <Class name="kafka.server.BrokerLifecycleManager"/>
