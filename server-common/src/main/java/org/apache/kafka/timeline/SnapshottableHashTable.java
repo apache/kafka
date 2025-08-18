@@ -293,9 +293,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
     }
 
     int snapshottableSize(long epoch) {
-        if (epoch == LATEST_EPOCH) {
-            return baseSize();
-        } else {
+        if (epoch != LATEST_EPOCH) {
             Iterator<Snapshot> iterator = snapshotRegistry.iterator(epoch);
             while (iterator.hasNext()) {
                 Snapshot snapshot = iterator.next();
@@ -304,8 +302,8 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                     return tier.size;
                 }
             }
-            return baseSize();
         }
+        return baseSize();
     }
 
     T snapshottableGet(Object key, long epoch) {
