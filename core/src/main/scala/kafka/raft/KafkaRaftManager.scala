@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, MetadataLogConfig, QuorumConfig, RaftClient, RaftManager, ReplicatedLog, TimingWheelExpirationService}
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, QuorumConfig, RaftManager, ReplicatedLog, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -152,12 +152,6 @@ class KafkaRaftManager[T](
     CoreUtils.swallow(dataDirLock.foreach(_.destroy()), this)
   }
 
-  override def register(
-    listener: RaftClient.Listener[T]
-  ): Unit = {
-    client.register(listener)
-  }
-
   override def handleRequest(
     context: RequestContext,
     header: RequestHeader,
@@ -264,10 +258,6 @@ class KafkaRaftManager[T](
     )
 
     (controllerListenerName, networkClient)
-  }
-
-  override def leaderAndEpoch: LeaderAndEpoch = {
-    client.leaderAndEpoch
   }
 
   override def voterNode(id: Int, listener: ListenerName): Optional[Node] = {

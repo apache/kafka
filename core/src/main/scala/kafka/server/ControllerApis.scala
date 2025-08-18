@@ -1070,7 +1070,7 @@ class ControllerApis(
       EndpointType.CONTROLLER,
       clusterId,
       () => registrationsPublisher.describeClusterControllers(request.context.listenerName()),
-      () => raftManager.leaderAndEpoch.leaderId().orElse(-1)
+      () => raftManager.client.leaderAndEpoch.leaderId().orElse(-1)
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))

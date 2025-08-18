@@ -181,7 +181,7 @@ class TestRaftServer(
 
     private var claimedEpoch: Option[Int] = None
 
-    raftManager.register(this)
+    raftManager.client.register(this)
 
     override def handleLeaderChange(newLeaderAndEpoch: LeaderAndEpoch): Unit = {
       if (newLeaderAndEpoch.isLeader(config.nodeId)) {

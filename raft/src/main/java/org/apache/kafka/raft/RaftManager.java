@@ -36,10 +36,6 @@ public interface RaftManager<T> {
         long createdTimeMs
     );
 
-    void register(RaftClient.Listener<T> listener);
-
-    LeaderAndEpoch leaderAndEpoch();
-
     RaftClient<T> client();
 
     ReplicatedLog replicatedLog();

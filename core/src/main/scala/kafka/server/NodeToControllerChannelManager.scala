@@ -82,7 +82,7 @@ class RaftControllerNodeProvider(
   private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName).toScala
 
   override def getControllerInfo(): ControllerInformation =
-    ControllerInformation(raftManager.leaderAndEpoch.leaderId.toScala.flatMap(idToNode),
+    ControllerInformation(raftManager.client.leaderAndEpoch.leaderId.toScala.flatMap(idToNode),
       listenerName, securityProtocol, saslMechanism)
 }
 
