@@ -3039,15 +3039,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    *
    * @param partition The partition whose leader metadata should be verified across all brokers.
    */
-  def waitForBrokerMetadataPropagation(partition: TopicPartition): Unit = {
-    while (true) {
-      val headBrokerLeaderId = brokers.head.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).get.id()
-      if (brokers.forall { broker =>
-        val leaderId = broker.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).get.id()
-        leaderId == headBrokerLeaderId
-      }) return
+    def waitForBrokerMetadataPropagation(partition: TopicPartition): Unit = {
+      while (brokers.map(_.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName))
+        .filter(_.isPresent)
+        .map(_.get())
+        .toSet.size != 1)
+        TimeUnit.MILLISECONDS.sleep(300)
     }
-  }
 
   @Test
   def testElectPreferredLeaders(): Unit = {
