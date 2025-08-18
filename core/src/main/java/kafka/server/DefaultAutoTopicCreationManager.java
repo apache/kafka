@@ -52,7 +52,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager {
@@ -121,7 +120,7 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
         var creatableTopicResponses = creatableTopics.isEmpty() ?
                 List.<MetadataResponseTopic>of() : sendCreateTopicRequest(creatableTopics, metadataRequestContext);
         return Stream.concat(uncreatableTopicResponses.stream(), creatableTopicResponses.stream())
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -170,8 +169,7 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                     LOGGER.warn("Auto topic creation failed for {} with invalid version exception.", creatableTopics.keySet());
                 } else {
                     if (response.hasResponse()) {
-                        if (response.responseBody() instanceof CreateTopicsResponse) {
-                            var createTopicsResponse = (CreateTopicsResponse) response.responseBody();
+                        if (response.responseBody() instanceof CreateTopicsResponse createTopicsResponse) {
                             createTopicsResponse.data().topics().forEach(topicResult -> {
                                 var error = Errors.forCode(topicResult.errorCode());
                                 if (error != Errors.NONE) {
@@ -214,7 +212,7 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
                         .setName(topic)
                         .setIsInternal(Topic.isInternal(topic)))
-                .collect(Collectors.toList());
+                .toList();
 
         LOGGER.info("Sent auto-creation request for {} to the active controller.", creatableTopics.keySet());
         return creatableTopicResponses;
