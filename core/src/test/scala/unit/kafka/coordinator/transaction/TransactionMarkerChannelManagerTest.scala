@@ -66,7 +66,9 @@ class TransactionMarkerChannelManagerTest {
   private val txnTimeoutMs = 0
   private val txnResult = TransactionResult.COMMIT
   private val txnMetadata1 = new TransactionMetadata(transactionalId1, producerId1, producerId1, RecordBatch.NO_PRODUCER_ID, producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, 0L, 0L, TransactionVersion.TV_2)
+  txnMetadata1.addPartitions(util.Set.of(partition1, partition2))
   private val txnMetadata2 = new TransactionMetadata(transactionalId2, producerId2, producerId2, RecordBatch.NO_PRODUCER_ID, producerEpoch, lastProducerEpoch, txnTimeoutMs, TransactionState.PREPARE_COMMIT, 0L, 0L, TransactionVersion.TV_2)
+  txnMetadata2.addPartitions(util.Set.of(partition1))
 
   private val capturedErrorsCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
   private val time = new MockTime
