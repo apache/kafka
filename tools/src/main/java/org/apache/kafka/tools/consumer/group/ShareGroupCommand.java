@@ -656,25 +656,7 @@ public class ShareGroupCommand {
         }
     }
 
-    static class SharePartitionOffsetInformation {
-        final String group;
-        final String topic;
-        final int partition;
-        final Optional<Long> offset;
-        final Optional<Integer> leaderEpoch;
-
-        SharePartitionOffsetInformation(
-            String group,
-            String topic,
-            int partition,
-            Optional<Long> offset,
-            Optional<Integer> leaderEpoch
-        ) {
-            this.group = group;
-            this.topic = topic;
-            this.partition = partition;
-            this.offset = offset;
-            this.leaderEpoch = leaderEpoch;
-        }
+    record SharePartitionOffsetInformation(String group, String topic, int partition, Optional<Long> offset,
+                                           Optional<Integer> leaderEpoch) {
     }
 }
