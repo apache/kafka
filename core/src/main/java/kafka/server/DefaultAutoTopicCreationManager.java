@@ -146,7 +146,8 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
             Map<String, CreatableTopic> creatableTopics,
             Optional<RequestContext> requestContext
     ) {
-        var topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.values().iterator());
+        var topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size());
+        topicsToCreate.addAll(creatableTopics.values());
         var createTopicsRequest = new CreateTopicsRequest.Builder(
                 new CreateTopicsRequestData()
                         .setTimeoutMs(config.requestTimeoutMs())
