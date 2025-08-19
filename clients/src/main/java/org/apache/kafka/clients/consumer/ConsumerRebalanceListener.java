@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
 
-import java.time.Duration;
 import java.util.Collection;
 
 /**
