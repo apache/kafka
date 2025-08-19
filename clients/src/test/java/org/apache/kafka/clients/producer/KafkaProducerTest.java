@@ -1018,6 +1018,7 @@ public class KafkaProducerTest {
         final String topic = "topic";
         MockClient client = new MockClient(time, metadata);
         client.setShouldUpdateWithCurrentMetadata(false);
+        client.advanceTimeDuringPoll(true);
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
 
