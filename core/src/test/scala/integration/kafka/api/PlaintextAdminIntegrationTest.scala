@@ -3040,7 +3040,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * @param partition The partition whose leader metadata should be verified across all brokers.
    */
     def waitForBrokerMetadataPropagation(partition: TopicPartition): Unit = {
-      while (brokers.map(_.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName))
+      while (brokers.exists(_.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName).isEmpty) ||
+        brokers.map(_.metadataCache.getPartitionLeaderEndpoint(partition.topic, partition.partition(), listenerName))
         .filter(_.isPresent)
         .map(_.get())
         .toSet.size != 1)
