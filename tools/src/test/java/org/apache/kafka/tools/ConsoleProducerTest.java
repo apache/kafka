@@ -35,9 +35,9 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
-import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,7 +93,7 @@ public class ConsoleProducerTest {
         ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_VALID_ARGS);
         ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
-        assertEquals(asList("localhost:1003", "localhost:1004"), producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals(List.of("localhost:1003", "localhost:1004"), producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
     }
 
     @Test
@@ -147,7 +147,7 @@ public class ConsoleProducerTest {
         ConsoleProducerOptions opts = new ConsoleProducerOptions(BOOTSTRAP_SERVER_OVERRIDE);
         ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
-        assertEquals(Collections.singletonList("localhost:1002"), producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals(List.of("localhost:1002"), producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
     }
 
     @Test

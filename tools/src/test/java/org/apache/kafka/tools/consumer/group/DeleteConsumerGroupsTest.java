@@ -47,8 +47,6 @@ import java.util.stream.IntStream;
 
 import joptsimple.OptionException;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -313,7 +311,7 @@ public class DeleteConsumerGroupsTest {
                 cluster,
                 groupId,
                 protocol.name,
-                emptyMap());
+                Map.of());
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
                 1,
@@ -331,7 +329,7 @@ public class DeleteConsumerGroupsTest {
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         return new ConsumerGroupCommand.ConsumerGroupService(
                 opts,
-                singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+                Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
     }
 

@@ -27,7 +27,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -176,7 +175,7 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(consumerNode);
+        return topology -> Set.of(consumerNode);
     }
 
     @Override
