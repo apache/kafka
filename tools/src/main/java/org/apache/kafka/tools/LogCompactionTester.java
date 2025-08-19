@@ -44,6 +44,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -60,7 +61,7 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
-import static java.util.stream.Collectors.toSet;
+import static java.util.stream.Collectors.toCollection;
 
 
 /**
@@ -249,7 +250,7 @@ public class LogCompactionTester {
         long testId = RANDOM.nextLong();
         Set<String> topics = IntStream.range(0, topicCount)
                 .mapToObj(i -> "log-cleaner-test-" + testId + "-" + i)
-                .collect(toSet());
+                .collect(toCollection(LinkedHashSet::new));
         createTopics(brokerUrl, topics);
 
         System.out.println("Producing " + messages + " messages..to topics " + String.join(",", topics));
