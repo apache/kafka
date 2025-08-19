@@ -352,25 +352,25 @@ public class DescribeStreamsGroupTest {
                 String[] lines = output.split("\n");
                 if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-            if (lines.length == 0) return false;
-            List<String> header = List.of(lines[0].split("\\s+"));
-            if (!expectedHeader.equals(header)) return false;
+                if (lines.length == 0) return false;
+                List<String> header = List.of(lines[0].split("\\s+"));
+                if (!expectedHeader.equals(header)) return false;
 
-            Set<List<String>> groupDesc = Arrays.stream(Arrays.copyOfRange(lines, 1, lines.length))
-                .map(line -> List.of(line.split("\\s+")))
-                .collect(Collectors.toSet());
-            if (groupDesc.size() != expectedRows.size()) return false;
-            // clear the dontCare fields and then compare two sets
-            return expectedRows
-                .equals(
-                    groupDesc.stream()
-                        .map(list -> {
-                            List<String> listCloned = new ArrayList<>(list);
-                            dontCareIndices.forEach(index -> listCloned.set(index, ""));
-                            return listCloned;
-                        }).collect(Collectors.toSet())
-                );
-        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
+                Set<List<String>> groupDesc = Arrays.stream(Arrays.copyOfRange(lines, 1, lines.length))
+                    .map(line -> List.of(line.split("\\s+")))
+                    .collect(Collectors.toSet());
+                if (groupDesc.size() != expectedRows.size()) return false;
+                // clear the dontCare fields and then compare two sets
+                return expectedRows
+                    .equals(
+                        groupDesc.stream()
+                            .map(list -> {
+                                List<String> listCloned = new ArrayList<>(list);
+                                dontCareIndices.forEach(index -> listCloned.set(index, ""));
+                                return listCloned;
+                            }).collect(Collectors.toSet())
+                    );
+            }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
         } finally {
             Exit.resetExitProcedure();
         }
@@ -393,9 +393,9 @@ public class DescribeStreamsGroupTest {
                 String[] lines = output.split("\n");
                 if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-            if (lines.length == 0) return false;
-            List<String> header = List.of(lines[0].split("\\s+"));
-            if (!expectedHeader.equals(header)) return false;
+                if (lines.length == 0) return false;
+                List<String> header = List.of(lines[0].split("\\s+"));
+                if (!expectedHeader.equals(header)) return false;
 
                 Map<String, Set<List<String>>> groupdescMap = splitOutputByGroup(lines);
 
