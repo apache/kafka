@@ -1528,7 +1528,10 @@ public class WorkerSinkTaskTest {
         assertEquals(rebalanceOffsets, workerTask.lastCommittedOffsets());
 
         // onPartitionsRevoked
-        verify(sinkTask).close(new ArrayList<>(workerCurrentOffsets.keySet()));
+        ArgumentCaptor<Collection<TopicPartition>> closeCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask).close(closeCaptor.capture());
+        Collection<TopicPartition> actualClosePartitions = closeCaptor.getValue();
+        assertEquals(workerCurrentOffsets.keySet(), new HashSet<>(actualClosePartitions));
         verify(consumer).commitSync(anyMap());
 
         // onPartitionsAssigned - step 2
