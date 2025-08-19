@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -102,6 +103,7 @@ public class MultiVersionTest {
     }
 
     public static final String DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION;
+    public static final Set<String> DEFAULT_ISOLATED_ARTIFACTS_VERSIONS;
     public static final Map<Path, List<VersionedPluginBuilder.BuildInfo>> DEFAULT_ISOLATED_ARTIFACTS;
     public static final Map<Path, List<VersionedPluginBuilder.BuildInfo>> DEFAULT_COMBINED_ARTIFACT;
     public static final Plugins MULTI_VERSION_PLUGINS;
@@ -115,6 +117,7 @@ public class MultiVersionTest {
                 defaultIsolatedArtifactsVersions, VersionedPluginBuilder.VersionedTestPlugin.values()
             );
             DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION = "4.3.0";
+            DEFAULT_ISOLATED_ARTIFACTS_VERSIONS = new HashSet<>(Arrays.asList(defaultIsolatedArtifactsVersions));
             DEFAULT_COMBINED_ARTIFACT_VERSIONS = new HashMap<>();
 
             VersionedPluginBuilder builder = new VersionedPluginBuilder();

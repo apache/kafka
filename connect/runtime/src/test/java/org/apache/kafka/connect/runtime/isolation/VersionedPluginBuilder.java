@@ -54,6 +54,9 @@ public class VersionedPluginBuilder {
         }
     }
 
+    // version specific config will have the default value as the version provided during plugin build
+    public static final String VERSION_SPECIFIC_CONFIG_IN_PLUGIN = "version-specific-config";
+
     public static class BuildInfo {
 
         private final VersionedTestPlugin plugin;
