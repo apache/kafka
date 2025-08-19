@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
 
-import java.time.Duration;
 import java.util.Collection;
 
 /**
@@ -121,7 +120,7 @@ public interface ConsumerRebalanceListener {
     /**
      * A callback method the user can implement to provide handling of offset commits to a customized store.
      * This method will be called during a rebalance operation when the consumer has to give up some partitions.
-     * It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
+     * It can also be called when consumer is being closed ({@link KafkaConsumer#close(CloseOptions option)})
      * or is unsubscribing ({@link KafkaConsumer#unsubscribe()}).
      * It is recommended that offsets should be committed in this callback to either Kafka or a
      * custom offset store to prevent duplicate data.

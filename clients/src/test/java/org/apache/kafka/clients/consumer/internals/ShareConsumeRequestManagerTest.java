@@ -117,6 +117,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1407,10 +1408,84 @@ public class ShareConsumeRequestManagerTest {
 
         shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), Collections.emptyMap());
 
-        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(1, builder.data().topics().size());
+        // We should not add the acknowledgements as part of the request.
+        assertEquals(0, builder.data().topics().find(tip0.topicId()).partitions().find(0).acknowledgementBatches().size());
 
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
         assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+    }
+
+    @Test
+    public void testPiggybackAcknowledgementsOnInitialShareSessionErrorSubscriptionChange() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(singleton(tp0));
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+
+        fetchRecords();
+
+        // Simulate a broker restart, but no leader change, this resets share session epoch to 0.
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+        client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.SHARE_SESSION_NOT_FOUND));
+        networkClientDelegate.poll(time.timer(0));
+
+        // Simulate a metadata update with no topics in the response.
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Collections.emptyMap(),
+                        tp -> validLeaderEpoch, null, false));
+
+        // The acknowledgements for the initial fetch from tip0 are processed now and sent to the background thread.
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), Collections.emptyMap());
+
+        assertEquals(0, completedAcknowledgements.size());
+
+        // Next fetch would not include any acknowledgements.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(0, pollResult.unsentRequests.size());
+
+        // We should fail any waiting acknowledgements for tip-0 as it would have a share session epoch equal to 0.
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+    }
+
+    @Test
+    public void testPiggybackAcknowledgementsOnInitialShareSession_ShareSessionNotFound() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(singleton(tp0));
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+
+        fetchRecords();
+
+        // The acknowledgements for the initial fetch from tip0 are processed now and sent to the background thread.
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), Collections.emptyMap());
+
+        // We attempt to send the acknowledgements piggybacking on the fetch.
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        // Simulate a broker restart, but no leader change, this resets share session epoch to 0.
+        client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.SHARE_SESSION_NOT_FOUND));
+        networkClientDelegate.poll(time.timer(0));
+
+        // We would complete these acknowledgements with the error code from the response.
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(Errors.SHARE_SESSION_NOT_FOUND.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+
+        // Next fetch would proceed as expected and would not include any acknowledgements.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(0, builder.data().topics().find(topicId).partitions().find(0).acknowledgementBatches().size());
     }
 
     @Test
@@ -2384,6 +2459,36 @@ public class ShareConsumeRequestManagerTest {
 
         fetchedRecords = partitionRecords.get(tp0);
         assertEquals(1, fetchedRecords.size());
+    }
+
+    @Test
+    public void testCloseInternalClosesShareFetchMetricsManager() throws Exception {
+        buildRequestManager();
+
+        // Define all sensor names that should be created and removed
+        String[] sensorNames = {
+            "fetch-throttle-time",
+            "bytes-fetched",
+            "records-fetched",
+            "fetch-latency",
+            "sent-acknowledgements",
+            "failed-acknowledgements"
+        };
+
+        // Verify that sensors exist before closing
+        for (String sensorName : sensorNames) {
+            assertNotNull(metrics.getSensor(sensorName), 
+                "Sensor " + sensorName + " should exist before closing");
+        }
+
+        // Close the request manager
+        shareConsumeRequestManager.close();
+
+        // Verify that all sensors are removed after closing
+        for (String sensorName : sensorNames) {
+            assertNull(metrics.getSensor(sensorName), 
+                "Sensor " + sensorName + " should be removed after closing");
+        }
     }
 
     private ShareFetchResponse fetchResponseWithTopLevelError(TopicIdPartition tp, Errors error) {

@@ -65,32 +65,30 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     private static final String PURPOSE = "mask fields";
 
-    private static final Map<Class<?>, Function<String, ?>> REPLACEMENT_MAPPING_FUNC = new HashMap<>();
-    private static final Map<Class<?>, Object> PRIMITIVE_VALUE_MAPPING = new HashMap<>();
-
-    static {
-        PRIMITIVE_VALUE_MAPPING.put(Boolean.class, Boolean.FALSE);
-        PRIMITIVE_VALUE_MAPPING.put(Byte.class, (byte) 0);
-        PRIMITIVE_VALUE_MAPPING.put(Short.class, (short) 0);
-        PRIMITIVE_VALUE_MAPPING.put(Integer.class, 0);
-        PRIMITIVE_VALUE_MAPPING.put(Long.class, 0L);
-        PRIMITIVE_VALUE_MAPPING.put(Float.class, 0f);
-        PRIMITIVE_VALUE_MAPPING.put(Double.class, 0d);
-        PRIMITIVE_VALUE_MAPPING.put(BigInteger.class, BigInteger.ZERO);
-        PRIMITIVE_VALUE_MAPPING.put(BigDecimal.class, BigDecimal.ZERO);
-        PRIMITIVE_VALUE_MAPPING.put(Date.class, new Date(0));
-        PRIMITIVE_VALUE_MAPPING.put(String.class, "");
-
-        REPLACEMENT_MAPPING_FUNC.put(Byte.class, v -> Values.convertToByte(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Short.class, v -> Values.convertToShort(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Integer.class, v -> Values.convertToInteger(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Long.class, v -> Values.convertToLong(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Float.class, v -> Values.convertToFloat(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Double.class, v -> Values.convertToDouble(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(String.class, Function.identity());
-        REPLACEMENT_MAPPING_FUNC.put(BigDecimal.class, BigDecimal::new);
-        REPLACEMENT_MAPPING_FUNC.put(BigInteger.class, BigInteger::new);
-    }
+    private static final Map<Class<?>, Function<String, ?>> REPLACEMENT_MAPPING_FUNC = Map.of(
+        Byte.class, v -> Values.convertToByte(null, v),
+        Short.class, v -> Values.convertToShort(null, v),
+        Integer.class, v -> Values.convertToInteger(null, v),
+        Long.class, v -> Values.convertToLong(null, v),
+        Float.class, v -> Values.convertToFloat(null, v),
+        Double.class, v -> Values.convertToDouble(null, v),
+        String.class, Function.identity(),
+        BigDecimal.class, BigDecimal::new,
+        BigInteger.class, BigInteger::new
+    );
+    private static final Map<Class<?>, Object> PRIMITIVE_VALUE_MAPPING = Map.ofEntries(
+        Map.entry(Boolean.class, Boolean.FALSE),
+        Map.entry(Byte.class, (byte) 0),
+        Map.entry(Short.class, (short) 0),
+        Map.entry(Integer.class, 0),
+        Map.entry(Long.class, 0L),
+        Map.entry(Float.class, 0f),
+        Map.entry(Double.class, 0d),
+        Map.entry(BigInteger.class, BigInteger.ZERO),
+        Map.entry(BigDecimal.class, BigDecimal.ZERO),
+        Map.entry(Date.class, new Date(0)),
+        Map.entry(String.class, "")
+    );
 
     private Set<String> maskedFields;
     private String replacement;

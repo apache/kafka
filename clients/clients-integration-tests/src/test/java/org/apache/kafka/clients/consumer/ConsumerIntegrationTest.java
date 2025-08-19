@@ -31,12 +31,12 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -257,7 +257,7 @@ public class ConsumerIntegrationTest {
         ) {
             // Create a new topic with 1 partition on broker 0.
             admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0)))));
-            clusterInstance.waitForTopic(topic, 1);
+            clusterInstance.waitTopicCreation(topic, 1);
 
             producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes()));
             producer.flush();
@@ -282,7 +282,7 @@ public class ConsumerIntegrationTest {
                     NewPartitions.increaseTo(3, List.of(List.of(1), List.of(1)))
                 )
             );
-            clusterInstance.waitForTopic(topic, 3);
+            clusterInstance.waitTopicCreation(topic, 3);
             TestUtils.waitForCondition(() -> {
                 consumer0.poll(Duration.ofMillis(1000));
                 consumer1.poll(Duration.ofMillis(1000));
@@ -299,7 +299,7 @@ public class ConsumerIntegrationTest {
                     NewPartitions.increaseTo(6, List.of(List.of(2), List.of(2), List.of(2)))
                 )
             );
-            clusterInstance.waitForTopic(topic, 6);
+            clusterInstance.waitTopicCreation(topic, 6);
             TestUtils.waitForCondition(() -> {
                 consumer0.poll(Duration.ofMillis(1000));
                 consumer1.poll(Duration.ofMillis(1000));

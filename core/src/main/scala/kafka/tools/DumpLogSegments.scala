@@ -638,7 +638,7 @@ object DumpLogSegments {
       " Instead, the value-decoder-class option can be used if a custom RLMM implementation is configured.")
     private val shareStateOpt = parser.accepts("share-group-state-decoder", "If set, log data will be parsed as share group state data from the " +
       "__share_group_state topic.")
-    private val skipRecordMetadataOpt = parser.accepts("skip-record-metadata", "Whether to skip printing metadata for each record.")
+    private val skipRecordMetadataOpt = parser.accepts("skip-record-metadata", "Skip metadata when printing records. This flag also skips control records.")
     options = parser.parse(args : _*)
 
     def messageParser: MessageParser[_, _] =

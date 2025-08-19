@@ -29,11 +29,12 @@ import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicConfig, CreatableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{CreateTopicsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{CreateTopicsRequest, CreateTopicsResponse, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.quota.ControllerMutationQuota
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -137,6 +138,19 @@ class DefaultAutoTopicCreationManager(
         } else if (response.versionMismatch() != null) {
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
         } else {
+          if (response.hasResponse) {
+            response.responseBody() match {
+              case createTopicsResponse: CreateTopicsResponse =>
+                createTopicsResponse.data().topics().forEach(topicResult => {
+                  val error = Errors.forCode(topicResult.errorCode)
+                  if (error != Errors.NONE) {
+                    warn(s"Auto topic creation failed for ${topicResult.name} with error '${error.name}': ${topicResult.errorMessage}")
+                  }
+                })
+              case other =>
+                warn(s"Auto topic creation request received unexpected response type: ${other.getClass.getSimpleName}")
+            }
+          }
           debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
         }
       }
