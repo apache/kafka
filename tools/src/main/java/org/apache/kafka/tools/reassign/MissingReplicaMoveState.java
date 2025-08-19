@@ -19,14 +19,9 @@ package org.apache.kafka.tools.reassign;
 
 /**
  * A replica log directory move state where the source log directory is missing.
+ * @param targetLogDir The log directory that we wanted the replica to move to.
  */
 record MissingReplicaMoveState(String targetLogDir) implements LogDirMoveState {
-    /**
-     * @param targetLogDir The log directory that we wanted the replica to move to.
-     */
-    MissingReplicaMoveState {
-    }
-
     @Override
     public boolean done() {
         return false;

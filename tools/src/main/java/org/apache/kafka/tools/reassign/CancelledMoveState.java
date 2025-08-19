@@ -20,18 +20,12 @@ package org.apache.kafka.tools.reassign;
 /**
  * A replica log directory move state where there is no move in progress, but we did not
  * reach the target log directory.
+ * @param currentLogDir The current log directory.
+ * @param targetLogDir  The log directory that we wanted the replica to move to.
  */
 record CancelledMoveState(String currentLogDir, String targetLogDir) implements LogDirMoveState {
-    /**
-     * @param currentLogDir The current log directory.
-     * @param targetLogDir  The log directory that we wanted the replica to move to.
-     */
-    CancelledMoveState {
-    }
-
     @Override
     public boolean done() {
         return true;
     }
-
 }
