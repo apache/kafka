@@ -1456,6 +1456,39 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testPiggybackAcknowledgementsOnInitialShareSession_ShareSessionNotFound() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(singleton(tp0));
+        sendFetchAndVerifyResponse(records, acquiredRecords, Errors.NONE);
+
+        fetchRecords();
+
+        // The acknowledgements for the initial fetch from tip0 are processed now and sent to the background thread.
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), Collections.emptyMap());
+
+        // We attempt to send the acknowledgements piggybacking on the fetch.
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        // Simulate a broker restart, but no leader change, this resets share session epoch to 0.
+        client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.SHARE_SESSION_NOT_FOUND));
+        networkClientDelegate.poll(time.timer(0));
+
+        // We would complete these acknowledgements with the error code from the response.
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(Errors.SHARE_SESSION_NOT_FOUND.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+
+        // Next fetch would proceed as expected and would not include any acknowledgements.
+        NetworkClientDelegate.PollResult pollResult = shareConsumeRequestManager.sendFetchesReturnPollResult();
+        assertEquals(1, pollResult.unsentRequests.size());
+        ShareFetchRequest.Builder builder = (ShareFetchRequest.Builder) pollResult.unsentRequests.get(0).requestBuilder();
+        assertEquals(0, builder.data().topics().find(topicId).partitions().find(0).acknowledgementBatches().size());
+    }
+
+    @Test
     public void testInvalidDefaultRecordBatch() {
         buildRequestManager();
 

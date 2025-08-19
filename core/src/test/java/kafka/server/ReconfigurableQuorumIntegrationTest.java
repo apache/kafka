@@ -24,11 +24,14 @@ import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
+import org.apache.kafka.common.test.api.TestKitDefaults;
+import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -161,6 +164,71 @@ public class ReconfigurableQuorumIntegrationTest {
                     dirId,
                     Set.of(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080))
                 ).all().get();
+            }
+        }
+    }
+
+    @Test
+    public void testControllersAutoJoinStandaloneVoter() throws Exception {
+        final var nodes = new TestKitNodes.Builder().
+            setNumBrokerNodes(1).
+            setNumControllerNodes(3).
+            setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
+            build();
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
+            setConfigProp(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, true).
+            setStandalone(true).
+            build()
+        ) {
+            cluster.format();
+            cluster.startup();
+            try (Admin admin = Admin.create(cluster.clientProperties())) {
+                TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
+                    for (int replicaId : new int[] {3000, 3001, 3002}) {
+                        assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
+                    }
+                });
+            }
+        }
+    }
+
+    @Test
+    public void testNewVoterAutoRemovesAndAdds() throws Exception {
+        final var nodes = new TestKitNodes.Builder().
+            setNumBrokerNodes(1).
+            setNumControllerNodes(3).
+            setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
+            build();
+
+        // Configure the initial voters with one voter having a different directory ID.
+        // This simulates the case where the controller failed and is brought back up with a different directory ID.
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        final var oldDirectoryId = Uuid.randomUuid();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                controllerNode.id(),
+                controllerNode.id() == TestKitDefaults.CONTROLLER_ID_OFFSET ?
+                    oldDirectoryId : controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
+            setConfigProp(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, true).
+            setInitialVoterSet(initialVoters).
+            build()
+        ) {
+            cluster.format();
+            cluster.startup();
+            try (Admin admin = Admin.create(cluster.clientProperties())) {
+                TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
+                    for (int replicaId : new int[] {3000, 3001, 3002}) {
+                        assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
+                    }
+                });
             }
         }
     }
