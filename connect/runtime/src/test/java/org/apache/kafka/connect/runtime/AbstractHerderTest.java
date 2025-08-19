@@ -196,7 +196,7 @@ public class AbstractHerderTest {
         AbstractHerder herder = testHerder();
 
         when(configStore.snapshot()).thenReturn(SNAPSHOT);
-        assertEquals(Set.of(CONN1), new HashSet<>(herder.connectors()));
+        assertEquals(Set.of(CONN1), Set.copyOf(herder.connectors()));
     }
 
     @Test
