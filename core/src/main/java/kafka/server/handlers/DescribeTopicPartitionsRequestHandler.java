@@ -230,4 +230,3 @@ public class DescribeTopicPartitionsRequestHandler {
                 .setPartitions(partitionData);
     }
 }
-
