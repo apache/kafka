@@ -28,8 +28,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
+import org.apache.kafka.common.test.SslManager;
 import org.apache.kafka.common.test.TestKitNodes;
-import org.apache.kafka.common.test.UnifiedSslManager;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
@@ -195,11 +195,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
                     )
                 );
-                if (clusterTestKit.trustStoreFile().isPresent()) {
+                if (SslManager.TRUST_STORE_FILE != null) {
                     props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
-                            clusterTestKit.trustStoreFile().get().getAbsolutePath());
+                            SslManager.TRUST_STORE_FILE.getAbsolutePath());
 
-                    props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, UnifiedSslManager.CLUSTER_TRUSTSTORE_PASSWORD);
+                    props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, SslManager.CLUSTER_TRUSTSTORE_PASSWORD);
                     props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
 
                     props.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");

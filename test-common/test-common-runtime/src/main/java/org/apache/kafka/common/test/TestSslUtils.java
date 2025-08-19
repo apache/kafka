@@ -100,8 +100,11 @@ public class TestSslUtils {
         return ks;
     }
 
-    private static void saveKeyStore(KeyStore ks, String filename,
-                                     Password password) throws GeneralSecurityException, IOException {
+    private static void saveKeyStore(
+        KeyStore ks, 
+        String filename,
+        Password password
+    ) throws GeneralSecurityException, IOException {
         try (OutputStream out = Files.newOutputStream(Paths.get(filename))) {
             ks.store(out, password.value().toCharArray());
         }
@@ -119,17 +122,24 @@ public class TestSslUtils {
      * @throws GeneralSecurityException for any error with the security APIs
      * @throws IOException if there is an I/O error saving the file
      */
-    public static void createKeyStore(String filename,
-                                      Password password, Password keyPassword, String alias,
-                                      Key privateKey, Certificate cert) throws GeneralSecurityException, IOException {
+    public static void createKeyStore(
+        String filename,
+        Password password, 
+        Password keyPassword, 
+        String alias,
+        Key privateKey, 
+        Certificate cert
+    ) throws GeneralSecurityException, IOException {
         KeyStore ks = createEmptyKeyStore();
-        ks.setKeyEntry(alias, privateKey, keyPassword.value().toCharArray(),
-                new Certificate[]{cert});
+        ks.setKeyEntry(alias, privateKey, keyPassword.value().toCharArray(), new Certificate[]{cert});
         saveKeyStore(ks, filename, password);
     }
 
     public static <T extends Certificate> void createTrustStore(
-            String filename, Password password, Map<String, T> certs) throws GeneralSecurityException, IOException {
+        String filename, 
+        Password password, 
+        Map<String, T> certs
+    ) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance("JKS");
         try (InputStream in = Files.newInputStream(Paths.get(filename))) {
             ks.load(in, password.value().toCharArray());

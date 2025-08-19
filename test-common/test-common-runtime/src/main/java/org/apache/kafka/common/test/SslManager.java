@@ -32,34 +32,37 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class UnifiedSslManager {
+public class SslManager {
 
-    private static final Logger log = LoggerFactory.getLogger(UnifiedSslManager.class);
+    private static final Logger log = LoggerFactory.getLogger(SslManager.class);
     private static volatile Map<String, Object> globalSslConfig = null;
     private static final Object LOCK = new Object();
     private static final File KEY_STORE_FILE;
+    public static final File TRUST_STORE_FILE;
     public static final String CLUSTER_TRUSTSTORE_PASSWORD = "cluster-truststore-password";
+    
 
     static {
         try {
             KEY_STORE_FILE = TestUtils.tempFile("kafka.cluster.keystore", ".jks");
+            TRUST_STORE_FILE = TestUtils.tempFile("kafka.server.truststore", ".jks");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static Map<String, Object> getOrCreateGlobalSslConfig(File trustStoreFile) {
+    public static Map<String, Object> getOrCreateGlobalSslConfig() {
         if (globalSslConfig == null) {
             synchronized (LOCK) {
                 if (globalSslConfig == null) {
-                    globalSslConfig = createUnifiedSslConfig(trustStoreFile);
+                    globalSslConfig = createUnifiedSslConfig();
                 }
             }
         }
         return new HashMap<>(globalSslConfig);
     }
 
-    private static Map<String, Object> createUnifiedSslConfig(File trustStoreFile) {
+    private static Map<String, Object> createUnifiedSslConfig() {
         try {
             KeyPair clusterKeyPair = TestSslUtils.generateKeyPair("RSA");
             String[] hostNames = {"localhost", "127.0.0.1"};
@@ -91,18 +94,18 @@ public class UnifiedSslManager {
             
             Password trustStorePassword = new Password(CLUSTER_TRUSTSTORE_PASSWORD);
             TestSslUtils.createTrustStore(
-                trustStoreFile.getPath(),
+                TRUST_STORE_FILE.getPath(),
                 trustStorePassword,
                 Map.of("kafka-cluster", clusterCert)
             );
-            log.info("Created unified SSL config - KeyStore: {}, TrustStore: {}", KEY_STORE_FILE.getPath(), trustStoreFile.getPath());
+            log.info("Created unified SSL config - KeyStore: {}, TrustStore: {}", KEY_STORE_FILE.getPath(), TRUST_STORE_FILE.getPath());
             return Map.ofEntries(
                 Map.entry(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, KEY_STORE_FILE.getPath()),
                 Map.entry(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, keyStorePassword),
                 Map.entry(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword),
                 Map.entry(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS"),
 
-                Map.entry(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath()),
+                Map.entry(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, TRUST_STORE_FILE.getPath()),
                 Map.entry(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword),
                 Map.entry(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS"),
 
@@ -122,6 +125,9 @@ public class UnifiedSslManager {
         globalSslConfig = null;
         if (KEY_STORE_FILE != null) {
             Utils.delete(KEY_STORE_FILE);
+        }
+        if (TRUST_STORE_FILE != null) {
+            Utils.delete(TRUST_STORE_FILE);
         }
     }
 }
