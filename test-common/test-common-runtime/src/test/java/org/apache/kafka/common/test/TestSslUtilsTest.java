@@ -17,6 +17,7 @@
 package org.apache.kafka.common.test;
 
 import org.apache.kafka.common.config.types.Password;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

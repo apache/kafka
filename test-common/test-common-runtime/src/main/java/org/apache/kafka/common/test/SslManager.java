@@ -35,7 +35,7 @@ import java.util.Map;
 public class SslManager {
 
     private static final Logger log = LoggerFactory.getLogger(SslManager.class);
-    private static volatile Map<String, Object> globalSslConfig = null;
+    private static final Map<String, Object> SSL_CONFIG = new HashMap<>();
     private static final Object LOCK = new Object();
     private static final File KEY_STORE_FILE;
     public static final File TRUST_STORE_FILE;
@@ -52,14 +52,14 @@ public class SslManager {
     }
 
     public static Map<String, Object> getOrCreateGlobalSslConfig() {
-        if (globalSslConfig == null) {
+        if (SSL_CONFIG.isEmpty()) {
             synchronized (LOCK) {
-                if (globalSslConfig == null) {
-                    globalSslConfig = createUnifiedSslConfig();
+                if (SSL_CONFIG.isEmpty()) {
+                    SSL_CONFIG.putAll(createUnifiedSslConfig());
                 }
             }
         }
-        return new HashMap<>(globalSslConfig);
+        return new HashMap<>(SSL_CONFIG);
     }
 
     private static Map<String, Object> createUnifiedSslConfig() {
@@ -122,7 +122,7 @@ public class SslManager {
     }
 
     public static void close() throws IOException {
-        globalSslConfig = null;
+        SSL_CONFIG.clear();
         if (KEY_STORE_FILE != null) {
             Utils.delete(KEY_STORE_FILE);
         }
