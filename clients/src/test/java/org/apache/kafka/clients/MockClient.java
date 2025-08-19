@@ -39,6 +39,8 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -72,6 +74,8 @@ public class MockClient implements KafkaClient {
     private int correlation;
     private Runnable wakeupHook;
     private boolean advanceTimeDuringPoll;
+    private boolean shouldUpdateWithCurrentMetadata = true;
+    private CountDownLatch isMetadataUpdateNeeded = new CountDownLatch(1);
     private final Time time;
     private final MockMetadataUpdater metadataUpdater;
     private final Map<String, ConnectionState> connections = new HashMap<>();
@@ -190,6 +194,10 @@ public class MockClient implements KafkaClient {
 
     public void setDisconnectFuture(CompletableFuture<String> disconnectFuture) {
         this.disconnectFuture = disconnectFuture;
+    }
+
+    public void setShouldUpdateWithCurrentMetadata(boolean shouldUpdateWithCurrentMetadata) {
+        this.shouldUpdateWithCurrentMetadata = shouldUpdateWithCurrentMetadata;
     }
 
     @Override
@@ -329,8 +337,10 @@ public class MockClient implements KafkaClient {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (metadataUpdate != null) {
                 metadataUpdater.update(time, metadataUpdate);
-            } else {
+            } else if (shouldUpdateWithCurrentMetadata) {
                 metadataUpdater.updateWithCurrentMetadata(time);
+            } else {
+                isMetadataUpdateNeeded.countDown();
             }
         }
 
@@ -348,6 +358,14 @@ public class MockClient implements KafkaClient {
         }
 
         return copy;
+    }
+
+    public boolean awaitMetadataUpdateRequest(long timeoutMs) throws InterruptedException {
+        if (isMetadataUpdateNeeded.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+            isMetadataUpdateNeeded = new CountDownLatch(1);
+            return true;
+        }
+        return false;
     }
 
     private long elapsedTimeMs(long currentTimeMs, long startTimeMs) {
