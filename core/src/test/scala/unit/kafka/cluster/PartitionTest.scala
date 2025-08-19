@@ -1497,7 +1497,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setDirectories(DirectoryId.unassignedArray(replicas.length))
       .build()
     assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, None), "Expected become leader transition to succeed")
-    assertEquals(Set(brokerId), partition.partitionState.isr)
+    assertEquals(util.Set.of(brokerId), partition.partitionState.isr)
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
@@ -1548,7 +1548,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setDirectories(DirectoryId.unassignedArray(replicas.length))
       .build()
     assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, None), "Expected become leader transition to succeed")
-    assertEquals(Set(brokerId), partition.partitionState.isr)
+    assertEquals(util.Set.of(brokerId), partition.partitionState.isr)
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
@@ -1611,7 +1611,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setDirectories(DirectoryId.unassignedArray(replicas.length))
       .build()
     assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, None), "Expected become leader transition to succeed")
-    assertEquals(Set(brokerId), partition.partitionState.isr)
+    assertEquals(util.Set.of(brokerId), partition.partitionState.isr)
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
@@ -1681,8 +1681,8 @@ class PartitionTest extends AbstractPartitionTest {
       .build()
     assertTrue(partition.makeLeader(partitionRegistration, isNew = false, offsetCheckpoints, None), "Expected become leader transition to succeed")
 
-    assertEquals(replicas.toSet, partition.partitionState.isr)
-    assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.isr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.maximalIsr)
 
     // Fetch to let the follower catch up to the log end offset
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
@@ -1720,8 +1720,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertFalse(partition.makeLeader(partitionRegistration, isNew = false, offsetCheckpoints, None), "Expected to stay leader")
 
     assertTrue(partition.isLeader)
-    assertEquals(util.Set.copyOf(shrinkedIsr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(shrinkedIsr), partition.partitionState.maximalIsr)
+    assertEquals(shrinkedIsr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(shrinkedIsr.toSet.asJava, partition.partitionState.maximalIsr)
     assertEquals(Set.empty, partition.getOutOfSyncReplicas(partition.replicaLagTimeMaxMs))
 
     // In the case of unfenced, the HWM doesn't increase, otherwise the HWM increases because the
@@ -1775,8 +1775,8 @@ class PartitionTest extends AbstractPartitionTest {
       .setDirectories(DirectoryId.unassignedArray(replicas.length))
       .build()
     assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, None), "Expected become leader transition to succeed")
-    assertEquals(isr.toSet, partition.partitionState.isr)
-    assertEquals(isr.toSet, partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
 
     markRemoteReplicaEligible(true)
 
@@ -1792,16 +1792,16 @@ class PartitionTest extends AbstractPartitionTest {
     )
 
     // Expansion is triggered.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
 
     // Controller rejects the expansion because the broker is fenced or offline.
     alterPartitionManager.failIsrUpdate(Errors.INELIGIBLE_REPLICA)
 
     // The leader reverts back to the previous ISR.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
     assertFalse(partition.partitionState.isInflight)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
 
@@ -1812,8 +1812,8 @@ class PartitionTest extends AbstractPartitionTest {
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
 
     // Expansion is not triggered because the follower is fenced.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
     assertFalse(partition.partitionState.isInflight)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
 
@@ -1824,8 +1824,8 @@ class PartitionTest extends AbstractPartitionTest {
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
 
     // Expansion is triggered.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.maximalIsr)
     assertTrue(partition.partitionState.isInflight)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
 
@@ -1833,8 +1833,8 @@ class PartitionTest extends AbstractPartitionTest {
     alterPartitionManager.completeIsrUpdate(newPartitionEpoch = 1)
 
     // ISR is committed.
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.maximalIsr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.isr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.maximalIsr)
     assertFalse(partition.partitionState.isInflight)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
   }
@@ -1880,8 +1880,8 @@ class PartitionTest extends AbstractPartitionTest {
       .setDirectories(DirectoryId.unassignedArray(replicas.length))
       .build()
     assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, None), "Expected become leader transition to succeed")
-    assertEquals(isr.toSet, partition.partitionState.isr)
-    assertEquals(isr.toSet, partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
 
     // Fetch to let the follower catch up to the log end offset, but using a wrong broker epoch. The expansion should fail.
     addBrokerEpochToMockMetadataCache(metadataCache, Array(brokerId, remoteBrokerId2))
@@ -1902,8 +1902,8 @@ class PartitionTest extends AbstractPartitionTest {
     )
 
     // Expansion is not triggered.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
 
     // Fetch again, this time with correct default broker epoch.
@@ -1920,8 +1920,8 @@ class PartitionTest extends AbstractPartitionTest {
     )
 
     // Expansion is triggered.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
     val isrUpdate = alterPartitionManager.isrUpdates.head
     isrUpdate.leaderAndIsr.isrWithBrokerEpoch.asScala.foreach { brokerState =>
@@ -1969,8 +1969,8 @@ class PartitionTest extends AbstractPartitionTest {
       .setDirectories(DirectoryId.unassignedArray(replicas.length))
       .build()
     assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, None), "Expected become leader transition to succeed")
-    assertEquals(isr.toSet, partition.partitionState.isr)
-    assertEquals(isr.toSet, partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
 
     val expectedReplicaEpoch = defaultBrokerEpoch(remoteBrokerId1)
     fetchFollower(partition,
@@ -2032,8 +2032,8 @@ class PartitionTest extends AbstractPartitionTest {
       .setDirectories(DirectoryId.unassignedArray(replicas.length))
       .build()
     assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, None), "Expected become leader transition to succeed")
-    assertEquals(isr.toSet, partition.partitionState.isr)
-    assertEquals(isr.toSet, partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
 
     // Fetch to let the follower catch up to the log end offset and
     // to check if an expansion is possible.
@@ -2047,16 +2047,16 @@ class PartitionTest extends AbstractPartitionTest {
     )
 
     // Expansion is triggered.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
 
     // Controller rejects the expansion because the broker is in controlled shutdown.
     alterPartitionManager.failIsrUpdate(Errors.INELIGIBLE_REPLICA)
 
     // The leader reverts back to the previous ISR.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
     assertFalse(partition.partitionState.isInflight)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
 
@@ -2067,8 +2067,8 @@ class PartitionTest extends AbstractPartitionTest {
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
 
     // Expansion is not triggered because the follower is fenced.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
     assertFalse(partition.partitionState.isInflight)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
 
@@ -2079,8 +2079,8 @@ class PartitionTest extends AbstractPartitionTest {
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
 
     // Expansion is triggered.
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.maximalIsr)
     assertTrue(partition.partitionState.isInflight)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
 
@@ -2088,8 +2088,8 @@ class PartitionTest extends AbstractPartitionTest {
     alterPartitionManager.completeIsrUpdate(newPartitionEpoch= 1)
 
     // ISR is committed.
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.maximalIsr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.isr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.maximalIsr)
     assertFalse(partition.partitionState.isInflight)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
   }
@@ -3220,9 +3220,9 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(1, partition.getPartitionEpoch)
     assertEquals(1, partition.getLeaderEpoch)
     assertEquals(Some(localReplica), partition.leaderReplicaIdOpt)
-    assertEquals(util.Set.copyOf(replicas), partition.partitionState.isr)
+    assertEquals(replicas.toSet.asJava, partition.partitionState.isr)
     assertEquals(Seq(remoteReplica1, remoteReplica2), partition.remoteReplicas.map(_.brokerId).toSeq)
-    assertEquals(replicas, partition.assignmentState.replicas)
+    assertEquals(replicas.toList.asJava, partition.assignmentState.replicas)
 
     // The local replica becomes a follower.
     val updatedLeaderRegistration = leaderRegistrationBuilder
@@ -3236,7 +3236,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Some(remoteReplica1), partition.leaderReplicaIdOpt)
     assertEquals(util.Set.of(), partition.partitionState.isr)
     assertEquals(Seq.empty, partition.remoteReplicas.map(_.brokerId).toSeq)
-    assertEquals(replicas, partition.assignmentState.replicas)
+    assertEquals(replicas.toList.asJava, partition.assignmentState.replicas)
   }
 
   @Test
@@ -3582,8 +3582,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertFalse(partition.partitionState.isInflight)
     assertEquals(topicId, partition.topicId)
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.isr)
-    assertEquals(util.Set.copyOf(isr), partition.partitionState.maximalIsr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.isr)
+    assertEquals(isr.toSet.asJava, partition.partitionState.maximalIsr)
     assertEquals(partitionEpoch, partition.getPartitionEpoch)
     newLeader
   }
