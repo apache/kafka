@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.Descr
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
+import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.metadata.MetadataCache;
 
 import java.util.HashSet;
@@ -95,6 +96,10 @@ public class DescribeTopicPartitionsRequestHandler {
         final DescribeTopicPartitionsResponseData response =
                 buildResponse(authorizedTopicsStream, abstractRequest, requestData, cursorTopicName);
 
+        // get topic authorized operations
+        response.topics().forEach(topicData ->
+                topicData.setTopicAuthorizedOperations(authHelper.authorizedOperations(abstractRequest, new Resource(TOPIC, topicData.name()))));
+
         // Add unauthorized topics to the response to avoid disclosing their existence
         response.topics().addAll(unauthorizedForDescribeTopicMetadata);
         return response;
@@ -148,13 +153,14 @@ public class DescribeTopicPartitionsRequestHandler {
         return topics;
     }
 
+
     /**
-     * Validates the pagination cursor for a describe-topics request.
+     * Validates the cursor provided in the request.
      * <p>
-     * If the cursor is provided, ensures the partition index is non-negative.
+     * If the cursor is not null, this method checks that the partition index is non-negative.
      *
-     * @param cursor the pagination cursor, if present in the request
-     * @throws InvalidRequestException if the partition index is negative
+     * @param cursor the cursor to validate; may be null
+     * @throws InvalidRequestException if the partition index in the cursor is negative
      */
     private void validateCursor(final DescribeTopicPartitionsRequestData.Cursor cursor) {
         if (cursor != null && cursor.partitionIndex() < 0) {
