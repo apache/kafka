@@ -28,42 +28,20 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class SslManager {
 
     private static final Logger log = LoggerFactory.getLogger(SslManager.class);
-    private static final Map<String, Object> SSL_CONFIG = new HashMap<>();
-    private static final Object LOCK = new Object();
-    private static final File KEY_STORE_FILE;
-    public static final File TRUST_STORE_FILE;
+    private File keyStoreFile;
+    private File trustStoreFile;
     public static final String CLUSTER_TRUSTSTORE_PASSWORD = "cluster-truststore-password";
-    
 
-    static {
+    public Map<String, Object> createSslConfig() {
         try {
-            KEY_STORE_FILE = TestUtils.tempFile("kafka.cluster.keystore", ".jks");
-            TRUST_STORE_FILE = TestUtils.tempFile("kafka.server.truststore", ".jks");
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static Map<String, Object> getOrCreateGlobalSslConfig() {
-        if (SSL_CONFIG.isEmpty()) {
-            synchronized (LOCK) {
-                if (SSL_CONFIG.isEmpty()) {
-                    SSL_CONFIG.putAll(createUnifiedSslConfig());
-                }
-            }
-        }
-        return new HashMap<>(SSL_CONFIG);
-    }
-
-    private static Map<String, Object> createUnifiedSslConfig() {
-        try {
+            keyStoreFile = TestUtils.tempFile("kafka.cluster.keystore", ".jks");
+            trustStoreFile = TestUtils.tempFile("kafka.server.truststore", ".jks");
             KeyPair clusterKeyPair = TestSslUtils.generateKeyPair("RSA");
             String[] hostNames = {"localhost", "127.0.0.1"};
             X509Certificate clusterCert = TestSslUtils.generateSignedCertificate(
@@ -84,7 +62,7 @@ public class SslManager {
             Password keyPassword = new Password("cluster-key-password");
 
             TestSslUtils.createKeyStore(
-                KEY_STORE_FILE.getPath(),
+                keyStoreFile.getPath(),
                 keyStorePassword,
                 keyPassword,
                 "kafka-cluster",
@@ -94,18 +72,18 @@ public class SslManager {
             
             Password trustStorePassword = new Password(CLUSTER_TRUSTSTORE_PASSWORD);
             TestSslUtils.createTrustStore(
-                TRUST_STORE_FILE.getPath(),
+                trustStoreFile.getPath(),
                 trustStorePassword,
                 Map.of("kafka-cluster", clusterCert)
             );
-            log.info("Created unified SSL config - KeyStore: {}, TrustStore: {}", KEY_STORE_FILE.getPath(), TRUST_STORE_FILE.getPath());
+            log.info("Created unified SSL config - KeyStore: {}, TrustStore: {}", keyStoreFile.getPath(), trustStoreFile.getPath());
             return Map.ofEntries(
-                Map.entry(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, KEY_STORE_FILE.getPath()),
+                Map.entry(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath()),
                 Map.entry(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, keyStorePassword),
                 Map.entry(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword),
                 Map.entry(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS"),
 
-                Map.entry(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, TRUST_STORE_FILE.getPath()),
+                Map.entry(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath()),
                 Map.entry(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword),
                 Map.entry(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS"),
 
@@ -120,14 +98,17 @@ public class SslManager {
             throw new RuntimeException(e);
         }
     }
+    
+    public String trustStoreLocation() {
+        return trustStoreFile != null ? trustStoreFile.getAbsolutePath() : null;
+    }
 
-    public static void close() throws IOException {
-        SSL_CONFIG.clear();
-        if (KEY_STORE_FILE != null) {
-            Utils.delete(KEY_STORE_FILE);
+    public void close() throws IOException {
+        if (keyStoreFile != null) {
+            Utils.delete(keyStoreFile);
         }
-        if (TRUST_STORE_FILE != null) {
-            Utils.delete(TRUST_STORE_FILE);
+        if (trustStoreFile != null) {
+            Utils.delete(trustStoreFile);
         }
     }
 }

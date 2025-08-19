@@ -195,9 +195,9 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                         JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
                     )
                 );
-                if (SslManager.TRUST_STORE_FILE != null) {
+                if (clusterTestKit.sslManager() != null) {
                     props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
-                            SslManager.TRUST_STORE_FILE.getAbsolutePath());
+                           clusterTestKit.sslManager().trustStoreLocation());
 
                     props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, SslManager.CLUSTER_TRUSTSTORE_PASSWORD);
                     props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
