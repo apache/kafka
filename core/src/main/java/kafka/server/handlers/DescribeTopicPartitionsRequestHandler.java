@@ -80,7 +80,7 @@ public class DescribeTopicPartitionsRequestHandler {
         final Set<String> topicsToDescribe = getTopicsToDescribe(requestData, cursorTopicName);
 
         // Validate cursor if provided in the request
-        validateCursor(requestData.cursor(), topicsToDescribe);
+        validateCursor(requestData.cursor());
 
         // Handle topics that are unauthorized for the Describe operation
         final Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
@@ -149,26 +149,18 @@ public class DescribeTopicPartitionsRequestHandler {
     }
 
     /**
-     * Validates the cursor from the request. If the cursor is provided, it checks that the partition index is valid
-     * and that the topic in the cursor is included in the list of topics.
+     * Validates the pagination cursor for a describe-topics request.
+     * <p>
+     * If the cursor is provided, ensures the partition index is non-negative.
      *
-     * @param cursor           The cursor for pagination, if provided in the request.
-     * @param topicsToDescribe The list of topics that the requestor is authorized to describe.
+     * @param cursor the pagination cursor, if present in the request
+     * @throws InvalidRequestException if the partition index is negative
      */
-    private void validateCursor(
-            final DescribeTopicPartitionsRequestData.Cursor cursor,
-            final Set<String> topicsToDescribe
-    ) {
-        if (cursor != null) {
-            // Validate that the partition index in the cursor is valid
-            if (cursor.partitionIndex() < 0) {
-                throw new InvalidRequestException("DescribeTopicPartitionsRequest cursor partition must be valid: " + cursor);
-            }
-
-            // Ensure the cursor topic is included in the list of topics
-            if (!topicsToDescribe.contains(cursor.topicName())) {
-                throw new InvalidRequestException("DescribeTopicPartitionsRequest topic list should contain the cursor topic: " + cursor.topicName());
-            }
+    private void validateCursor(final DescribeTopicPartitionsRequestData.Cursor cursor) {
+        if (cursor != null && cursor.partitionIndex() < 0) {
+            throw new InvalidRequestException(
+                    "Invalid cursor: partition index must be non-negative. Received: " + cursor
+            );
         }
     }
 
