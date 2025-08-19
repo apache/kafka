@@ -39,9 +39,13 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.isolation.MultiVersionTest;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
+import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.VersionedPluginBuilder;
+import org.apache.kafka.connect.runtime.isolation.VersionedPluginLoadingException;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -63,6 +67,8 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 
+import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -82,6 +88,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -128,6 +135,9 @@ public class AbstractHerderTest {
     private static final String TEST_REF2 = "${file:/tmp/somefile2.txt:somevar2}";
     private static final String TEST_REF3 = "${file:/tmp/somefile3.txt:somevar3}";
     static {
+
+        Assertions.assertNotNull(MultiVersionTest.MULTI_VERSION_PLUGINS, "Required plugins instance MultiVersionTest.MULTI_VERSION_PLUGINS is null");
+
         CONN1_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN1);
         CONN1_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
         CONN1_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
@@ -1251,6 +1261,209 @@ public class AbstractHerderTest {
         assertTrue(AbstractHerder.taskConfigsChanged(snapshotWithDifferentAppliedConfig, CONN1, TASK_CONFIGS));
     }
 
+    @Test
+    public void testVersionedGetConfigDef() throws InvalidVersionSpecificationException {
+        assertNotNull(MultiVersionTest.MULTI_VERSION_PLUGINS, "Plugins with multiple plugin artifacts is not initialized in MultiVersionTest.MULTI_VERSION_PLUGINS");
+        AbstractHerder herder = testHerder();
+        when(herder.plugins()).thenReturn(MultiVersionTest.MULTI_VERSION_PLUGINS);
+        List<VersionedPluginBuilder.BuildInfo> pluginArtifacts = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS.values().stream().flatMap(Collection::stream).toList();
+        for (VersionedPluginBuilder.BuildInfo buildInfo : pluginArtifacts) {
+            List<ConfigKeyInfo> configs = herder.connectorPluginConfig(buildInfo.plugin().className(), PluginUtils.connectorVersionRequirement(buildInfo.version()));
+            Optional<ConfigKeyInfo> requiredConfig = configs.stream()
+                .filter(config -> config.name().equals(VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG_IN_PLUGIN))
+                .findAny();
+            assertTrue(requiredConfig.isPresent(), "Required config (" + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG_IN_PLUGIN + ") "
+                + "is not found in the plugin config. It is possible that plugin creation was not correct in VersionedPluginBuilder.");
+            // the version specific config will have the default value as the version of the plugin
+            assertEquals(requiredConfig.get().defaultValue(), buildInfo.version());
+        }
+    }
+
+    @Test
+    public void testGetConnectorConfigWithInvalidVersion() throws ClassNotFoundException {
+        String connName = "AnotherPlugin";
+        AbstractHerder herder = testHerder();
+        when(worker.getPlugins()).thenReturn(plugins);
+        when(plugins.pluginClass(anyString(), any())).thenThrow(VersionedPluginLoadingException.class);
+        assertThrows(BadRequestException.class, () -> herder.connectorPluginConfig(connName));
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private AbstractHerder multiVersionPluginHerder() throws ClassNotFoundException {
+        assertNotNull(MultiVersionTest.MULTI_VERSION_PLUGINS, "Plugins with multiple plugin artifacts is not initialized in MultiVersionTest.MULTI_VERSION_PLUGINS");
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        workerProps.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        workerProps.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
+        Mockito.lenient().when(workerConfig.originalsStrings()).thenReturn(workerProps);
+        Mockito.lenient().when(workerConfig.getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG))
+            .thenReturn((Class) MultiVersionTest.MULTI_VERSION_PLUGINS.pluginClass(VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className()));
+        assertNotNull(MultiVersionTest.MULTI_VERSION_PLUGINS, "Plugins with multiple plugin artifacts is not initialized in MultiVersionTest.MULTI_VERSION_PLUGINS");
+        when(worker.getPlugins()).thenReturn(MultiVersionTest.MULTI_VERSION_PLUGINS);
+        Mockito.lenient().when(worker.config()).thenReturn(workerConfig);
+        return testHerder();
+    }
+
+    @Test
+    public void testValidateHasVersionConfigs() throws ClassNotFoundException {
+        AbstractHerder herder = multiVersionPluginHerder();
+        Map<String, String> connProps = new HashMap<>();
+        connProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className());
+        connProps.put(ConnectorConfig.CONNECTOR_VERSION, MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
+        connProps.put("transforms", "t");
+        connProps.put("predicates", "p");
+        ConfigInfos configInfos = herder.validateConnectorConfig(connProps, s -> null, false);
+        Set<String> versionConfigs = configInfos.values().stream()
+            .map(info -> info.configKey().name())
+            .filter(name -> name.contains(WorkerConfig.PLUGIN_VERSION_SUFFIX))
+            .collect(Collectors.toSet());
+        assertEquals(6, versionConfigs.size());
+        assertTrue(versionConfigs.contains(ConnectorConfig.CONNECTOR_VERSION));
+        assertTrue(versionConfigs.contains(ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG));
+        assertTrue(versionConfigs.contains(ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG));
+        assertTrue(versionConfigs.contains(ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG));
+        assertTrue(versionConfigs.contains("transforms.t." + WorkerConfig.PLUGIN_VERSION_SUFFIX));
+        assertTrue(versionConfigs.contains("predicates.p." + WorkerConfig.PLUGIN_VERSION_SUFFIX));
+    }
+
+    @Test
+    public void testInvalidConnectorVersion() throws ClassNotFoundException {
+        AbstractHerder herder = multiVersionPluginHerder();
+
+        Map<String, String> connProps = new HashMap<>();
+        connProps.put(ConnectorConfig.NAME_CONFIG, "connector-name");
+        connProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SOURCE_CONNECTOR.className());
+        connProps.put(ConnectorConfig.CONNECTOR_VERSION, "invalid-version");
+
+        ConfigInfos infos = herder.validateConnectorConfig(connProps, s -> null, false);
+
+        assertEquals(2, infos.errorCount());
+        assertErrorForKey(infos, ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        assertErrorForKey(infos, ConnectorConfig.CONNECTOR_VERSION);
+
+        ConfigInfo versionInfo = infos.values().stream()
+            .filter(info -> info.configKey().name().equals(ConnectorConfig.CONNECTOR_VERSION))
+            .findFirst().get();
+        assertEquals(MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION, versionInfo.configKey().defaultValue());
+        List<String> requiredRecommends = new ArrayList<>();
+        requiredRecommends.add(MultiVersionTest.DEFAULT_COMBINED_ARTIFACT_VERSIONS.get(VersionedPluginBuilder.VersionedTestPlugin.SOURCE_CONNECTOR));
+        requiredRecommends.addAll(MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.stream().sorted().toList());
+        assertEquals(requiredRecommends, versionInfo.configValue().recommendedValues());
+    }
+
+    @Test
+    public void testInvalidConverterTransformationPredicateVersion() throws ClassNotFoundException {
+        AbstractHerder herder = multiVersionPluginHerder();
+
+        Map<String, String> connProps = new HashMap<>();
+        connProps.put(ConnectorConfig.NAME_CONFIG, "connector-name");
+        connProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SOURCE_CONNECTOR.className());
+        connProps.put(ConnectorConfig.CONNECTOR_VERSION, MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
+        connProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        connProps.put(ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, "invalid-version");
+        connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        connProps.put(ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, "invalid-version");
+        connProps.put(ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
+        connProps.put(ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG, "invalid-version");
+        connProps.put("transforms", "t");
+        connProps.put("transforms.t.type", VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
+        connProps.put("transforms.t." + WorkerConfig.PLUGIN_VERSION_SUFFIX, "invalid-version");
+        connProps.put("predicates", "p");
+        connProps.put("predicates.p.type", VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
+        connProps.put("predicates.p." + WorkerConfig.PLUGIN_VERSION_SUFFIX, "invalid-version");
+
+        ConfigInfos infos = herder.validateConnectorConfig(connProps, s -> null, false);
+        assertEquals(10, infos.errorCount());
+        assertErrorForKey(infos, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG);
+        assertErrorForKey(infos, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG);
+        assertErrorForKey(infos, ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG);
+        assertErrorForKey(infos, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG);
+        assertErrorForKey(infos, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG);
+        assertErrorForKey(infos, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG);
+        assertErrorForKey(infos, "transforms.t.type");
+        assertErrorForKey(infos, "predicates.p.type");
+        assertErrorForKey(infos, "transforms.t." + WorkerConfig.PLUGIN_VERSION_SUFFIX);
+        assertErrorForKey(infos, "predicates.p." + WorkerConfig.PLUGIN_VERSION_SUFFIX);
+    }
+
+    @Test
+    public void testInvalidClassDoesNotAffectVersionConfig() throws ClassNotFoundException {
+        AbstractHerder herder = multiVersionPluginHerder();
+
+        Map<String, String> connProps = new HashMap<>();
+        connProps.put(ConnectorConfig.NAME_CONFIG, "connector-name");
+        connProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SOURCE_CONNECTOR.className());
+        connProps.put(ConnectorConfig.CONNECTOR_VERSION, MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
+        connProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, "invalid-class");
+        connProps.put(ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
+        connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, "invalid-class");
+        connProps.put(ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
+        connProps.put(ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, "invalid-class");
+        connProps.put(ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG, MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
+        connProps.put("transforms", "t");
+        connProps.put("transforms.t.type", "invalid-class");
+        connProps.put("transforms.t." + WorkerConfig.PLUGIN_VERSION_SUFFIX, MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
+        connProps.put("predicates", "p");
+        connProps.put("predicates.p.type", "invalid-class");
+        connProps.put("predicates.p." + WorkerConfig.PLUGIN_VERSION_SUFFIX, MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_LATEST_VERSION);
+
+        ConfigInfos infos = herder.validateConnectorConfig(connProps, s -> null, false);
+        assertEquals(5, infos.errorCount());
+        assertErrorForKey(infos, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG);
+        assertErrorForKey(infos, ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG);
+        assertErrorForKey(infos, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG);
+        assertErrorForKey(infos, "transforms.t.type");
+        assertErrorForKey(infos, "predicates.p.type");
+    }
+
+    @Test
+    public void testValidationUsesCorrectPluginConfig() throws ClassNotFoundException {
+        AbstractHerder herder = multiVersionPluginHerder();
+        List<String> versions = MultiVersionTest.DEFAULT_ISOLATED_ARTIFACTS_VERSIONS.stream().toList();
+        // Randomly select versions for each plugin
+        Random rand = new Random();
+        String connectorVersion = versions.get(Math.abs(rand.nextInt()) % versions.size());
+        String keyConverterVersion = versions.get(Math.abs(rand.nextInt()) % versions.size());
+        String valueConverterVersion = versions.get(Math.abs(rand.nextInt()) % versions.size());
+        String headerConverterVersion = versions.get(Math.abs(rand.nextInt()) % versions.size());
+        String transformationVersion = versions.get(Math.abs(rand.nextInt()) % versions.size());
+        String predicateVersion = versions.get(Math.abs(rand.nextInt()) % versions.size());
+
+        Map<String, String> connProps = new HashMap<>();
+        connProps.put(ConnectorConfig.NAME_CONFIG, "connector-name");
+        connProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.SOURCE_CONNECTOR.className());
+        connProps.put(ConnectorConfig.CONNECTOR_VERSION, connectorVersion);
+        connProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        connProps.put(ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, keyConverterVersion);
+        connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className());
+        connProps.put(ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, valueConverterVersion);
+        connProps.put(ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
+        connProps.put(ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG, headerConverterVersion);
+        connProps.put("transforms", "t");
+        connProps.put("transforms.t.type", VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
+        connProps.put("transforms.t." + WorkerConfig.PLUGIN_VERSION_SUFFIX, transformationVersion);
+        connProps.put("predicates", "p");
+        connProps.put("predicates.p.type", VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
+        connProps.put("predicates.p." + WorkerConfig.PLUGIN_VERSION_SUFFIX, predicateVersion);
+
+        ConfigInfos infos = herder.validateConnectorConfig(connProps, s -> null, false);
+        assertEquals(0, infos.errorCount());
+        assertInfoValue(infos, ConnectorConfig.CONNECTOR_VERSION, connectorVersion);
+        assertInfoValue(infos, ConnectorConfig.KEY_CONVERTER_VERSION_CONFIG, keyConverterVersion);
+        assertInfoValue(infos, ConnectorConfig.VALUE_CONVERTER_VERSION_CONFIG, valueConverterVersion);
+        assertInfoValue(infos, ConnectorConfig.HEADER_CONVERTER_VERSION_CONFIG, headerConverterVersion);
+        assertInfoValue(infos, "transforms.t." + WorkerConfig.PLUGIN_VERSION_SUFFIX, transformationVersion);
+        assertInfoValue(infos, "predicates.p." + WorkerConfig.PLUGIN_VERSION_SUFFIX, predicateVersion);
+
+        // The versioned plugins have a specific config whose default value is set to the version of the plugin
+        assertDefault(infos, VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG_IN_PLUGIN, connectorVersion);
+        assertDefault(infos, ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG + "." + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG_IN_PLUGIN, keyConverterVersion);
+        assertDefault(infos, ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG + "." + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG_IN_PLUGIN, valueConverterVersion);
+        assertDefault(infos, ConnectorConfig.HEADER_CONVERTER_CLASS_CONFIG + "." + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG_IN_PLUGIN, headerConverterVersion);
+        assertDefault(infos, "transforms.t." + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG_IN_PLUGIN, transformationVersion);
+        assertDefault(infos, "predicates.p." + VersionedPluginBuilder.VERSION_SPECIFIC_CONFIG_IN_PLUGIN, predicateVersion);
+    }
+
     protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {
         ConfigDef configDef = new ConfigDef().define(name, ConfigDef.Type.STRING, null, null,
                 ConfigDef.Importance.HIGH, "doc", group, 10,
@@ -1278,6 +1491,12 @@ public class AbstractHerderTest {
         assertEquals(name, info.name());
         assertEquals(value, info.value());
         assertEquals(Arrays.asList(errors), info.errors());
+    }
+
+    protected void assertDefault(ConfigInfos infos, String name, String value) {
+        Optional<ConfigInfo> key = infos.values().stream().filter(info -> info.configKey().name().equals(name)).findFirst();
+        assertTrue(key.isPresent());
+        assertEquals(value, key.get().configKey().defaultValue());
     }
 
     protected ConfigInfo findInfo(ConfigInfos infos, String name) {
