@@ -20,6 +20,7 @@ package kafka.server.handlers;
 import kafka.network.RequestChannel;
 import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
