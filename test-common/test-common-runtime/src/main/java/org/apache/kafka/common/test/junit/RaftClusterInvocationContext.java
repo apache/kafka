@@ -20,8 +20,13 @@ import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.ClusterConfig;
@@ -41,6 +46,7 @@ import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -173,6 +179,37 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             return Stream.concat(controllers().values().stream().map(ControllerServer::clusterId),
                 brokers().values().stream().map(KafkaBroker::clusterId)).findFirst()
                 .orElseThrow(() -> new RuntimeException("No controllers or brokers!"));
+        }
+
+        @Override
+        public Map<String, Object> setClientSslConfig(Map<String, Object> configs) {
+            Map<String, Object> props = new HashMap<>(configs);
+            if (config().brokerSecurityProtocol() == SecurityProtocol.SASL_SSL) {
+                props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_SSL.name);
+                props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
+                props.putIfAbsent(
+                    SaslConfigs.SASL_JAAS_CONFIG,
+                    String.format(
+                        "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                        JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
+                    )
+                );
+                if (clusterTestKit.trustStoreFile().isPresent()) {
+                    props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+                            clusterTestKit.trustStoreFile().get().getAbsolutePath());
+
+                    // 使用 TestSslUtils 的預設密碼
+                    props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "cluster-truststore-password");  // 而不是硬編碼字串
+                    props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
+
+                    // 額外的 SSL 設定
+                    props.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
+                    props.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of("TLSv1.2"));
+                    props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ""); // 禁用主機名驗證
+                    props.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, "PKIX");
+                }
+            }
+            return props;
         }
 
         @Override

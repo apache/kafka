@@ -24,7 +24,6 @@ import kafka.server.FaultHandlerFactory;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaRaftServer;
 import kafka.server.SharedServer;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
@@ -50,7 +49,6 @@ import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -144,7 +142,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return this;
         }
 
-        private KafkaConfig createNodeConfig(TestKitNode node) throws IOException {
+        private KafkaConfig createNodeConfig(TestKitNode node, Optional<File> trustStoreFile) throws IOException {
             TestKitNode brokerNode = nodes.brokerNodes().get(node.id());
             TestKitNode controllerNode = nodes.controllerNodes().get(node.id());
 
@@ -152,13 +150,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                     Long.toString(TimeUnit.MINUTES.toMillis(10)));
             props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, roles(node.id()));
-            props.put(KRaftConfigs.NODE_ID_CONFIG,
-                    Integer.toString(node.id()));
+            props.put(KRaftConfigs.NODE_ID_CONFIG, Integer.toString(node.id()));
+
             // In combined mode, always prefer the metadata log directory of the controller node.
             if (controllerNode != null) {
                 props.put(MetadataLogConfig.METADATA_LOG_DIR_CONFIG,
                         controllerNode.metadataDirectory());
-                setSecurityProtocolProps(props, controllerSecurityProtocol);
+                setSecurityProtocolProps(props, controllerSecurityProtocol, trustStoreFile);
             } else {
                 props.put(MetadataLogConfig.METADATA_LOG_DIR_CONFIG,
                         node.metadataDirectory());
@@ -167,7 +165,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 // Set the log.dirs according to the broker node setting (if there is a broker node)
                 props.put(LOG_DIRS_CONFIG,
                         String.join(",", brokerNode.logDataDirectories()));
-                setSecurityProtocolProps(props, brokerSecurityProtocol);
+                setSecurityProtocolProps(props, brokerSecurityProtocol, trustStoreFile);
             } else {
                 // Set log.dirs equal to the metadata directory if there is just a controller.
                 props.put(LOG_DIRS_CONFIG,
@@ -216,7 +214,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return new KafkaConfig(props, false);
         }
 
-        private void setSecurityProtocolProps(Map<String, Object> props, String securityProtocol) {
+        private void setSecurityProtocolProps(
+            Map<String, Object> props,
+            String securityProtocol,
+            Optional<File> trustStoreFile
+        ) {
             if (securityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
@@ -224,11 +226,20 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 props.putIfAbsent(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, StandardAuthorizer.class.getName());
                 props.putIfAbsent(StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
                 props.putIfAbsent(StandardAuthorizer.SUPER_USERS_CONFIG, "User:" + JaasUtils.KAFKA_PLAIN_ADMIN);
+            } else if (securityProtocol.equals(SecurityProtocol.SASL_SSL.name)) {
+                props.putIfAbsent(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
+                props.putIfAbsent(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
+                props.putIfAbsent(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
+                props.putIfAbsent(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, StandardAuthorizer.class.getName());
+                props.putIfAbsent(StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
+                props.putIfAbsent(StandardAuthorizer.SUPER_USERS_CONFIG, "User:" + JaasUtils.KAFKA_PLAIN_ADMIN);
+                UnifiedSslManager.getOrCreateGlobalSslConfig(trustStoreFile.get()).forEach(props::putIfAbsent);
             }
         }
 
         private Optional<File> maybeSetupJaasFile() throws Exception {
-            if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
+            if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name) ||
+                    brokerSecurityProtocol.equals(SecurityProtocol.SASL_SSL.name)) {
                 File file = JaasUtils.writeJaasContextsToFile(Set.of(
                     new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
                         List.of(
@@ -260,6 +271,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             Map<Integer, SharedServer> jointServers = new HashMap<>();
             File baseDirectory = null;
             Optional<File> jaasFile = maybeSetupJaasFile();
+            Optional<File> trustStoreFile = Optional.of(TestUtils.tempFile("kafka.server.truststore", ".jks"));
             try {
                 baseDirectory = new File(nodes.baseDirectory());
                 for (TestKitNode node : nodes.controllerNodes().values()) {
@@ -270,7 +282,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 }
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), List.of());
-                    KafkaConfig config = createNodeConfig(node);
+                    KafkaConfig config = createNodeConfig(node, trustStoreFile);
                     SharedServer sharedServer = new SharedServer(
                         config,
                         node.initialMetaPropertiesEnsemble(),
@@ -298,7 +310,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 for (TestKitNode node : nodes.brokerNodes().values()) {
                     SharedServer sharedServer = jointServers.get(node.id());
                     if (sharedServer == null) {
-                        KafkaConfig config = createNodeConfig(node);
+                        KafkaConfig config = createNodeConfig(node, trustStoreFile);
                         sharedServer = new SharedServer(
                             config,
                             node.initialMetaPropertiesEnsemble(),
@@ -342,6 +354,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     faultHandlerFactory,
                     socketFactoryManager,
                     jaasFile,
+                    trustStoreFile,
                     standalone,
                     initialVoterSet,
                     deleteOnClose);
@@ -389,6 +402,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final PreboundSocketFactoryManager socketFactoryManager;
     private final String controllerListenerName;
     private final Optional<File> jaasFile;
+    private final Optional<File> trustStoreFile;
     private final boolean standalone;
     private final Optional<Map<Integer, Uuid>> initialVoterSet;
     private final boolean deleteOnClose;
@@ -401,6 +415,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         SimpleFaultHandlerFactory faultHandlerFactory,
         PreboundSocketFactoryManager socketFactoryManager,
         Optional<File> jaasFile,
+        Optional<File> trustStoreFile,
         boolean standalone,
         Optional<Map<Integer, Uuid>> initialVoterSet,
         boolean deleteOnClose
@@ -420,6 +435,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         this.socketFactoryManager = socketFactoryManager;
         this.controllerListenerName = nodes.controllerListenerName().value();
         this.jaasFile = jaasFile;
+        this.trustStoreFile = trustStoreFile;
         this.standalone = standalone;
         this.initialVoterSet = initialVoterSet;
         this.deleteOnClose = deleteOnClose;
@@ -702,6 +718,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
         return faultHandlerFactory.nonFatalFaultHandler();
     }
 
+    public Optional<File> trustStoreFile() {
+        return trustStoreFile;
+    }
+    
     @Override
     public void close() throws Exception {
         List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();
@@ -729,6 +749,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 if (jaasFile.isPresent()) {
                     Utils.delete(jaasFile.get());
                 }
+                if (trustStoreFile.isPresent()) {
+                    Utils.delete(trustStoreFile.get());
+                }
+                UnifiedSslManager.close();
             }
         } catch (Exception e) {
             for (Entry<String, Future<?>> entry : futureEntries) {

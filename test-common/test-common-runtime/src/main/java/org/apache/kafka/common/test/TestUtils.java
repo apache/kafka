@@ -54,7 +54,16 @@ class TestUtils {
      * suffix to generate its name.
      */
     public static File tempFile() throws IOException {
-        final File file = Files.createTempFile("kafka", ".tmp").toFile();
+        return tempFile("kafka", ".tmp");
+    }
+
+    /**
+     * Create an empty file in the default temporary-file directory, using the given prefix and suffix
+     * to generate its name.
+     * @throws IOException
+     */
+    public static File tempFile(final String prefix, final String suffix) throws IOException {
+        final File file = Files.createTempFile(prefix, suffix).toFile();
         file.deleteOnExit();
         return file;
     }

@@ -1558,6 +1558,7 @@ project(':test-common:test-common-runtime') {
     implementation project(':raft')
     implementation project(':storage')
 
+    implementation libs.bcpkix
     implementation libs.junitPlatformLanucher
     implementation libs.junitJupiter
     implementation libs.jacksonDatabindYaml

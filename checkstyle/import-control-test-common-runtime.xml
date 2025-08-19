@@ -29,4 +29,6 @@
     <allow pkg="java" />
     <allow pkg="scala.jdk.javaapi" />
     <allow pkg="javax.security" />
+    <allow pkg="org.bouncycastle" />
+    <allow pkg="javax.net" />
 </import-control>
