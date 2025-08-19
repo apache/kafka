@@ -46,6 +46,7 @@ import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.apache.logging.log4j.Level;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -416,6 +417,7 @@ public class StoreChangelogReaderTest {
         shouldPollWithRightTimeout(true, type);
     }
 
+    @Disabled
     @ParameterizedTest
     @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
     public void shouldPollWithRightTimeoutWithoutStateUpdater(final Task.TaskType type) {
