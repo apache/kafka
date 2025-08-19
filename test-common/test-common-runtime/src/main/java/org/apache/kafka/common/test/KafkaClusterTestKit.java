@@ -710,7 +710,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public MockFaultHandler nonFatalFaultHandler() {
         return faultHandlerFactory.nonFatalFaultHandler();
     }
-    
+
     @Override
     public void close() throws Exception {
         List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();
