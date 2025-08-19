@@ -942,7 +942,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             Topic.isInternal(topic),
             util.Collections.emptyList()
           )
-        }).collect(Collectors.toList())
+        }).toList
       }
 
       val responses = new util.ArrayList[MetadataResponseTopic](topicResponses)
