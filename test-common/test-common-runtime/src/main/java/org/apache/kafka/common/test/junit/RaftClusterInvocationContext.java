@@ -29,6 +29,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
+import org.apache.kafka.common.test.UnifiedSslManager;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
@@ -198,14 +199,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
                             clusterTestKit.trustStoreFile().get().getAbsolutePath());
 
-                    // 使用 TestSslUtils 的預設密碼
-                    props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "cluster-truststore-password");  // 而不是硬編碼字串
+                    props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, UnifiedSslManager.CLUSTER_TRUSTSTORE_PASSWORD);
                     props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
 
-                    // 額外的 SSL 設定
                     props.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
                     props.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of("TLSv1.2"));
-                    props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ""); // 禁用主機名驗證
+                    props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
                     props.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, "PKIX");
                 }
             }
