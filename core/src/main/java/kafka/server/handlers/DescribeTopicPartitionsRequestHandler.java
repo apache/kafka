@@ -194,7 +194,7 @@ public class DescribeTopicPartitionsRequestHandler {
                     DESCRIBE, TOPIC, topicName, true, true, 1
             );
             if (!fetchAllTopics && !isAuthorized) {
-                // If unauthorized, add the topic to the unauthorized list with an empty UUID
+                // We should not return topicId when on unauthorized error, so we return zero uuid.
                 unauthorizedForDescribeTopicMetadata.add(describeTopicPartitionsResponseTopic(
                         Errors.TOPIC_AUTHORIZATION_FAILED, topicName, Uuid.ZERO_UUID, false, List.of())
                 );
