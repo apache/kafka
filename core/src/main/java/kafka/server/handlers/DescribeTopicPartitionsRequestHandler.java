@@ -75,7 +75,7 @@ public class DescribeTopicPartitionsRequestHandler {
         final DescribeTopicPartitionsRequestData requestData = getRequestData(abstractRequest);
 
         // Get topics to describe based on request data (all topics or specific ones)
-        final String cursorTopicName = requestData.cursor() != null ? cursor.topicName() : "";
+        final String cursorTopicName = requestData.cursor() != null ? requestData.cursor().topicName() : "";
         final Set<String> topicsToDescribe = getTopicsToDescribe(requestData, cursorTopicName);
 
         // Validate cursor if provided in the request
@@ -92,7 +92,7 @@ public class DescribeTopicPartitionsRequestHandler {
 
         // Construct the response for authorized topics
         final DescribeTopicPartitionsResponseData response =
-                buildResponse(authorizedTopicsStream, abstractRequest, requestData);
+                buildResponse(authorizedTopicsStream, abstractRequest, requestData, cursorTopicName);
 
         // Add unauthorized topics to the response to avoid disclosing their existence
         response.topics().addAll(unauthorizedForDescribeTopicMetadata);
@@ -122,7 +122,7 @@ public class DescribeTopicPartitionsRequestHandler {
     ) {
         final Set<String> topics = new HashSet<>();
         final boolean fetchAllTopics = requestData.topics().isEmpty();
-        final DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
+        final DescribeTopicPartitionsRequestData.Cursor cursor = requestData.cursor();
 
         // If no topics are specified, fetch all topics that come after the cursor topic
         if (fetchAllTopics) {
@@ -213,13 +213,14 @@ public class DescribeTopicPartitionsRequestHandler {
     private DescribeTopicPartitionsResponseData buildResponse(
             final Stream<String> authorizedTopicsStream,
             final RequestChannel.Request abstractRequest,
-            final DescribeTopicPartitionsRequestData requestData
+            final DescribeTopicPartitionsRequestData requestData,
+            final String cursorTopicName
     ) {
         return metadataCache.describeTopicResponse(
                 authorizedTopicsStream.iterator(),
                 abstractRequest.context().listenerName,
-                (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
-                Math.max(Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()), 1),
+                (String topicName) -> topicName.equals(cursorTopicName) ? requestData.cursor().partitionIndex() : 0,
+                Math.max(Math.min(config.maxRequestPartitionSizeLimit(), requestData.responsePartitionLimit()), 1),
                 requestData.topics().isEmpty()
         );
     }
