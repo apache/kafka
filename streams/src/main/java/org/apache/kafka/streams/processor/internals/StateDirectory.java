@@ -204,7 +204,7 @@ public class StateDirectory implements AutoCloseable {
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final ThreadCache dummyCache = new ThreadCache(logContext, 0, streamsMetrics);
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
-            final boolean stateUpdaterEnabled = StreamsConfig.InternalConfig.stateUpdaterEnabled(config.originals());
+            final boolean stateUpdaterEnabled = true;
 
             // discover all non-empty task directories in StateDirectory
             for (final TaskDirectory taskDirectory : nonEmptyTaskDirectories) {

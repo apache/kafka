@@ -33,7 +33,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
@@ -236,7 +235,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.stateRestoreListener = stateRestoreListener;
         this.standbyUpdateListener = standbyUpdateListener;
 
-        this.stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
+        this.stateUpdaterEnabled = true;
 
         this.groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));

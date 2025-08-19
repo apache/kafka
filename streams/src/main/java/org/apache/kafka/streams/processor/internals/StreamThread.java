@@ -393,7 +393,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final Runnable shutdownErrorHook,
                                       final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler) {
 
-        final boolean stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
+        final boolean stateUpdaterEnabled = true;
 
         final String threadId = clientId + THREAD_ID_SUBSTRING + threadIdx;
         final String stateUpdaterId = threadId.replace(THREAD_ID_SUBSTRING, STATE_UPDATER_ID_SUBSTRING);
@@ -858,7 +858,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
-        this.stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
+        this.stateUpdaterEnabled = true;
         this.processingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
         this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
 
