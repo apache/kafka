@@ -306,7 +306,7 @@ public abstract class AbstractIndex implements Closeable {
      * Get offset relative to base offset of this index
      * @throws IndexOffsetOverflowException
      */
-    public int relativeOffset(long offset) {
+    public int relativeOffset(long offset) throws IndexOffsetOverflowException {
         OptionalInt relativeOffset = toRelative(offset);
         return relativeOffset.orElseThrow(() -> new IndexOffsetOverflowException(
             "Integer overflow for offset: " + offset + " (" + file.getAbsoluteFile() + ")"));
