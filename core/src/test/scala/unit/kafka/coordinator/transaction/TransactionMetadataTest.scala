@@ -53,6 +53,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -77,6 +78,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -101,6 +103,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -123,6 +126,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_2)
@@ -147,6 +151,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.COMPLETE_ABORT,
+      util.Set.of,
       time.milliseconds() - 1,
       time.milliseconds(),
       TV_2)
@@ -171,6 +176,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.COMPLETE_COMMIT,
+      util.Set.of,
       time.milliseconds() - 1,
       time.milliseconds(),
       TV_2)
@@ -194,6 +200,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       1L,
       time.milliseconds(),
       TV_0)
@@ -221,6 +228,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       1L,
       time.milliseconds(),
       TV_0)
@@ -247,6 +255,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       time.milliseconds(),
       time.milliseconds(),
       TV_0)
@@ -284,6 +293,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
+      util.Set.of,
       1L,
       time.milliseconds(),
       TV_0)
@@ -311,6 +321,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
+      util.Set.of,
       1L,
       time.milliseconds(),
       TV_0)
@@ -341,6 +352,7 @@ class TransactionMetadataTest {
       lastProducerEpoch,
       30000,
       TransactionState.PREPARE_COMMIT,
+      util.Set.of(),
       1L,
       time.milliseconds(),
       clientTransactionVersion
@@ -373,6 +385,7 @@ class TransactionMetadataTest {
       lastProducerEpoch,
       30000,
       TransactionState.PREPARE_ABORT,
+      util.Set.of,
       1L,
       time.milliseconds(),
       clientTransactionVersion
@@ -403,6 +416,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -434,6 +448,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.COMPLETE_COMMIT,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -455,6 +470,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.COMPLETE_ABORT,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -476,6 +492,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -496,6 +513,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -523,6 +541,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
+      util.Set.of,
       time.milliseconds(),
       time.milliseconds(),
       TV_2)
@@ -554,6 +573,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.ONGOING,
+      util.Set.of,
       time.milliseconds(),
       time.milliseconds(),
       TV_2)
@@ -607,6 +627,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -631,6 +652,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -656,6 +678,7 @@ class TransactionMetadataTest {
       lastProducerEpoch,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -681,6 +704,7 @@ class TransactionMetadataTest {
       lastProducerEpoch,
       30000,
       TransactionState.EMPTY,
+      util.Set.of,
       -1,
       time.milliseconds(),
       TV_0)
@@ -746,6 +770,7 @@ class TransactionMetadataTest {
       RecordBatch.NO_PRODUCER_EPOCH,
       30000,
       state,
+      util.Set.of,
       -1,
       time.milliseconds(),
       clientTransactionVersion)

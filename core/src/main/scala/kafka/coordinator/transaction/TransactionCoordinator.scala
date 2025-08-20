@@ -156,6 +156,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               RecordBatch.NO_PRODUCER_EPOCH,
               resolvedTxnTimeoutMs,
               TransactionState.EMPTY,
+              util.Set.of(),
               -1,
               time.milliseconds(),
               TransactionVersion.TV_0)

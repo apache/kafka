@@ -74,6 +74,7 @@ public class TransactionMetadata {
      * @param lastProducerEpoch        last epoch of the producer
      * @param txnTimeoutMs             timeout to be used to abort long running transactions
      * @param state                    current state of the transaction
+     * @param topicPartitions          current set of partitions that are part of this transaction
      * @param txnStartTimestamp        time the transaction was started, i.e., when first partition is added
      * @param txnLastUpdateTimestamp   updated when any operation updates the TransactionMetadata. To be used for expiration
      * @param clientTransactionVersion TransactionVersion used by the client when the state was transitioned
@@ -86,6 +87,7 @@ public class TransactionMetadata {
                                short lastProducerEpoch,
                                int txnTimeoutMs,
                                TransactionState state,
+                               Set<TopicPartition> topicPartitions,
                                long txnStartTimestamp,
                                long txnLastUpdateTimestamp,
                                TransactionVersion clientTransactionVersion) {
@@ -97,7 +99,7 @@ public class TransactionMetadata {
         this.lastProducerEpoch = lastProducerEpoch;
         this.txnTimeoutMs = txnTimeoutMs;
         this.state = state;
-        this.topicPartitions = new HashSet<>();
+        this.topicPartitions = new HashSet<>(topicPartitions);
         this.txnStartTimestamp = txnStartTimestamp;
         this.txnLastUpdateTimestamp = txnLastUpdateTimestamp;
         this.clientTransactionVersion = clientTransactionVersion;

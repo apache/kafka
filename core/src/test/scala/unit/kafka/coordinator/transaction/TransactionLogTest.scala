@@ -49,7 +49,8 @@ class TransactionLogTest {
     val transactionalId = "transactionalId"
     val producerId = 23423L
 
-    val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, TransactionState.EMPTY, 0, 0, TV_0)
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, TransactionState.EMPTY, util.Set.of, 0, 0, TV_0)
     txnMetadata.addPartitions(topicPartitions)
 
     assertThrows(classOf[IllegalStateException], () => TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2))
@@ -73,7 +74,8 @@ class TransactionLogTest {
 
     // generate transaction log messages
     val txnRecords = pidMappings.map { case (transactionalId, producerId) =>
-      val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, transactionStates(producerId), 0, 0, TV_0)
+      val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
+        RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, transactionStates(producerId), util.Set.of, 0, 0, TV_0)
 
       if (!txnMetadata.state.equals(TransactionState.EMPTY))
         txnMetadata.addPartitions(topicPartitions)
