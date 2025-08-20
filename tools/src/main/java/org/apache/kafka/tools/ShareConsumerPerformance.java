@@ -62,7 +62,7 @@ public class ShareConsumerPerformance {
         try {
             LOG.info("Starting share consumer/consumers...");
             ShareConsumerPerfOptions options = new ShareConsumerPerfOptions(args);
-            AtomicLong totalMessagesRead = new AtomicLong(0);
+            AtomicLong totalRecordsRead = new AtomicLong(0);
             AtomicLong totalBytesRead = new AtomicLong(0);
 
             if (!options.hideHeader())
@@ -73,7 +73,7 @@ public class ShareConsumerPerformance {
                 shareConsumers.add(new KafkaShareConsumer<>(options.props()));
             }
             long startMs = System.currentTimeMillis();
-            consume(shareConsumers, options, totalMessagesRead, totalBytesRead, startMs);
+            consume(shareConsumers, options, totalRecordsRead, totalBytesRead, startMs);
             long endMs = System.currentTimeMillis();
 
             List<Map<MetricName, ? extends Metric>> shareConsumersMetrics = new ArrayList<>();
@@ -89,7 +89,7 @@ public class ShareConsumerPerformance {
             // Print final stats for share group.
             double elapsedSec = (endMs - startMs) / 1_000.0;
             long fetchTimeInMs = endMs - startMs;
-            printStats(totalBytesRead.get(), totalMessagesRead.get(), elapsedSec, fetchTimeInMs, startMs, endMs,
+            printStats(totalBytesRead.get(), totalRecordsRead.get(), elapsedSec, fetchTimeInMs, startMs, endMs,
                     options.dateFormat(), -1);
 
             shareConsumersMetrics.forEach(ToolsUtils::printMetrics);
@@ -108,15 +108,15 @@ public class ShareConsumerPerformance {
 
     private static void consume(List<KafkaShareConsumer<byte[], byte[]>> shareConsumers,
                                 ShareConsumerPerfOptions options,
-                                AtomicLong totalMessagesRead,
+                                AtomicLong totalRecordsRead,
                                 AtomicLong totalBytesRead,
                                 long startMs) throws ExecutionException, InterruptedException, TimeoutException {
-        long numMessages = options.numMessages();
+        long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         shareConsumers.forEach(shareConsumer -> shareConsumer.subscribe(options.topic()));
 
         // Now start the benchmark.
-        AtomicLong messagesRead = new AtomicLong(0);
+        AtomicLong recordsRead = new AtomicLong(0);
         AtomicLong bytesRead = new AtomicLong(0);
         List<ShareConsumerConsumption> shareConsumersConsumptionDetails = new ArrayList<>();
 
@@ -128,7 +128,7 @@ public class ShareConsumerPerformance {
             ShareConsumerConsumption shareConsumerConsumption = new ShareConsumerConsumption(0, 0);
             futures.add(executorService.submit(() -> {
                 try {
-                    consumeMessagesForSingleShareConsumer(shareConsumers.get(index), messagesRead, bytesRead, options,
+                    consumeRecordsForSingleShareConsumer(shareConsumers.get(index), recordsRead, bytesRead, options,
                         shareConsumerConsumption, index + 1);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
@@ -166,22 +166,22 @@ public class ShareConsumerPerformance {
                 // Print stats for share consumer.
                 double elapsedSec = (endMs - startMs) / 1_000.0;
                 long fetchTimeInMs = endMs - startMs;
-                long messagesReadByConsumer = shareConsumersConsumptionDetails.get(index).messagesConsumed();
+                long recordsReadByConsumer = shareConsumersConsumptionDetails.get(index).recordsConsumed();
                 long bytesReadByConsumer = shareConsumersConsumptionDetails.get(index).bytesConsumed();
-                printStats(bytesReadByConsumer, messagesReadByConsumer, elapsedSec, fetchTimeInMs, startMs, endMs, options.dateFormat(), index + 1);
+                printStats(bytesReadByConsumer, recordsReadByConsumer, elapsedSec, fetchTimeInMs, startMs, endMs, options.dateFormat(), index + 1);
             }
         }
 
-        if (messagesRead.get() < numMessages) {
-            System.out.printf("WARNING: Exiting before consuming the expected number of messages: timeout (%d ms) exceeded. " +
+        if (recordsRead.get() < numRecords) {
+            System.out.printf("WARNING: Exiting before consuming the expected number of records: timeout (%d ms) exceeded. " +
                     "You can use the --timeout option to increase the timeout.%n", recordFetchTimeoutMs);
         }
-        totalMessagesRead.set(messagesRead.get());
+        totalRecordsRead.set(recordsRead.get());
         totalBytesRead.set(bytesRead.get());
     }
 
-    private static void consumeMessagesForSingleShareConsumer(KafkaShareConsumer<byte[], byte[]> shareConsumer,
-                                                              AtomicLong totalMessagesRead,
+    private static void consumeRecordsForSingleShareConsumer(KafkaShareConsumer<byte[], byte[]> shareConsumer,
+                                                              AtomicLong totalRecordsRead,
                                                               AtomicLong totalBytesRead,
                                                               ShareConsumerPerfOptions options,
                                                               ShareConsumerConsumption shareConsumerConsumption,
@@ -192,17 +192,17 @@ public class ShareConsumerPerformance {
         long lastReportTimeMs = currentTimeMs;
 
         long lastBytesRead = 0L;
-        long lastMessagesRead = 0L;
-        long messagesReadByConsumer = 0L;
+        long lastRecordsRead = 0L;
+        long recordsReadByConsumer = 0L;
         long bytesReadByConsumer = 0L;
-        while (totalMessagesRead.get() < options.numMessages() && currentTimeMs - lastConsumedTimeMs <= options.recordFetchTimeoutMs()) {
+        while (totalRecordsRead.get() < options.numRecords() && currentTimeMs - lastConsumedTimeMs <= options.recordFetchTimeoutMs()) {
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(100));
             currentTimeMs = System.currentTimeMillis();
             if (!records.isEmpty())
                 lastConsumedTimeMs = currentTimeMs;
             for (ConsumerRecord<byte[], byte[]> record : records) {
-                messagesReadByConsumer += 1;
-                totalMessagesRead.addAndGet(1);
+                recordsReadByConsumer += 1;
+                totalRecordsRead.addAndGet(1);
                 if (record.key() != null) {
                     bytesReadByConsumer += record.key().length;
                     totalBytesRead.addAndGet(record.key().length);
@@ -213,13 +213,13 @@ public class ShareConsumerPerformance {
                 }
                 if (currentTimeMs - lastReportTimeMs >= options.reportingIntervalMs()) {
                     if (options.showDetailedStats())
-                        printShareConsumerProgress(bytesReadByConsumer, lastBytesRead, messagesReadByConsumer, lastMessagesRead,
+                        printShareConsumerProgress(bytesReadByConsumer, lastBytesRead, recordsReadByConsumer, lastRecordsRead,
                                 lastReportTimeMs, currentTimeMs, dateFormat, index);
                     lastReportTimeMs = currentTimeMs;
-                    lastMessagesRead = messagesReadByConsumer;
+                    lastRecordsRead = recordsReadByConsumer;
                     lastBytesRead = bytesReadByConsumer;
                 }
-                shareConsumerConsumption.updateMessagesConsumed(messagesReadByConsumer);
+                shareConsumerConsumption.updateRecordsConsumed(recordsReadByConsumer);
                 shareConsumerConsumption.updateBytesConsumed(bytesReadByConsumer);
             }
         }
@@ -227,8 +227,8 @@ public class ShareConsumerPerformance {
 
     protected static void printShareConsumerProgress(long bytesRead,
                                                 long lastBytesRead,
-                                                long messagesRead,
-                                                long lastMessagesRead,
+                                                long recordsRead,
+                                                long lastRecordsRead,
                                                 long startMs,
                                                 long endMs,
                                                 SimpleDateFormat dateFormat,
@@ -237,18 +237,18 @@ public class ShareConsumerPerformance {
         double totalMbRead = (bytesRead * 1.0) / (1024 * 1024);
         double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
         double intervalMbPerSec = 1000.0 * intervalMbRead / elapsedMs;
-        double intervalMessagesPerSec = ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0;
+        double intervalRecordsPerSec = ((recordsRead - lastRecordsRead) / elapsedMs) * 1000.0;
         long fetchTimeMs = endMs - startMs;
 
         System.out.printf("%s, %s, %.4f, %.4f, %.4f, %d, %d for share consumer %d", dateFormat.format(startMs), dateFormat.format(endMs),
-            totalMbRead, intervalMbPerSec, intervalMessagesPerSec, messagesRead, fetchTimeMs, index);
+            totalMbRead, intervalMbPerSec, intervalRecordsPerSec, recordsRead, fetchTimeMs, index);
         System.out.println();
     }
 
     // Prints stats for both share consumer and share group. For share group, index is -1. For share consumer,
     // index is >= 1.
     private static void printStats(long bytesRead,
-                                   long messagesRead,
+                                   long recordsRead,
                                    double elapsedSec,
                                    long fetchTimeInMs,
                                    long startMs,
@@ -263,8 +263,8 @@ public class ShareConsumerPerformance {
                     dateFormat.format(endMs),
                     totalMbRead,
                     totalMbRead / elapsedSec,
-                    messagesRead / elapsedSec,
-                    messagesRead,
+                    recordsRead / elapsedSec,
+                    recordsRead,
                     fetchTimeInMs
             );
             return;
@@ -274,8 +274,8 @@ public class ShareConsumerPerformance {
                 dateFormat.format(endMs),
                 totalMbRead,
                 totalMbRead / elapsedSec,
-                messagesRead / elapsedSec,
-                messagesRead,
+                recordsRead / elapsedSec,
+                recordsRead,
                 fetchTimeInMs
         );
     }
@@ -286,11 +286,14 @@ public class ShareConsumerPerformance {
         private final OptionSpec<String> groupIdOpt;
         private final OptionSpec<Integer> fetchSizeOpt;
         private final OptionSpec<Integer> socketBufferSizeOpt;
+        // Deprecated option, kept for backward compatibility
+        // and will be removed in a future version.
         private final OptionSpec<String> consumerConfigOpt;
+        private final OptionSpec<String> commandConfigOpt;
         private final OptionSpec<Void> printMetricsOpt;
         private final OptionSpec<Void> showDetailedStatsOpt;
         private final OptionSpec<Long> recordFetchTimeoutOpt;
-        private final OptionSpec<Long> numMessagesOpt;
+        private final OptionSpec<Long> numRecordsOpt;
         private final OptionSpec<Long> reportingIntervalOpt;
         private final OptionSpec<String> dateFormatOpt;
         private final OptionSpec<Void> hideHeaderOpt;
@@ -322,8 +325,13 @@ public class ShareConsumerPerformance {
                     .describedAs("size")
                     .ofType(Integer.class)
                     .defaultsTo(2 * 1024 * 1024);
-            consumerConfigOpt = parser.accepts("consumer.config", "Share consumer config properties file.")
-                    .withRequiredArg()
+            consumerConfigOpt = parser.accepts("consumer.config", "(DEPRECATED) Share consumer config properties file. " +
+                    "This option will be removed in a future version. Use --command-config instead.")
+                    .withOptionalArg()
+                    .describedAs("config file")
+                    .ofType(String.class);
+            commandConfigOpt = parser.accepts("command-config", "Share consumer config properties file.")
+                    .withOptionalArg()
                     .describedAs("config file")
                     .ofType(String.class);
             printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.");
@@ -334,7 +342,7 @@ public class ShareConsumerPerformance {
                     .describedAs("milliseconds")
                     .ofType(Long.class)
                     .defaultsTo(10_000L);
-            numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to consume.")
+            numRecordsOpt = parser.accepts("num-records", "REQUIRED: The number of records to consume.")
                     .withRequiredArg()
                     .describedAs("count")
                     .ofType(Long.class);
@@ -366,7 +374,10 @@ public class ShareConsumerPerformance {
             }
             if (options != null) {
                 CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the share consumer performance.");
-                CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt);
+                CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numRecordsOpt);
+                if (!options.has(consumerConfigOpt)) {
+                    CommandLineUtils.checkRequiredArgs(parser, options, commandConfigOpt);
+                }
             }
         }
 
@@ -379,8 +390,15 @@ public class ShareConsumerPerformance {
         }
 
         public Properties props() throws IOException {
-            Properties props = (options.has(consumerConfigOpt))
-                    ? Utils.loadProps(options.valueOf(consumerConfigOpt))
+            String commandConfigFile;
+            if (options.has(consumerConfigOpt)) {
+                System.out.println("Warning: --consumer.config is deprecated. Use --command-config instead.");
+                commandConfigFile = options.valueOf(consumerConfigOpt);
+            } else {
+                commandConfigFile = options.valueOf(commandConfigOpt);
+            }
+            Properties props = commandConfigFile != null
+                    ? Utils.loadProps(commandConfigFile)
                     : new Properties();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostsAndPorts());
             props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt));
@@ -398,8 +416,8 @@ public class ShareConsumerPerformance {
             return Set.of(options.valueOf(topicOpt));
         }
 
-        public long numMessages() {
-            return options.valueOf(numMessagesOpt);
+        public long numRecords() {
+            return options.valueOf(numRecordsOpt);
         }
 
         public int threads() {
@@ -434,26 +452,26 @@ public class ShareConsumerPerformance {
         }
     }
 
-    // Helper class to know the final messages and bytes consumer by share consumer at the end of consumption.
+    // Helper class to know the final records and bytes consumed by share consumer at the end of consumption.
     private static class ShareConsumerConsumption {
-        private long messagesConsumed;
+        private long recordsConsumed;
         private long bytesConsumed;
 
-        public ShareConsumerConsumption(long messagesConsumed, long bytesConsumed) {
-            this.messagesConsumed = messagesConsumed;
+        public ShareConsumerConsumption(long recordsConsumed, long bytesConsumed) {
+            this.recordsConsumed = recordsConsumed;
             this.bytesConsumed = bytesConsumed;
         }
 
-        public long messagesConsumed() {
-            return messagesConsumed;
+        public long recordsConsumed() {
+            return recordsConsumed;
         }
 
         public long bytesConsumed() {
             return bytesConsumed;
         }
 
-        public void updateMessagesConsumed(long messagesConsumed) {
-            this.messagesConsumed = messagesConsumed;
+        public void updateRecordsConsumed(long recordsConsumed) {
+            this.recordsConsumed = recordsConsumed;
         }
 
         public void updateBytesConsumed(long bytesConsumed) {

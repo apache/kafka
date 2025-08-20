@@ -40,7 +40,7 @@ class ConsumerPerformanceService(PerformanceService):
         "socket-buffer-size", "The size of the tcp RECV size."
 
         "new-consumer", "Use the new consumer implementation."
-        "consumer.config", "Consumer config properties file."
+        "command-config", "Consumer config properties file."
     """
 
     # Root directory for persistent output
@@ -115,7 +115,7 @@ class ConsumerPerformanceService(PerformanceService):
         for key, value in self.args(node.version).items():
             cmd += " --%s %s" % (key, value)
 
-        cmd += " --consumer.config %s" % ConsumerPerformanceService.CONFIG_FILE
+        cmd += " --command-config %s" % ConsumerPerformanceService.CONFIG_FILE
 
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))

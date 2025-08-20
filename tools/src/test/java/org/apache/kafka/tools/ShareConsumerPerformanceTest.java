@@ -62,7 +62,7 @@ public class ShareConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "10",
+            "--num-records", "10",
             "--print-metrics"
         };
 
@@ -70,7 +70,7 @@ public class ShareConsumerPerformanceTest {
 
         assertEquals("localhost:9092", config.brokerHostsAndPorts());
         assertTrue(config.topic().contains("test"));
-        assertEquals(10, config.numMessages());
+        assertEquals(10, config.numRecords());
     }
 
     @Test
@@ -78,7 +78,7 @@ public class ShareConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "10",
+            "--num-records", "10",
             "--new-share-consumer"
         };
 
@@ -89,7 +89,9 @@ public class ShareConsumerPerformanceTest {
 
     @Test
     public void testClientIdOverride() throws IOException {
-        File tempFile = Files.createFile(tempDir.resolve("test_share_consumer_config.conf")).toFile();
+        Path configPath = tempDir.resolve("test_share_consumer_config.conf");
+        Files.deleteIfExists(configPath);
+        File tempFile = Files.createFile(configPath).toFile();
         try (PrintWriter output = new PrintWriter(Files.newOutputStream(tempFile.toPath()))) {
             output.println("client.id=share-consumer-1");
             output.flush();
@@ -98,13 +100,37 @@ public class ShareConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "10",
+            "--num-records", "10",
+            "--command-config", tempFile.getAbsolutePath()
+        };
+
+        ShareConsumerPerformance.ShareConsumerPerfOptions config = new ShareConsumerPerformance.ShareConsumerPerfOptions(args);
+
+        assertEquals("share-consumer-1", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+        Files.deleteIfExists(configPath);
+    }
+
+    @Test
+    public void testConsumerConfigDeprecated() throws IOException {
+        Path configPath = tempDir.resolve("test_share_consumer_config.conf");
+        Files.deleteIfExists(configPath);
+        File tempFile = Files.createFile(configPath).toFile();
+        try (PrintWriter output = new PrintWriter(Files.newOutputStream(tempFile.toPath()))) {
+            output.println("client.id=share-consumer-1");
+            output.flush();
+        }
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--num-records", "10",
             "--consumer.config", tempFile.getAbsolutePath()
         };
 
         ShareConsumerPerformance.ShareConsumerPerfOptions config = new ShareConsumerPerformance.ShareConsumerPerfOptions(args);
 
         assertEquals("share-consumer-1", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+        Files.deleteIfExists(configPath);
     }
 
     @Test
@@ -112,7 +138,7 @@ public class ShareConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "10"
+            "--num-records", "10"
         };
 
         ShareConsumerPerformance.ShareConsumerPerfOptions config = new ShareConsumerPerformance.ShareConsumerPerfOptions(args);

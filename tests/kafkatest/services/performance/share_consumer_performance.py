@@ -33,7 +33,7 @@ class ShareConsumerPerformanceService(PerformanceService):
 
         "socket-buffer-size", "The size of the tcp RECV size."
 
-        "consumer.config", "Consumer config properties file."
+        "command-config", "Share consumer config properties file."
     """
 
     # Root directory for persistent output
@@ -100,7 +100,7 @@ class ShareConsumerPerformanceService(PerformanceService):
         for key, value in self.args().items():
             cmd += " --%s %s" % (key, value)
 
-        cmd += " --consumer.config %s" % ShareConsumerPerformanceService.CONFIG_FILE
+        cmd += " --command-config %s" % ShareConsumerPerformanceService.CONFIG_FILE
 
         for key, value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
