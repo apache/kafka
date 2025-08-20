@@ -1084,7 +1084,6 @@ public class KafkaProducerTest {
                     client.updateMetadata(updateResponse);
                     exchanger.exchange(null);  // 3
                     assertTrue(client.awaitMetadataUpdateRequest(Long.parseLong(maxBlockMs)));
-                    System.out.println("Received metadata update request");
                     time.sleep(Long.parseLong(maxBlockMs));
                 } catch (Exception e) {
                     throw new RuntimeException(e);
