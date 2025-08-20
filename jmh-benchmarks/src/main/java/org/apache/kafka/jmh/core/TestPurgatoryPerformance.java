@@ -425,18 +425,9 @@ public class TestPurgatoryPerformance {
     }
 
     private record FakeOperationKey(String key) implements DelayedOperationKey {
-
         @Override
         public String keyLabel() {
             return key;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            FakeOperationKey that = (FakeOperationKey) o;
-            return Objects.equals(key, that.key);
         }
     }
 
@@ -454,7 +445,6 @@ public class TestPurgatoryPerformance {
 
         @Override
         public void onExpiration() {
-
         }
 
         @Override
