@@ -280,7 +280,6 @@ public class ActiveTaskCreatorTest {
             0,
             uuid,
             new LogContext(),
-            false,
             false);
 
         assertThat(

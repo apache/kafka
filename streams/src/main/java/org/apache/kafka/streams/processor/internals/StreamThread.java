@@ -440,7 +440,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             threadIdx,
             processId,
             logContext,
-            stateUpdaterEnabled,
             proceessingThreadsEnabled
         );
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
