@@ -304,7 +304,7 @@ public abstract class AbstractIndex implements Closeable {
 
     /**
      * Get offset relative to base offset of this index
-     * @throws IndexOffsetOverflowException
+     @throws IndexOffsetOverflowException if the OptionalInt is empty
      */
     public int relativeOffset(long offset) throws IndexOffsetOverflowException {
         OptionalInt relativeOffset = toRelative(offset);
