@@ -991,7 +991,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testTopicNotExistingInMetadata() throws InterruptedException {
+    public void testTopicNotExistingInMetadata() {
         Map<String, Object> configs = new HashMap<>();
         final String maxBlockMs = "30000";
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -1003,6 +1003,7 @@ public class KafkaProducerTest {
         final Time time = new MockTime();
         final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, metadataIdleMs,
                 new LogContext(), new ClusterResourceListeners(), time);
+        final String warmupTopic = "warmup-topic";
         final String topic = "topic";
         MockClient client = new MockClient(time, metadata);
         client.setShouldUpdateWithCurrentMetadata(false);
@@ -1010,26 +1011,16 @@ public class KafkaProducerTest {
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
 
-            Exchanger<Void> exchanger = new Exchanger<>();
+            MetadataResponse updateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(warmupTopic, 1));
+            client.updateMetadata(updateResponse);
 
-            Thread t = new Thread(() -> {
-                try {
-                    // Update the metadata with non-existing topic.
-                    MetadataResponse updateResponse = RequestTestUtils.metadataUpdateWith("kafka-cluster", 1,
-                            singletonMap(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION), emptyMap());
-                    client.updateMetadata(updateResponse);
-                    exchanger.exchange(null);
-                    assertTrue(client.awaitMetadataUpdateRequest(Long.parseLong(maxBlockMs)));
-                    time.sleep(Long.parseLong(maxBlockMs));
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            t.start();
-            exchanger.exchange(null);
+            updateResponse = RequestTestUtils.metadataUpdateWith("kafka-cluster", 1,
+                    singletonMap(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION), emptyMap());
+            client.prepareMetadataUpdate(updateResponse);
+
             Throwable throwable = assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
             assertInstanceOf(UnknownTopicOrPartitionException.class, throwable.getCause());
-            t.join();
+            assertEquals(0, client.preparedMetadataUpdatesCount());
         }
     }
 
