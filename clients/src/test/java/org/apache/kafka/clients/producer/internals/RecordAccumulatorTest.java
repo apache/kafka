@@ -64,9 +64,9 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -1719,7 +1719,7 @@ public class RecordAccumulatorTest {
         Comparator<ProducerBatch> reverseComparator = (batch1, batch2) -> Integer.compare(batch2.recordCount,
                 batch1.recordCount);
 
-        while (splitOperations < maxSplitOperations || !foundSingleRecordBatch) {
+        while (splitOperations < maxSplitOperations && !foundSingleRecordBatch) {
             // Get the current batches for this topic-partition
             Deque<ProducerBatch> tp1Deque = accum.getDeque(tp1);
             if (tp1Deque.isEmpty()) {

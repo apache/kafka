@@ -514,12 +514,12 @@ public class RecordAccumulator {
         // the split doesn't happen too often.
         CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression.type(),
                                                 Math.max(1.0f, (float) bigBatch.compressionRatio()));
-        int maxBatchSize = this.batchSize;
+        int targetSplitBatchSize = this.batchSize;
 
         if (bigBatch.isSplitBatch()) {
-            maxBatchSize = Math.max(bigBatch.maxRecordSize, bigBatch.estimatedSizeInBytes() / 2);
+            targetSplitBatchSize = Math.max(bigBatch.maxRecordSize, bigBatch.estimatedSizeInBytes() / 2);
         }
-        Deque<ProducerBatch> dq = bigBatch.split(maxBatchSize);
+        Deque<ProducerBatch> dq = bigBatch.split(targetSplitBatchSize);
         int numSplitBatches = dq.size();
         Deque<ProducerBatch> partitionDequeue = getOrCreateDeque(bigBatch.topicPartition);
         while (!dq.isEmpty()) {
