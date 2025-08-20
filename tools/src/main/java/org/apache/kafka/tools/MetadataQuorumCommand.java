@@ -65,7 +65,6 @@ import java.util.stream.Stream;
 
 import static java.lang.String.format;
 import static java.lang.String.valueOf;
-import static java.util.Arrays.asList;
 
 /**
  * A tool for describing quorum status
@@ -206,7 +205,7 @@ public class MetadataQuorumCommand {
         rows.addAll(quorumInfoToRows(leader, quorumInfo.observers().stream(), "Observer", humanReadable));
 
         ToolsUtils.prettyPrintTable(
-            asList("NodeId", "DirectoryId", "LogEndOffset", "Lag", "LastFetchTimestamp", "LastCaughtUpTimestamp", "Status"),
+            List.of("NodeId", "DirectoryId", "LogEndOffset", "Lag", "LastFetchTimestamp", "LastCaughtUpTimestamp", "Status"),
             rows,
             System.out
         );

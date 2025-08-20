@@ -20,7 +20,7 @@ import org.apache.kafka.connect.runtime.TargetState;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -33,7 +33,7 @@ public class CreateConnectorRequestTest {
         assertEquals(TargetState.PAUSED, CreateConnectorRequest.InitialState.PAUSED.toTargetState());
         assertEquals(TargetState.STOPPED, CreateConnectorRequest.InitialState.STOPPED.toTargetState());
 
-        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest("test-name", Collections.emptyMap(), null);
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest("test-name", Map.of(), null);
         assertNull(createConnectorRequest.initialTargetState());
     }
 
