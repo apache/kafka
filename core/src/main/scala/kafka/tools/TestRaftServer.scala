@@ -115,8 +115,8 @@ class TestRaftServer(
     workloadGenerator = new RaftWorkloadGenerator(
       raftManager,
       time,
-      recordsPerSec = 20000,
-      recordSize = 256
+      recordsPerSec = throughput,
+      recordSize = recordSize
     )
 
     val requestHandler = new TestRaftRequestHandler(
@@ -428,7 +428,7 @@ object TestRaftServer extends Logging {
   }
 
   private class TestRaftServerOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-    val configOpt: OptionSpec[String] = parser.accepts("config", "Required configured file")
+    val configOpt: OptionSpec[String] = parser.accepts("config", "REQUIRED: The configured file")
       .withRequiredArg
       .describedAs("filename")
       .ofType(classOf[String])
@@ -446,7 +446,7 @@ object TestRaftServer extends Logging {
       .ofType(classOf[Int])
       .defaultsTo(256)
 
-    val directoryId: OptionSpec[String] = parser.accepts("replica-directory-id", "The directory id of the replica")
+    val directoryId: OptionSpec[String] = parser.accepts("replica-directory-id", "REQUIRED: The directory id of the replica")
       .withRequiredArg
       .describedAs("directory id")
       .ofType(classOf[String])
