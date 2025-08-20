@@ -134,7 +134,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -961,8 +960,6 @@ public class KafkaProducerTest {
         final String maxBlockMs = "600000";
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
-        // test under normal producer for simplicity
-        configs.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
         long refreshBackoffMs = 500L;
         long refreshBackoffMaxMs = 5000L;
         long metadataExpireMs = 60000L;
@@ -974,31 +971,22 @@ public class KafkaProducerTest {
         final String topic = "topic";
         MockClient client = new MockClient(time, metadata);
         client.setShouldUpdateWithCurrentMetadata(false);
+        client.advanceTimeDuringPoll(true);
         try (KafkaProducer<String, String> producer = kafkaProducer(configs,
                 new StringSerializer(), new StringSerializer(), metadata, client, null, time)) {
 
-            AtomicBoolean running = new AtomicBoolean(true);
-            Thread t = new Thread(() -> {
-                try {
-                    MetadataResponse updateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(warmupTopic, 1));
-                    client.updateMetadata(updateResponse);
-                    while (running.get()) {
-                        if (client.awaitMetadataUpdateRequest(100)) {
-                            updateResponse = RequestTestUtils.metadataUpdateWith("kafka-cluster", 1,
-                                    singletonMap(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION), emptyMap());
-                            client.updateMetadata(updateResponse);
-                            time.sleep(Long.parseLong(maxBlockMs));
-                        }
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            t.start();
+            MetadataResponse updateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(warmupTopic, 1));
+            client.updateMetadata(updateResponse);
+
+            final int preparedUpdatesCount = 100;
+            updateResponse = RequestTestUtils.metadataUpdateWith("kafka-cluster", 1,
+                    singletonMap(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION), emptyMap());
+            for (int i = 0; i < preparedUpdatesCount; i++) {
+                client.prepareMetadataUpdate(updateResponse);
+            }
             Throwable throwable = assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
             assertInstanceOf(UnknownTopicOrPartitionException.class, throwable.getCause());
-            running.set(false);
-            t.join();
+            assertTrue(preparedUpdatesCount > client.preparedMetadataUpdatesCount());
         }
     }
 
