@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -184,6 +185,12 @@ public final class DistributedConfig extends WorkerConfig {
     public static final String CONNECT_PROTOCOL_CONFIG = "connect.protocol";
     public static final String CONNECT_PROTOCOL_DOC = "Compatibility mode for Kafka Connect Protocol";
     public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.SESSIONED.toString();
+
+
+    public static final String INTERNAL_TOPICS_CREATION_CONFIG = "internal.topics.creation";
+    public static final String INTERNAL_TOPICS_CREATION_DOC = "Whether to automatically create internal topics used by Connect, such as the offset, config, and status topics. "
+            + "If set to false, these topics must be created manually before starting the Connect worker.";
+    public static final Boolean INTERNAL_TOPICS_CREATION_DEFAULT = true;
 
     /**
      * <code>scheduled.rebalance.max.delay.ms</code>
@@ -425,6 +432,10 @@ public final class DistributedConfig extends WorkerConfig {
                     WORKER_UNSYNC_BACKOFF_MS_DEFAULT,
                     ConfigDef.Importance.MEDIUM,
                     WORKER_UNSYNC_BACKOFF_MS_DOC)
+            .define(INTERNAL_TOPICS_CREATION_CONFIG,
+                    Type.BOOLEAN,
+                    ConfigDef.Importance.HIGH,
+                    INTERNAL_TOPICS_CREATION_DOC)
             .define(OFFSET_STORAGE_TOPIC_CONFIG,
                     ConfigDef.Type.STRING,
                     ConfigDef.Importance.HIGH,
@@ -581,6 +592,11 @@ public final class DistributedConfig extends WorkerConfig {
     @Override
     public boolean connectorOffsetsTopicsPermitted() {
         return true;
+    }
+
+    @Override
+    public boolean internalTopicsCreationEnabled() {
+        return Boolean.TRUE.equals(getBoolean(INTERNAL_TOPICS_CREATION_CONFIG));
     }
 
     @Override

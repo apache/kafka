@@ -395,6 +395,10 @@ public class WorkerConfig extends AbstractConfig {
         return false;
     }
 
+    public boolean internalTopicsCreationEnabled() {
+        return false;
+    }
+
     /**
      * @return the offset commit interval for tasks created by this worker
      */

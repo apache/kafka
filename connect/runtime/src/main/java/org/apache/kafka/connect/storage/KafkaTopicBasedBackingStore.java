@@ -39,13 +39,17 @@ public abstract class KafkaTopicBasedBackingStore {
 
     Consumer<TopicAdmin> topicInitializer(String topic, NewTopic topicDescription, WorkerConfig config, Time time) {
         return admin -> {
-            log.debug("Creating Connect internal topic for {}", getTopicPurpose());
-            // Create the topic if it doesn't exist
-            Set<String> newTopics = createTopics(topicDescription, admin, config, time);
-            if (!newTopics.contains(topic)) {
-                // It already existed, so check that the topic cleanup policy is compact only and not delete
-                log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                admin.verifyTopicCleanupPolicyOnlyCompact(topic, getTopicConfig(), getTopicPurpose());
+			if (config.internalTopicsCreationEnabled()) {
+                log.debug("Creating Connect internal topic for {}", getTopicPurpose());
+                // Create the topic if it doesn't exist
+                Set<String> newTopics = createTopics(topicDescription, admin, config, time);
+                if (!newTopics.contains(topic)) {
+                    // It already existed, so check that the topic cleanup policy is compact only and not delete
+                    log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+                    admin.verifyTopicCleanupPolicyOnlyCompact(topic, getTopicConfig(), getTopicPurpose());
+                }
+			} else {
+                //TODO throw an exception if the topic does not exist
             }
         };
     }
