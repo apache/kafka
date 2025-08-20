@@ -1005,7 +1005,7 @@ public class KafkaProducerTest {
     @Test
     public void testTopicNotExistingInMetadata() throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
-        final String maxBlockMs = "300000";
+        final String maxBlockMs = "30000";
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
         long refreshBackoffMs = 500L;
