@@ -449,8 +449,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             stateDirectory,
             changelogReader,
             threadId,
-            logContext,
-            stateUpdaterEnabled);
+            logContext);
 
         final Tasks tasks = new Tasks(logContext);
         final boolean processingThreadsEnabled =
