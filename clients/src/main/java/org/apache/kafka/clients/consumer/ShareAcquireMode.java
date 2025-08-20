@@ -26,11 +26,11 @@ import java.util.stream.Collectors;
 public enum ShareAcquireMode {
     BATCH_OPTIMIZED("batch_optimized", (byte) 0),
     RECORD_LIMIT("record_limit", (byte) 1);
-    
+
     public final String name;
 
     public final byte id;
-    
+
     ShareAcquireMode(final String name, byte id) {
         this.name = name;
         this.id = id;
