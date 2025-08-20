@@ -18,10 +18,11 @@
 package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
@@ -38,16 +39,16 @@ public class StandardAclRecordIteratorTest {
         StandardAclRecordIterator iterator =
             new StandardAclRecordIterator(TEST_ACLS.iterator(), 2);
         assertTrue(iterator.hasNext());
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
             new ApiMessageAndVersion(TEST_ACLS.get(0).toRecord(), (short) 0),
             new ApiMessageAndVersion(TEST_ACLS.get(1).toRecord(), (short) 0)),
             iterator.next());
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
             new ApiMessageAndVersion(TEST_ACLS.get(2).toRecord(), (short) 0),
             new ApiMessageAndVersion(TEST_ACLS.get(3).toRecord(), (short) 0)),
             iterator.next());
         assertTrue(iterator.hasNext());
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
             new ApiMessageAndVersion(TEST_ACLS.get(4).toRecord(), (short) 0)),
             iterator.next());
         assertFalse(iterator.hasNext());
@@ -60,6 +61,6 @@ public class StandardAclRecordIteratorTest {
         iterator.next();
         iterator.next();
         iterator.next();
-        assertThrows(NoSuchElementException.class, () -> iterator.next());
+        assertThrows(NoSuchElementException.class, iterator::next);
     }
 }

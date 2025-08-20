@@ -16,48 +16,61 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
-import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.message.SnapshotFooterRecord;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.function.Function;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class BatchAccumulator<T> implements Closeable {
+    @FunctionalInterface
+    public interface MemoryRecordsCreator {
+        MemoryRecords create(
+            long baseOffset,
+            int epoch,
+            Compression compression,
+            ByteBuffer byteBuffer
+        );
+    }
+
     private final int epoch;
     private final Time time;
-    private final SimpleTimer lingerTimer;
     private final int lingerMs;
     private final int maxBatchSize;
-    private final CompressionType compressionType;
+    private final int maxNumberOfBatches;
+    private final Compression compression;
     private final MemoryPool memoryPool;
-    private final ReentrantLock appendLock;
     private final RecordSerde<T> serde;
 
-    private final ConcurrentLinkedQueue<CompletedBatch<T>> completed;
-    private volatile DrainStatus drainStatus;
+    private final SimpleTimer lingerTimer = new SimpleTimer();
+    private final AtomicLong drainOffset = new AtomicLong(Long.MAX_VALUE);
+    private final ConcurrentLinkedQueue<CompletedBatch<T>> completed = new ConcurrentLinkedQueue<>();
+    private volatile DrainStatus drainStatus = DrainStatus.NONE;
 
     // These fields are protected by the append lock
+    private final ReentrantLock appendLock = new ReentrantLock();
     private long nextOffset;
     private BatchBuilder<T> currentBatch;
 
@@ -70,106 +83,84 @@ public class BatchAccumulator<T> implements Closeable {
         long baseOffset,
         int lingerMs,
         int maxBatchSize,
+        int maxNumberOfBatches,
         MemoryPool memoryPool,
         Time time,
-        CompressionType compressionType,
+        Compression compression,
         RecordSerde<T> serde
     ) {
         this.epoch = epoch;
         this.lingerMs = lingerMs;
         this.maxBatchSize = maxBatchSize;
+        this.maxNumberOfBatches = maxNumberOfBatches;
         this.memoryPool = memoryPool;
         this.time = time;
-        this.lingerTimer = new SimpleTimer();
-        this.compressionType = compressionType;
+        this.compression = compression;
         this.serde = serde;
         this.nextOffset = baseOffset;
-        this.drainStatus = DrainStatus.NONE;
-        this.completed = new ConcurrentLinkedQueue<>();
-        this.appendLock = new ReentrantLock();
     }
 
     /**
-     * Append a list of records into as many batches as necessary.
+     * Append to the accumulator.
      *
-     * The order of the elements in the records argument will match the order in the batches.
-     * This method will use as many batches as necessary to serialize all of the records. Since
-     * this method can split the records into multiple batches it is possible that some of the
-     * records will get committed while other will not when the leader fails.
+     * @param epoch the leader epoch to append at
+     * @param records the records to append
+     * @param delayDrain whether the records could be drained
+     * @return the offset of the last record
      *
-     * @param epoch the expected leader epoch. If this does not match, then {@link NotLeaderException}
-     *              will be thrown
-     * @param records the list of records to include in the batches
-     * @return the expected offset of the last record
-     * @throws RecordBatchTooLargeException if the size of one record T is greater than the maximum
-     *         batch size; if this exception is throw some of the elements in records may have
-     *         been committed
-     * @throws NotLeaderException if the epoch is less than the leader epoch
-     * @throws IllegalArgumentException if the epoch is invalid (greater than the leader epoch)
-     * @throws BufferAllocationException if we failed to allocate memory for the records
-     * @throws IllegalStateException if we tried to append new records after the batch has been built
+     * @throws NotLeaderException indicates that an append operation cannot be completed because the
+     *         provided leader epoch was too old
+     * @throws IllegalArgumentException indicates that an append operation cannot be completed
+     *         because the provided leader epoch was too new
+     * @throws IllegalStateException if the number of accumulated batches reaches the maximum
+     *         number of batches
      */
-    public long append(int epoch, List<T> records) {
-        return append(epoch, records, false);
-    }
-
-    /**
-     * Append a list of records into an atomic batch. We guarantee all records are included in the
-     * same underlying record batch so that either all of the records become committed or none of
-     * them do.
-     *
-     * @param epoch the expected leader epoch. If this does not match, then {@link NotLeaderException}
-     *              will be thrown
-     * @param records the list of records to include in a batch
-     * @return the expected offset of the last record
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
-     *         batch size; if this exception is throw none of the elements in records were
-     *         committed
-     * @throws NotLeaderException if the epoch is less than the leader epoch
-     * @throws IllegalArgumentException if the epoch is invalid (greater than the leader epoch)
-     * @throws BufferAllocationException if we failed to allocate memory for the records
-     * @throws IllegalStateException if we tried to append new records after the batch has been built
-     */
-    public long appendAtomic(int epoch, List<T> records) {
-        return append(epoch, records, true);
-    }
-
-    private long append(int epoch, List<T> records, boolean isAtomic) {
+    public long append(int epoch, List<T> records, boolean delayDrain) {
+        int numberOfCompletedBatches = completed.size();
         if (epoch < this.epoch) {
             throw new NotLeaderException("Append failed because the given epoch " + epoch + " is stale. " +
                     "Current leader epoch = " + this.epoch());
         } else if (epoch > this.epoch) {
             throw new IllegalArgumentException("Attempt to append from epoch " + epoch +
                 " which is larger than the current epoch " + this.epoch);
+        } else if (numberOfCompletedBatches >= maxNumberOfBatches) {
+            throw new IllegalStateException(
+                String.format(
+                    "Attempting to append records when the number of batches %s reached %s",
+                    numberOfCompletedBatches,
+                    maxNumberOfBatches
+                )
+            );
         }
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
 
         appendLock.lock();
         try {
+            long lastOffset = nextOffset + records.size() - 1;
             maybeCompleteDrain();
 
             BatchBuilder<T> batch = null;
-            if (isAtomic) {
-                batch = maybeAllocateBatch(records, serializationCache);
+            batch = maybeAllocateBatch(records, serializationCache);
+            if (batch == null) {
+                throw new BufferAllocationException("Append failed because we failed to allocate memory to write the batch");
+            }
+
+            if (delayDrain) {
+                // The user asked to not drain these records. If the drainOffset is not already set,
+                // then set the record at the current end offset (nextOffset) as maximum offset
+                // that can be drained.
+                drainOffset.compareAndSet(Long.MAX_VALUE, nextOffset);
             }
 
             for (T record : records) {
-                if (!isAtomic) {
-                    batch = maybeAllocateBatch(Collections.singleton(record), serializationCache);
-                }
-
-                if (batch == null) {
-                    throw new BufferAllocationException("Append failed because we failed to allocate memory to write the batch");
-                }
-
                 batch.appendRecord(record, serializationCache);
-                nextOffset += 1;
             }
 
             maybeResetLinger();
 
-            return nextOffset - 1;
+            nextOffset = lastOffset + 1;
+            return lastOffset;
         } finally {
             appendLock.unlock();
         }
@@ -221,31 +212,48 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     /**
+     * Allows draining of all batches.
+     */
+    public void allowDrain() {
+        drainOffset.set(Long.MAX_VALUE);
+    }
+
+    /**
      * Append a control batch from a supplied memory record.
      *
      * See the {@code valueCreator} parameter description for requirements on this function.
      *
      * @param valueCreator a function that uses the passed buffer to create the control
      *        batch that will be appended. The memory records returned must contain one
-     *        control batch and that control batch have one record.
+     *        control batch and that control batch have at least one record.
+     * @return the last of offset of the records created
      */
-    private void appendControlMessage(Function<ByteBuffer, MemoryRecords> valueCreator) {
+    public long appendControlMessages(MemoryRecordsCreator valueCreator) {
         appendLock.lock();
         try {
-            ByteBuffer buffer = memoryPool.tryAllocate(256);
+            ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
             if (buffer != null) {
                 try {
                     forceDrain();
+                    MemoryRecords memoryRecords = valueCreator.create(
+                        nextOffset,
+                        epoch,
+                        compression,
+                        buffer
+                    );
+
+                    int numberOfRecords = validateMemoryRecordsAndReturnCount(memoryRecords);
+
                     completed.add(
                         new CompletedBatch<>(
                             nextOffset,
-                            1,
-                            valueCreator.apply(buffer),
+                            numberOfRecords,
+                            memoryRecords,
                             memoryPool,
                             buffer
                         )
                     );
-                    nextOffset += 1;
+                    nextOffset += numberOfRecords;
                 } catch (Exception e) {
                     // Release the buffer now since the buffer was not stored in completed for a delayed release
                     memoryPool.release(buffer);
@@ -254,10 +262,74 @@ public class BatchAccumulator<T> implements Closeable {
             } else {
                 throw new IllegalStateException("Could not allocate buffer for the control record");
             }
+
+            return nextOffset - 1;
         } finally {
             appendLock.unlock();
         }
     }
+
+    private int validateMemoryRecordsAndReturnCount(MemoryRecords memoryRecords) {
+        // Confirm that it is one control batch and it is at least one control record
+        Iterator<MutableRecordBatch> batches = memoryRecords.batches().iterator();
+        if (!batches.hasNext()) {
+            throw new IllegalArgumentException("valueCreator didn't create a batch");
+        }
+
+        MutableRecordBatch batch = batches.next();
+        Integer numberOfRecords = batch.countOrNull();
+        if (!batch.isControlBatch()) {
+            throw new IllegalArgumentException("valueCreator didn't create a control batch");
+        } else if (batch.baseOffset() != nextOffset) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected a base offset of %d but got %d",
+                    nextOffset,
+                    batch.baseOffset()
+                )
+            );
+        } else if (batch.partitionLeaderEpoch() != epoch) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected a partition leader epoch of %d but got %d",
+                    epoch,
+                    batch.partitionLeaderEpoch()
+                )
+            );
+        } else if (numberOfRecords == null) {
+            throw new IllegalArgumentException("valueCreator didn't create a batch with the count");
+        } else if (numberOfRecords < 1) {
+            throw new IllegalArgumentException("valueCreator didn't create at least one control record");
+        } else if (batches.hasNext()) {
+            throw new IllegalArgumentException("valueCreator created more than one batch");
+        }
+
+        return numberOfRecords;
+    }
+
+    /**
+     * Append a {@link VotersRecord} record to the batch
+     *
+     * @param voters the record to append
+     * @param currentTimestamp the current time in milliseconds
+     * @return the last of offset of the records created
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public long appendVotersRecord(
+        VotersRecord voters,
+        long currentTimestamp
+    ) {
+        return appendControlMessages((baseOffset, epoch, compression, buffer) ->
+            MemoryRecords.withVotersRecord(
+                baseOffset,
+                currentTimestamp,
+                epoch,
+                buffer,
+                voters
+            )
+        );
+    }
+
 
     /**
      * Append a {@link LeaderChangeMessage} record to the batch
@@ -270,15 +342,15 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimestamp
     ) {
-        appendControlMessage(buffer -> {
-            return MemoryRecords.withLeaderChangeMessage(
-                this.nextOffset,
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
+            MemoryRecords.withLeaderChangeMessage(
+                baseOffset,
                 currentTimestamp,
-                this.epoch,
+                epoch,
                 buffer,
                 leaderChangeMessage
-            );
-        });
+            )
+        );
     }
 
 
@@ -293,15 +365,15 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimestamp
     ) {
-        appendControlMessage(buffer -> {
-            return MemoryRecords.withSnapshotHeaderRecord(
-                this.nextOffset,
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
+            MemoryRecords.withSnapshotHeaderRecord(
+                baseOffset,
                 currentTimestamp,
-                this.epoch,
+                epoch,
                 buffer,
                 snapshotHeaderRecord
-            );
-        });
+            )
+        );
     }
 
     /**
@@ -315,15 +387,15 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimestamp
     ) {
-        appendControlMessage(buffer -> {
-            return MemoryRecords.withSnapshotFooterRecord(
-                this.nextOffset,
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
+            MemoryRecords.withSnapshotFooterRecord(
+                baseOffset,
                 currentTimestamp,
-                this.epoch,
+                epoch,
                 buffer,
                 snapshotFooterRecord
-            );
-        });
+            )
+        );
     }
 
     public void forceDrain() {
@@ -354,10 +426,9 @@ public class BatchAccumulator<T> implements Closeable {
             currentBatch = new BatchBuilder<>(
                 buffer,
                 serde,
-                compressionType,
+                compression,
                 nextOffset,
                 time.milliseconds(),
-                false,
                 epoch,
                 maxBatchSize
             );
@@ -382,7 +453,10 @@ public class BatchAccumulator<T> implements Closeable {
      * @return the delay in milliseconds before the next expected drain
      */
     public long timeUntilDrain(long currentTimeMs) {
-        if (drainStatus == DrainStatus.FINISHED) {
+        boolean drainableBatches = Optional.ofNullable(completed.peek())
+            .map(batch -> batch.drainable(drainOffset.get()))
+            .orElse(false);
+        if (drainableBatches) {
             return 0;
         } else {
             return lingerTimer.remainingMs(currentTimeMs);
@@ -408,13 +482,19 @@ public class BatchAccumulator<T> implements Closeable {
      * This call will not block, but the drain may require multiple attempts before
      * it can be completed if the thread responsible for appending is holding the
      * append lock. In the worst case, the append will be completed on the next
-     * call to {@link #append(int, List)} following the initial call to this method.
+     * call to {@link #append(int, List, boolean)} following the
+     * initial call to this method.
+     *
      * The caller should respect the time to the next flush as indicated by
      * {@link #timeUntilDrain(long)}.
      *
      * @return the list of completed batches
      */
     public List<CompletedBatch<T>> drain() {
+        return drain(drainOffset.get());
+    }
+
+    private List<CompletedBatch<T>> drain(long drainOffset) {
         // Start the drain if it has not been started already
         if (drainStatus == DrainStatus.NONE) {
             drainStatus = DrainStatus.STARTED;
@@ -432,19 +512,21 @@ public class BatchAccumulator<T> implements Closeable {
         // If the drain has finished, then all of the batches will be completed
         if (drainStatus == DrainStatus.FINISHED) {
             drainStatus = DrainStatus.NONE;
-            return drainCompleted();
+            return drainCompleted(drainOffset);
         } else {
-            return Collections.emptyList();
+            return List.of();
         }
     }
 
-    private List<CompletedBatch<T>> drainCompleted() {
-        List<CompletedBatch<T>> res = new ArrayList<>(completed.size());
+    private List<CompletedBatch<T>> drainCompleted(long drainOffset) {
+        List<CompletedBatch<T>> res = new ArrayList<>();
         while (true) {
-            CompletedBatch<T> batch = completed.poll();
-            if (batch == null) {
+            CompletedBatch<T> batch = completed.peek();
+            if (batch == null || !batch.drainable(drainOffset)) {
                 return res;
             } else {
+                // The batch can be drained so remove the batch and add it to the result.
+                completed.poll();
                 res.add(batch);
             }
         }
@@ -457,17 +539,16 @@ public class BatchAccumulator<T> implements Closeable {
         return !lingerTimer.isRunning();
     }
 
-    /**
-     * Get the number of completed batches which are ready to be drained.
-     * This does not include the batch that is currently being filled.
-     */
-    public int numCompletedBatches() {
-        return completed.size();
-    }
-
     @Override
     public void close() {
-        List<CompletedBatch<T>> unwritten = drain();
+        // Acquire the lock so that drain is guaranteed to complete the current batch
+        appendLock.lock();
+        List<CompletedBatch<T>> unwritten;
+        try {
+            unwritten = drain(Long.MAX_VALUE);
+        } finally {
+            appendLock.unlock();
+        }
         unwritten.forEach(CompletedBatch::release);
     }
 
@@ -488,14 +569,14 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
-            Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
-
             this.baseOffset = baseOffset;
             this.records = Optional.of(records);
             this.numRecords = records.size();
             this.data = data;
             this.pool = pool;
             this.initialBuffer = initialBuffer;
+
+            validateContruction();
         }
 
         private CompletedBatch(
@@ -505,14 +586,24 @@ public class BatchAccumulator<T> implements Closeable {
             MemoryPool pool,
             ByteBuffer initialBuffer
         ) {
-            Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
-
             this.baseOffset = baseOffset;
             this.records = Optional.empty();
             this.numRecords = numRecords;
             this.data = data;
             this.pool = pool;
             this.initialBuffer = initialBuffer;
+
+            validateContruction();
+        }
+
+        private void validateContruction() {
+            Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
+
+            if (numRecords <= 0) {
+                throw new IllegalArgumentException(
+                    String.format("Completed batch must contain at least one record: %s", numRecords)
+                );
+            }
         }
 
         public int sizeInBytes() {
@@ -528,6 +619,10 @@ public class BatchAccumulator<T> implements Closeable {
             // 2. maxTimestamp is the append time of the batch. This needs to be changed
             //    to return the LastContainedLogTimestamp of the SnapshotHeaderRecord
             return data.firstBatch().maxTimestamp();
+        }
+
+        public boolean drainable(long drainOffset) {
+            return baseOffset + numRecords - 1 < drainOffset;
         }
     }
 
@@ -548,5 +643,4 @@ public class BatchAccumulator<T> implements Closeable {
             return Math.max(0, deadlineMs.get() - currentTimeMs);
         }
     }
-
 }

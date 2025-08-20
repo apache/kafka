@@ -23,6 +23,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -35,10 +36,9 @@ import java.util.Set;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CoordinatorStrategyTest {
 
@@ -55,9 +55,9 @@ public class CoordinatorStrategyTest {
     @Test
     public void testBuildLookupRequest() {
         CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
-        FindCoordinatorRequest.Builder request = strategy.buildRequest(new HashSet<>(Arrays.asList(
+        FindCoordinatorRequest.Builder request = strategy.buildRequest(Set.of(
             CoordinatorKey.byGroupId("foo"),
-            CoordinatorKey.byGroupId("bar"))));
+            CoordinatorKey.byGroupId("bar")));
         assertEquals("", request.data().key());
         assertEquals(2, request.data().coordinatorKeys().size());
         assertEquals(CoordinatorType.GROUP, CoordinatorType.forId(request.data().keyType()));
@@ -67,8 +67,8 @@ public class CoordinatorStrategyTest {
     public void testBuildLookupRequestNonRepresentable() {
         CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
         FindCoordinatorRequest.Builder request = strategy.buildRequest(new HashSet<>(Arrays.asList(
-                CoordinatorKey.byGroupId("foo"),
-                null)));
+            CoordinatorKey.byGroupId("foo"),
+            null)));
         assertEquals("", request.data().key());
         assertEquals(1, request.data().coordinatorKeys().size());
     }
@@ -81,7 +81,7 @@ public class CoordinatorStrategyTest {
 
         CoordinatorKey group1 = CoordinatorKey.byGroupId("foo");
         CoordinatorKey group2 = CoordinatorKey.byGroupId("bar");
-        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(mkSet(group1, group2)));
+        assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(Set.of(group1, group2)));
     }
 
     @Test
@@ -90,7 +90,7 @@ public class CoordinatorStrategyTest {
         strategy.disableBatch();
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
-                new HashSet<>(Arrays.asList(CoordinatorKey.byTransactionalId("txnid")))));
+                Set.of(CoordinatorKey.byTransactionalId("txnid"))));
     }
 
     @Test
@@ -105,9 +105,9 @@ public class CoordinatorStrategyTest {
         CoordinatorStrategy strategy = new CoordinatorStrategy(CoordinatorType.GROUP, new LogContext());
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
-                new HashSet<>(Arrays.asList(
-                        CoordinatorKey.byGroupId("group"),
-                        CoordinatorKey.byTransactionalId("txnid")))));
+            Set.of(
+                CoordinatorKey.byGroupId("group"),
+                CoordinatorKey.byTransactionalId("txnid"))));
     }
 
     @Test
@@ -123,7 +123,7 @@ public class CoordinatorStrategyTest {
         CoordinatorKey group1 = CoordinatorKey.byGroupId("foo");
         CoordinatorKey group2 = CoordinatorKey.byGroupId("bar");
         assertThrows(IllegalArgumentException.class, () ->
-            strategy.handleResponse(mkSet(group1, group2), response));
+            strategy.handleResponse(Set.of(group1, group2), response));
     }
 
     @Test
@@ -161,7 +161,7 @@ public class CoordinatorStrategyTest {
                         .setPort(9092)
                         .setNodeId(2)));
 
-        AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(new HashSet<>(Arrays.asList(group1, group2)), responseData);
+        AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(Set.of(group1, group2), responseData);
         Map<CoordinatorKey, Integer> expectedResult = new HashMap<>();
         expectedResult.put(group1, 1);
         expectedResult.put(group2, 2);
@@ -204,7 +204,7 @@ public class CoordinatorStrategyTest {
                             .setHost("localhost")
                             .setPort(9092)
                             .setNodeId(2)));
-        AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(new HashSet<>(Arrays.asList(group1, group2)), responseData);
+        AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(Set.of(group1, group2), responseData);
 
         assertEquals(emptyMap(), result.failedKeys);
         assertEquals(singletonMap(group2, 2), result.mappedKeys);
@@ -217,7 +217,7 @@ public class CoordinatorStrategyTest {
         assertFatalOldLookup(group, Errors.UNKNOWN_SERVER_ERROR);
 
         Throwable throwable = assertFatalOldLookup(group, Errors.GROUP_AUTHORIZATION_FAILED);
-        assertTrue(throwable instanceof GroupAuthorizationException);
+        assertInstanceOf(GroupAuthorizationException.class, throwable);
         GroupAuthorizationException exception = (GroupAuthorizationException) throwable;
         assertEquals("foo", exception.groupId());
     }
@@ -233,7 +233,7 @@ public class CoordinatorStrategyTest {
         assertEquals(singleton(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
         return throwable;
     }
 
@@ -244,7 +244,7 @@ public class CoordinatorStrategyTest {
         assertFatalLookup(group, Errors.UNKNOWN_SERVER_ERROR);
 
         Throwable throwable = assertFatalLookup(group, Errors.GROUP_AUTHORIZATION_FAILED);
-        assertTrue(throwable instanceof GroupAuthorizationException);
+        assertInstanceOf(GroupAuthorizationException.class, throwable);
         GroupAuthorizationException exception = (GroupAuthorizationException) throwable;
         assertEquals("foo", exception.groupId());
     }
@@ -264,7 +264,7 @@ public class CoordinatorStrategyTest {
         assertEquals(singleton(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
         return throwable;
     }
 

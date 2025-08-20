@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.Optional;
 
 public abstract class AbstractRecords implements Records {
 
@@ -44,6 +45,17 @@ public abstract class AbstractRecords implements Records {
         return iterator.next();
     }
 
+    @Override
+    public Optional<RecordBatch> lastBatch() {
+        Iterator<? extends RecordBatch> iterator = batches().iterator();
+
+        RecordBatch batch = null;
+        while (iterator.hasNext())
+            batch = iterator.next();
+
+        return Optional.ofNullable(batch);
+    }
+
     /**
      * Get an iterator over the deep records.
      * @return An iterator over the records
@@ -59,7 +71,7 @@ public abstract class AbstractRecords implements Records {
     }
 
     private Iterator<Record> recordsIterator() {
-        return new AbstractIterator<Record>() {
+        return new AbstractIterator<>() {
             private final Iterator<? extends RecordBatch> batches = batches().iterator();
             private Iterator<Record> records;
 

@@ -19,9 +19,9 @@ package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.junit.Test;
 
-import java.util.Collections;
+import org.junit.jupiter.api.Test;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,8 +31,7 @@ public class PrincipalConnectorClientConfigOverridePolicyTest extends BaseConnec
 
     @Test
     public void testPrincipalOnly() {
-        Map<String, Object> clientConfig = Collections.singletonMap(SaslConfigs.SASL_JAAS_CONFIG, "test");
-        testValidOverride(clientConfig);
+        testValidOverride(Map.of(SaslConfigs.SASL_JAAS_CONFIG, "test"));
     }
 
     @Test

@@ -16,129 +16,221 @@
  */
 package kafka.raft
 
-import java.util.concurrent.CompletableFuture
+import java.net.InetSocketAddress
+import java.nio.channels.FileChannel
+import java.nio.channels.OverlappingFileLockException
+import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.Properties
-import kafka.raft.KafkaRaftManager.RaftIoThread
-import kafka.server.{KafkaConfig, MetaProperties}
+import java.util.concurrent.CompletableFuture
+import kafka.server.KafkaConfig
 import kafka.tools.TestRaftServer.ByteArraySerde
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.raft.KafkaRaftClient
-import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.test.TestUtils
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.raft.{Endpoints, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito._
 
-import java.io.File
+import scala.util.Using
+import scala.jdk.CollectionConverters._
 
 class RaftManagerTest {
 
-  private def instantiateRaftManagerWithConfigs(topicPartition: TopicPartition, processRoles: String, nodeId: String) = {
-    def configWithProcessRolesAndNodeId(processRoles: String, nodeId: String, logDir: File): KafkaConfig = {
-      val props = new Properties
-      props.setProperty(KafkaConfig.MetadataLogDirProp, logDir.getPath)
-      props.setProperty(KafkaConfig.ProcessRolesProp, processRoles)
-      props.setProperty(KafkaConfig.NodeIdProp, nodeId)
-      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
-      if (processRoles.contains("broker")) {
-        props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
-        if (processRoles.contains("controller")) { // co-located
-          props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
-          props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
-        } else { // broker-only
-          val voterId = (nodeId.toInt + 1)
-          props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
-        }
-      } else if (processRoles.contains("controller")) { // controller-only
-        props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9093")
-        props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+  private def createConfig(
+    processRoles: Set[ProcessRole],
+    nodeId: Int,
+    logDir: Seq[Path],
+    metadataDir: Option[Path]
+  ): KafkaConfig = {
+    val props = new Properties
+    logDir.foreach { value =>
+      props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, value.toString)
+    }
+    metadataDir.foreach { value =>
+      props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, value.toString)
+    }
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, processRoles.mkString(","))
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    if (processRoles.contains(ProcessRole.BrokerRole)) {
+      props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
+      if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located
+        props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+        props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
+      } else { // broker-only
+        val voterId = nodeId + 1
+        props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
       }
-
-      new KafkaConfig(props)
+    } else if (processRoles.contains(ProcessRole.ControllerRole)) { // controller-only
+      props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:9093")
+      props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
     }
 
-    val logDir = TestUtils.tempDirectory()
-    val config = configWithProcessRolesAndNodeId(processRoles, nodeId, logDir)
+    new KafkaConfig(props)
+  }
+
+  private def createRaftManager(
+    topicPartition: TopicPartition,
+    config: KafkaConfig
+  ): KafkaRaftManager[Array[Byte]] = {
     val topicId = new Uuid(0L, 2L)
-    val metaProperties = MetaProperties(
-      clusterId = Uuid.randomUuid.toString,
-      nodeId = config.nodeId
+
+    val endpoints = Endpoints.fromInetSocketAddresses(
+      config.effectiveAdvertisedControllerListeners
+        .map { endpoint =>
+          (ListenerName.normalised(endpoint.listener), InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
+        }
+        .toMap
+        .asJava
     )
 
     new KafkaRaftManager[Array[Byte]](
-      metaProperties,
+      Uuid.randomUuid.toString,
       config,
+      Uuid.randomUuid,
       new ByteArraySerde,
       topicPartition,
       topicId,
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
+      new DefaultExternalKRaftMetrics(None, None),
       Option.empty,
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters))
+      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
+      QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
+      endpoints,
+      mock(classOf[FaultHandler])
     )
   }
 
-  @Test
-  def testNodeIdPresentIfBrokerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "broker", "1")
-    assertEquals(1, raftManager.client.nodeId.getAsInt)
+  @ParameterizedTest
+  @ValueSource(strings = Array("broker", "controller", "broker,controller"))
+  def testNodeIdPresent(processRoles: String): Unit = {
+    var processRolesSet = Set.empty[ProcessRole]
+    if (processRoles.contains("broker")) {
+      processRolesSet = processRolesSet ++ Set(ProcessRole.BrokerRole)
+    }
+    if (processRoles.contains("controller")) {
+      processRolesSet = processRolesSet ++ Set(ProcessRole.ControllerRole)
+    }
+
+    val logDir = TestUtils.tempDir()
+    val nodeId = 1
+    val raftManager = createRaftManager(
+      new TopicPartition("__raft_id_test", 0),
+      createConfig(
+        processRolesSet,
+        nodeId,
+        Seq(logDir.toPath),
+        None
+      )
+    )
+    assertEquals(nodeId, raftManager.client.nodeId.getAsInt)
     raftManager.shutdown()
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("metadata-only", "log-only", "both"))
+  def testLogDirLockWhenControllerOnly(dirType: String): Unit = {
+    val logDir = if (dirType.equals("metadata-only")) {
+      Seq.empty
+    } else {
+      Seq(TestUtils.tempDir().toPath)
+    }
+
+    val metadataDir = if (dirType.equals("log-only")) {
+      None
+    } else {
+      Some(TestUtils.tempDir().toPath)
+    }
+
+    val nodeId = 1
+    val raftManager = createRaftManager(
+      new TopicPartition("__raft_id_test", 0),
+      createConfig(
+        Set(ProcessRole.ControllerRole),
+        nodeId,
+        logDir,
+        metadataDir
+      )
+    )
+
+    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LOCK_FILE_NAME)
+    assertTrue(fileLocked(lockPath))
+
+    raftManager.shutdown()
+
+    assertFalse(fileLocked(lockPath))
+  }
+
   @Test
-  def testNodeIdPresentIfControllerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller", "1")
-    assertEquals(1, raftManager.client.nodeId.getAsInt)
+  def testLogDirLockWhenBrokerOnlyWithSeparateMetadataDir(): Unit = {
+    val logDir = Seq(TestUtils.tempDir().toPath)
+    val metadataDir = Some(TestUtils.tempDir().toPath)
+
+    val nodeId = 1
+    val raftManager = createRaftManager(
+      new TopicPartition("__raft_id_test", 0),
+      createConfig(
+        Set(ProcessRole.BrokerRole),
+        nodeId,
+        logDir,
+        metadataDir
+      )
+    )
+
+    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LOCK_FILE_NAME)
+    assertTrue(fileLocked(lockPath))
+
+    raftManager.shutdown()
+
+    assertFalse(fileLocked(lockPath))
+  }
+
+  def createMetadataLog(config: KafkaConfig): Unit = {
+    val raftManager = createRaftManager(
+      new TopicPartition("__cluster_metadata", 0),
+      config
+    )
     raftManager.shutdown()
   }
 
-  @Test
-  def testNodeIdPresentIfColocated(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller,broker", "1")
-    assertEquals(1, raftManager.client.nodeId.getAsInt)
-    raftManager.shutdown()
+  def assertLogDirsExist(
+    logDirs: Seq[Path],
+    metadataLogDir: Option[Path],
+    expectMetadataLog: Boolean
+  ): Unit = {
+    // In all cases, the log dir and metadata log dir themselves should be untouched
+    assertTrue(Files.exists(metadataLogDir.get))
+    logDirs.foreach { logDir =>
+      assertTrue(Files.exists(logDir), "Should not delete log dir")
+    }
+
+    if (expectMetadataLog) {
+      assertTrue(Files.exists(metadataLogDir.get.resolve("__cluster_metadata-0")))
+    } else {
+      assertFalse(Files.exists(metadataLogDir.get.resolve("__cluster_metadata-0")))
+    }
   }
 
-  @Test
-  def testShutdownIoThread(): Unit = {
-    val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft")
-
-    when(raftClient.isRunning).thenReturn(true)
-    assertTrue(ioThread.isRunning)
-
-    val shutdownFuture = new CompletableFuture[Void]
-    when(raftClient.shutdown(5000)).thenReturn(shutdownFuture)
-
-    ioThread.initiateShutdown()
-    assertTrue(ioThread.isRunning)
-    assertTrue(ioThread.isShutdownInitiated)
-    verify(raftClient).shutdown(5000)
-
-    shutdownFuture.complete(null)
-    when(raftClient.isRunning).thenReturn(false)
-    ioThread.run()
-    assertFalse(ioThread.isRunning)
-    assertTrue(ioThread.isShutdownComplete)
+  private def fileLocked(path: Path): Boolean = {
+    Using.resource(FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) { channel =>
+      try {
+        Option(channel.tryLock()).foreach(_.close())
+        false
+      } catch {
+        case _: OverlappingFileLockException => true
+      }
+    }
   }
-
-  @Test
-  def testUncaughtExceptionInIoThread(): Unit = {
-    val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft")
-
-    when(raftClient.isRunning).thenReturn(true)
-    assertTrue(ioThread.isRunning)
-
-    when(raftClient.poll()).thenThrow(new RuntimeException)
-    ioThread.run()
-
-    assertTrue(ioThread.isShutdownComplete)
-    assertTrue(ioThread.isThreadFailed)
-    assertFalse(ioThread.isRunning)
-  }
-
 }

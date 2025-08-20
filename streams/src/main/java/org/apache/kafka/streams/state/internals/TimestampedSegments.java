@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
@@ -37,12 +37,12 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
 
     @Override
     public TimestampedSegment getOrCreateSegment(final long segmentId,
-                                                 final ProcessorContext context) {
+                                                 final StateStoreContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
             final TimestampedSegment newSegment =
-                new TimestampedSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+                new TimestampedSegment(segmentName(segmentId), name, segmentId, position, metricsRecorder);
 
             if (segments.put(segmentId, newSegment) != null) {
                 throw new IllegalStateException("TimestampedSegment already exists. Possible concurrent access.");
@@ -54,8 +54,17 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
     }
 
     @Override
-    public void openExisting(final ProcessorContext context, final long streamTime) {
-        metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
+    public TimestampedSegment getOrCreateSegmentIfLive(final long segmentId,
+                                                    final StateStoreContext context,
+                                                    final long streamTime) {
+        final TimestampedSegment segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
+        cleanupExpiredSegments(streamTime);
+        return segment;
+    }
+
+    @Override
+    public void openExisting(final StateStoreContext context, final long streamTime) {
+        metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
         super.openExisting(context, streamTime);
     }
 }

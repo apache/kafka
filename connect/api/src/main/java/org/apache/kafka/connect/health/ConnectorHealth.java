@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.health;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.util.Map;
 import java.util.Objects;
-
-import org.apache.kafka.common.utils.Utils;
 
 /**
  * Provides basic health information about the connector and its tasks.

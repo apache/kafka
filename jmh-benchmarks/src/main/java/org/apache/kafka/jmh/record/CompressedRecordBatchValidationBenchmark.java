@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.jmh.record;
 
-import kafka.common.LongRef;
-import kafka.log.AppendOrigin;
-import kafka.log.LogValidator;
-import kafka.message.CompressionCodec;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.storage.internals.log.AppendOrigin;
+import org.apache.kafka.storage.internals.log.LogValidator;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
@@ -45,21 +45,17 @@ public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBen
     private CompressionType compressionType = CompressionType.LZ4;
 
     @Override
-    CompressionType compressionType() {
-        return compressionType;
+    Compression compression() {
+        return Compression.of(compressionType).build();
     }
 
     @Benchmark
     public void measureValidateMessagesAndAssignOffsetsCompressed(Blackhole bh) {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
-        LogValidator.validateMessagesAndAssignOffsetsCompressed(records, new TopicPartition("a", 0),
-                new LongRef(startingOffset), Time.SYSTEM, System.currentTimeMillis(),
-                CompressionCodec.getCompressionCodec(compressionType.id),
-                CompressionCodec.getCompressionCodec(compressionType.id),
-                false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
-                new AppendOrigin.Client$(),
-                MetadataVersion.latest(),
-                brokerTopicStats,
-                requestLocal);
+        new LogValidator(records, new TopicPartition("a", 0),
+            Time.SYSTEM, compressionType, compression(), false,  messageVersion,
+            TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT
+        ).validateMessagesAndAssignOffsetsCompressed(PrimitiveRef.ofLong(startingOffset),
+            validatorMetricsRecorder, requestLocal.bufferSupplier());
     }
 }

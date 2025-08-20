@@ -17,12 +17,15 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -34,7 +37,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
@@ -42,13 +45,12 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.Random;
@@ -58,9 +60,9 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KTableKTableLeftJoinTest {
     private final String topic1 = "topic1";
@@ -69,9 +71,14 @@ public class KTableKTableLeftJoinTest {
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
+    private StreamsBuilder createStreamBuilderInMemory() {
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
+        return new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+    }
+
     @Test
     public void testJoin() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -84,7 +91,7 @@ public class KTableKTableLeftJoinTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(Set.of(topic1, topic2), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
@@ -192,7 +199,7 @@ public class KTableKTableLeftJoinTest {
 
     @Test
     public void testNotSendingOldValue() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -308,7 +315,7 @@ public class KTableKTableLeftJoinTest {
 
     @Test
     public void testSendingOldValue() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -442,7 +449,7 @@ public class KTableKTableLeftJoinTest {
         final String tableSix = "tableSix";
         final String[] inputs = {agg, tableOne, tableTwo, tableThree, tableFour, tableFive, tableSix};
 
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
         final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
         final KTable<Long, String> aggTable = builder
             .table(agg, consumed, Materialized.as(Stores.inMemoryKeyValueStore("agg-base-store")))
@@ -452,30 +459,12 @@ public class KTableKTableLeftJoinTest {
                 MockReducer.STRING_ADDER,
                 Materialized.as(Stores.inMemoryKeyValueStore("agg-store")));
 
-        final KTable<Long, String> one = builder.table(
-            tableOne,
-            consumed,
-            Materialized.as(Stores.inMemoryKeyValueStore("tableOne-base-store")));
-        final KTable<Long, String> two = builder.table(
-            tableTwo,
-            consumed,
-            Materialized.as(Stores.inMemoryKeyValueStore("tableTwo-base-store")));
-        final KTable<Long, String> three = builder.table(
-            tableThree,
-            consumed,
-            Materialized.as(Stores.inMemoryKeyValueStore("tableThree-base-store")));
-        final KTable<Long, String> four = builder.table(
-            tableFour,
-            consumed,
-            Materialized.as(Stores.inMemoryKeyValueStore("tableFour-base-store")));
-        final KTable<Long, String> five = builder.table(
-            tableFive,
-            consumed,
-            Materialized.as(Stores.inMemoryKeyValueStore("tableFive-base-store")));
-        final KTable<Long, String> six = builder.table(
-            tableSix,
-            consumed,
-            Materialized.as(Stores.inMemoryKeyValueStore("tableSix-base-store")));
+        final KTable<Long, String> one = builder.table(tableOne, consumed);
+        final KTable<Long, String> two = builder.table(tableTwo, consumed);
+        final KTable<Long, String> three = builder.table(tableThree, consumed);
+        final KTable<Long, String> four = builder.table(tableFour, consumed);
+        final KTable<Long, String> five = builder.table(tableFive, consumed);
+        final KTable<Long, String> six = builder.table(tableSix, consumed);
 
         final ValueMapper<String, String> mapper = value -> value.toUpperCase(Locale.ROOT);
 
@@ -514,7 +503,7 @@ public class KTableKTableLeftJoinTest {
 
     @Test
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
 
         @SuppressWarnings("unchecked")
         final Processor<String, Change<String>, String, Change<Object>> join = new KTableKTableLeftJoin<>(

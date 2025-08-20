@@ -17,19 +17,20 @@
 
 package org.apache.kafka.jmh.common;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ResponseHeader;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -47,6 +48,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -78,7 +80,7 @@ public class FetchResponseBenchmark {
 
     @Setup(Level.Trial)
     public void setup() {
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord(1000, "key1".getBytes(StandardCharsets.UTF_8), "value1".getBytes(StandardCharsets.UTF_8)),
                 new SimpleRecord(1001, "key2".getBytes(StandardCharsets.UTF_8), "value2".getBytes(StandardCharsets.UTF_8)),
                 new SimpleRecord(1002, "key3".getBytes(StandardCharsets.UTF_8), "value3".getBytes(StandardCharsets.UTF_8)));
@@ -102,19 +104,19 @@ public class FetchResponseBenchmark {
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
+        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, List.of());
         this.fetchResponseData = this.fetchResponse.data();
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
-        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
+        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, List.of());
         return fetchResponse.data().responses().size();
     }
 
     @Benchmark
     public int testPartitionMapFromData() {
-        return new FetchResponse(fetchResponseData).responseData(topicNames, ApiKeys.FETCH.latestVersion()).size();
+        return FetchResponse.of(fetchResponseData).responseData(topicNames, ApiKeys.FETCH.latestVersion()).size();
     }
 
     @Benchmark

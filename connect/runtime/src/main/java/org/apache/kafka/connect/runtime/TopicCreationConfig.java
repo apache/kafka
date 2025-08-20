@@ -25,6 +25,11 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+/**
+ * Configuration options for source connector automatic topic creation.
+ *
+ * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-158%3A+Kafka+Connect+should+allow+source+connectors+to+set+topic-specific+settings+for+new+topics">KIP-158</a>
+ */
 public class TopicCreationConfig {
 
     public static final String DEFAULT_TOPIC_CREATION_PREFIX = "topic.creation.default.";
@@ -93,7 +98,7 @@ public class TopicCreationConfig {
         }
     }
 
-    public static ConfigDef configDef(String group, short defaultReplicationFactor, int defaultParitionCount) {
+    public static ConfigDef configDef(String group, short defaultReplicationFactor, int defaultPartitionCount) {
         int orderInGroup = 0;
         ConfigDef configDef = new ConfigDef();
         configDef
@@ -110,7 +115,7 @@ public class TopicCreationConfig {
                         ConfigDef.Importance.LOW, REPLICATION_FACTOR_DOC, group, ++orderInGroup,
                         ConfigDef.Width.LONG, "Replication Factor for Topics in " + group)
                 .define(PARTITIONS_CONFIG, ConfigDef.Type.INT,
-                        defaultParitionCount, PARTITIONS_VALIDATOR,
+                        defaultPartitionCount, PARTITIONS_VALIDATOR,
                         ConfigDef.Importance.LOW, PARTITIONS_DOC, group, ++orderInGroup,
                         ConfigDef.Width.LONG, "Partition Count for Topics in " + group);
         return configDef;

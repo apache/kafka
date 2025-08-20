@@ -37,6 +37,7 @@ public class MockStateRestoreListener implements StateRestoreListener {
     public static final String RESTORE_START = "restore_start";
     public static final String RESTORE_BATCH = "restore_batch";
     public static final String RESTORE_END = "restore_end";
+    public static final String RESTORE_SUSPENDED = "restore_suspended";
 
     @Override
     public void onRestoreStart(final TopicPartition topicPartition,
@@ -66,6 +67,15 @@ public class MockStateRestoreListener implements StateRestoreListener {
                              final long totalRestored) {
         restoreTopicPartition = topicPartition;
         storeNameCalledStates.put(RESTORE_END, storeName);
+        totalNumRestored = totalRestored;
+    }
+
+    @Override
+    public void onRestoreSuspended(final TopicPartition topicPartition,
+                                   final String storeName,
+                                   final long totalRestored) {
+        restoreTopicPartition = topicPartition;
+        storeNameCalledStates.put(RESTORE_SUSPENDED, storeName);
         totalNumRestored = totalRestored;
     }
 

@@ -13,27 +13,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka import config_property
+from kafkatest.services.kafka import config_property, KafkaService
+from kafkatest.services.kafka.quorum import isolated_kraft, combined_kraft
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.utils.remote_account import java_version
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, \
-    LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
-    LATEST_2_6, LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, V_0_11_0_0, V_2_8_0, V_3_0_0, DEV_BRANCH, \
-    KafkaVersion
-from kafkatest.services.kafka.util import new_jdk_not_supported
+from kafkatest.version import LATEST_3_4, LATEST_3_5, \
+    LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, LATEST_4_0, DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION
 
+#
+# Test upgrading between different KRaft versions.
+#
+# The earliest supported version to ugrade from is `3.3` - the first KRaft version deemed production-ready
+# and also when KIP-778 (KRaft to KRaft upgrades) landed.
+#
 class TestUpgrade(ProduceConsumeValidateTest):
 
     def __init__(self, test_context):
         super(TestUpgrade, self).__init__(test_context=test_context)
+        self.may_truncate_acked_records = False
 
     def setUp(self):
         self.topic = "test_topic"
@@ -50,179 +52,136 @@ class TestUpgrade(ProduceConsumeValidateTest):
             wait_until(lambda: len(self.kafka.isr_idx_list(self.topic, partition)) == self.replication_factor, timeout_sec=60,
                     backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
-    def perform_upgrade(self, from_kafka_version, to_message_format_version=None):
-        self.logger.info("Upgrade ZooKeeper from %s to %s" % (str(self.zk.nodes[0].version), str(DEV_BRANCH)))
-        self.zk.set_version(DEV_BRANCH)
-        self.zk.restart_cluster()
-        # Confirm we have a successful ZooKeeper upgrade by List ACLs for the topic.
-        # Not trying to detect a problem here leads to failure in the ensuing Kafka roll, which would be a less
-        # intuitive failure than seeing a problem here, so detect ZooKeeper upgrade problems before involving Kafka.
-        self.zk.list_acls(self.topic)
-        # Do some stuff that exercises the use of ZooKeeper before we upgrade to the latest ZooKeeper client version
-        self.logger.info("First pass bounce - rolling Kafka with old ZooKeeper client")
+    def upgrade_to_dev_version(self, update_metadata_version):
+        self.logger.info("Performing rolling upgrade.")
+        for node in self.kafka.controller_quorum.nodes:
+            self.logger.info("Stopping controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.stop_node(node)
+            node.version = DEV_BRANCH
+            self.logger.info("Restarting controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.start_node(node)
+            self.wait_until_rejoin()
+            self.logger.info("Successfully restarted controller node %s" % node.account.hostname)
         for node in self.kafka.nodes:
-            self.kafka.restart_node(node)
-        topic_cfg = {
-            "topic": "another_topic",
-            "partitions": self.partitions,
-            "replication-factor": self.replication_factor,
-            "configs": {"min.insync.replicas": 2}
-        }
-        self.kafka.create_topic(topic_cfg)
-
-        self.logger.info("Second pass bounce - rolling upgrade")
-        for node in self.kafka.nodes:
+            self.logger.info("Stopping broker node %s" % node.account.hostname)
             self.kafka.stop_node(node)
             node.version = DEV_BRANCH
-            node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = from_kafka_version
-            node.config[config_property.MESSAGE_FORMAT_VERSION] = from_kafka_version
+            self.logger.info("Restarting broker node %s" % node.account.hostname)
             self.kafka.start_node(node)
             self.wait_until_rejoin()
+            self.logger.info("Successfully restarted broker node %s" % node.account.hostname)
+        if update_metadata_version:
+            self.logger.info("Changing metadata.version to %s" % LATEST_STABLE_METADATA_VERSION)
+            self.kafka.upgrade_metadata_version(LATEST_STABLE_METADATA_VERSION)
 
-        self.logger.info("Third pass bounce - remove inter.broker.protocol.version config")
+    def downgrade_to_version(self, to_kafka_version):
+        self.logger.info("Performing rolling downgrade.")
+        for node in self.kafka.controller_quorum.nodes:
+            self.logger.info("Stopping controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.stop_node(node)
+            node.version = KafkaVersion(to_kafka_version)
+            self.logger.info("Restarting controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.start_node(node)
+            self.wait_until_rejoin()
+            self.logger.info("Successfully restarted controller node %s" % node.account.hostname)
         for node in self.kafka.nodes:
+            self.logger.info("Stopping broker node %s" % node.account.hostname)
             self.kafka.stop_node(node)
-            del node.config[config_property.INTER_BROKER_PROTOCOL_VERSION]
-            if to_message_format_version is None:
-                del node.config[config_property.MESSAGE_FORMAT_VERSION]
-            else:
-                # older message formats are not supported with IBP 3.0 or higher
-                if to_message_format_version < V_0_11_0_0:
-                    node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = str(V_2_8_0)
-                node.config[config_property.MESSAGE_FORMAT_VERSION] = to_message_format_version
+            node.version = KafkaVersion(to_kafka_version)
+            self.logger.info("Restarting broker node %s" % node.account.hostname)
             self.kafka.start_node(node)
             self.wait_until_rejoin()
+            self.logger.info("Successfully restarted broker node %s" % node.account.hostname)
 
-    @cluster(num_nodes=6)
-    @parametrize(from_kafka_version=str(LATEST_3_2), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_3_2), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_3_2), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_3_1), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_3_1), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_3_1), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_3_0), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_3_0), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_3_0), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_2_7), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_2_6), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_6), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_2_6), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_2_5), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_5), to_message_format_version=None, compression_types=["zstd"])
-    @parametrize(from_kafka_version=str(LATEST_2_4), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_4), to_message_format_version=None, compression_types=["zstd"])
-    @parametrize(from_kafka_version=str(LATEST_2_3), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_3), to_message_format_version=None, compression_types=["zstd"])
-    @parametrize(from_kafka_version=str(LATEST_2_2), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_2), to_message_format_version=None, compression_types=["zstd"])
-    @parametrize(from_kafka_version=str(LATEST_2_1), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_1), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_2_0), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_2_0), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_1_1), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_1_1), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_1_0), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_1_0), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_0_11_0), to_message_format_version=None, compression_types=["gzip"])
-    @parametrize(from_kafka_version=str(LATEST_0_11_0), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=str(LATEST_0_9), compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=str(LATEST_0_10), compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_0_10_1), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_0_10_1), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["lz4"])
-    @cluster(num_nodes=7)
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"], security_protocol="SASL_SSL")
-    @cluster(num_nodes=6)
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["snappy"])
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["lz4"])
-    @cluster(num_nodes=7)
-    @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["snappy"])
-    def test_upgrade(self, from_kafka_version, to_message_format_version, compression_types,
-                     security_protocol="PLAINTEXT"):
+    def run_upgrade(self, from_kafka_version):
         """Test upgrade of Kafka broker cluster from various versions to the current version
 
-        from_kafka_version is a Kafka version to upgrade from
+        from_kafka_version is a Kafka version to upgrade from.
 
-        If to_message_format_version is None, it means that we will upgrade to default (latest)
-        message format version. It is possible to upgrade to 0.10 brokers but still use message
-        format version 0.9
-
-        - Start 3 node broker cluster on version 'from_kafka_version'
-        - Start producer and consumer in the background
-        - Perform two-phase rolling upgrade
-            - First phase: upgrade brokers to 0.10 with inter.broker.protocol.version set to
-            from_kafka_version and log.message.format.version set to from_kafka_version
-            - Second phase: remove inter.broker.protocol.version config with rolling bounce; if
-            to_message_format_version is set to 0.9, set log.message.format.version to
-            to_message_format_version, otherwise remove log.message.format.version config
-        - Finally, validate that every message acked by the producer was consumed by the consumer
+        - Start 3 node broker cluster on version 'from_kafka_version'.
+        - Start producer and consumer in the background.
+        - Perform rolling upgrade.
+        - Upgrade cluster to the latest metadata.version.
+        - Finally, validate that every message acked by the producer was consumed by the consumer.
         """
-        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=KafkaVersion(from_kafka_version))
         fromKafkaVersion = KafkaVersion(from_kafka_version)
-        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk,
+        self.kafka = KafkaService(self.test_context,
+                                  num_nodes=3,
+                                  zk=None,
                                   version=fromKafkaVersion,
                                   topics={self.topic: {"partitions": self.partitions,
-                      "replication-factor": self.replication_factor,
-                      'configs': {"min.insync.replicas": 2}}})
-        self.kafka.security_protocol = security_protocol
-        self.kafka.interbroker_security_protocol = security_protocol
-
-        jdk_version = java_version(self.kafka.nodes[0])
-
-        if jdk_version > 9 and from_kafka_version in new_jdk_not_supported:
-            self.logger.info("Test ignored! Kafka " + from_kafka_version + " not support jdk " + str(jdk_version))
-            return
-
-        self.zk.start()
+                                                       "replication-factor": self.replication_factor,
+                                                       'configs': {"min.insync.replicas": 2}}})
         self.kafka.start()
-
-        old_id = self.kafka.topic_id(self.topic)
-
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
                                            message_validator=is_int,
-                                           compression_types=compression_types,
+                                           compression_types=["none"],
                                            version=KafkaVersion(from_kafka_version))
-
-        if from_kafka_version <= LATEST_0_10_0:
-            assert self.kafka.cluster_id() is None
-
-        # With older message formats before KIP-101, message loss may occur due to truncation
-        # after leader change. Tolerate limited data loss for this case to avoid transient test failures.
-        self.may_truncate_acked_records = False if from_kafka_version >= V_0_11_0_0 else True
-
-        new_consumer = fromKafkaVersion.consumer_supports_bootstrap_server()
-        # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
-                                        self.topic, new_consumer=new_consumer, consumer_timeout_ms=30000,
+                                        self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=KafkaVersion(from_kafka_version))
 
-        self.run_produce_consume_validate(core_test_action=lambda: self.perform_upgrade(from_kafka_version,
-                                                                                        to_message_format_version))
-
+        self.run_produce_consume_validate(core_test_action=lambda: self.upgrade_to_dev_version(True))
         cluster_id = self.kafka.cluster_id()
         assert cluster_id is not None
         assert len(cluster_id) == 22
-
-        assert self.kafka.all_nodes_support_topic_ids()
-        new_id = self.kafka.topic_id(self.topic)
-        if from_kafka_version >= V_2_8_0:
-            assert old_id is not None
-            assert new_id is not None
-            assert old_id == new_id
-        else:
-            assert old_id is None
-            assert new_id is not None
-
         assert self.kafka.check_protocol_errors(self)
+
+    def run_upgrade_downgrade(self, starting_kafka_version):
+        """Test upgrade and downgrade of Kafka broker cluster from various versions to current version and back
+
+        - Start 3 node broker cluster on version 'starting_kafka_version'.
+        - Perform rolling upgrade but do not update metadata.version.
+        - Start producer and consumer in the background.
+        - Perform rolling downgrade.
+        - Finally, validate that every message acked by the producer was consumed by the consumer.
+        """
+        fromKafkaVersion = KafkaVersion(starting_kafka_version)
+        self.kafka = KafkaService(self.test_context,
+                                  num_nodes=3,
+                                  zk=None,
+                                  version=fromKafkaVersion,
+                                  topics={self.topic: {"partitions": self.partitions,
+                                                       "replication-factor": self.replication_factor,
+                                                       'configs': {"min.insync.replicas": 2}}})
+        self.kafka.start()
+        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
+                                           self.topic, throughput=self.producer_throughput,
+                                           message_validator=is_int,
+                                           compression_types=["none"],
+                                           version=KafkaVersion(starting_kafka_version))
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
+                                        self.topic, consumer_timeout_ms=30000,
+                                        message_validator=is_int, version=KafkaVersion(starting_kafka_version))
+        self.upgrade_to_dev_version(False)
+
+        self.run_produce_consume_validate(core_test_action=lambda: self.downgrade_to_version(starting_kafka_version))
+        cluster_id = self.kafka.cluster_id()
+        assert cluster_id is not None
+        assert len(cluster_id) == 22
+        assert self.kafka.check_protocol_errors(self)
+
+    @cluster(num_nodes=5)
+    @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(LATEST_4_0), str(DEV_BRANCH)],
+            metadata_quorum=[combined_kraft])
+    def test_combined_mode_upgrade(self, from_kafka_version, metadata_quorum):
+        self.run_upgrade(from_kafka_version)
+
+    @cluster(num_nodes=8)
+    @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(LATEST_4_0), str(DEV_BRANCH)],
+            metadata_quorum=[isolated_kraft])
+    def test_isolated_mode_upgrade(self, from_kafka_version, metadata_quorum):
+        self.run_upgrade(from_kafka_version)
+
+    @cluster(num_nodes=5)
+    @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(LATEST_4_0), str(DEV_BRANCH)],
+            metadata_quorum=[combined_kraft])
+    def test_combined_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum):
+        self.run_upgrade_downgrade(from_kafka_version)
+
+    @cluster(num_nodes=8)
+    @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(LATEST_4_0), str(DEV_BRANCH)],
+            metadata_quorum=[isolated_kraft])
+    def test_isolated_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum):
+        self.run_upgrade_downgrade(from_kafka_version)

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.Cache;
 import org.rocksdb.LRUCache;
@@ -44,11 +44,12 @@ public class BlockBasedTableConfigWithAccessibleCacheTest {
     public void shouldSetBlockCacheAndMakeItAccessible() {
         final BlockBasedTableConfigWithAccessibleCache configWithAccessibleCache =
             new BlockBasedTableConfigWithAccessibleCache();
-        final Cache blockCache = new LRUCache(1024);
+        try (final Cache blockCache = new LRUCache(1024)) {
 
-        final BlockBasedTableConfig updatedConfig = configWithAccessibleCache.setBlockCache(blockCache);
+            final BlockBasedTableConfig updatedConfig = configWithAccessibleCache.setBlockCache(blockCache);
 
-        assertThat(updatedConfig, sameInstance(configWithAccessibleCache));
-        assertThat(configWithAccessibleCache.blockCache(), sameInstance(blockCache));
+            assertThat(updatedConfig, sameInstance(configWithAccessibleCache));
+            assertThat(configWithAccessibleCache.blockCache(), sameInstance(blockCache));
+        }
     }
 }

@@ -26,7 +26,7 @@ package org.apache.kafka.common.utils;
  * This class also ensures monotonic updates to the timer even if the underlying clock is subject
  * to non-monotonic behavior. For example, the remaining time returned by {@link #remainingMs()} is
  * guaranteed to decrease monotonically until it hits zero.
- *
+ * <p>
  * Note that it is up to the caller to ensure progress of the timer using one of the
  * {@link #update()} methods or {@link #sleep(long)}. The timer will cache the current time and
  * return it indefinitely until the timer has been updated. This allows the caller to limit
@@ -34,14 +34,14 @@ package org.apache.kafka.common.utils;
  * waiting a request sent through the {@link org.apache.kafka.clients.NetworkClient} should call
  * {@link #update()} following each blocking call to
  * {@link org.apache.kafka.clients.NetworkClient#poll(long, long)}.
- *
+ * <p>
  * A typical usage might look something like this:
  *
  * <pre>
  *     Time time = Time.SYSTEM;
  *     Timer timer = time.timer(500);
  *
- *     while (!conditionSatisfied() && timer.notExpired) {
+ *     while (!conditionSatisfied() && timer.notExpired()) {
  *         client.poll(timer.remainingMs(), timer.currentTimeMs());
  *         timer.update();
  *     }
@@ -69,6 +69,15 @@ public class Timer {
      */
     public boolean isExpired() {
         return currentTimeMs >= deadlineMs;
+    }
+
+    /**
+     * Get the time in milliseconds that the timer has been expired. Like {@link #remainingMs()},
+     * this depends on the current cached time in milliseconds, which is only updated through one
+     * of the {@link #update()} methods or with {@link #sleep(long)}.
+     */
+    public long isExpiredBy() {
+        return Math.max(0, currentTimeMs - deadlineMs);
     }
 
     /**
@@ -137,7 +146,7 @@ public class Timer {
     /**
      * Update the cached current time to a specific value. In some contexts, the caller may already
      * have an accurate time, so this avoids unnecessary calls to system time.
-     *
+     * <p>
      * Note that if the updated current time is smaller than the cached time, then the update
      * is ignored.
      *
@@ -161,7 +170,7 @@ public class Timer {
     /**
      * Get the current time in milliseconds. This will return the same cached value until the timer
      * has been updated using one of the {@link #update()} methods or {@link #sleep(long)} is used.
-     *
+     * <p>
      * Note that the value returned is guaranteed to increase monotonically even if the underlying
      * {@link Time} implementation goes backwards. Effectively, the timer will just wait for the
      * time to catch up.

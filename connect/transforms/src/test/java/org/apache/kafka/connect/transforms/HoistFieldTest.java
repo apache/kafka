@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -39,18 +40,18 @@ public class HoistFieldTest {
 
     @Test
     public void schemaless() {
-        xform.configure(Collections.singletonMap("field", "magic"));
+        xform.configure(Map.of("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, null, 42, null, null, 0);
         final SinkRecord transformedRecord = xform.apply(record);
 
         assertNull(transformedRecord.keySchema());
-        assertEquals(Collections.singletonMap("magic", 42), transformedRecord.key());
+        assertEquals(Map.of("magic", 42), transformedRecord.key());
     }
 
     @Test
     public void withSchema() {
-        xform.configure(Collections.singletonMap("field", "magic"));
+        xform.configure(Map.of("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, Schema.INT32_SCHEMA, 42, null, null, 0);
         final SinkRecord transformedRecord = xform.apply(record);
@@ -62,7 +63,7 @@ public class HoistFieldTest {
 
     @Test
     public void testSchemalessMapIsMutable() {
-        xform.configure(Collections.singletonMap("field", "magic"));
+        xform.configure(Map.of("field", "magic"));
 
         final SinkRecord record = new SinkRecord("test", 0, null, 420, null, null, 0);
         final SinkRecord transformedRecord = xform.apply(record);
@@ -75,6 +76,11 @@ public class HoistFieldTest {
         expectedKey.put("k", "v");
         expectedKey.put("magic", 420);
         assertEquals(expectedKey, actualKey);
+    }
+
+    @Test
+    public void testHoistFieldVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 
 }

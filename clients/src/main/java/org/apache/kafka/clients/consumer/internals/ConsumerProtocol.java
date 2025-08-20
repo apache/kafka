@@ -25,12 +25,13 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.SchemaException;
 
-import java.nio.ByteBuffer;
 import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * ConsumerProtocol contains the schemas for consumer subscriptions and assignments for use with
@@ -89,7 +90,9 @@ public class ConsumerProtocol {
             }
             partition.partitions().add(tp.partition());
         }
+        subscription.rackId().ifPresent(data::setRackId);
 
+        data.setGenerationId(subscription.generationId().orElse(-1));
         return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 
@@ -110,7 +113,9 @@ public class ConsumerProtocol {
             return new Subscription(
                 data.topics(),
                 data.userData() != null ? data.userData().duplicate() : null,
-                ownedPartitions);
+                ownedPartitions,
+                data.generationId(),
+                data.rackId() == null || data.rackId().isEmpty() ? Optional.empty() : Optional.of(data.rackId()));
         } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
         }
@@ -118,6 +123,25 @@ public class ConsumerProtocol {
 
     public static Subscription deserializeSubscription(final ByteBuffer buffer) {
         return deserializeSubscription(buffer, deserializeVersion(buffer));
+    }
+
+    public static ConsumerProtocolSubscription deserializeConsumerProtocolSubscription(
+        final ByteBuffer buffer,
+        short version
+    ) {
+        version = checkSubscriptionVersion(version);
+
+        try {
+            return new ConsumerProtocolSubscription(new ByteBufferAccessor(buffer), version);
+        } catch (BufferUnderflowException e) {
+            throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
+        }
+    }
+
+    public static ConsumerProtocolSubscription deserializeConsumerProtocolSubscription(
+        final ByteBuffer buffer
+    ) {
+        return deserializeConsumerProtocolSubscription(buffer, deserializeVersion(buffer));
     }
 
     public static ByteBuffer serializeAssignment(final Assignment assignment) {
@@ -138,6 +162,11 @@ public class ConsumerProtocol {
             partition.partitions().add(tp.partition());
         });
         return MessageUtil.toVersionPrefixedByteBuffer(version, data);
+    }
+
+    public static ByteBuffer serializeAssignment(final ConsumerProtocolAssignment assignment, short version) {
+        version = checkAssignmentVersion(version);
+        return MessageUtil.toVersionPrefixedByteBuffer(version, assignment);
     }
 
     public static Assignment deserializeAssignment(final ByteBuffer buffer, short version) {
@@ -164,6 +193,23 @@ public class ConsumerProtocol {
 
     public static Assignment deserializeAssignment(final ByteBuffer buffer) {
         return deserializeAssignment(buffer, deserializeVersion(buffer));
+    }
+
+    public static ConsumerProtocolAssignment deserializeConsumerProtocolAssignment(
+        final ByteBuffer buffer,
+        short version
+    ) {
+        version = checkAssignmentVersion(version);
+
+        try {
+            return new ConsumerProtocolAssignment(new ByteBufferAccessor(buffer), version);
+        } catch (BufferUnderflowException e) {
+            throw new SchemaException("Buffer underflow while parsing consumer protocol's assignment", e);
+        }
+    }
+
+    public static ConsumerProtocolAssignment deserializeConsumerProtocolAssignment(final ByteBuffer buffer) {
+        return deserializeConsumerProtocolAssignment(buffer, deserializeVersion(buffer));
     }
 
     private static short checkSubscriptionVersion(final short version) {

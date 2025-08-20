@@ -19,13 +19,4 @@ package org.apache.kafka.raft;
 /**
  * Metadata for the record batch appended to log
  */
-public class LogAppendInfo {
-
-    public final long firstOffset;
-    public final long lastOffset;
-
-    public LogAppendInfo(long firstOffset, long lastOffset) {
-        this.firstOffset = firstOffset;
-        this.lastOffset = lastOffset;
-    }
-}
+public record LogAppendInfo(long firstOffset, long lastOffset) { }

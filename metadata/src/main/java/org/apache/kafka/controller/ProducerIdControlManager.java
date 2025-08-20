@@ -19,25 +19,63 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
+import org.slf4j.Logger;
+
 import java.util.List;
 
 
 public class ProducerIdControlManager {
+    static class Builder {
+        private LogContext logContext = null;
+        private SnapshotRegistry snapshotRegistry = null;
+        private ClusterControlManager clusterControlManager = null;
 
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        Builder setClusterControlManager(ClusterControlManager clusterControlManager) {
+            this.clusterControlManager = clusterControlManager;
+            return this;
+        }
+
+        ProducerIdControlManager build() {
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            if (clusterControlManager == null) {
+                throw new RuntimeException("You must specify ClusterControlManager.");
+            }
+            return new ProducerIdControlManager(
+                logContext,
+                clusterControlManager,
+                snapshotRegistry);
+        }
+    }
+
+    private final Logger log;
     private final ClusterControlManager clusterControlManager;
     private final TimelineObject<ProducerIdsBlock> nextProducerBlock;
     private final TimelineLong brokerEpoch;
 
-    ProducerIdControlManager(ClusterControlManager clusterControlManager, SnapshotRegistry snapshotRegistry) {
+    private ProducerIdControlManager(
+        LogContext logContext,
+        ClusterControlManager clusterControlManager,
+        SnapshotRegistry snapshotRegistry
+    ) {
+        this.log = logContext.logger(ProducerIdControlManager.class);
         this.clusterControlManager = clusterControlManager;
         this.nextProducerBlock = new TimelineObject<>(snapshotRegistry, ProducerIdsBlock.EMPTY);
         this.brokerEpoch = new TimelineLong(snapshotRegistry);
@@ -59,32 +97,26 @@ public class ProducerIdControlManager {
             .setNextProducerId(newNextProducerId)
             .setBrokerId(brokerId)
             .setBrokerEpoch(brokerEpoch);
-        return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)), block);
+        return ControllerResult.of(List.of(new ApiMessageAndVersion(record, (short) 0)), block);
+    }
+
+    // VisibleForTesting
+    ProducerIdsBlock nextProducerBlock() {
+        return nextProducerBlock.get();
     }
 
     void replay(ProducerIdsRecord record) {
-        long currentNextProducerId = nextProducerBlock.get().firstProducerId();
-        if (record.nextProducerId() <= currentNextProducerId) {
+        // During a migration, we may be calling replay() without ever having called generateNextProducerId(),
+        // so the next producer block could be EMPTY
+        ProducerIdsBlock nextBlock = nextProducerBlock.get();
+        if (nextBlock != ProducerIdsBlock.EMPTY && record.nextProducerId() <= nextBlock.firstProducerId()) {
             throw new RuntimeException("Next Producer ID from replayed record (" + record.nextProducerId() + ")" +
-                " is not greater than current next Producer ID (" + currentNextProducerId + ")");
+                " is not greater than current next Producer ID in block (" + nextBlock + ")");
         } else {
-            nextProducerBlock.set(new ProducerIdsBlock(record.brokerId(), record.nextProducerId(), ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE));
+            log.info("Replaying ProducerIdsRecord {}", record);
+            nextProducerBlock.set(new ProducerIdsBlock(record.brokerId(), record.nextProducerId(),
+                    ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE));
             brokerEpoch.set(record.brokerEpoch());
         }
-    }
-
-    Iterator<List<ApiMessageAndVersion>> iterator(long epoch) {
-        List<ApiMessageAndVersion> records = new ArrayList<>(1);
-
-        ProducerIdsBlock producerIdBlock = nextProducerBlock.get(epoch);
-        if (producerIdBlock.firstProducerId() > 0) {
-            records.add(new ApiMessageAndVersion(
-                new ProducerIdsRecord()
-                    .setNextProducerId(producerIdBlock.firstProducerId())
-                    .setBrokerId(producerIdBlock.assignedBrokerId())
-                    .setBrokerEpoch(brokerEpoch.get(epoch)),
-                (short) 0));
-        }
-        return Collections.singleton(records).iterator();
     }
 }

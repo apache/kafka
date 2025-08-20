@@ -21,16 +21,22 @@
   // The current implementation assumes that future versions will not break compatibility. When
   // it encounters a newer version, it parses it using the current format. This basically means
   // that new versions cannot remove or reorder any of the existing fields.
-  "validVersions": "0-1",
+  //
+  // Version 2 is to support a new field "GenerationId" in ConsumerProtocolSubscription.
+  // Version 3 adds rack id to ConsumerProtocolSubscription.
+  "validVersions": "0-3",
   "flexibleVersions": "none",
   "fields": [
     { "name": "AssignedPartitions", "type": "[]TopicPartition", "versions": "0+",
-      "fields": [
-        { "name": "Topic", "type": "string", "mapKey": true, "versions": "0+", "entityType": "topicName" },
-        { "name": "Partitions", "type": "[]int32", "versions": "0+" }
+      "about": "The list of topics and partitions assigned to this consumer.", "fields": [
+        { "name": "Topic", "type": "string", "mapKey": true, "versions": "0+", "entityType": "topicName",
+          "about": "The topic name."},
+        { "name": "Partitions", "type": "[]int32", "versions": "0+",
+          "about": "The list of partitions assigned to this consumer."}
       ]
     },
     { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
-      "default": "null", "zeroCopy": true }
+      "default": "null", "zeroCopy": true,
+      "about": "User data."}
   ]
 }

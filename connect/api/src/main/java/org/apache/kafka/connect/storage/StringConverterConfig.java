@@ -34,7 +34,7 @@ public class StringConverterConfig extends ConverterConfig {
     private static final String ENCODING_DOC = "The name of the Java character set to use for encoding strings as byte arrays.";
     private static final String ENCODING_DISPLAY = "Encoding";
 
-    private final static ConfigDef CONFIG;
+    private static final ConfigDef CONFIG;
 
     static {
         CONFIG = ConverterConfig.newConfigDef();

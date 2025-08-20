@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.time.Duration;
-import java.util.Collection;
-
 import org.apache.kafka.common.TopicPartition;
+
+import java.util.Collection;
 
 /**
  * A callback interface that the user can implement to trigger custom actions when the set of partitions assigned to the
@@ -121,7 +120,7 @@ public interface ConsumerRebalanceListener {
     /**
      * A callback method the user can implement to provide handling of offset commits to a customized store.
      * This method will be called during a rebalance operation when the consumer has to give up some partitions.
-     * It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
+     * It can also be called when consumer is being closed ({@link KafkaConsumer#close(CloseOptions option)})
      * or is unsubscribing ({@link KafkaConsumer#unsubscribe()}).
      * It is recommended that offsets should be committed in this callback to either Kafka or a
      * custom offset store to prevent duplicate data.
@@ -152,7 +151,7 @@ public interface ConsumerRebalanceListener {
      * {@link #onPartitionsRevoked(Collection)} callback before any instance executes its
      * {@link #onPartitionsAssigned(Collection)} callback. During exceptional scenarios, partitions may be migrated
      * without the old owner being notified (i.e. their {@link #onPartitionsRevoked(Collection)} callback not triggered),
-     * and later when the old owner consumer realized this event, the {@link #onPartitionsLost(Collection)} (Collection)} callback
+     * and later when the old owner consumer realized this event, the {@link #onPartitionsLost(Collection)} callback
      * will be triggered by the consumer then.
      * <p>
      * It is common for the assignment callback to use the consumer instance in order to query offsets. It is possible

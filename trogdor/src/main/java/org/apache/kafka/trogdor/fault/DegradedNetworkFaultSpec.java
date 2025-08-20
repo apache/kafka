@@ -17,13 +17,13 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
-import java.util.Collections;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.Map;
 
 public class DegradedNetworkFaultSpec extends TaskSpec {
@@ -74,7 +74,7 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
                                     @JsonProperty("durationMs") long durationMs,
                                     @JsonProperty("nodeSpecs") Map<String, NodeDegradeSpec> nodeSpecs) {
         super(startMs, durationMs);
-        this.nodeSpecs = nodeSpecs == null ? Collections.emptyMap() : Collections.unmodifiableMap(nodeSpecs);
+        this.nodeSpecs = nodeSpecs == null ? Map.of() : Map.copyOf(nodeSpecs);
     }
 
     @Override

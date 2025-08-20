@@ -17,12 +17,8 @@
 
 package org.apache.kafka.connect.transforms;
 
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
@@ -33,14 +29,22 @@ import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
-import java.util.Collections;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -53,6 +57,12 @@ public class CastTest {
     private static final long MILLIS_PER_HOUR = TimeUnit.HOURS.toMillis(1);
     private static final long MILLIS_PER_DAY = TimeUnit.DAYS.toMillis(1);
 
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(false, null),
+                Arguments.of(true, "10")
+        );
+    }
     @AfterEach
     public void teardown() {
         xformKey.close();
@@ -61,46 +71,64 @@ public class CastTest {
 
     @Test
     public void testConfigEmpty() {
-        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "")));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Map.of(Cast.SPEC_CONFIG, "")));
     }
 
     @Test
     public void testConfigInvalidSchemaType() {
-        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:faketype")));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:faketype")));
     }
 
     @Test
     public void testConfigInvalidTargetType() {
-        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array")));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:array")));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Map.of(Cast.SPEC_CONFIG, "array")));
     }
 
     @Test
     public void testUnsupportedTargetType() {
-        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:bytes")));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:bytes")));
     }
 
     @Test
     public void testConfigInvalidMap() {
-        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8:extra")));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:int8:extra")));
     }
 
     @Test
     public void testConfigMixWholeAndFieldTransformation() {
-        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int8,int32")));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:int8,int32")));
     }
 
     @Test
     public void castNullValueRecordWithSchema() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int64"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "foo:int64"));
         SourceRecord original = new SourceRecord(null, null, "topic", 0,
             Schema.STRING_SCHEMA, "key", Schema.STRING_SCHEMA, null);
         SourceRecord transformed = xformValue.apply(original);
         assertEquals(original, transformed);
     }
 
+    @ParameterizedTest
+    @MethodSource("data")
+    public void castFieldWithDefaultValueRecordWithSchema(boolean replaceNullWithDefault, Object expectedValue) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(Cast.SPEC_CONFIG, "magic:string");
+        configs.put(Cast.REPLACE_NULL_WITH_DEFAULT_CONFIG, replaceNullWithDefault);
+        xformValue.configure(configs);
+        Schema structSchema = SchemaBuilder.struct()
+                .field("magic", SchemaBuilder.int32().optional().defaultValue(10).build()).build();
+        SourceRecord original = new SourceRecord(null, null, "topic", 0,
+                Schema.STRING_SCHEMA, "key", structSchema, new Struct(structSchema).put("magic", null));
+        SourceRecord transformed = xformValue.apply(original);
+
+        assertEquals(Type.STRING, transformed.valueSchema().field("magic").schema().type());
+        assertEquals(expectedValue, ((Struct) transformed.value()).getWithoutDefault("magic"));
+    }
+
     @Test
     public void castNullValueRecordSchemaless() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int64"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "foo:int64"));
         SourceRecord original = new SourceRecord(null, null, "topic", 0,
             Schema.STRING_SCHEMA, "key", null, null);
         SourceRecord transformed = xformValue.apply(original);
@@ -109,7 +137,7 @@ public class CastTest {
 
     @Test
     public void castNullKeyRecordWithSchema() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int64"));
+        xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:int64"));
         SourceRecord original = new SourceRecord(null, null, "topic", 0,
             Schema.STRING_SCHEMA, null, Schema.STRING_SCHEMA, "value");
         SourceRecord transformed = xformKey.apply(original);
@@ -118,7 +146,7 @@ public class CastTest {
 
     @Test
     public void castNullKeyRecordSchemaless() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int64"));
+        xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:int64"));
         SourceRecord original = new SourceRecord(null, null, "topic", 0,
             null, null, Schema.STRING_SCHEMA, "value");
         SourceRecord transformed = xformKey.apply(original);
@@ -127,7 +155,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordKeyWithSchema() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformKey.configure(Map.of(Cast.SPEC_CONFIG, "int8"));
         SourceRecord transformed = xformKey.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42, Schema.STRING_SCHEMA, "bogus"));
 
@@ -137,7 +165,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaInt8() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int8"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -147,7 +175,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaInt16() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int16"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int16"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -157,7 +185,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaInt32() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int32"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -167,7 +195,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaInt64() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int64"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int64"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -177,7 +205,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaFloat32() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "float32"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "float32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -187,7 +215,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaFloat64() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "float64"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "float64"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -197,7 +225,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaBooleanTrue() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "boolean"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "boolean"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -207,7 +235,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaBooleanFalse() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "boolean"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "boolean"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 0));
 
@@ -217,7 +245,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueWithSchemaString() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "string"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Schema.INT32_SCHEMA, 42));
 
@@ -228,7 +256,7 @@ public class CastTest {
     @Test
     public void castWholeBigDecimalRecordValueWithSchemaString() {
         BigDecimal bigDecimal = new BigDecimal(42);
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "string"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Decimal.schema(bigDecimal.scale()), bigDecimal));
 
@@ -239,7 +267,7 @@ public class CastTest {
     @Test
     public void castWholeDateRecordValueWithSchemaString() {
         Date timestamp = new Date(MILLIS_PER_DAY + 1); // day + 1msec to get a timestamp formatting.
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "string"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 Timestamp.SCHEMA, timestamp));
 
@@ -250,7 +278,7 @@ public class CastTest {
     @Test
     public void castWholeRecordDefaultValue() {
         // Validate default value in schema is correctly converted
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int32"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 SchemaBuilder.float32().defaultValue(-42.125f).build(), 42.125f));
 
@@ -261,7 +289,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordKeySchemaless() {
-        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformKey.configure(Map.of(Cast.SPEC_CONFIG, "int8"));
         SourceRecord transformed = xformKey.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42, Schema.STRING_SCHEMA, "bogus"));
 
@@ -271,7 +299,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessInt8() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int8"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -281,7 +309,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessInt16() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int16"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int16"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -291,7 +319,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessInt32() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int32"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -301,7 +329,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessInt64() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int64"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int64"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -311,7 +339,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessFloat32() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "float32"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "float32"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -321,7 +349,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessFloat64() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "float64"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "float64"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -331,7 +359,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessBooleanTrue() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "boolean"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "boolean"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -341,7 +369,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessBooleanFalse() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "boolean"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "boolean"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 0));
 
@@ -351,7 +379,7 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessString() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "string"));
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
                 null, 42));
 
@@ -361,15 +389,15 @@ public class CastTest {
 
     @Test
     public void castWholeRecordValueSchemalessUnsupportedType() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int8"));
         assertThrows(DataException.class,
             () -> xformValue.apply(new SourceRecord(null, null, "topic", 0,
-                    null, Collections.singletonList("foo"))));
+                    null, List.of("foo"))));
     }
 
     @Test
     public void castLogicalToPrimitive() {
-        List<String> specParts = Arrays.asList(
+        List<String> specParts = List.of(
             "date_to_int32:int32",  // Cast to underlying representation
             "timestamp_to_int64:int64",  // Cast to underlying representation
             "time_to_int64:int64",  // Cast to wider datatype than underlying representation
@@ -379,7 +407,7 @@ public class CastTest {
         );
 
         Date day = new Date(MILLIS_PER_DAY);
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG,
             String.join(",", specParts)));
 
         SchemaBuilder builder = SchemaBuilder.struct();
@@ -426,7 +454,7 @@ public class CastTest {
         Date time = new Date(MILLIS_PER_HOUR);
         Date timestamp = new Date();
 
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG,
             "date:string,decimal:string,time:string,timestamp:string"));
 
         SchemaBuilder builder = SchemaBuilder.struct();
@@ -465,7 +493,7 @@ public class CastTest {
         byte[] byteArray = new byte[] {(byte) 0xFE, (byte) 0xDC, (byte) 0xBA, (byte) 0x98, 0x76, 0x54, 0x32, 0x10};
         ByteBuffer byteBuffer = ByteBuffer.wrap(Arrays.copyOf(byteArray, byteArray.length));
 
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG,
                 "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,date:string,optional:int32,bytes:string,byteArray:string"));
 
         // Include an optional fields and fields with defaults to validate their values are passed through properly
@@ -549,7 +577,7 @@ public class CastTest {
     @SuppressWarnings("unchecked")
     @Test
     public void castFieldsSchemaless() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32"));
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32"));
         Map<String, Object> recordValue = new HashMap<>();
         recordValue.put("int8", (byte) 8);
         recordValue.put("int16", (short) 16);
@@ -571,6 +599,14 @@ public class CastTest {
         assertEquals(true, ((Map<String, Object>) transformed.value()).get("float64"));
         assertEquals((byte) 1, ((Map<String, Object>) transformed.value()).get("boolean"));
         assertEquals(42, ((Map<String, Object>) transformed.value()).get("string"));
+    }
+
+    @Test
+    public void testCastVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xformKey.version());
+        assertEquals(AppInfoParser.getVersion(), xformValue.version());
+
+        assertEquals(xformKey.version(), xformValue.version());
     }
 
 }

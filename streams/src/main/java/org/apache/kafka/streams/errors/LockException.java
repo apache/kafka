@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 /**
  * Indicates that the state store directory lock could not be acquired because another thread holds the lock.
  *
@@ -24,7 +23,7 @@ package org.apache.kafka.streams.errors;
  */
 public class LockException extends StreamsException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     public LockException(final String message) {
         super(message);

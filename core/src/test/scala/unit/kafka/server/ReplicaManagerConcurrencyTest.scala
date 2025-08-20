@@ -20,25 +20,30 @@ import java.net.InetAddress
 import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
 import java.util.{Optional, Properties}
-import kafka.api.LeaderAndIsr
-import kafka.log.{AppendOrigin, LogConfig}
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
-import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.waitUntilTrue
-import kafka.utils.{MockTime, ShutdownableThread, TestUtils}
-import org.apache.kafka.common.metadata.RegisterBrokerRecord
-import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
+import kafka.utils.{CoreUtils, Logging, TestUtils}
+import org.apache.kafka.common
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, MockConfigRepository}
 import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.storage.Formatter
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, TopicIdPartition}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.Mockito
@@ -47,12 +52,15 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.Random
 
-class ReplicaManagerConcurrencyTest {
+class ReplicaManagerConcurrencyTest extends Logging {
 
   private val time = new MockTime()
   private val metrics = new Metrics()
   private val executor = Executors.newScheduledThreadPool(8)
   private val tasks = mutable.Buffer.empty[ShutdownableThread]
+  private var channel: ControllerChannel = _
+  private var quotaManagers: QuotaManagers = _
+  private var replicaManager: ReplicaManager = _
 
   private def submit(task: ShutdownableThread): Unit = {
     tasks += task
@@ -61,19 +69,23 @@ class ReplicaManagerConcurrencyTest {
 
   @AfterEach
   def cleanup(): Unit = {
-    tasks.foreach(_.shutdown())
-    executor.shutdownNow()
-    executor.awaitTermination(5, TimeUnit.SECONDS)
-    metrics.close()
+    CoreUtils.swallow(tasks.foreach(_.shutdown()), this)
+    CoreUtils.swallow(executor.shutdownNow(), this)
+    CoreUtils.swallow(executor.awaitTermination(5, TimeUnit.SECONDS), this)
+    CoreUtils.swallow(channel.shutdown(), this)
+    CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
+    CoreUtils.swallow(quotaManagers.shutdown(), this)
+    Utils.closeQuietly(metrics, "metrics")
+    CoreUtils.swallow(time.scheduler.shutdown(), this)
   }
 
   @Test
   def testIsrExpandAndShrinkWithConcurrentProduce(): Unit = {
     val localId = 0
     val remoteId = 1
-    val metadataCache = MetadataCache.kRaftMetadataCache(localId)
-    val channel = new ControllerChannel
-    val replicaManager = buildReplicaManager(localId, channel, metadataCache)
+    val metadataCache = new KRaftMetadataCache(localId, () => KRaftVersion.KRAFT_VERSION_0)
+    channel = new ControllerChannel
+    replicaManager = buildReplicaManager(localId, channel, metadataCache)
 
     // Start with the remote replica out of the ISR
     val initialPartitionRegistration = registration(
@@ -85,7 +97,7 @@ class ReplicaManagerConcurrencyTest {
 
     val topicModel = new TopicModel(Uuid.randomUuid(), "foo", Map(0 -> initialPartitionRegistration))
     val topicPartition = new TopicPartition(topicModel.name, 0)
-    val topicIdPartition = new TopicIdPartition(topicModel.topicId, topicPartition)
+    val topicIdPartition = new TopicIdPartition(topicModel.topicId, topicPartition.partition)
     val controller = new ControllerModel(Seq(localId, remoteId), topicModel, channel, replicaManager, metadataCache)
 
     submit(new Clock(time))
@@ -117,6 +129,7 @@ class ReplicaManagerConcurrencyTest {
       clientId = s"replica-$remoteId",
       replicaId = remoteId,
       topicIdPartition,
+      topicPartition.topic,
       replicaManager
     )
 
@@ -134,7 +147,7 @@ class ReplicaManagerConcurrencyTest {
 
   private class Clock(
     time: MockTime
-  ) extends ShutdownableThread(name = "clock", isInterruptible = false) {
+  ) extends ShutdownableThread("clock", false) {
     override def doWork(): Unit = {
       time.sleep(1)
     }
@@ -146,14 +159,21 @@ class ReplicaManagerConcurrencyTest {
     metadataCache: MetadataCache,
   ): ReplicaManager = {
     val logDir = TestUtils.tempDir()
+    val formatter = new Formatter().
+      setClusterId(Uuid.randomUuid().toString).
+      setNodeId(1)
+    formatter.addDirectory(logDir.getAbsolutePath)
+    formatter.setControllerListenerName("CONTROLLER")
+    formatter.setMetadataLogDirectory(logDir.getAbsolutePath)
+    formatter.run()
 
     val props = new Properties
-    props.put(KafkaConfig.QuorumVotersProp, "100@localhost:12345")
-    props.put(KafkaConfig.ProcessRolesProp, "broker")
-    props.put(KafkaConfig.NodeIdProp, localId.toString)
-    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    props.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
-    props.put(KafkaConfig.ReplicaLagTimeMaxMsProp, 5000.toString)
+    props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "100@localhost:12345")
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.put(KRaftConfigs.NODE_ID_CONFIG, localId.toString)
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    props.put(ServerLogConfigs.LOG_DIR_CONFIG, logDir.getAbsolutePath)
+    props.put(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, 5000.toString)
 
     val config = new KafkaConfig(props, doLog = false)
 
@@ -164,13 +184,15 @@ class ReplicaManagerConcurrencyTest {
       time = time
     )
 
+    quotaManagers = QuotaFactory.instantiate(config, metrics, time, "", "")
+
     new ReplicaManager(
       metrics = metrics,
       config = config,
       time = time,
       scheduler = time.scheduler,
       logManager = logManager,
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      quotaManagers = quotaManagers,
       metadataCache = metadataCache,
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = new MockAlterPartitionManager(channel)
@@ -178,7 +200,6 @@ class ReplicaManagerConcurrencyTest {
       override def createReplicaFetcherManager(
         metrics: Metrics,
         time: Time,
-        threadNamePrefix: Option[String],
         quotaManager: ReplicationQuotaManager
       ): ReplicaFetcherManager = {
         Mockito.mock(classOf[ReplicaFetcherManager])
@@ -190,8 +211,9 @@ class ReplicaManagerConcurrencyTest {
     clientId: String,
     replicaId: Int,
     topicIdPartition: TopicIdPartition,
+    topicName: String,
     replicaManager: ReplicaManager
-  ) extends ShutdownableThread(name = clientId, isInterruptible = false) {
+  ) extends ShutdownableThread(clientId, false) {
     private val random = new Random()
 
     private val clientMetadata = new DefaultClientMetadata(
@@ -215,11 +237,14 @@ class ReplicaManagerConcurrencyTest {
       )
 
       val future = new CompletableFuture[FetchPartitionData]()
-      def fetchCallback(results: collection.Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+      def fetchCallback(results: collection.Seq[(org.apache.kafka.common.TopicIdPartition, FetchPartitionData)]): Unit = {
         try {
           assertEquals(1, results.size)
           val (topicIdPartition, result) = results.head
-          assertEquals(this.topicIdPartition, topicIdPartition)
+          assertEquals(this.topicIdPartition.topicId, topicIdPartition.topicId)
+          assertEquals(this.topicIdPartition.partitionId, topicIdPartition.partition)
+          assertEquals(this.topicIdPartition.topicId, topicIdPartition.topicId)
+          assertEquals(topicName, topicIdPartition.topic)
           assertEquals(Errors.NONE, result.error)
           future.complete(result)
         } catch {
@@ -227,20 +252,20 @@ class ReplicaManagerConcurrencyTest {
         }
       }
 
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = replicaId,
-        maxWaitMs = random.nextInt(100),
-        minBytes = 1,
-        maxBytes = 1024 * 1024,
-        isolation = FetchIsolation(replicaId, IsolationLevel.READ_UNCOMMITTED),
-        clientMetadata = Some(clientMetadata)
+      val fetchParams = new FetchParams(
+        replicaId,
+        defaultBrokerEpoch(replicaId),
+        random.nextInt(100),
+        1,
+        1024 * 1024,
+        FetchIsolation.of(replicaId, IsolationLevel.READ_UNCOMMITTED),
+        Optional.of(clientMetadata)
       )
 
       replicaManager.fetchMessages(
         params = fetchParams,
-        fetchInfos = Seq(topicIdPartition -> partitionData),
-        quota = QuotaFactory.UnboundedQuota,
+        fetchInfos = Seq(new org.apache.kafka.common.TopicIdPartition(topicIdPartition.topicId, topicIdPartition.partitionId, topicName) -> partitionData),
+        quota = QuotaFactory.UNBOUNDED_QUOTA,
         responseCallback = fetchCallback,
       )
 
@@ -255,7 +280,7 @@ class ReplicaManagerConcurrencyTest {
     clientId: String,
     topicPartition: TopicPartition,
     replicaManager: ReplicaManager
-  ) extends ShutdownableThread(name = clientId, isInterruptible = false) {
+  ) extends ShutdownableThread(clientId, false) {
     private val random = new Random()
     private var sequence = 0
 
@@ -267,11 +292,13 @@ class ReplicaManagerConcurrencyTest {
       }
 
       val future = new CompletableFuture[ProduceResponse.PartitionResponse]()
-      def produceCallback(results: collection.Map[TopicPartition, ProduceResponse.PartitionResponse]): Unit = {
+      val topicIdPartition: common.TopicIdPartition = replicaManager.topicIdPartition(topicPartition)
+
+      def produceCallback(results: collection.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
         try {
           assertEquals(1, results.size)
           val (topicPartition, result) = results.head
-          assertEquals(this.topicPartition, topicPartition)
+          assertEquals(topicIdPartition, topicPartition)
           assertEquals(Errors.NONE, result.error)
           future.complete(result)
         } catch {
@@ -283,8 +310,8 @@ class ReplicaManagerConcurrencyTest {
         timeout = 30000,
         requiredAcks = (-1).toShort,
         internalTopicsAllowed = false,
-        origin = AppendOrigin.Client,
-        entriesPerPartition = collection.Map(topicPartition -> TestUtils.records(records)),
+        origin = AppendOrigin.CLIENT,
+        entriesPerPartition = collection.Map(topicIdPartition -> TestUtils.records(records)),
         responseCallback = produceCallback
       )
 
@@ -333,7 +360,7 @@ class ReplicaManagerConcurrencyTest {
     channel: ControllerChannel,
     replicaManager: ReplicaManager,
     metadataCache: KRaftMetadataCache
-  ) extends ShutdownableThread(name = "controller", isInterruptible = false) {
+  ) extends ShutdownableThread("controller", false) {
     private var latestImage = MetadataImage.EMPTY
 
     def initialize(): Unit = {
@@ -349,22 +376,27 @@ class ReplicaManagerConcurrencyTest {
     override def doWork(): Unit = {
       channel.poll() match {
         case InitializeEvent =>
-          val delta = new MetadataDelta(latestImage)
+          val delta = new MetadataDelta.Builder().setImage(latestImage).build()
           brokerIds.foreach { brokerId =>
+            delta.replay(new FeatureLevelRecord()
+              .setName(MetadataVersion.FEATURE_NAME)
+              .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+            )
             delta.replay(new RegisterBrokerRecord()
               .setBrokerId(brokerId)
               .setFenced(false)
+              .setBrokerEpoch(defaultBrokerEpoch(brokerId))
             )
           }
           topic.initialize(delta)
-          latestImage = delta.apply()
+          latestImage = delta.apply(latestImage.provenance())
           metadataCache.setImage(latestImage)
           replicaManager.applyDelta(delta.topicsDelta, latestImage)
 
         case AlterIsrEvent(future, topicPartition, leaderAndIsr) =>
-          val delta = new MetadataDelta(latestImage)
+          val delta = new MetadataDelta.Builder().setImage(latestImage).build()
           val updatedLeaderAndIsr = topic.alterIsr(topicPartition, leaderAndIsr, delta)
-          latestImage = delta.apply()
+          latestImage = delta.apply(latestImage.provenance())
           future.complete(updatedLeaderAndIsr)
           replicaManager.applyDelta(delta.topicsDelta, latestImage)
 
@@ -396,7 +428,7 @@ class ReplicaManagerConcurrencyTest {
       leaderAndIsr: LeaderAndIsr,
       delta: MetadataDelta
     ): LeaderAndIsr = {
-      val partitionModel = partitions.getOrElse(topicPartition.partition,
+      val partitionModel = partitions.getOrElse(topicPartition.partitionId,
         throw new IllegalStateException(s"Unexpected partition $topicPartition")
       )
       partitionModel.alterIsr(leaderAndIsr, delta)
@@ -415,7 +447,7 @@ class ReplicaManagerConcurrencyTest {
       delta.replay(new PartitionChangeRecord()
         .setTopicId(topic.topicId)
         .setPartitionId(partitionId)
-        .setIsr(leaderAndIsr.isr.map(Int.box).asJava)
+        .setIsr(leaderAndIsr.isr)
         .setLeader(leaderAndIsr.leader)
       )
       this.registration = delta.topicsDelta
@@ -447,7 +479,6 @@ class ReplicaManagerConcurrencyTest {
     override def submit(
       topicPartition: TopicIdPartition,
       leaderAndIsr: LeaderAndIsr,
-      controllerEpoch: Int
     ): CompletableFuture[LeaderAndIsr] = {
       channel.alterIsr(topicPartition, leaderAndIsr)
     }
@@ -461,16 +492,18 @@ class ReplicaManagerConcurrencyTest {
     leaderEpoch: Int = 0,
     partitionEpoch: Int = 0
   ): PartitionRegistration = {
-    new PartitionRegistration(
-      replicaIds.toArray,
-      isr.toArray,
-      Array.empty[Int],
-      Array.empty[Int],
-      leader,
-      leaderRecoveryState,
-      leaderEpoch,
-      partitionEpoch
-    )
+    new PartitionRegistration.Builder().
+      setReplicas(replicaIds.toArray).
+      setDirectories(DirectoryId.unassignedArray(replicaIds.size)).
+      setIsr(isr.toArray).
+      setLeader(leader).
+      setLeaderRecoveryState(leaderRecoveryState).
+      setLeaderEpoch(leaderEpoch).
+      setPartitionEpoch(partitionEpoch).
+      build()
   }
 
+  private def defaultBrokerEpoch(brokerId: Int): Long = {
+    brokerId + 100L
+  }
 }

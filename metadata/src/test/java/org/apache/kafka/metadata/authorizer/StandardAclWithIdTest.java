@@ -19,6 +19,7 @@ package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -31,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(value = 40)
 public class StandardAclWithIdTest {
-    public final static List<StandardAclWithId> TEST_ACLS = new ArrayList<>();
+    public static final List<StandardAclWithId> TEST_ACLS = new ArrayList<>();
 
     static {
         TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("QZDDv-R7SyaPgetDPGd0Mw"),

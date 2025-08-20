@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.types.Type;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -24,12 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.protocol.types.Type;
 
 /**
  * A cooperative version of the {@link AbstractStickyAssignor AbstractStickyAssignor}. This follows the same (sticky)
@@ -84,6 +86,11 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
     @Override
     protected MemberData memberData(Subscription subscription) {
+        // In ConsumerProtocolSubscription v2 or higher, we can take member data from fields directly
+        if (subscription.generationId().isPresent()) {
+            return new MemberData(subscription.ownedPartitions(), subscription.generationId());
+        }
+
         ByteBuffer buffer = subscription.userData();
         Optional<Integer> encodedGeneration;
         if (buffer == null) {
@@ -96,13 +103,13 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
                 encodedGeneration = Optional.of(DEFAULT_GENERATION);
             }
         }
-        return new MemberData(subscription.ownedPartitions(), encodedGeneration);
+        return new MemberData(subscription.ownedPartitions(), encodedGeneration, subscription.rackId());
     }
 
     @Override
-    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, Subscription> subscriptions) {
-        Map<String, List<TopicPartition>> assignments = super.assign(partitionsPerTopic, subscriptions);
+    public Map<String, List<TopicPartition>> assignPartitions(Map<String, List<PartitionInfo>> partitionsPerTopic,
+                                                              Map<String, Subscription> subscriptions) {
+        Map<String, List<TopicPartition>> assignments = super.assignPartitions(partitionsPerTopic, subscriptions);
 
         Map<TopicPartition, String> partitionsTransferringOwnership = super.partitionsTransferringOwnership == null ?
             computePartitionsTransferringOwnership(subscriptions, assignments) :

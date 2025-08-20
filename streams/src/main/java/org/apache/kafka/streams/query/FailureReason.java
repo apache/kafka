@@ -66,5 +66,5 @@ public enum FailureReason {
      * will contain the exception details. Depending on the nature of the exception, the caller
      * may be able to retry this instance or may need to try a different instance.
      */
-    STORE_EXCEPTION;
+    STORE_EXCEPTION
 }

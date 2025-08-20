@@ -17,6 +17,7 @@
 package org.apache.kafka.common.internals;
 
 import org.apache.kafka.common.TopicPartition;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -174,7 +175,7 @@ public class PartitionStatesTest {
         LinkedHashMap<TopicPartition, String> map = createMap();
         states.set(map);
         states.clear();
-        checkState(states, new LinkedHashMap<TopicPartition, String>());
+        checkState(states, new LinkedHashMap<>());
     }
 
     @Test

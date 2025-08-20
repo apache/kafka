@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
@@ -35,7 +36,6 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -44,9 +44,11 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Before;
-import org.junit.Test;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -57,9 +59,9 @@ import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KGroupedStreamImplTest {
 
@@ -70,7 +72,7 @@ public class KGroupedStreamImplTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @Before
+    @BeforeEach
     public void before() {
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
@@ -368,6 +370,40 @@ public class KGroupedStreamImplTest {
         table.toStream().process(supplier);
 
         doAggregateSessionWindows(supplier);
+    }
+
+    @Test
+    public void sessionGapOfZeroShouldOnlyPutRecordsWithSameTsIntoSameSession() {
+        final MockApiProcessorSupplier<Windowed<String>, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final KTable<Windowed<String>, Integer> table = groupedStream
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ZERO))
+            .aggregate(
+                () -> 0,
+                (aggKey, value, aggregate) -> aggregate + 1,
+                (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
+                Materialized.with(null, Serdes.Integer()));
+        table.toStream().process(supplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("1", "1", 10);
+            inputTopic.pipeInput("1", "1", 11);
+            inputTopic.pipeInput("1", "1", 11);
+            inputTopic.pipeInput("1", "1", 12);
+        }
+
+        final Map<Windowed<String>, ValueAndTimestamp<Integer>> result
+            = supplier.theCapturedProcessor().lastValueAndTimestampPerKey();
+        assertEquals(
+            ValueAndTimestamp.make(1, 10),
+            result.get(new Windowed<>("1", new SessionWindow(10L, 10L))));
+        assertEquals(
+            ValueAndTimestamp.make(2, 11L),
+            result.get(new Windowed<>("1", new SessionWindow(11L, 11L))));
+        assertEquals(
+            ValueAndTimestamp.make(1, 12L),
+            result.get(new Windowed<>("1", new SessionWindow(12L, 12L))));
     }
 
     private void doCountSessionWindows(final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier) {

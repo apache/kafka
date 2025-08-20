@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -51,20 +52,20 @@ class StandbyTaskCreator {
                        final StateDirectory stateDirectory,
                        final ChangelogReader storeChangelogReader,
                        final String threadId,
-                       final Logger log,
+                       final LogContext logContext,
                        final boolean stateUpdaterEnabled) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
-        this.log = log;
+        this.log = logContext.logger(getClass());
         this.stateUpdaterEnabled = stateUpdaterEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
 
         dummyCache = new ThreadCache(
-            new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
+            logContext,
             0,
             streamsMetrics
         );
@@ -91,7 +92,7 @@ class StandbyTaskCreator {
                     partitions,
                     stateUpdaterEnabled);
 
-                final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
+                final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
                     taskId,
                     applicationConfig,
                     stateManager,
@@ -123,7 +124,7 @@ class StandbyTaskCreator {
         }
 
         streamTask.prepareRecycle();
-        streamTask.stateMgr.transitionTaskType(Task.TaskType.STANDBY);
+        streamTask.stateMgr.transitionTaskType(Task.TaskType.STANDBY, getLogContext(streamTask.id));
 
         final StandbyTask task = new StandbyTask(
             streamTask.id,
@@ -146,12 +147,12 @@ class StandbyTaskCreator {
                                   final Set<TopicPartition> inputPartitions,
                                   final ProcessorTopology topology,
                                   final ProcessorStateManager stateManager,
-                                  final InternalProcessorContext<Object, Object> context) {
+                                  final InternalProcessorContext<?, ?> context) {
         final StandbyTask task = new StandbyTask(
             taskId,
             inputPartitions,
             topology,
-            topologyMetadata.getTaskConfigFor(taskId),
+            topologyMetadata.taskConfig(taskId),
             streamsMetrics,
             stateManager,
             stateDirectory,

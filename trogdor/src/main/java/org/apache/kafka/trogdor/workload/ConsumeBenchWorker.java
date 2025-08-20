@@ -17,9 +17,6 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -34,22 +31,26 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
+import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.HashMap;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -57,7 +58,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 
 
 public class ConsumeBenchWorker implements TaskWorker {
@@ -131,7 +131,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 }
             } else {
                 List<TopicPartition> partitions = populatePartitionsByTopic(consumer.consumer(), partitionsByTopic)
-                    .values().stream().flatMap(List::stream).collect(Collectors.toList());
+                    .values().stream().flatMap(List::stream).toList();
                 tasks.add(new ConsumeMessages(consumer, spec.recordProcessor(), partitions));
 
                 for (int i = 0; i < consumerCount - 1; i++) {
@@ -163,7 +163,7 @@ public class ConsumeBenchWorker implements TaskWorker {
 
         private String consumerGroup() {
             return toUseRandomConsumeGroup()
-                ? "consume-bench-" + UUID.randomUUID().toString()
+                ? "consume-bench-" + UUID.randomUUID()
                 : spec.consumerGroup();
         }
 
@@ -181,7 +181,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 if (partitions.isEmpty()) {
                     List<TopicPartition> fetchedPartitions = consumer.partitionsFor(topicName).stream()
                         .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
-                        .collect(Collectors.toList());
+                        .toList();
                     partitions.addAll(fetchedPartitions);
                 }
 
@@ -404,7 +404,7 @@ public class ConsumeBenchWorker implements TaskWorker {
          * The percentiles to use when calculating the histogram data.
          * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
          */
-        final static float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
+        static final float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
         @JsonCreator
         StatusData(@JsonProperty("assignedPartitions") List<String> assignedPartitions,
                    @JsonProperty("totalMessagesReceived") long totalMessagesReceived,
@@ -549,7 +549,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.consumerLock.lock();
             try {
                 return consumer.assignment().stream()
-                    .map(TopicPartition::toString).collect(Collectors.toList());
+                    .map(TopicPartition::toString).toList();
             } finally {
                 this.consumerLock.unlock();
             }

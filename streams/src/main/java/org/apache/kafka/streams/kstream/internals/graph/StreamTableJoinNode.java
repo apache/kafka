@@ -17,31 +17,34 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.time.Duration;
 import java.util.Arrays;
 
 /**
  * Represents a join between a KStream and a KTable or GlobalKTable
  */
 
-public class StreamTableJoinNode<K, V> extends GraphNode {
+public class StreamTableJoinNode<K, V, VOut> extends GraphNode {
 
     private final String[] storeNames;
-    private final ProcessorParameters<K, V, ?, ?> processorParameters;
+    private final ProcessorParameters<K, V, K, VOut> processorParameters;
     private final String otherJoinSideNodeName;
+    private final Duration gracePeriod;
 
     public StreamTableJoinNode(final String nodeName,
-                               final ProcessorParameters<K, V, ?, ?> processorParameters,
+                               final ProcessorParameters<K, V, K, VOut> processorParameters,
                                final String[] storeNames,
-                               final String otherJoinSideNodeName) {
+                               final String otherJoinSideNodeName,
+                               final Duration gracePeriod) {
         super(nodeName);
 
         // in the case of Stream-Table join the state stores associated with the KTable
         this.storeNames = storeNames;
         this.processorParameters = processorParameters;
         this.otherJoinSideNodeName = otherJoinSideNodeName;
+        this.gracePeriod = gracePeriod;
     }
 
     @Override
@@ -56,14 +59,23 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String processorName = processorParameters.processorName();
-        final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters.processorSupplier();
 
         // Stream - Table join (Global or KTable)
-        topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
+        processorParameters.addProcessorTo(topologyBuilder, parentNodeNames());
 
         // Steam - KTable join only
         if (otherJoinSideNodeName != null) {
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
+            if (gracePeriod != null) {
+                for (final String storeName : storeNames) {
+                    if (!topologyBuilder.isStoreVersioned(storeName)) {
+                        throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
+                    }
+                    if (gracePeriod.toMillis() > topologyBuilder.historyRetention(storeName)) {
+                        throw new IllegalArgumentException("History retention must be at least grace period.");
+                    }
+                }
+            }
         }
 
     }

@@ -23,6 +23,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
+
 import org.rocksdb.Cache;
 import org.rocksdb.HistogramData;
 import org.rocksdb.HistogramType;
@@ -49,6 +50,7 @@ import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ES
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ESTIMATED_NUMBER_OF_KEYS;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.LIVE_SST_FILES_SIZE;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.MEMTABLE_FLUSH_PENDING;
+import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_BACKGROUND_ERRORS;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_DELETES_ACTIVE_MEMTABLE;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_DELETES_IMMUTABLE_MEMTABLES;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE;
@@ -59,7 +61,6 @@ import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NU
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_RUNNING_FLUSHES;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.PINNED_USAGE_OF_BLOCK_CACHE;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.SIZE_OF_ALL_MEMTABLES;
-import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_BACKGROUND_ERRORS;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.TOTAL_SST_FILES_SIZE;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.USAGE_OF_BLOCK_CACHE;
 
@@ -78,12 +79,6 @@ public class RocksDBMetricsRecorder {
                 statistics.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
             }
             this.statistics = statistics;
-        }
-
-        public void maybeCloseStatistics() {
-            if (statistics != null) {
-                statistics.close();
-            }
         }
     }
 
@@ -140,7 +135,7 @@ public class RocksDBMetricsRecorder {
     public void init(final StreamsMetricsImpl streamsMetrics,
                      final TaskId taskId) {
         Objects.requireNonNull(streamsMetrics, "Streams metrics must not be null");
-        Objects.requireNonNull(streamsMetrics, "task ID must not be null");
+        Objects.requireNonNull(taskId, "task ID must not be null");
         if (this.taskId != null && !this.taskId.equals(taskId)) {
             throw new IllegalStateException("Metrics recorder is re-initialised with different task: previous task is " +
                 this.taskId + " whereas current task is " + taskId + ". This is a bug in Kafka Streams. " +
@@ -379,14 +374,14 @@ public class RocksDBMetricsRecorder {
                         // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
                         // BigInteger and construct the object from the byte representation of the value
                         result = new BigInteger(1, longToBytes(
-                            valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
+                            valueProvider.db.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
                         ));
                         break;
                     } else {
                         // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
                         // BigInteger and construct the object from the byte representation of the value
                         result = result.add(new BigInteger(1, longToBytes(
-                            valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
+                            valueProvider.db.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
                         )));
                     }
                 } catch (final RocksDBException e) {
@@ -411,7 +406,6 @@ public class RocksDBMetricsRecorder {
                 " could be found. This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
-        removedValueProviders.maybeCloseStatistics();
         if (storeToValueProviders.isEmpty()) {
             logger.debug(
                 "Removing metrics recorder for store {} of task {} from metrics recording trigger",
@@ -468,8 +462,7 @@ public class RocksDBMetricsRecorder {
             writeStallDuration += valueProviders.statistics.getAndResetTickerCount(TickerType.STALL_MICROS);
             bytesWrittenDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES);
             bytesReadDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES);
-            numberOfOpenFiles += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_OPENS)
-                - valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_CLOSES);
+            numberOfOpenFiles = -1;
             numberOfFileErrors += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_ERRORS);
             final HistogramData memtableFlushTimeData = valueProviders.statistics.getHistogramData(HistogramType.FLUSH_TIME);
             memtableFlushTimeSum += memtableFlushTimeData.getSum();

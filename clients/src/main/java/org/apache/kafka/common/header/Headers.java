@@ -50,7 +50,7 @@ public interface Headers extends Iterable<Header> {
      * Returns just one (the very last) header for the given key, if present.
      * 
      * @param key to get the last header for.
-     * @return this last header matching the given key, returns none if not present.
+     * @return this last header matching the given key, returns null if not present.
      */
     Header lastHeader(String key);
 

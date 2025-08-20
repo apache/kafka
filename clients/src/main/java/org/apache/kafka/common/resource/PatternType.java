@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.resource;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -28,7 +26,6 @@ import java.util.stream.Collectors;
 /**
  * Resource pattern type.
  */
-@InterfaceStability.Evolving
 public enum PatternType {
     /**
      * Represents any PatternType which this client cannot understand, perhaps because this client is too old.
@@ -69,13 +66,13 @@ public enum PatternType {
      */
     PREFIXED((byte) 4);
 
-    private final static Map<Byte, PatternType> CODE_TO_VALUE =
+    private static final Map<Byte, PatternType> CODE_TO_VALUE =
         Collections.unmodifiableMap(
             Arrays.stream(PatternType.values())
                 .collect(Collectors.toMap(PatternType::code, Function.identity()))
         );
 
-    private final static Map<String, PatternType> NAME_TO_VALUE =
+    private static final Map<String, PatternType> NAME_TO_VALUE =
         Collections.unmodifiableMap(
             Arrays.stream(PatternType.values())
                 .collect(Collectors.toMap(PatternType::name, Function.identity()))

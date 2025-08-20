@@ -17,26 +17,24 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
-
 import java.util.{Collections, Optional}
-import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
-import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.Logging
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV2
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.{PartitionFetchState, ReplicaFetch, ResultWithPartitions}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.{Map, mutable}
-import scala.compat.java8.OptionConverters.RichOptionForJava8
+import scala.collection.mutable
 
 /**
  * Facilitates fetches from a remote replica leader.
@@ -56,7 +54,8 @@ class RemoteLeaderEndPoint(logPrefix: String,
                            brokerConfig: KafkaConfig,
                            replicaManager: ReplicaManager,
                            quota: ReplicaQuota,
-                           metadataVersionSupplier: () => MetadataVersion) extends LeaderEndPoint with Logging {
+                           metadataVersionSupplier: () => MetadataVersion,
+                           brokerEpochSupplier: () => Long) extends LeaderEndPoint with Logging {
 
   this.logIdent = logPrefix
 
@@ -65,7 +64,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
-  override def isTruncationOnFetchSupported = metadataVersionSupplier().isTruncationOnFetchSupported
+  override def isTruncationOnFetchSupported: Boolean = true
 
   override def initiateClose(): Unit = blockingSender.initiateClose()
 
@@ -73,7 +72,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
   override def brokerEndPoint(): BrokerEndPoint = blockingSender.brokerEndPoint()
 
-  override def fetch(fetchRequest: FetchRequest.Builder): collection.Map[TopicPartition, FetchData] = {
+  override def fetch(fetchRequest: FetchRequest.Builder): java.util.Map[TopicPartition, FetchResponseData.PartitionData] = {
     val clientResponse = try {
       blockingSender.sendRequest(fetchRequest)
     } catch {
@@ -87,29 +86,33 @@ class RemoteLeaderEndPoint(logPrefix: String,
       if (fetchResponse.error == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
         throw Errors.forCode(fetchResponse.error().code()).exception()
       } else {
-        Map.empty
+        java.util.Map.of()
       }
     } else {
-      fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion()).asScala
+      fetchResponse.responseData(fetchSessionHandler.sessionTopicNames, clientResponse.requestHeader().apiVersion())
     }
   }
 
-  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+  override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_TIMESTAMP)
   }
 
-  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+  override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.LATEST_TIMESTAMP)
   }
 
-  private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, earliestOrLatest: Long): Long = {
+  override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
+    fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)
+  }
+
+  private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, timestamp: Long): OffsetAndEpoch = {
     val topic = new ListOffsetsTopic()
       .setName(topicPartition.topic)
       .setPartitions(Collections.singletonList(
         new ListOffsetsPartition()
           .setPartitionIndex(topicPartition.partition)
           .setCurrentLeaderEpoch(currentLeaderEpoch)
-          .setTimestamp(earliestOrLatest)))
+          .setTimestamp(timestamp)))
     val metadataVersion = metadataVersionSupplier()
     val requestBuilder = ListOffsetsRequest.Builder.forReplica(metadataVersion.listOffsetRequestVersion, brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
@@ -120,23 +123,19 @@ class RemoteLeaderEndPoint(logPrefix: String,
       .partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
 
     Errors.forCode(responsePartition.errorCode) match {
-      case Errors.NONE =>
-        if (metadataVersion.isAtLeast(IBP_0_10_1_IV2))
-          responsePartition.offset
-        else
-          responsePartition.oldStyleOffsets.get(0)
+      case Errors.NONE => new OffsetAndEpoch(responsePartition.offset, responsePartition.leaderEpoch)
       case error => throw error.exception
     }
   }
 
-  override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+  override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = {
     if (partitions.isEmpty) {
       debug("Skipping leaderEpoch request since all partitions do not have an epoch")
-      return Map.empty
+      return java.util.Map.of()
     }
 
     val topics = new OffsetForLeaderTopicCollection(partitions.size)
-    partitions.forKeyValue { (topicPartition, epochData) =>
+    partitions.forEach { (topicPartition, epochData) =>
       var topic = topics.find(topicPartition.topic)
       if (topic == null) {
         topic = new OffsetForLeaderTopic().setTopic(topicPartition.topic)
@@ -145,8 +144,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       topic.partitions.add(epochData)
     }
 
-    val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(
-      metadataVersionSupplier().offsetForLeaderEpochRequestVersion, topics, brokerConfig.brokerId)
+    val epochRequest = OffsetsForLeaderEpochRequest.Builder.forFollower(topics, brokerConfig.brokerId)
     debug(s"Sending offset for leader epoch request $epochRequest")
 
     try {
@@ -158,40 +156,39 @@ class RemoteLeaderEndPoint(logPrefix: String,
           val tp = new TopicPartition(offsetForLeaderTopicResult.topic, offsetForLeaderPartitionResult.partition)
           tp -> offsetForLeaderPartitionResult
         }
-      }.toMap
+      }.toMap.asJava
     } catch {
       case t: Throwable =>
         warn(s"Error when sending leader epoch request for $partitions", t)
 
         // if we get any unexpected exception, mark all partitions with an error
         val error = Errors.forException(t)
-        partitions.map { case (tp, _) =>
+        partitions.asScala.map { case (tp, _) =>
           tp -> new EpochEndOffset()
             .setPartition(tp.partition)
             .setErrorCode(error.code)
-        }
+        }.asJava
     }
   }
 
-  override def buildFetch(partitions: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
+  override def buildFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[java.util.Optional[ReplicaFetch]] = {
     val partitionsWithError = mutable.Set[TopicPartition]()
-
     val builder = fetchSessionHandler.newBuilder(partitions.size, false)
-    partitions.forKeyValue { (topicPartition, fetchState) =>
+    partitions.forEach { (topicPartition, fetchState) =>
       // We will not include a replica in the fetch request if it should be throttled.
       if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, fetchState, topicPartition)) {
         try {
           val logStartOffset = replicaManager.localLogOrException(topicPartition).logStartOffset
           val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-            fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).asJava
+            fetchState.lastFetchedEpoch()
           else
             Optional.empty[Integer]
           builder.add(topicPartition, new FetchRequest.PartitionData(
-            fetchState.topicId.getOrElse(Uuid.ZERO_UUID),
-            fetchState.fetchOffset,
+            fetchState.topicId().orElse(Uuid.ZERO_UUID),
+            fetchState.fetchOffset(),
             logStartOffset,
             fetchSize,
-            Optional.of(fetchState.currentLeaderEpoch),
+            Optional.of(fetchState.currentLeaderEpoch()),
             lastFetchedEpoch))
         } catch {
           case _: KafkaStorageException =>
@@ -204,24 +201,24 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
     val fetchData = builder.build()
     val fetchRequestOpt = if (fetchData.sessionPartitions.isEmpty && fetchData.toForget.isEmpty) {
-      None
+      Optional.empty[ReplicaFetch]
     } else {
       val metadataVersion = metadataVersionSupplier()
-      val version: Short = if (metadataVersion.fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) {
+      val version: Short = if (!fetchData.canUseTopicIds) {
         12
       } else {
         metadataVersion.fetchRequestVersion
       }
       val requestBuilder = FetchRequest.Builder
-        .forReplica(version, brokerConfig.brokerId, maxWait, minBytes, fetchData.toSend)
+        .forReplica(version, brokerConfig.brokerId, brokerEpochSupplier(), maxWait, minBytes, fetchData.toSend)
         .setMaxBytes(maxBytes)
         .removed(fetchData.toForget)
         .replaced(fetchData.toReplace)
         .metadata(fetchData.metadata)
-      Some(ReplicaFetch(fetchData.sessionPartitions(), requestBuilder))
+      Optional.of(new ReplicaFetch(fetchData.sessionPartitions(), requestBuilder))
     }
 
-    ResultWithPartitions(fetchRequestOpt, partitionsWithError)
+    new ResultWithPartitions(fetchRequestOpt, partitionsWithError.asJava)
   }
 
   /**

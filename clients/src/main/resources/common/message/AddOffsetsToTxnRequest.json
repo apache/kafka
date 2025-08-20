@@ -16,14 +16,16 @@
 {
   "apiKey": 25,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "AddOffsetsToTxnRequest",
   // Version 1 is the same as version 0.
   //
   // Version 2 adds the support for new error code PRODUCER_FENCED.
   //
   // Version 3 enables flexible versions.
-  "validVersions": "0-3",
+  //
+  // Version 4 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",

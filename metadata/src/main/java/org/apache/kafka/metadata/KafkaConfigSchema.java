@@ -24,15 +24,16 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.server.config.ConfigSynonym;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptyMap;
+import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
 
 
 /**
@@ -41,7 +42,7 @@ import static java.util.Collections.emptyMap;
  * determining the type of config keys (string, int, password, etc.)
  */
 public class KafkaConfigSchema {
-    public static final KafkaConfigSchema EMPTY = new KafkaConfigSchema(emptyMap(), emptyMap());
+    public static final KafkaConfigSchema EMPTY = new KafkaConfigSchema(Map.of(), Map.of());
 
     private static final ConfigDef EMPTY_CONFIG_DEF = new ConfigDef();
 
@@ -54,28 +55,17 @@ public class KafkaConfigSchema {
      * makes sense to put it here.
      */
     public static ConfigEntry.ConfigType translateConfigType(ConfigDef.Type type) {
-        switch (type) {
-            case BOOLEAN:
-                return ConfigEntry.ConfigType.BOOLEAN;
-            case STRING:
-                return ConfigEntry.ConfigType.STRING;
-            case INT:
-                return ConfigEntry.ConfigType.INT;
-            case SHORT:
-                return ConfigEntry.ConfigType.SHORT;
-            case LONG:
-                return ConfigEntry.ConfigType.LONG;
-            case DOUBLE:
-                return ConfigEntry.ConfigType.DOUBLE;
-            case LIST:
-                return ConfigEntry.ConfigType.LIST;
-            case CLASS:
-                return ConfigEntry.ConfigType.CLASS;
-            case PASSWORD:
-                return ConfigEntry.ConfigType.PASSWORD;
-            default:
-                return ConfigEntry.ConfigType.UNKNOWN;
-        }
+        return switch (type) {
+            case BOOLEAN -> ConfigEntry.ConfigType.BOOLEAN;
+            case STRING -> ConfigEntry.ConfigType.STRING;
+            case INT -> ConfigEntry.ConfigType.INT;
+            case SHORT -> ConfigEntry.ConfigType.SHORT;
+            case LONG -> ConfigEntry.ConfigType.LONG;
+            case DOUBLE -> ConfigEntry.ConfigType.DOUBLE;
+            case LIST -> ConfigEntry.ConfigType.LIST;
+            case CLASS -> ConfigEntry.ConfigType.CLASS;
+            case PASSWORD -> ConfigEntry.ConfigType.PASSWORD;
+        };
     }
 
     private static final Map<ConfigEntry.ConfigSource, DescribeConfigsResponse.ConfigSource> TRANSLATE_CONFIG_SOURCE_MAP;
@@ -158,13 +148,17 @@ public class KafkaConfigSchema {
     }
 
     public Map<String, ConfigEntry> resolveEffectiveTopicConfigs(
-            Map<String, ? extends Object> staticNodeConfig,
-            Map<String, ? extends Object> dynamicClusterConfigs,
-            Map<String, ? extends Object> dynamicNodeConfigs,
-            Map<String, ? extends Object> dynamicTopicConfigs) {
+            Map<String, ?> staticNodeConfig,
+            Map<String, ?> dynamicClusterConfigs,
+            Map<String, ?> dynamicNodeConfigs,
+            Map<String, ?> dynamicTopicConfigs) {
         ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.TOPIC, EMPTY_CONFIG_DEF);
         HashMap<String, ConfigEntry> effectiveConfigs = new HashMap<>();
         for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
+            // This config is internal; if the user hasn't set it explicitly, it should not be returned.
+            if (configKey.internalConfig && !dynamicTopicConfigs.containsKey(configKey.name)) {
+                continue;
+            }
             ConfigEntry entry = resolveEffectiveTopicConfig(configKey, staticNodeConfig,
                 dynamicClusterConfigs, dynamicNodeConfigs, dynamicTopicConfigs);
             effectiveConfigs.put(entry.name(), entry);
@@ -172,17 +166,35 @@ public class KafkaConfigSchema {
         return effectiveConfigs;
     }
 
-    private ConfigEntry resolveEffectiveTopicConfig(ConfigDef.ConfigKey configKey,
-            Map<String, ? extends Object> staticNodeConfig,
-            Map<String, ? extends Object> dynamicClusterConfigs,
-            Map<String, ? extends Object> dynamicNodeConfigs,
-            Map<String, ? extends Object> dynamicTopicConfigs) {
+    public ConfigEntry resolveEffectiveTopicConfig(
+        String keyName,
+        Map<String, ?> staticNodeConfig,
+        Map<String, ?> dynamicClusterConfigs,
+        Map<String, ?> dynamicNodeConfigs,
+        Map<String, ?> dynamicTopicConfigs
+    ) {
+        ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.TOPIC, EMPTY_CONFIG_DEF);
+        ConfigDef.ConfigKey configKey = configDef.configKeys().get(keyName);
+        return resolveEffectiveTopicConfig(configKey,
+            staticNodeConfig,
+            dynamicClusterConfigs,
+            dynamicNodeConfigs,
+            dynamicTopicConfigs);
+    }
+
+    public ConfigEntry resolveEffectiveTopicConfig(
+        ConfigDef.ConfigKey configKey,
+        Map<String, ?> staticNodeConfig,
+        Map<String, ?> dynamicClusterConfigs,
+        Map<String, ?> dynamicNodeConfigs,
+        Map<String, ?> dynamicTopicConfigs
+    ) {
         if (dynamicTopicConfigs.containsKey(configKey.name)) {
             return toConfigEntry(configKey,
                 dynamicTopicConfigs.get(configKey.name),
                 ConfigSource.DYNAMIC_TOPIC_CONFIG, Function.identity());
         }
-        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, emptyList());
+        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, List.of());
         for (ConfigSynonym synonym : synonyms) {
             if (dynamicNodeConfigs.containsKey(synonym.name())) {
                 return toConfigEntry(configKey, dynamicNodeConfigs.get(synonym.name()),
@@ -205,11 +217,29 @@ public class KafkaConfigSchema {
             ConfigSource.DEFAULT_CONFIG, Function.identity());
     }
 
+    public String getStaticOrDefaultConfig(
+        String configName,
+        Map<String, ?> staticNodeConfig
+    ) {
+        ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.BROKER, EMPTY_CONFIG_DEF);
+        ConfigDef.ConfigKey configKey = configDef.configKeys().get(configName);
+        if (configKey == null) return null;
+        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, List.of());
+        for (ConfigSynonym synonym : synonyms) {
+            if (staticNodeConfig.containsKey(synonym.name())) {
+                return toConfigEntry(configKey, staticNodeConfig.get(synonym.name()),
+                    ConfigSource.STATIC_BROKER_CONFIG, synonym.converter()).value();
+            }
+        }
+        return toConfigEntry(configKey, configKey.hasDefault() ? configKey.defaultValue : null,
+            ConfigSource.DEFAULT_CONFIG, Function.identity()).value();
+    }
+
     private ConfigEntry toConfigEntry(ConfigDef.ConfigKey configKey,
                                       Object value,
                                       ConfigSource source,
                                       Function<String, String> converter) {
-        // Convert the value into a nulllable string suitable for storing in ConfigEntry.
+        // Convert the value into a nullable string suitable for storing in ConfigEntry.
         String stringValue = null;
         if (value != null) {
             if (value instanceof String) {
@@ -239,8 +269,16 @@ public class KafkaConfigSchema {
             source,
             configKey.type().isSensitive(),
             false, // "readonly" is always false, for now.
-            emptyList(), // we don't populate synonyms, for now.
+            List.of(), // we don't populate synonyms, for now.
             translateConfigType(configKey.type()),
             configKey.documentation);
+    }
+
+    public int getStaticallyConfiguredMinInsyncReplicas(Map<String, ?> staticNodeConfig) {
+        String minInsyncReplicasString = Objects.requireNonNull(
+            getStaticOrDefaultConfig(MIN_IN_SYNC_REPLICAS_CONFIG, staticNodeConfig));
+        return (int) ConfigDef.parseType(MIN_IN_SYNC_REPLICAS_CONFIG,
+            minInsyncReplicasString,
+            ConfigDef.Type.INT);
     }
 }

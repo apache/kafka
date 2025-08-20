@@ -18,14 +18,12 @@
 package kafka
 
 import java.util.Properties
-
 import joptsimple.OptionParser
-import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
+import kafka.server.{KafkaConfig, KafkaRaftServer, Server}
 import kafka.utils.Implicits._
-import kafka.utils.{CommandLineUtils, Exit, Logging}
-import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
-
-import scala.jdk.CollectionConverters._
+import kafka.utils.Logging
+import org.apache.kafka.common.utils.{Exit, Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
+import org.apache.kafka.server.util.CommandLineUtils
 
 object Kafka extends Logging {
 
@@ -40,13 +38,13 @@ object Kafka extends Logging {
     // This is a bit of an ugly crutch till we get a chance to rework the entire command line parsing
     optionParser.accepts("version", "Print version information and exit.")
 
-    if (args.length == 0 || args.contains("--help")) {
-      CommandLineUtils.printUsageAndDie(optionParser,
+    if (args.isEmpty || args.contains("--help")) {
+      CommandLineUtils.printUsageAndExit(optionParser,
         "USAGE: java [options] %s server.properties [--override property=value]*".format(this.getClass.getCanonicalName.split('$').head))
     }
 
     if (args.contains("--version")) {
-      CommandLineUtils.printVersionAndDie()
+      CommandLineUtils.printVersionAndExit()
     }
 
     val props = Utils.loadProps(args(0))
@@ -55,30 +53,20 @@ object Kafka extends Logging {
       val options = optionParser.parse(args.slice(1, args.length): _*)
 
       if (options.nonOptionArguments().size() > 0) {
-        CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
+        CommandLineUtils.printUsageAndExit(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
       }
 
-      props ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt).asScala)
+      props ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt))
     }
     props
   }
 
   private def buildServer(props: Properties): Server = {
-    val config = KafkaConfig.fromProps(props, false)
-    if (config.requiresZookeeper) {
-      new KafkaServer(
-        config,
-        Time.SYSTEM,
-        threadNamePrefix = None,
-        enableForwarding = false
-      )
-    } else {
-      new KafkaRaftServer(
-        config,
-        Time.SYSTEM,
-        threadNamePrefix = None
-      )
-    }
+    val config = KafkaConfig.fromProps(props, doLog = false)
+    new KafkaRaftServer(
+      config,
+      Time.SYSTEM,
+    )
   }
 
   def main(args: Array[String]): Unit = {
@@ -96,7 +84,7 @@ object Kafka extends Logging {
       }
 
       // attach shutdown handler to catch terminating signals as well as normal termination
-      Exit.addShutdownHook("kafka-shutdown-hook", {
+      Exit.addShutdownHook("kafka-shutdown-hook", () => {
         try server.shutdown()
         catch {
           case _: Throwable =>
@@ -109,7 +97,7 @@ object Kafka extends Logging {
       try server.startup()
       catch {
         case e: Throwable =>
-          // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
+          // KafkaBroker.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
           fatal("Exiting Kafka due to fatal exception during startup.", e)
           Exit.exit(1)
       }

@@ -19,7 +19,7 @@ package org.apache.kafka.test;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -30,7 +30,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
-public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
+public final class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
 
@@ -39,10 +39,10 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     private long endOffset = 0L;
     private long currentOffset = 0L;
 
-    private ArrayList<ConsumerRecord<byte[], byte[]>> recordBuffer = new ArrayList<>();
+    private final ArrayList<ConsumerRecord<byte[], byte[]>> recordBuffer = new ArrayList<>();
 
     public MockRestoreConsumer(final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-        super(OffsetResetStrategy.EARLIEST);
+        super(AutoOffsetResetStrategy.EARLIEST.name());
 
         reset();
         this.keySerializer = keySerializer;
@@ -122,7 +122,7 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
             throw new IllegalArgumentException("RestoreConsumer: offset should not be negative");
 
         if (seekOffset >= 0)
-            throw new IllegalStateException("RestoreConsumer: offset already seeked");
+            throw new IllegalStateException("RestoreConsumer: offset already sought");
 
         seekOffset = offset;
         currentOffset = offset;

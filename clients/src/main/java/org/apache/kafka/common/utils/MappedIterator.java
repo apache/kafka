@@ -32,12 +32,12 @@ public final class MappedIterator<F, T> implements Iterator<T> {
     }
 
     @Override
-    public final boolean hasNext() {
+    public boolean hasNext() {
         return underlyingIterator.hasNext();
     }
 
     @Override
-    public final T next() {
+    public T next() {
         return mapper.apply(underlyingIterator.next());
     }
 

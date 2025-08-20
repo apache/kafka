@@ -19,15 +19,13 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.image.node.ConfigurationImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.stream.Collectors;
-
 
 
 /**
@@ -36,15 +34,23 @@ import java.util.stream.Collectors;
  * This class is thread-safe.
  */
 public final class ConfigurationImage {
-    public static final ConfigurationImage EMPTY = new ConfigurationImage(Collections.emptyMap());
+    private final ConfigResource resource;
 
     private final Map<String, String> data;
 
-    public ConfigurationImage(Map<String, String> data) {
+    public ConfigurationImage(
+        ConfigResource resource,
+        Map<String, String> data
+    ) {
+        this.resource = resource;
         this.data = data;
     }
 
-    Map<String, String> data() {
+    public ConfigResource resource() {
+        return resource;
+    }
+
+    public Map<String, String> data() {
         return data;
     }
 
@@ -58,10 +64,13 @@ public final class ConfigurationImage {
         return properties;
     }
 
+    public Map<String, String> toMap() {
+        return Collections.unmodifiableMap(data);
+    }
+
     public void write(
         ConfigResource configResource,
-        ImageWriter writer,
-        ImageWriterOptions options
+        ImageWriter writer
     ) {
         for (Map.Entry<String, String> entry : data.entrySet()) {
             writer.write(0, new ConfigRecord().
@@ -74,8 +83,7 @@ public final class ConfigurationImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ConfigurationImage)) return false;
-        ConfigurationImage other = (ConfigurationImage) o;
+        if (!(o instanceof ConfigurationImage other)) return false;
         return data.equals(other.data);
     }
 
@@ -86,8 +94,6 @@ public final class ConfigurationImage {
 
     @Override
     public String toString() {
-        return "ConfigurationImage(data=" + data.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ")";
+        return new ConfigurationImageNode(this).stringify();
     }
 }

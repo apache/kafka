@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicCollection.TopicIdCollection;
 import org.apache.kafka.common.TopicCollection.TopicNameCollection;
+import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TopicCollectionTest {
 
@@ -34,11 +36,11 @@ public class TopicCollectionTest {
         List<Uuid> topicIds = Arrays.asList(Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid());
         List<String> topicNames = Arrays.asList("foo", "bar");
 
-        TopicCollection idCollection = TopicCollection.ofTopicIds(topicIds);
-        TopicCollection nameCollection = TopicCollection.ofTopicNames(topicNames);
+        TopicIdCollection idCollection = TopicCollection.ofTopicIds(topicIds);
+        TopicNameCollection nameCollection = TopicCollection.ofTopicNames(topicNames);
 
-        assertTrue(((TopicIdCollection) idCollection).topicIds().containsAll(topicIds));
-        assertTrue(((TopicNameCollection) nameCollection).topicNames().containsAll(topicNames));
+        assertTrue(idCollection.topicIds().containsAll(topicIds));
+        assertTrue(nameCollection.topicNames().containsAll(topicNames));
     }
 
 }

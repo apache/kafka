@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.token.delegation;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.ArrayList;
@@ -27,7 +26,6 @@ import java.util.Objects;
  * A class representing a delegation token details.
  *
  */
-@InterfaceStability.Evolving
 public class TokenInformation {
 
     private final KafkaPrincipal owner;
@@ -54,16 +52,27 @@ public class TokenInformation {
         this.expiryTimestamp =  expiryTimestamp;
     }
 
+    // Convert record elements into a TokenInformation
+    public static TokenInformation fromRecord(String tokenId, KafkaPrincipal owner, KafkaPrincipal tokenRequester,
+                            Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
+        return new TokenInformation(
+            tokenId, owner, tokenRequester, renewers, issueTimestamp, maxTimestamp, expiryTimestamp);
+    }
+
     public KafkaPrincipal owner() {
         return owner;
+    }
+
+    public String ownerAsString() {
+        return owner.toString();
     }
 
     public KafkaPrincipal tokenRequester() {
         return tokenRequester;
     }
 
-    public String ownerAsString() {
-        return owner.toString();
+    public String tokenRequesterAsString() {
+        return tokenRequester.toString();
     }
 
     public Collection<KafkaPrincipal> renewers() {

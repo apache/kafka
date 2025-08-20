@@ -16,10 +16,11 @@
  */
 
 package org.apache.kafka.trogdor.rest;
+import org.apache.kafka.trogdor.task.TaskSpec;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
-import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
  * The state a task is in once it's done.

@@ -17,12 +17,14 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.SubmittedRecords.SubmittedRecord;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -30,21 +32,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.connect.runtime.SubmittedRecords.CommittableOffsets;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SubmittedRecordsTest {
 
-    private static final Map<String, Object> PARTITION1 = Collections.singletonMap("subreddit", "apachekafka");
-    private static final Map<String, Object> PARTITION2 = Collections.singletonMap("subreddit", "adifferentvalue");
-    private static final Map<String, Object> PARTITION3 = Collections.singletonMap("subreddit", "asdfqweoicus");
+    private static final Map<String, Object> PARTITION1 = Map.of("subreddit", "apachekafka");
+    private static final Map<String, Object> PARTITION2 = Map.of("subreddit", "adifferentvalue");
+    private static final Map<String, Object> PARTITION3 = Map.of("subreddit", "asdfqweoicus");
 
     private AtomicInteger offset;
 
     SubmittedRecords submittedRecords;
 
-    @Before
+    @BeforeEach
     public void setup() {
         submittedRecords = new SubmittedRecords();
         offset = new AtomicInteger();
@@ -67,22 +69,22 @@ public class SubmittedRecordsTest {
     @Test
     public void testNoCommittedRecords() {
         for (int i = 0; i < 3; i++) {
-            for (Map<String, Object> partition : Arrays.asList(PARTITION1, PARTITION2, PARTITION3)) {
+            for (Map<String, Object> partition : List.of(PARTITION1, PARTITION2, PARTITION3)) {
                 submittedRecords.submit(partition, newOffset());
             }
         }
 
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 9, 3, 3, PARTITION1, PARTITION2, PARTITION3);
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
 
         committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 9, 3, 3, PARTITION1, PARTITION2, PARTITION3);
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
 
         committableOffsets = submittedRecords.committableOffsets();
         assertMetadata(committableOffsets, 0, 9, 3, 3, PARTITION1, PARTITION2, PARTITION3);
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
     }
 
     @Test
@@ -93,7 +95,7 @@ public class SubmittedRecordsTest {
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         // Record has been submitted but not yet acked; cannot commit offsets for it yet
         assertFalse(committableOffsets.isEmpty());
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 1, 1, 1, PARTITION1);
         assertNoEmptyDeques();
 
@@ -101,7 +103,7 @@ public class SubmittedRecordsTest {
         committableOffsets = submittedRecords.committableOffsets();
         // Record has been acked; can commit offsets for it
         assertFalse(committableOffsets.isEmpty());
-        assertEquals(Collections.singletonMap(PARTITION1, offset), committableOffsets.offsets());
+        assertEquals(Map.of(PARTITION1, offset), committableOffsets.offsets());
         assertMetadataNoPending(committableOffsets, 1);
 
         // Everything has been ack'd and consumed; make sure that it's been cleaned up to avoid memory leaks
@@ -109,7 +111,7 @@ public class SubmittedRecordsTest {
 
         committableOffsets = submittedRecords.committableOffsets();
         // Old offsets should be wiped
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
         assertTrue(committableOffsets.isEmpty());
     }
 
@@ -127,27 +129,27 @@ public class SubmittedRecordsTest {
 
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
         // No records ack'd yet; can't commit any offsets
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 4, 2, 2, PARTITION1, PARTITION2);
         assertNoEmptyDeques();
 
         partition1Record2.ack();
         committableOffsets = submittedRecords.committableOffsets();
         // One record has been ack'd, but a record that comes before it and corresponds to the same source partition hasn't been
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 4, 2, 2, PARTITION1, PARTITION2);
         assertNoEmptyDeques();
 
         partition2Record1.ack();
         committableOffsets = submittedRecords.committableOffsets();
         // We can commit the first offset for the second partition
-        assertEquals(Collections.singletonMap(PARTITION2, partition2Offset1), committableOffsets.offsets());
+        assertEquals(Map.of(PARTITION2, partition2Offset1), committableOffsets.offsets());
         assertMetadata(committableOffsets, 1, 3, 2, 2, PARTITION1);
         assertNoEmptyDeques();
 
         committableOffsets = submittedRecords.committableOffsets();
         // No new offsets to commit
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 3, 2, 2, PARTITION1);
         assertNoEmptyDeques();
 
@@ -175,11 +177,11 @@ public class SubmittedRecordsTest {
         SubmittedRecord submittedRecord = submittedRecords.submit(PARTITION1, newOffset());
 
         CommittableOffsets committableOffsets = submittedRecords.committableOffsets();
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 1, 1, 1, PARTITION1);
 
-        assertTrue("First attempt to remove record from submitted queue should succeed", submittedRecord.drop());
-        assertFalse("Attempt to remove already-removed record from submitted queue should fail", submittedRecord.drop());
+        assertTrue(submittedRecord.drop(), "First attempt to remove record from submitted queue should succeed");
+        assertFalse(submittedRecord.drop(), "Attempt to remove already-removed record from submitted queue should fail");
 
         committableOffsets = submittedRecords.committableOffsets();
         // Even if SubmittedRecords::remove is broken, we haven't ack'd anything yet, so there should be no committable offsets
@@ -203,11 +205,11 @@ public class SubmittedRecordsTest {
         assertMetadata(committableOffsets, 0, 2, 2, 1, PARTITION1, PARTITION2);
         assertNoEmptyDeques();
 
-        assertTrue("First attempt to remove record from submitted queue should succeed", recordToRemove.drop());
+        assertTrue(recordToRemove.drop(), "First attempt to remove record from submitted queue should succeed");
 
         committableOffsets = submittedRecords.committableOffsets();
         // Even if SubmittedRecords::remove is broken, we haven't ack'd anything yet, so there should be no committable offsets
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 1, 1, 1, PARTITION2);
         assertNoEmptyDeques();
         // The only record for this partition has been removed; we shouldn't be tracking a deque for it anymore
@@ -216,14 +218,14 @@ public class SubmittedRecordsTest {
         recordToRemove.ack();
         committableOffsets = submittedRecords.committableOffsets();
         // Even though the record has somehow been acknowledged, it should not be counted when collecting committable offsets
-        assertEquals(Collections.emptyMap(), committableOffsets.offsets());
+        assertEquals(Map.of(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 1, 1, 1, PARTITION2);
         assertNoEmptyDeques();
 
         lastSubmittedRecord.ack();
         committableOffsets = submittedRecords.committableOffsets();
         // Now that the last-submitted record has been ack'd, we should be able to commit its offset
-        assertEquals(Collections.singletonMap(PARTITION2, partition2Offset), committableOffsets.offsets());
+        assertEquals(Map.of(PARTITION2, partition2Offset), committableOffsets.offsets());
         assertMetadata(committableOffsets, 1, 0, 0, 0, (Map<String, Object>) null);
         assertFalse(committableOffsets.hasPending());
 
@@ -265,27 +267,27 @@ public class SubmittedRecordsTest {
         SubmittedRecord recordToRemove1 = submittedRecords.submit(PARTITION1, newOffset());
         SubmittedRecord recordToRemove2 = submittedRecords.submit(PARTITION1, newOffset());
         assertFalse(
-                "Await should fail since neither of the in-flight records has been removed so far",
-                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS),
+                "Await should fail since neither of the in-flight records has been removed so far"
         );
 
         recordToRemove1.drop();
         assertFalse(
-                "Await should fail since only one of the two submitted records has been removed so far",
-                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS),
+                "Await should fail since only one of the two submitted records has been removed so far"
         );
 
         recordToRemove1.drop();
         assertFalse(
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS),
                 "Await should fail since only one of the two submitted records has been removed so far, "
-                        + "even though that record has been removed twice",
-                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+                        + "even though that record has been removed twice"
         );
 
         recordToRemove2.drop();
         assertTrue(
-                "Await should succeed since both submitted records have now been removed",
-                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
+                submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS),
+                "Await should succeed since both submitted records have now been removed"
         );
     }
 
@@ -308,53 +310,53 @@ public class SubmittedRecordsTest {
         }).start();
 
         assertTrue(
-                "Should not have finished awaiting message delivery before either in-flight record was acknowledged",
-                awaitComplete.getCount() > 0
+                awaitComplete.getCount() > 0,
+                "Should not have finished awaiting message delivery before either in-flight record was acknowledged"
         );
 
         inFlightRecord1.ack();
         assertTrue(
-                "Should not have finished awaiting message delivery before one in-flight record was acknowledged",
-                awaitComplete.getCount() > 0
+                awaitComplete.getCount() > 0,
+                "Should not have finished awaiting message delivery before one in-flight record was acknowledged"
         );
 
         inFlightRecord1.ack();
         assertTrue(
+                awaitComplete.getCount() > 0,
                 "Should not have finished awaiting message delivery before one in-flight record was acknowledged, "
-                        + "even though the other record has been acknowledged twice",
-                awaitComplete.getCount() > 0
+                        + "even though the other record has been acknowledged twice"
         );
 
         inFlightRecord2.ack();
         assertTrue(
-                "Should have finished awaiting message delivery after both in-flight records were acknowledged",
-                awaitComplete.await(1, TimeUnit.SECONDS)
+                awaitComplete.await(1, TimeUnit.SECONDS),
+                "Should have finished awaiting message delivery after both in-flight records were acknowledged"
         );
         assertTrue(
-                "Await of in-flight messages should have succeeded",
-                awaitResult.get()
+                awaitResult.get(),
+                "Await of in-flight messages should have succeeded"
         );
     }
 
     private void assertNoRemainingDeques() {
-        assertEquals("Internal records map should be completely empty", Collections.emptyMap(), submittedRecords.records);
+        assertEquals(Map.of(), submittedRecords.records, "Internal records map should be completely empty");
     }
 
     @SafeVarargs
-    private final void assertRemovedDeques(Map<String, ?>... partitions) {
+    private void assertRemovedDeques(Map<String, ?>... partitions) {
         for (Map<String, ?> partition : partitions) {
-            assertFalse("Deque for partition " + partition + " should have been cleaned up from internal records map", submittedRecords.records.containsKey(partition));
+            assertFalse(submittedRecords.records.containsKey(partition), "Deque for partition " + partition + " should have been cleaned up from internal records map");
         }
     }
 
     private void assertNoEmptyDeques() {
         submittedRecords.records.forEach((partition, deque) ->
-            assertFalse("Empty deque for partition " + partition + " should have been cleaned up from internal records map", deque.isEmpty())
+            assertFalse(deque.isEmpty(), "Empty deque for partition " + partition + " should have been cleaned up from internal records map")
         );
     }
 
     private Map<String, Object> newOffset() {
-        return Collections.singletonMap("timestamp", offset.getAndIncrement());
+        return Map.of("timestamp", offset.getAndIncrement());
     }
 
     private void assertMetadataNoPending(CommittableOffsets committableOffsets, int committableMessages) {
@@ -364,7 +366,7 @@ public class SubmittedRecordsTest {
 
     @SafeVarargs
     @SuppressWarnings("varargs")
-    private final void assertMetadata(
+    private void assertMetadata(
             CommittableOffsets committableOffsets,
             int committableMessages,
             int uncommittableMessages,

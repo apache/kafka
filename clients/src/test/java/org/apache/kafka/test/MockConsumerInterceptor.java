@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.ClusterResource;
+import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -41,6 +41,9 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_COMMIT_COUNT = new AtomicInteger(0);
+    public static final AtomicInteger CONFIG_COUNT = new AtomicInteger(0);
+    public static final AtomicInteger THROW_CONFIG_EXCEPTION = new AtomicInteger(0);
+    public static final AtomicInteger THROW_ON_CONFIG_EXCEPTION_THRESHOLD = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
     public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
     public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_ON_CONSUME = new AtomicReference<>(NO_CLUSTER_ID);
@@ -55,6 +58,11 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
         Object clientIdValue = configs.get(ConsumerConfig.CLIENT_ID_CONFIG);
         if (clientIdValue == null)
             throw new ConfigException("Mock consumer interceptor expects configuration " + ProducerConfig.CLIENT_ID_CONFIG);
+
+        CONFIG_COUNT.incrementAndGet();
+        if (CONFIG_COUNT.get() == THROW_ON_CONFIG_EXCEPTION_THRESHOLD.get()) {
+            throw new ConfigException("Failed to instantiate interceptor. Reached configuration exception threshold.");
+        }
     }
 
     @Override
@@ -65,8 +73,11 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
         CLUSTER_ID_BEFORE_ON_CONSUME.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
 
         Map<TopicPartition, List<ConsumerRecord<String, String>>> recordMap = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
+
         for (TopicPartition tp : records.partitions()) {
             List<ConsumerRecord<String, String>> lst = new ArrayList<>();
+            long nextOffset = 0;
             for (ConsumerRecord<String, String> record: records.records(tp)) {
                 lst.add(new ConsumerRecord<>(record.topic(), record.partition(), record.offset(),
                                              record.timestamp(), record.timestampType(),
@@ -74,10 +85,16 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
                                              record.serializedValueSize(),
                                              record.key(), record.value().toUpperCase(Locale.ROOT),
                                              new RecordHeaders(), Optional.empty()));
+                nextOffset = record.offset() + 1;
             }
-            recordMap.put(tp, lst);
+            if (lst.isEmpty()) {
+                recordMap.put(tp, List.of());
+            } else {
+                recordMap.put(tp, lst);
+                nextOffsets.put(tp, new OffsetAndMetadata(nextOffset, Optional.empty(), ""));
+            }
         }
-        return new ConsumerRecords<>(recordMap);
+        return new ConsumerRecords<>(recordMap, nextOffsets);
     }
 
     @Override
@@ -90,10 +107,16 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
         CLOSE_COUNT.incrementAndGet();
     }
 
+    public static void setThrowOnConfigExceptionThreshold(int value) {
+        THROW_ON_CONFIG_EXCEPTION_THRESHOLD.set(value);
+    }
+
     public static void resetCounters() {
         INIT_COUNT.set(0);
         CLOSE_COUNT.set(0);
         ON_COMMIT_COUNT.set(0);
+        CONFIG_COUNT.set(0);
+        THROW_CONFIG_EXCEPTION.set(0);
         CLUSTER_META.set(null);
         CLUSTER_ID_BEFORE_ON_CONSUME.set(NO_CLUSTER_ID);
     }

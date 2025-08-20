@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,6 +103,13 @@ class KTableKTableRightJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
                 return;
             }
 
+            // drop out-of-order records from versioned tables (cf. KIP-914)
+            if (useVersionedSemantics && !record.value().isLatest) {
+                LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
+                droppedRecordsSensor.record();
+                return;
+            }
+
             final VOut newValue;
             final long resultTimestamp;
             VOut oldValue = null;
@@ -122,7 +130,7 @@ class KTableKTableRightJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
                 oldValue = joiner.apply(record.value().oldValue, valueLeft);
             }
 
-            context().forward(record.withValue(new Change<>(newValue, oldValue)).withTimestamp(resultTimestamp));
+            context().forward(record.withValue(new Change<>(newValue, oldValue, record.value().isLatest)).withTimestamp(resultTimestamp));
         }
 
         @Override
@@ -166,6 +174,14 @@ class KTableKTableRightJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
             } else {
                 return null;
             }
+        }
+
+        @Override
+        public boolean isVersioned() {
+            // even though we can derive a proper versioned result (assuming both parent value
+            // getters are versioned), we choose not to since the output of a join of two
+            // versioned tables today is not considered versioned (cf KIP-914)
+            return false;
         }
 
         @Override

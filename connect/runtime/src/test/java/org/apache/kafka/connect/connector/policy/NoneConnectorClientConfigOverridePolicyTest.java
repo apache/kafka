@@ -19,9 +19,9 @@ package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.junit.Test;
 
-import java.util.Collections;
+import org.junit.jupiter.api.Test;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,7 +31,7 @@ public class NoneConnectorClientConfigOverridePolicyTest extends BaseConnectorCl
 
     @Test
     public void testNoOverrides() {
-        testValidOverride(Collections.emptyMap());
+        testValidOverride(Map.of());
     }
 
     @Test

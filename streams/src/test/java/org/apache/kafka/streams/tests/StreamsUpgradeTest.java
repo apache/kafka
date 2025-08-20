@@ -33,7 +33,10 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
@@ -42,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.LegacySubscriptionInfoSerde;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +69,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
+import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
 
 public class StreamsUpgradeTest {
 
@@ -93,9 +99,24 @@ public class StreamsUpgradeTest {
 
     public static KafkaStreams buildStreams(final Properties streamsProperties) {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Void, Void> dataStream = builder.stream("data");
+        final KTable<String, Integer> dataTable = builder.table(
+            "data", Consumed.with(stringSerde, intSerde));
+        final KStream<String, Integer> dataStream = dataTable.toStream();
         dataStream.process(SmokeTestUtil.printProcessorSupplier("data"));
         dataStream.to("echo");
+
+        final boolean runFkJoin = Boolean.parseBoolean(streamsProperties.getProperty(
+            "test.run_fk_join",
+            "false"));
+        if (runFkJoin) {
+            try {
+                final KTable<Integer, String> fkTable = builder.table(
+                    "fk", Consumed.with(intSerde, stringSerde));
+                buildFKTable(dataStream, fkTable);
+            } catch (final Exception e) {
+                System.err.println("Caught " + e.getMessage());
+            }
+        }
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
@@ -114,6 +135,15 @@ public class StreamsUpgradeTest {
         return new KafkaStreams(builder.build(), config, kafkaClientSupplier);
     }
 
+    private static void buildFKTable(final KStream<String, Integer> primaryTable,
+                                     final KTable<Integer, String> otherTable) {
+        final KStream<String, String> kStream = primaryTable.toTable()
+            .join(otherTable, v -> v, (k0, v0) -> v0)
+            .toStream();
+        kStream.process(SmokeTestUtil.printProcessorSupplier("fk"));
+        kStream.to("fk-result", Produced.with(stringSerde, stringSerde));
+    }
+
     private static class FutureKafkaClientSupplier extends DefaultKafkaClientSupplier {
         @Override
         public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
@@ -124,7 +154,7 @@ public class StreamsUpgradeTest {
 
     public static class FutureStreamsPartitionAssignor extends StreamsPartitionAssignor {
         private static final Map<String, String> CLIENT_TAGS = mkMap(mkEntry("t1", "v1"), mkEntry("t2", "v2"));
-        private final Logger log = LoggerFactory.getLogger(FutureStreamsPartitionAssignor.class);
+        private static final Logger log = LoggerFactory.getLogger(FutureStreamsPartitionAssignor.class);
 
         private AtomicInteger usedSubscriptionMetadataVersionPeek;
         private AtomicLong nextScheduledRebalanceMs;
@@ -164,7 +194,7 @@ public class StreamsUpgradeTest {
                     LATEST_SUPPORTED_VERSION + 1,
                     taskManager.processId(),
                     userEndPoint(),
-                    taskManager.getTaskOffsetSums(),
+                    taskManager.taskOffsetSums(),
                     uniqueField,
                     0,
                     CLIENT_TAGS
@@ -172,9 +202,9 @@ public class StreamsUpgradeTest {
             } else {
                 return new FutureSubscriptionInfo(
                     usedSubscriptionMetadataVersion,
-                    taskManager.processId(),
-                    SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
-                    SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
+                    taskManager.processId().id(),
+                    SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.taskOffsetSums()),
+                    SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.taskOffsetSums()),
                     userEndPoint())
                     .encode();
             }
@@ -266,7 +296,7 @@ public class StreamsUpgradeTest {
                                 LATEST_SUPPORTED_VERSION,
                                 info.processId(),
                                 info.userEndPoint(),
-                                taskManager().getTaskOffsetSums(),
+                                taskManager().taskOffsetSums(),
                                 (byte) 0,
                                 0,
                                 CLIENT_TAGS

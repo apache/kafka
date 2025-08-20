@@ -51,7 +51,7 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
          *
          * This constructor is public to make testing of <code>CreateTopicPolicy</code> implementations easier.
          *
-         * @param topic the name of the topic to created.
+         * @param topic the name of the topic to create.
          * @param numPartitions the number of partitions to create or null if replicasAssignments is set.
          * @param replicationFactor the replication factor for the topic or null if replicaAssignments is set.
          * @param replicasAssignments replica assignments or null if numPartitions and replicationFactor is set. The

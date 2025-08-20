@@ -16,14 +16,16 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiMessage;
 
 import java.util.concurrent.CompletableFuture;
 
 public abstract class RaftRequest implements RaftMessage {
-    protected final int correlationId;
-    protected final ApiMessage data;
-    protected final long createdTimeMs;
+    private final int correlationId;
+    private final ApiMessage data;
+    private final long createdTimeMs;
 
     public RaftRequest(int correlationId, ApiMessage data, long createdTimeMs) {
         this.correlationId = correlationId;
@@ -45,44 +47,69 @@ public abstract class RaftRequest implements RaftMessage {
         return createdTimeMs;
     }
 
-    public static class Inbound extends RaftRequest {
+    public static final class Inbound extends RaftRequest {
+        private final short apiVersion;
+        private final ListenerName listenerName;
+
         public final CompletableFuture<RaftResponse.Outbound> completion = new CompletableFuture<>();
 
-        public Inbound(int correlationId, ApiMessage data, long createdTimeMs) {
+        public Inbound(
+            ListenerName listenerName,
+            int correlationId,
+            short apiVersion,
+            ApiMessage data,
+            long createdTimeMs
+        ) {
             super(correlationId, data, createdTimeMs);
+
+            this.listenerName = listenerName;
+            this.apiVersion = apiVersion;
+        }
+
+        public short apiVersion() {
+            return apiVersion;
+        }
+
+        public ListenerName listenerName() {
+            return listenerName;
         }
 
         @Override
         public String toString() {
-            return "InboundRequest(" +
-                    "correlationId=" + correlationId +
-                    ", data=" + data +
-                    ", createdTimeMs=" + createdTimeMs +
-                    ')';
+            return String.format(
+                "InboundRequest(listenerName=%s, correlationId=%d, apiVersion=%d, data=%s, " +
+                "createdTimeMs=%d)",
+                listenerName,
+                correlationId(),
+                apiVersion,
+                data(),
+                createdTimeMs()
+            );
         }
     }
 
-    public static class Outbound extends RaftRequest {
-        private final int destinationId;
+    public static final class Outbound extends RaftRequest {
+        private final Node destination;
         public final CompletableFuture<RaftResponse.Inbound> completion = new CompletableFuture<>();
 
-        public Outbound(int correlationId, ApiMessage data, int destinationId, long createdTimeMs) {
+        public Outbound(int correlationId, ApiMessage data, Node destination, long createdTimeMs) {
             super(correlationId, data, createdTimeMs);
-            this.destinationId = destinationId;
+            this.destination = destination;
         }
 
-        public int destinationId() {
-            return destinationId;
+        public Node destination() {
+            return destination;
         }
 
         @Override
         public String toString() {
-            return "OutboundRequest(" +
-                    "correlationId=" + correlationId +
-                    ", data=" + data +
-                    ", createdTimeMs=" + createdTimeMs +
-                    ", destinationId=" + destinationId +
-                    ')';
+            return String.format(
+                "OutboundRequest(correlationId=%d, data=%s, createdTimeMs=%d, destination=%s)",
+                correlationId(),
+                data(),
+                createdTimeMs(),
+                destination
+            );
         }
     }
 }

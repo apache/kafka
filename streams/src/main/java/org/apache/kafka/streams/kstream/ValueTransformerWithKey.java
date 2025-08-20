@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import java.time.Duration;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -24,6 +23,8 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+
+import java.time.Duration;
 
 /**
  * The {@code ValueTransformerWithKey} interface for stateful mapping of a value to a new value (with possible new type).
@@ -46,8 +47,7 @@ import org.apache.kafka.streams.processor.To;
  * @param <VR> transformed value type
  * @see ValueTransformer
  * @see ValueTransformerWithKeySupplier
- * @see KStream#transformValues(ValueTransformerSupplier, String...)
- * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
+ * @see KTable#transformValues(ValueTransformerWithKeySupplier, String...) 
  * @see Transformer
  */
 
@@ -76,7 +76,7 @@ public interface ValueTransformerWithKey<K, V, VR> {
 
     /**
      * Transform the given [key and] value to a new value.
-     * Additionally, any {@link StateStore} that is {@link KStream#transformValues(ValueTransformerWithKeySupplier, String...)
+     * Additionally, any {@link StateStore} that is {@link KTable#transformValues(ValueTransformerWithKeySupplier, Named, String...)
      * attached} to this operator can be accessed and modified arbitrarily (cf.
      * {@link ProcessorContext#getStateStore(String)}).
      * <p>

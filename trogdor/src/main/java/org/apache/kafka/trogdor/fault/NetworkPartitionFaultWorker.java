@@ -17,13 +17,15 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.Topology;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.databind.node.TextNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,9 +72,7 @@ public class NetworkPartitionFaultWorker implements TaskWorker {
         TreeSet<String> toBlock = new TreeSet<>();
         for (Set<String> partitionSet : partitionSets) {
             if (!partitionSet.contains(curNode.name())) {
-                for (String nodeName : partitionSet) {
-                    toBlock.add(nodeName);
-                }
+                toBlock.addAll(partitionSet);
             }
         }
         for (String nodeName : toBlock) {

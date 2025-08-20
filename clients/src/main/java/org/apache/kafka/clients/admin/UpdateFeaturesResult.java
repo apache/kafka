@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Map;
 import org.apache.kafka.common.KafkaFuture;
+
+import java.util.Map;
 
 /**
  * The result of the {@link Admin#updateFeatures(Map, UpdateFeaturesOptions)} call.
@@ -43,6 +44,6 @@ public class UpdateFeaturesResult {
      * Return a future which succeeds if all the feature updates succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

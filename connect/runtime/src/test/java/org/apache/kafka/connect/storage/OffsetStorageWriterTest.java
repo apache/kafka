@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.Callback;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -33,22 +37,25 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class OffsetStorageWriterTest {
     private static final String NAMESPACE = "namespace";
     // Connect format - any types should be accepted here
-    private static final Map<String, Object> OFFSET_KEY = Collections.singletonMap("key", "key");
-    private static final Map<String, Object> OFFSET_VALUE = Collections.singletonMap("key", 12);
+    private static final Map<String, Object> OFFSET_KEY = Map.of("key", "key");
+    private static final Map<String, Object> OFFSET_VALUE = Map.of("key", 12);
 
     // Serialized
     private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
@@ -63,13 +70,13 @@ public class OffsetStorageWriterTest {
 
     private ExecutorService service;
 
-    @Before
+    @BeforeEach
     public void setup() {
         writer = new OffsetStorageWriter(store, NAMESPACE, keyConverter, valueConverter);
         service = Executors.newFixedThreadPool(1);
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         service.shutdownNow();
     }
@@ -82,7 +89,7 @@ public class OffsetStorageWriterTest {
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
 
-        assertTrue(writer.beginFlush());
+        assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         verify(callback).onCompletion(isNull(), isNull());
     }
@@ -96,7 +103,7 @@ public class OffsetStorageWriterTest {
 
         writer.offset(OFFSET_KEY, null);
 
-        assertTrue(writer.beginFlush());
+        assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         verify(callback).onCompletion(isNull(), isNull());
     }
@@ -111,14 +118,15 @@ public class OffsetStorageWriterTest {
 
         writer.offset(null, OFFSET_VALUE);
 
-        assertTrue(writer.beginFlush());
+        assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         verify(callback).onCompletion(isNull(), isNull());
     }
 
     @Test
-    public void testNoOffsetsToFlush() {
-        assertFalse(writer.beginFlush());
+    public void testNoOffsetsToFlush() throws InterruptedException, TimeoutException {
+        assertFalse(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
+        assertFalse(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
 
         // If no offsets are flushed, we should finish immediately and not have made any calls to the
         // underlying storage layer
@@ -135,22 +143,22 @@ public class OffsetStorageWriterTest {
         // First time the write fails
         expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, true, null);
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(writer.beginFlush());
+        assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         verify(callback).onCompletion(eq(EXCEPTION), isNull());
 
         // Second time it succeeds
         expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, null);
-        assertTrue(writer.beginFlush());
+        assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.doFlush(callback).get(1000, TimeUnit.MILLISECONDS);
         verify(callback).onCompletion(isNull(), isNull());
 
         // Third time it has no data to flush so we won't get past beginFlush()
-        assertFalse(writer.beginFlush());
+        assertFalse(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
     }
 
     @Test
-    public void testAlreadyFlushing() {
+    public void testAlreadyFlushing() throws InterruptedException, TimeoutException {
         @SuppressWarnings("unchecked")
         final Callback<Void> callback = mock(Callback.class);
         // Trigger the send, but don't invoke the callback so we'll still be mid-flush
@@ -158,15 +166,18 @@ public class OffsetStorageWriterTest {
         expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(writer.beginFlush());
+        assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
+        assertThrows(TimeoutException.class, () -> writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.doFlush(callback);
-        assertThrows(ConnectException.class, writer::beginFlush);
+        assertThrows(TimeoutException.class, () -> writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
+        allowStoreCompleteCountdown.countDown();
+        assertFalse(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
     }
 
     @Test
-    public void testCancelBeforeAwaitFlush() {
+    public void testCancelBeforeAwaitFlush() throws InterruptedException, TimeoutException {
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(writer.beginFlush());
+        assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         writer.cancelFlush();
     }
 
@@ -180,7 +191,7 @@ public class OffsetStorageWriterTest {
         expectStore(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED, false, allowStoreCompleteCountdown);
 
         writer.offset(OFFSET_KEY, OFFSET_VALUE);
-        assertTrue(writer.beginFlush());
+        assertTrue(writer.beginFlush(1000L, TimeUnit.MILLISECONDS));
         // Start the flush, then immediately cancel before allowing the mocked store request to finish
         Future<Void> flushFuture = writer.doFlush(callback);
         writer.cancelFlush();
@@ -214,7 +225,7 @@ public class OffsetStorageWriterTest {
                 keySerialized == null ? null : ByteBuffer.wrap(keySerialized),
                 valueSerialized == null ? null : ByteBuffer.wrap(valueSerialized));
         when(store.set(eq(offsetsSerialized), storeCallback.capture())).thenAnswer(invocation -> {
-            final Callback<Void> cb = storeCallback.getValue();
+            final Callback<Void> cb = invocation.getArgument(1);
             return service.submit(() -> {
                 if (waitForCompletion != null)
                     assertTrue(waitForCompletion.await(10000, TimeUnit.MILLISECONDS));

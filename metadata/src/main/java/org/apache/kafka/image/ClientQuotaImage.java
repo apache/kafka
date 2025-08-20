@@ -21,17 +21,15 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.ValueDat
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.image.node.ClientQuotaImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
+import java.util.Map.Entry;
 
 
 /**
@@ -39,23 +37,16 @@ import java.util.stream.Collectors;
  *
  * This class is thread-safe.
  */
-public final class ClientQuotaImage {
-    public final static ClientQuotaImage EMPTY = new ClientQuotaImage(Collections.emptyMap());
+public record ClientQuotaImage(Map<String, Double> quotas) {
+    public static final ClientQuotaImage EMPTY = new ClientQuotaImage(Map.of());
 
-    private final Map<String, Double> quotas;
-
-    public ClientQuotaImage(Map<String, Double> quotas) {
-        this.quotas = quotas;
-    }
-
-    Map<String, Double> quotas() {
-        return quotas;
+    public ClientQuotaImage {
+        quotas = Collections.unmodifiableMap(quotas);
     }
 
     public void write(
         ClientQuotaEntity entity,
-        ImageWriter writer,
-        ImageWriterOptions options
+        ImageWriter writer
     ) {
         for (Entry<String, Double> entry : quotas.entrySet()) {
             writer.write(0, new ClientQuotaRecord().
@@ -97,21 +88,7 @@ public final class ClientQuotaImage {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotaImage)) return false;
-        ClientQuotaImage other = (ClientQuotaImage) o;
-        return quotas.equals(other.quotas);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(quotas);
-    }
-
-    @Override
     public String toString() {
-        return "ClientQuotaImage(quotas=" + quotas.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ")";
+        return new ClientQuotaImageNode(this).stringify();
     }
 }

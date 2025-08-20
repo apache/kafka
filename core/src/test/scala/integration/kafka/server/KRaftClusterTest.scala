@@ -18,34 +18,53 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import kafka.server.IntegrationTestUtils.connectAndReceive
-import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, Config, ConfigEntry, DescribeMetadataQuorumOptions, FeatureUpdate, NewPartitionReassignment, NewTopic, UpdateFeaturesOptions}
-import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo}
+import org.apache.kafka.server.IntegrationTestUtils.connectAndReceive
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.clients.admin._
+import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
+import org.apache.kafka.common.config.ConfigResource.Type
+import org.apache.kafka.common.errors.{InvalidPartitionsException, PolicyViolationException, UnsupportedVersionException}
 import org.apache.kafka.common.message.DescribeClusterRequestData
+import org.apache.kafka.common.metadata.{ConfigRecord, FeatureLevelRecord}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.quota.ClientQuotaAlteration.Op
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
+import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
+import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegrationTestUtils}
+import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, MetadataVersion}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs}
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.server.quota
+import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaType}
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
-
-import java.util
-import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
-import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.config.ConfigResource.Type
-import org.apache.kafka.common.protocol.Errors._
-import org.apache.kafka.image.ClusterImage
-import org.apache.kafka.server.common.MetadataVersion
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
 
-import scala.annotation.nowarn
-import scala.collection.mutable
-import scala.concurrent.ExecutionException
+import java.io.File
+import java.nio.charset.StandardCharsets
+import java.nio.file.{FileSystems, Files, Path, Paths}
+import java.{lang, util}
+import java.util.concurrent.{CompletableFuture, CompletionStage, ExecutionException, TimeUnit}
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.{Optional, OptionalLong, Properties}
+import scala.collection.{Seq, mutable}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 @Timeout(120)
 @Tag("integration")
@@ -64,6 +83,76 @@ class KRaftClusterTest {
       cluster.startup()
     } finally {
       cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateClusterAndRestartBrokerNode(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val broker = cluster.brokers().values().iterator().next()
+      broker.shutdown()
+      broker.startup()
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateClusterAndRestartControllerNode(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().asScala.filter(_.controller.isActive).next()
+      val port = controller.socketServer.boundPort(ListenerName.normalised(controller.config.controllerListeners.head.listener))
+
+      // shutdown active controller
+      controller.shutdown()
+      // Rewrite The `listeners` config to avoid controller socket server init using different port
+      val config = controller.sharedServer.controllerConfig.props
+      config.asInstanceOf[util.HashMap[String,String]].put(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:$port")
+      controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
+
+      // restart controller
+      controller.startup()
+      TestUtils.waitUntilTrue(() => cluster.controllers().values().iterator().asScala.exists(_.controller.isActive), "Timeout waiting for new controller election")
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testClusterWithLowerCaseListeners(): Unit = {
+    Using.resource(new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setBrokerListenerName(new ListenerName("external")).
+        setNumControllerNodes(3).
+        build()).build()
+    ) { cluster =>
+      cluster.format()
+      cluster.startup()
+      cluster.brokers().forEach((_, broker) => {
+        assertEquals("external://localhost:0", broker.config.get(SocketServerConfigs.LISTENERS_CONFIG))
+        assertEquals("external", broker.config.get(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG))
+        assertEquals("external:PLAINTEXT,CONTROLLER:PLAINTEXT", broker.config.get(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG))
+      })
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
+        "RaftManager was not initialized.")
+      Using.resource(Admin.create(cluster.clientProperties())) { admin =>
+        assertEquals(cluster.nodes().clusterId(), admin.describeCluster().clusterId().get())
+      }
     }
   }
 
@@ -110,13 +199,13 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create a test topic
-        val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 3.toShort))
+        val newTopic = util.List.of(new NewTopic("test-topic", 1, 3.toShort))
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
         waitForTopicListing(admin, Seq("test-topic"), Seq())
 
         // Delete topic
-        val deleteResult = admin.deleteTopics(Collections.singletonList("test-topic"))
+        val deleteResult = admin.deleteTopics(util.List.of("test-topic"))
         deleteResult.all().get()
 
         // List again
@@ -176,22 +265,22 @@ class KRaftClusterTest {
         "Broker never made it to RUNNING state.")
       val admin = Admin.create(cluster.clientProperties())
       try {
-        val entity = new ClientQuotaEntity(Map("user" -> "testkit").asJava)
+        val entity = new ClientQuotaEntity(util.Map.of("user", "testkit"))
         var filter = ClientQuotaFilter.containsOnly(
           List(ClientQuotaFilterComponent.ofEntity("user", "testkit")).asJava)
 
         def alterThenDescribe(entity: ClientQuotaEntity,
                               quotas: Seq[ClientQuotaAlteration.Op],
                               filter: ClientQuotaFilter,
-                              expectCount: Int): java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]] = {
-          val alterResult = admin.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, quotas.asJava)).asJava)
+                              expectCount: Int): util.Map[ClientQuotaEntity, util.Map[String, lang.Double]] = {
+          val alterResult = admin.alterClientQuotas(util.List.of(new ClientQuotaAlteration(entity, quotas.asJava)))
           try {
             alterResult.all().get()
           } catch {
             case t: Throwable => fail("AlterClientQuotas request failed", t)
           }
 
-          def describeOrFail(filter: ClientQuotaFilter): java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]] = {
+          def describeOrFail(filter: ClientQuotaFilter): util.Map[ClientQuotaEntity, util.Map[String, lang.Double]] = {
             try {
               admin.describeClientQuotas(filter).entities().get()
             } catch {
@@ -200,7 +289,7 @@ class KRaftClusterTest {
           }
 
           val (describeResult, ok) = TestUtils.computeUntilTrue(describeOrFail(filter)) {
-            results => results.getOrDefault(entity, java.util.Collections.emptyMap[String, java.lang.Double]()).size() == expectCount
+            results => results.getOrDefault(entity, util.Map.of[String, lang.Double]()).size() == expectCount
           }
           assertTrue(ok, "Broker never saw new client quotas")
           describeResult
@@ -234,21 +323,21 @@ class KRaftClusterTest {
         assertEquals(9999.0, describeResult.get(entity).get("producer_byte_rate"), 1e-6)
 
         // Add another quota for a different entity with same user part
-        val entity2 = new ClientQuotaEntity(Map("user" -> "testkit", "client-id" -> "some-client").asJava)
+        val entity2 = new ClientQuotaEntity(util.Map.of("user", "testkit", "client-id", "some-client"))
         filter = ClientQuotaFilter.containsOnly(
-          List(
+          util.List.of(
             ClientQuotaFilterComponent.ofEntity("user", "testkit"),
             ClientQuotaFilterComponent.ofEntity("client-id", "some-client"),
-          ).asJava)
+          ))
         describeResult = alterThenDescribe(entity2,
           Seq(new ClientQuotaAlteration.Op("producer_byte_rate", 9998)), filter, 1)
         assertEquals(9998.0, describeResult.get(entity2).get("producer_byte_rate"), 1e-6)
 
         // non-strict match
         filter = ClientQuotaFilter.contains(
-          List(ClientQuotaFilterComponent.ofEntity("user", "testkit")).asJava)
+          util.List.of(ClientQuotaFilterComponent.ofEntity("user", "testkit")))
 
-        TestUtils.tryUntilNoAssertionError(){
+        TestUtils.tryUntilNoAssertionError() {
           val results = admin.describeClientQuotas(filter).entities().get()
           assertEquals(2, results.size(), "Broker did not see two client quotas")
           assertEquals(9999.0, results.get(entity).get("producer_byte_rate"), 1e-6)
@@ -262,18 +351,88 @@ class KRaftClusterTest {
     }
   }
 
+  def setConsumerByteRate(
+    admin: Admin,
+    entity: ClientQuotaEntity,
+    value: Long
+  ): Unit = {
+    admin.alterClientQuotas(util.List.of(
+      new ClientQuotaAlteration(entity, util.List.of(
+        new Op("consumer_byte_rate", value.doubleValue()))))).
+        all().get()
+  }
+
+  def getConsumerByteRates(admin: Admin): Map[ClientQuotaEntity, Long] = {
+    val allFilter = ClientQuotaFilter.contains(util.List.of)
+    val results = new util.HashMap[ClientQuotaEntity, Long]
+    admin.describeClientQuotas(allFilter).entities().get().forEach {
+      case (entity, entityMap) =>
+        Option(entityMap.get("consumer_byte_rate")).foreach(value => results.put(entity, value.longValue()))
+    }
+    results.asScala.toMap
+  }
+
+  @Test
+  def testDefaultClientQuotas(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val defaultUser = new ClientQuotaEntity(util.Collections.singletonMap[String, String]("user", null))
+        val bobUser = new ClientQuotaEntity(util.Map.of[String, String]("user", "bob"))
+        TestUtils.retry(30000) {
+          assertEquals(Map(), getConsumerByteRates(admin))
+        }
+        setConsumerByteRate(admin, defaultUser, 100L)
+        TestUtils.retry(30000) {
+          assertEquals(Map(
+              defaultUser -> 100L
+            ), getConsumerByteRates(admin))
+        }
+        setConsumerByteRate(admin, bobUser, 1000L)
+        TestUtils.retry(30000) {
+          assertEquals(Map(
+            defaultUser -> 100L,
+            bobUser -> 1000L
+          ), getConsumerByteRates(admin))
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
   @Test
   def testCreateClusterWithAdvertisedPortZero(): Unit = {
-    val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, _) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://localhost:0"))
+    val brokerPropertyOverrides: util.Map[Integer, util.Map[String, String]] = new util.HashMap[Integer, util.Map[String, String]]()
+    Seq.range(0, 3).asJava.forEach(brokerId => {
+      val props = new util.HashMap[String, String]()
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0")
+      props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "EXTERNAL://localhost:0")
+      brokerPropertyOverrides.put(brokerId, props)
+    })
 
-    doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
-      sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
+    val nodes = new TestKitNodes.Builder()
+      .setNumControllerNodes(1)
+      .setNumBrokerNodes(3)
+      .setPerServerProperties(brokerPropertyOverrides)
+      .build()
+
+    doOnStartedKafkaCluster(nodes) { implicit cluster =>
+      sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.brokerListenerName, (15L, SECONDS))
         .nodes.values.forEach { broker =>
           assertEquals("localhost", broker.host,
             "Did not advertise configured advertised host")
-          assertEquals(cluster.brokers.get(broker.id).socketServer.boundPort(cluster.nodes.externalListenerName), broker.port,
+          assertEquals(cluster.brokers.get(broker.id).socketServer.boundPort(cluster.nodes.brokerListenerName), broker.port,
             "Did not advertise bound socket port")
         }
     }
@@ -281,12 +440,23 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer(): Unit = {
-    val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, broker) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://advertised-host-${broker.id}:${broker.id + 100}"))
+    val brokerPropertyOverrides: util.Map[Integer, util.Map[String, String]] = new util.HashMap[Integer, util.Map[String, String]]()
+    Seq.range(0, 3).asJava.forEach(brokerId => {
+      val props = new util.HashMap[String, String]()
+      props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0")
+      props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"EXTERNAL://advertised-host-$brokerId:${brokerId + 100}")
+      brokerPropertyOverrides.put(brokerId, props)
+    })
 
-    doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
-      sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
+    val nodes = new TestKitNodes.Builder()
+      .setNumControllerNodes(1)
+      .setNumBrokerNodes(3)
+      .setNumDisksPerBroker(1)
+      .setPerServerProperties(brokerPropertyOverrides)
+      .build()
+
+    doOnStartedKafkaCluster(nodes) { implicit cluster =>
+      sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.brokerListenerName, (15L, SECONDS))
         .nodes.values.forEach { broker =>
           assertEquals(s"advertised-host-${broker.id}", broker.host, "Did not advertise configured advertised host")
           assertEquals(broker.id + 100, broker.port, "Did not advertise configured advertised port")
@@ -294,29 +464,8 @@ class KRaftClusterTest {
     }
   }
 
-  @Test
-  def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertEquals("Bootstrap metadata versions before 3.3-IV0 are not supported. Can't load " +
-      "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
-        new KafkaClusterTestKit.Builder(
-          new TestKitNodes.Builder().
-            setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
-            setNumBrokerNodes(1).
-            setNumControllerNodes(1).build()).build()
-    }).getMessage)
-  }
-
-  private def doOnStartedKafkaCluster(numControllerNodes: Int = 1,
-                                      numBrokerNodes: Int,
-                                      brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String])
+  private def doOnStartedKafkaCluster(nodes: TestKitNodes)
                                      (action: KafkaClusterTestKit => Unit): Unit = {
-    val nodes = new TestKitNodes.Builder()
-      .setNumControllerNodes(numControllerNodes)
-      .setNumBrokerNodes(numBrokerNodes)
-      .build()
-    nodes.brokerNodes.values.forEach {
-      broker => broker.propertyOverrides.putAll(brokerPropertyOverrides(nodes, broker).asJava)
-    }
     val cluster = new KafkaClusterTestKit.Builder(nodes).build()
     try {
       cluster.format()
@@ -369,12 +518,10 @@ class KRaftClusterTest {
   }
 
   private def sendDescribeClusterRequestToBoundPort(destination: SocketServer,
-                                                    listenerName: ListenerName): DescribeClusterResponse =
-    connectAndReceive[DescribeClusterResponse](
-      request = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
-      destination = destination,
-      listenerName = listenerName
-    )
+                                                    listenerName: ListenerName): DescribeClusterResponse = {
+    connectAndReceive[DescribeClusterResponse](new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
+      destination.boundPort(listenerName))
+  }
 
   @Test
   def testCreateClusterAndPerformReassignment(): Unit = {
@@ -390,26 +537,26 @@ class KRaftClusterTest {
       try {
         // Create the topic.
         val assignments = new util.HashMap[Integer, util.List[Integer]]
-        assignments.put(0, Arrays.asList(0, 1, 2))
-        assignments.put(1, Arrays.asList(1, 2, 3))
-        assignments.put(2, Arrays.asList(2, 3, 0))
-        assignments.put(3, Arrays.asList(3, 2, 1))
-        val createTopicResult = admin.createTopics(Collections.singletonList(
+        assignments.put(0, util.List.of(0, 1, 2))
+        assignments.put(1, util.List.of(1, 2, 3))
+        assignments.put(2, util.List.of(2, 3, 0))
+        assignments.put(3, util.List.of(3, 2, 1))
+        val createTopicResult = admin.createTopics(util.List.of(
           new NewTopic("foo", assignments)))
         createTopicResult.all().get()
         waitForTopicListing(admin, Seq("foo"), Seq())
 
         // Start some reassignments.
-        assertEquals(Collections.emptyMap(), admin.listPartitionReassignments().reassignments().get())
+        assertEquals(util.Map.of, admin.listPartitionReassignments().reassignments().get())
         val reassignments = new util.HashMap[TopicPartition, Optional[NewPartitionReassignment]]
         reassignments.put(new TopicPartition("foo", 0),
-          Optional.of(new NewPartitionReassignment(Arrays.asList(2, 1, 0))))
+          Optional.of(new NewPartitionReassignment(util.List.of(2, 1, 0))))
         reassignments.put(new TopicPartition("foo", 1),
-          Optional.of(new NewPartitionReassignment(Arrays.asList(0, 1, 2))))
+          Optional.of(new NewPartitionReassignment(util.List.of(0, 1, 2))))
         reassignments.put(new TopicPartition("foo", 2),
-          Optional.of(new NewPartitionReassignment(Arrays.asList(2, 3))))
+          Optional.of(new NewPartitionReassignment(util.List.of(2, 3))))
         reassignments.put(new TopicPartition("foo", 3),
-          Optional.of(new NewPartitionReassignment(Arrays.asList(3, 2, 0, 1))))
+          Optional.of(new NewPartitionReassignment(util.List.of(3, 2, 0, 1))))
         admin.alterPartitionReassignments(reassignments).all().get()
         TestUtils.waitUntilTrue(
           () => admin.listPartitionReassignments().reassignments().get().isEmpty,
@@ -417,7 +564,7 @@ class KRaftClusterTest {
         var currentMapping: Seq[Seq[Int]] = Seq()
         val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(2, 3), Seq(3, 2, 0, 1))
         TestUtils.waitUntilTrue( () => {
-          val topicInfoMap = admin.describeTopics(Collections.singleton("foo")).allTopicNames().get()
+          val topicInfoMap = admin.describeTopics(util.Set.of("foo")).allTopicNames().get()
           if (topicInfoMap.containsKey("foo")) {
             currentMapping = translatePartitionInfoToSeq(topicInfoMap.get("foo").partitions())
             expectedMapping.equals(currentMapping)
@@ -425,7 +572,7 @@ class KRaftClusterTest {
             false
           }
         }, "Timed out waiting for replica assignments for topic foo. " +
-          s"Wanted: ${expectedMapping}. Got: ${currentMapping}")
+          s"Wanted: $expectedMapping. Got: $currentMapping")
 
         TestUtils.retry(60000) {
           checkReplicaManager(
@@ -483,7 +630,7 @@ class KRaftClusterTest {
       admin.listTopics().names().get().forEach(name => topicsNotFound.remove(name))
       extraTopics = admin.listTopics().names().get().asScala.filter(expectedAbsent.contains(_))
       topicsNotFound.isEmpty && extraTopics.isEmpty
-    }, s"Failed to find topic(s): ${topicsNotFound.asScala} and NOT find topic(s): ${extraTopics}")
+    }, s"Failed to find topic(s): ${topicsNotFound.asScala} and NOT find topic(s): $extraTopics")
   }
 
   private def incrementalAlter(
@@ -523,7 +670,7 @@ class KRaftClusterTest {
             val actual = new util.TreeMap[String, String]()
             val expected = new util.TreeMap[String, String]()
             config.entries().forEach {
-              case entry =>
+              entry =>
                 actual.put(entry.name(), entry.value())
                 if (!exhaustive) {
                   expected.put(entry.name(), entry.value())
@@ -559,12 +706,13 @@ class KRaftClusterTest {
         assertEquals(Seq(ApiError.NONE), incrementalAlter(admin, Seq(
           (new ConfigResource(Type.BROKER, ""), Seq(
             new AlterConfigOp(new ConfigEntry("log.roll.ms", "1234567"), OpType.SET),
-            new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "6"), OpType.SET))))))
+            new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "60"), OpType.SET))))))
         validateConfigs(admin, Map(new ConfigResource(Type.BROKER, "") -> Seq(
           ("log.roll.ms", "1234567"),
-          ("max.connections.per.ip", "6"))), true)
+          ("max.connections.per.ip", "60"),
+          ("min.insync.replicas", "1"))), exhaustive = true)
 
-        admin.createTopics(Arrays.asList(
+        admin.createTopics(util.List.of(
           new NewTopic("foo", 2, 3.toShort),
           new NewTopic("bar", 2, 3.toShort))).all().get()
         TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "foo", 2)
@@ -653,75 +801,32 @@ class KRaftClusterTest {
     }
   }
 
-  @nowarn("cat=deprecation") // Suppress warnings about using legacy alterConfigs
-  def legacyAlter(
-    admin: Admin,
-    resources: Map[ConfigResource, Seq[ConfigEntry]]
-  ): Seq[ApiError] = {
-    val configs = new util.HashMap[ConfigResource, Config]()
-    resources.foreach {
-      case (resource, entries) => configs.put(resource, new Config(entries.asJava))
-    }
-    val values = admin.alterConfigs(configs).values()
-    resources.map {
-      case (resource, _) => try {
-        values.get(resource).get()
-        ApiError.NONE
-      } catch {
-        case e: ExecutionException => ApiError.fromThrowable(e.getCause)
-        case t: Throwable => ApiError.fromThrowable(t)
-      }
-    }.toSeq
-  }
-
-  @Test
-  def testLegacyAlterConfigs(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("3.7-IV0", "3.7-IV2"))
+  def testCreatePartitions(metadataVersionString: String): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(4).
-        setNumControllerNodes(3).build()).build()
+        setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString)).
+        setNumControllerNodes(3).build()).
+      build()
     try {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
       val admin = Admin.create(cluster.clientProperties())
       try {
-        val defaultBroker = new ConfigResource(Type.BROKER, "")
-
-        assertEquals(Seq(ApiError.NONE), legacyAlter(admin, Map(defaultBroker -> Seq(
-          new ConfigEntry("log.roll.ms", "1234567"),
-          new ConfigEntry("max.connections.per.ip", "6")))))
-
-        validateConfigs(admin, Map(defaultBroker -> Seq(
-          ("log.roll.ms", "1234567"),
-          ("max.connections.per.ip", "6"))), true)
-
-        assertEquals(Seq(ApiError.NONE), legacyAlter(admin, Map(defaultBroker -> Seq(
-          new ConfigEntry("log.roll.ms", "1234567")))))
-
-        // Since max.connections.per.ip was left out of the previous legacyAlter, it is removed.
-        validateConfigs(admin, Map(defaultBroker -> Seq(
-          ("log.roll.ms", "1234567"))), true)
-
-        admin.createTopics(Arrays.asList(
-          new NewTopic("foo", 2, 3.toShort),
-          new NewTopic("bar", 2, 3.toShort))).all().get()
-        TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "foo", 2)
-        TestUtils.waitForAllPartitionsMetadata(cluster.brokers().values().asScala.toSeq, "bar", 2)
-        assertEquals(Seq(ApiError.NONE,
-            new ApiError(INVALID_CONFIG, "Unknown topic config name: not.a.real.topic.config"),
-            new ApiError(UNKNOWN_TOPIC_OR_PARTITION, "The topic 'baz' does not exist.")),
-          legacyAlter(admin, Map(
-            new ConfigResource(Type.TOPIC, "foo") -> Seq(
-              new ConfigEntry("segment.jitter.ms", "345")),
-            new ConfigResource(Type.TOPIC, "bar") -> Seq(
-              new ConfigEntry("not.a.real.topic.config", "789")),
-            new ConfigResource(Type.TOPIC, "baz") -> Seq(
-              new ConfigEntry("segment.jitter.ms", "678")))))
-
-        validateConfigs(admin, Map(new ConfigResource(Type.TOPIC, "foo") -> Seq(
-          ("segment.jitter.ms", "345"))))
-
+        val createResults = admin.createTopics(util.List.of(
+          new NewTopic("foo", 1, 3.toShort),
+          new NewTopic("bar", 2, 3.toShort))).values()
+        createResults.get("foo").get()
+        createResults.get("bar").get()
+        val increaseResults = admin.createPartitions(util.Map.of(
+          "foo", NewPartitions.increaseTo(3),
+          "bar", NewPartitions.increaseTo(2))).values()
+        increaseResults.get("foo").get()
+        assertEquals(classOf[InvalidPartitionsException], assertThrows(
+          classOf[ExecutionException], () => increaseResults.get("bar").get()).getCause.getClass)
       } finally {
         admin.close()
       }
@@ -729,7 +834,6 @@ class KRaftClusterTest {
       cluster.close()
     }
   }
-
   private def clusterImage(
     cluster: KafkaClusterTestKit,
     brokerId: Int
@@ -754,8 +858,9 @@ class KRaftClusterTest {
     Option(image.brokers().get(brokerId)).isEmpty
   }
 
-  @Test
-  def testUnregisterBroker(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testUnregisterBroker(usingBootstrapController: Boolean): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(4).
@@ -769,7 +874,7 @@ class KRaftClusterTest {
       cluster.brokers().get(0).shutdown()
       TestUtils.waitUntilTrue(() => !brokerIsUnfenced(clusterImage(cluster, 1), 0),
         "Timed out waiting for broker 0 to be fenced.")
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = createAdminClient(cluster, bootstrapController = usingBootstrapController)
       try {
         admin.unregisterBroker(0)
       } finally {
@@ -782,9 +887,12 @@ class KRaftClusterTest {
     }
   }
 
-  def createAdminClient(cluster: KafkaClusterTestKit): Admin = {
+  def createAdminClient(cluster: KafkaClusterTestKit, bootstrapController: Boolean): Admin = {
     var props: Properties = null
-    props = cluster.clientProperties()
+    props = if (bootstrapController)
+      cluster.newClientPropertiesBuilder().setUsingBootstrapControllers(true).build()
+    else
+      cluster.clientProperties()
     props.put(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass.getName)
     Admin.create(props)
   }
@@ -796,13 +904,13 @@ class KRaftClusterTest {
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
-      cluster.format
-      cluster.startup
+      cluster.format()
+      cluster.startup()
       for (i <- 0 to 3) {
         TestUtils.waitUntilTrue(() => cluster.brokers.get(i).brokerState == BrokerState.RUNNING,
           "Broker Never started up")
       }
-      val admin = createAdminClient(cluster)
+      val admin = createAdminClient(cluster, bootstrapController = false)
       try {
         val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
         val quorumInfo = quorumState.quorumInfo.get()
@@ -831,9 +939,9 @@ class KRaftClusterTest {
           ) { observers =>
             (
               cluster.brokers.asScala.keySet == observers.asScala.map(_.replicaId).toSet
-                && observers.stream.allMatch(observer => (observer.logEndOffset > 0
+                && observers.stream.allMatch(observer => observer.logEndOffset > 0
                 && observer.lastFetchTimestamp() != OptionalLong.empty()
-                && observer.lastCaughtUpTimestamp() != OptionalLong.empty())))
+                && observer.lastCaughtUpTimestamp() != OptionalLong.empty()))
           }
 
         assertTrue(observerResponseValid, s"At least one observer did not return the expected state within timeout." +
@@ -846,12 +954,57 @@ class KRaftClusterTest {
     }
   }
 
+  @Test
+  def testDescribeQuorumRequestToControllers() : Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      for (i <- 0 to 3) {
+        TestUtils.waitUntilTrue(() => cluster.brokers.get(i).brokerState == BrokerState.RUNNING,
+          "Broker Never started up")
+      }
+      val admin = createAdminClient(cluster, bootstrapController = true)
+      try {
+        val quorumInfo = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions).quorumInfo.get()
+
+        assertEquals(cluster.controllers.asScala.keySet, quorumInfo.voters.asScala.map(_.replicaId).toSet)
+        assertTrue(cluster.controllers.asScala.keySet.contains(quorumInfo.leaderId),
+          s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
+
+        // Try to bring down the raft client in the active controller node to force the leader election.
+        // Stop raft client but not the controller, because we would like to get NOT_LEADER_OR_FOLLOWER error first.
+        // If the controller is shutdown, the client can't send request to the original leader.
+        cluster.controllers().get(quorumInfo.leaderId).sharedServer.raftManager.client.shutdown(1000)
+        // Send another describe metadata quorum request, it'll get NOT_LEADER_OR_FOLLOWER error first and then re-retrieve the metadata update
+        // and send to the correct active controller.
+        val quorumInfo2Future = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions).quorumInfo
+        // If raft client finishes shutdown before returning NOT_LEADER_OR_FOLLOWER error, the request will not be handled.
+        // This makes test fail. Shutdown the controller to make sure the request is handled by another controller.
+        cluster.controllers.get(quorumInfo.leaderId).shutdown()
+        val quorumInfo2 = quorumInfo2Future.get
+        // Make sure the leader has changed
+        assertTrue(quorumInfo.leaderId() != quorumInfo2.leaderId())
+
+        assertEquals(cluster.controllers.asScala.keySet, quorumInfo.voters.asScala.map(_.replicaId).toSet)
+        assertTrue(cluster.controllers.asScala.keySet.contains(quorumInfo.leaderId),
+          s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
 
   @Test
   def testUpdateMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -861,16 +1014,830 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         admin.updateFeatures(
-          Map(MetadataVersion.FEATURE_NAME ->
-            new FeatureUpdate(MetadataVersion.latest().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions
+          util.Map.of(MetadataVersion.FEATURE_NAME,
+            new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)), new UpdateFeaturesOptions
         )
+        assertEquals(new SupportedVersionRange(0, 1), admin.describeFeatures().featureMetadata().get().
+          supportedFeatures().get(KRaftVersion.FEATURE_NAME))
       } finally {
         admin.close()
       }
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latest()),
-        "Timed out waiting for metadata version update.")
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion()
+        .equals(Optional.of(MetadataVersion.latestTesting())), "Timed out waiting for metadata.version update")
     } finally {
       cluster.close()
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testDescribeKRaftVersion(usingBootstrapControlers: Boolean): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).
+        setFeature(KRaftVersion.FEATURE_NAME, 1.toShort).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.newClientPropertiesBuilder().
+        setUsingBootstrapControllers(usingBootstrapControlers).
+        build())
+      try {
+        val featureMetadata = admin.describeFeatures().featureMetadata().get()
+        assertEquals(new SupportedVersionRange(0, 1),
+          featureMetadata.supportedFeatures().get(KRaftVersion.FEATURE_NAME))
+        assertEquals(new FinalizedVersionRange(1.toShort, 1.toShort),
+          featureMetadata.finalizedFeatures().get(KRaftVersion.FEATURE_NAME))
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testRemoteLogManagerInstantiation(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build())
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+        "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+        "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
+      .build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.brokers().forEach((_, server) => {
+        server.remoteLogManagerOpt match {
+          case Some(_) =>
+          case None => fail("RemoteLogManager should be initialized")
+        }
+      })
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build())
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+        "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
+      .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+        "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
+      .build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
+        "RaftManager was not initialized.")
+
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        // Create a test topic
+        val newTopic = util.List.of(new NewTopic("test-topic", 1, 1.toShort))
+        val createTopicResult = admin.createTopics(newTopic)
+        createTopicResult.all().get()
+        waitForTopicListing(admin, Seq("test-topic"), Seq())
+
+        // Delete topic
+        val deleteResult = admin.deleteTopics(util.List.of("test-topic"))
+        deleteResult.all().get()
+
+        // List again
+        waitForTopicListing(admin, Seq(), Seq("test-topic"))
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testSnapshotCount(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp("metadata.log.max.snapshot.interval.ms", "500")
+      .setConfigProp("metadata.max.idle.interval.ms", "50") // Set this low to generate metadata
+      .build()
+
+    try {
+      cluster.format()
+      cluster.startup()
+      def snapshotCounter(path: Path): Long = {
+       path.toFile.listFiles((_: File, name: String) => {
+          name.toLowerCase.endsWith("checkpoint")
+        }).length
+      }
+
+      val metaLog = FileSystems.getDefault.getPath(cluster.controllers().get(3000).config.metadataLogDir, "__cluster_metadata-0")
+      TestUtils.waitUntilTrue(() => { snapshotCounter(metaLog) > 0 }, "Failed to see at least one snapshot")
+      Thread.sleep(500 * 10) // Sleep for 10 snapshot intervals
+      val countAfterTenIntervals = snapshotCounter(metaLog)
+      assertTrue(countAfterTenIntervals > 1, s"Expected to see at least one more snapshot, saw $countAfterTenIntervals")
+      assertTrue(countAfterTenIntervals < 20, s"Did not expect to see more than twice as many snapshots as snapshot intervals, saw $countAfterTenIntervals")
+      TestUtils.waitUntilTrue(() => {
+        val emitterMetrics = cluster.controllers().values().iterator().next().
+          sharedServer.snapshotEmitter.metrics()
+        emitterMetrics.latestSnapshotGeneratedBytes() > 0
+      }, "Failed to see latestSnapshotGeneratedBytes > 0")
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testAuthorizerFailureFoundInControllerStartup(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumControllerNodes(3).build()).
+      setConfigProp("authorizer.class.name", classOf[BadAuthorizer].getName).build()
+    try {
+      cluster.format()
+      val exception = assertThrows(classOf[ExecutionException], () => cluster.startup())
+      assertEquals("java.lang.IllegalStateException: test authorizer exception", exception.getMessage)
+      cluster.fatalFaultHandler().setIgnore(true)
+    } finally {
+      cluster.close()
+    }
+  }
+
+  /**
+   * Test a single broker, single controller cluster at the minimum bootstrap level. This tests
+   * that we can function without having periodic NoOpRecords written.
+   */
+  @Test
+  def testSingleControllerSingleBrokerCluster(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testReconfigureControllerClientQuotas(combinedController: Boolean): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setCombined(combinedController).
+        setNumControllerNodes(1).build()).
+      setConfigProp("client.quota.callback.class", classOf[DummyClientQuotaCallback].getName).
+      setConfigProp(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey, "0").
+      build()
+
+    def assertConfigValue(expected: Int): Unit = {
+      TestUtils.retry(60000) {
+        assertEquals(expected, cluster.controllers().values().iterator().next().
+          quotaManagers.clientQuotaCallbackPlugin.get.get.asInstanceOf[DummyClientQuotaCallback].value)
+        assertEquals(expected, cluster.brokers().values().iterator().next().
+          quotaManagers.clientQuotaCallbackPlugin.get.get.asInstanceOf[DummyClientQuotaCallback].value)
+      }
+    }
+
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      assertConfigValue(0)
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        admin.incrementalAlterConfigs(
+          util.Map.of(new ConfigResource(Type.BROKER, ""),
+            util.List.of(new AlterConfigOp(
+              new ConfigEntry(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey, "1"), OpType.SET)))).
+          all().get()
+      } finally {
+        admin.close()
+      }
+      assertConfigValue(1)
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testReconfigureControllerAuthorizer(combinedMode: Boolean): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setCombined(combinedMode).
+        setNumControllerNodes(1).build()).
+      setConfigProp("authorizer.class.name", classOf[FakeConfigurableAuthorizer].getName).
+      build()
+
+    def assertFoobarValue(expected: Int): Unit = {
+      TestUtils.retry(60000) {
+        assertEquals(expected, cluster.controllers().values().iterator().next().
+          authorizerPlugin.get.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+        assertEquals(expected, cluster.brokers().values().iterator().next().
+          authorizerPlugin.get.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+      }
+    }
+
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      assertFoobarValue(0)
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        admin.incrementalAlterConfigs(
+          util.Map.of(new ConfigResource(Type.BROKER, ""),
+            util.List.of(new AlterConfigOp(
+              new ConfigEntry(FakeConfigurableAuthorizer.foobarConfigKey, "123"), OpType.SET)))).
+          all().get()
+      } finally {
+        admin.close()
+      }
+      assertFoobarValue(123)
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testOverlyLargeCreateTopics(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val newTopics = new util.ArrayList[NewTopic]()
+        for (i <- 0 to 10000) {
+          newTopics.add(new NewTopic("foo" + i, 100000, 1.toShort))
+        }
+        val executionException = assertThrows(classOf[ExecutionException],
+            () => admin.createTopics(newTopics).all().get())
+        assertNotNull(executionException.getCause)
+        assertEquals(classOf[PolicyViolationException], executionException.getCause.getClass)
+        assertEquals("Excessively large number of partitions per request.",
+          executionException.getCause.getMessage)
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testTimedOutHeartbeats(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(3).
+        setNumControllerNodes(1).build()).
+      setConfigProp(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, 10.toString).
+      setConfigProp(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG, 1000.toString).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().next()
+      controller.controller.waitForReadyBrokers(3).get()
+      TestUtils.retry(60000) {
+        val latch = QuorumControllerIntegrationTestUtils.pause(controller.controller.asInstanceOf[QuorumController])
+        Thread.sleep(1001)
+        latch.countDown()
+        assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
+        assertTrue(controller.quorumControllerMetrics.timedOutHeartbeats() > 0,
+          "Expected timedOutHeartbeats to be greater than 0.")
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testRegisteredControllerEndpoints(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(3).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      TestUtils.retry(60000) {
+        val controller = cluster.controllers().values().iterator().next()
+        val registeredControllers = controller.registrationsPublisher.controllers()
+        assertEquals(3, registeredControllers.size(), "Expected 3 controller registrations")
+        registeredControllers.values().forEach(registration => {
+          assertNotNull(registration.listeners.get("CONTROLLER"))
+          assertNotEquals(0, registration.listeners.get("CONTROLLER").port())
+        })
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testDirectToControllerCommunicationFailsOnOlderMetadataVersion(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2).
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.newClientPropertiesBuilder().
+        setUsingBootstrapControllers(true).
+        build())
+      try {
+        val exception = assertThrows(classOf[ExecutionException],
+          () => admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES))
+        assertNotNull(exception.getCause)
+        assertEquals(classOf[UnsupportedVersionException], exception.getCause.getClass)
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testStartupWithNonDefaultKControllerDynamicConfiguration(): Unit = {
+    val bootstrapRecords = util.List.of(
+      new ApiMessageAndVersion(new FeatureLevelRecord().
+        setName(MetadataVersion.FEATURE_NAME).
+        setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel), 0.toShort),
+      new ApiMessageAndVersion(new ConfigRecord().
+        setResourceType(ConfigResource.Type.BROKER.id).
+        setResourceName("").
+        setName("num.io.threads").
+        setValue("9"), 0.toShort))
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords")).
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().next()
+      TestUtils.retry(60000) {
+        assertNotNull(controller.controllerApisHandlerPool)
+        assertEquals(9, controller.controllerApisHandlerPool.threadPoolSize.get())
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testTopicDeletedAndRecreatedWhileBrokerIsDown(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2).
+        setNumBrokerNodes(3).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val broker0 = cluster.brokers().get(0)
+        val broker1 = cluster.brokers().get(1)
+        val foo0 = new TopicPartition("foo", 0)
+
+        admin.createTopics(util.List.of(
+          new NewTopic("foo", 3, 3.toShort))).all().get()
+
+        // Wait until foo-0 is created on broker0.
+        TestUtils.retry(60000) {
+          assertTrue(broker0.logManager.getLog(foo0).isDefined)
+        }
+
+        // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+        broker0.shutdown()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
+          assertTrue(info.isPresent)
+          assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
+        }
+
+        // Modify foo-0 so that it has the wrong topic ID.
+        val logDir = broker0.logManager.getLog(foo0).get.dir
+        val partitionMetadataFile = new File(logDir, "partition.metadata")
+        Files.write(partitionMetadataFile.toPath,
+          "version: 0\ntopic_id: AAAAAAAAAAAAA7SrBWaJ7g\n".getBytes(StandardCharsets.UTF_8))
+
+        // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+        broker0.startup()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
+          assertTrue(info.isPresent)
+          assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
+        setNumBrokerNodes(3).
+        setNumDisksPerBroker(2).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val broker0 = cluster.brokers().get(0)
+        val broker1 = cluster.brokers().get(1)
+        val foo0 = new TopicPartition("foo", 0)
+
+        admin.createTopics(util.List.of(
+          new NewTopic("foo", 3, 3.toShort))).all().get()
+
+        // Wait until foo-0 is created on broker0.
+        TestUtils.retry(60000) {
+          assertTrue(broker0.logManager.getLog(foo0).isDefined)
+        }
+
+        // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+        broker0.shutdown()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
+          assertTrue(info.isPresent)
+          assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
+        }
+
+        // Modify foo-0 so that it refers to a future replica.
+        // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
+        // the main replica being offline
+        val log = broker0.logManager.getLog(foo0).get
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), false)
+
+        // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+        broker0.startup()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
+          assertTrue(info.isPresent)
+          assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+          assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  def copyDirectory(src: String, dest: String): Unit = {
+    Files.walk(Paths.get(src)).forEach(p => {
+      val out = Paths.get(dest, p.toString.substring(src.length()))
+      if (!p.toString.equals(src)) {
+        Files.copy(p, out)
+      }
+    })
+  }
+
+  @Test
+  def testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
+        setNumBrokerNodes(3).
+        setNumDisksPerBroker(2).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val broker0 = cluster.brokers().get(0)
+        val broker1 = cluster.brokers().get(1)
+        val foo0 = new TopicPartition("foo", 0)
+
+        admin.createTopics(util.List.of(
+          new NewTopic("foo", 3, 3.toShort))).all().get()
+
+        // Wait until foo-0 is created on broker0.
+        TestUtils.retry(60000) {
+          assertTrue(broker0.logManager.getLog(foo0).isDefined)
+        }
+
+        // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+        broker0.shutdown()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
+          assertTrue(info.isPresent)
+          assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
+        }
+
+        val log = broker0.logManager.getLog(foo0).get
+
+        // Copy foo-0 to targetParentDir
+        // This is so that we can rename the main replica to a future down below
+        val parentDir = log.parentDir
+        val targetParentDir = broker0.config.logDirs.stream().filter(l => !l.equals(parentDir)).findFirst().get()
+        val targetDirFile = new File(targetParentDir, log.dir.getName)
+        targetDirFile.mkdir()
+        copyDirectory(log.dir.toString, targetDirFile.toString)
+        assertTrue(targetDirFile.exists())
+
+        // Rename original log to a future
+        // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
+        // the main replica being online
+        val originalLogFile = log.dir
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), false)
+        assertFalse(originalLogFile.exists())
+
+        // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+        broker0.startup()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
+          assertTrue(info.isPresent)
+          assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+          assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
+          assertFalse(targetDirFile.exists())
+          assertTrue(originalLogFile.exists())
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testControllerFailover(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(5).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
+        "RaftManager was not initialized.")
+
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        // Create a test topic
+        admin.createTopics(util.List.of(
+          new NewTopic("test-topic", 1, 1.toShort))).all().get()
+        waitForTopicListing(admin, Seq("test-topic"), Seq())
+
+        // Shut down active controller
+        val active = cluster.waitForActiveController()
+        cluster.raftManagers().get(active.asInstanceOf[QuorumController].nodeId()).shutdown()
+
+        // Create a test topic on the new active controller
+        admin.createTopics(util.List.of(
+          new NewTopic("test-topic2", 1, 1.toShort))).all().get()
+        waitForTopicListing(admin, Seq("test-topic2"), Seq())
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  /**
+   * Test that once a cluster is formatted, a bootstrap.metadata file that contains an unsupported
+   * MetadataVersion is not a problem. This is a regression test for KAFKA-19192.
+   */
+  @Test
+  def testOldBootstrapMetadataFile(): Unit = {
+    val baseDirectory = TestUtils.tempDir().toPath()
+    Using.resource(new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).
+        setBaseDirectory(baseDirectory).
+          build()).
+      setDeleteOnClose(false).
+        build()
+    ) { cluster =>
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+    }
+    val oldBootstrapMetadata = BootstrapMetadata.fromRecords(
+      util.List.of(
+        new ApiMessageAndVersion(
+          new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(1),
+          0.toShort)
+      ),
+      "oldBootstrapMetadata")
+    // Re-create the cluster using the same directory structure as above.
+    // Since we do not need to use the bootstrap metadata, the fact that
+    // it specifies an obsolete metadata.version should not be a problem.
+    Using.resource(new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).
+        setBaseDirectory(baseDirectory).
+        setBootstrapMetadata(oldBootstrapMetadata).
+          build()).build()
+    ) { cluster =>
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+    }
+  }
+
+  @Test
+  def testIncreaseNumIoThreads(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).
+      setConfigProp(ServerConfigs.NUM_IO_THREADS_CONFIG, "4").
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        admin.incrementalAlterConfigs(
+          util.Map.of(new ConfigResource(Type.BROKER, ""),
+            util.List.of(new AlterConfigOp(
+              new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, "8"), OpType.SET)))).all().get()
+        val newTopic = util.List.of(new NewTopic("test-topic", 1, 1.toShort))
+        val createTopicResult = admin.createTopics(newTopic)
+        createTopicResult.all().get()
+        waitForTopicListing(admin, Seq("test-topic"), Seq())
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+}
+
+class BadAuthorizer extends Authorizer {
+
+  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
+    throw new IllegalStateException("test authorizer exception")
+  }
+
+  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = ???
+
+  override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = ???
+
+  override def close(): Unit = {}
+
+  override def configure(configs: util.Map[String, _]): Unit = {}
+
+  override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = ???
+
+  override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = ???
+}
+
+object DummyClientQuotaCallback {
+  val dummyClientQuotaCallbackValueConfigKey = "dummy.client.quota.callback.value"
+}
+
+class DummyClientQuotaCallback extends ClientQuotaCallback with Reconfigurable {
+  var value = 0
+  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = util.Map.of
+
+  override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = 1.0
+
+  override def updateQuota(quotaType: ClientQuotaType, quotaEntity: quota.ClientQuotaEntity, newValue: Double): Unit = {}
+
+  override def removeQuota(quotaType: ClientQuotaType, quotaEntity: quota.ClientQuotaEntity): Unit = {}
+
+  override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = true
+
+  override def updateClusterMetadata(cluster: Cluster): Boolean = false
+
+  override def close(): Unit = {}
+
+  override def configure(configs: util.Map[String, _]): Unit = {
+    val newValue = configs.get(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey)
+    if (newValue != null) {
+      value = Integer.parseInt(newValue.toString)
+    }
+  }
+
+  override def reconfigurableConfigs(): util.Set[String] = util.Set.of(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey)
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = configure(configs)
+}
+
+object FakeConfigurableAuthorizer {
+  val foobarConfigKey = "fake.configurable.authorizer.foobar.config"
+
+  def fakeConfigurableAuthorizerConfigToInt(configs: util.Map[String, _]): Int = {
+    val result = configs.get(foobarConfigKey)
+    if (result == null) {
+      0
+    } else {
+      val resultString = result.toString.trim()
+      try {
+        Integer.valueOf(resultString)
+      } catch {
+        case _: NumberFormatException => throw new ConfigException(s"Bad value of $foobarConfigKey: $resultString")
+      }
+    }
+  }
+}
+
+class FakeConfigurableAuthorizer extends Authorizer with Reconfigurable {
+  import FakeConfigurableAuthorizer._
+
+  val foobar = new AtomicInteger(0)
+
+  override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
+    serverInfo.endpoints().asScala.map(e => e -> {
+      val future = new CompletableFuture[Void]
+      future.complete(null)
+      future
+    }).toMap.asJava
+  }
+
+  override def reconfigurableConfigs(): util.Set[String] = util.Set.of(foobarConfigKey)
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
+    fakeConfigurableAuthorizerConfigToInt(configs)
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = {
+    foobar.set(fakeConfigurableAuthorizerConfigToInt(configs))
+  }
+
+  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+    actions.asScala.map(_ => AuthorizationResult.ALLOWED).toList.asJava
+  }
+
+  override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = util.List.of[AclBinding]()
+
+  override def close(): Unit = {}
+
+  override def configure(configs: util.Map[String, _]): Unit = {
+    foobar.set(fakeConfigurableAuthorizerConfigToInt(configs))
+  }
+
+  override def createAcls(
+    requestContext: AuthorizableRequestContext,
+    aclBindings: util.List[AclBinding]
+  ): util.List[_ <: CompletionStage[AclCreateResult]] = {
+    util.List.of
+  }
+
+  override def deleteAcls(
+    requestContext: AuthorizableRequestContext,
+    aclBindingFilters: util.List[AclBindingFilter]
+  ): util.List[_ <: CompletionStage[AclDeleteResult]] = {
+    util.List.of
   }
 }

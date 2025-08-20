@@ -104,14 +104,14 @@ public interface QueryResult<R> {
 
     /**
      * True iff the query was successfully executed. The response is available in {@link
-     * this#getResult()}.
+     * #getResult()}.
      */
     boolean isSuccess();
 
 
     /**
      * True iff the query execution failed. More information about the failure is available in
-     * {@link this#getFailureReason()} and {@link this#getFailureMessage()}.
+     * {@link #getFailureReason()} and {@link #getFailureMessage()}.
      */
     boolean isFailure();
 
@@ -146,7 +146,7 @@ public interface QueryResult<R> {
     /**
      * Returns the result of executing the query on one partition. The result type is determined by
      * the query. Note: queries may choose to return {@code null} for a successful query, so {@link
-     * this#isSuccess()} and {@link this#isFailure()} must be used to determine whether the query
+     * #isSuccess()} and {@link #isFailure()} must be used to determine whether the query
      * was successful of failed on this partition.
      *
      * @throws IllegalArgumentException if this is not a successful query.

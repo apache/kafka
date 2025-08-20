@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.source;
 
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 
 import java.util.Map;
@@ -26,8 +27,8 @@ import java.util.Map;
  */
 public interface SourceTaskContext {
     /**
-     * Get the Task configuration.  This is the latest configuration and may differ from that passed on startup.
-     *
+     * Get the Task configuration. This is the latest configuration and may differ from that passed on startup.
+     * <p>
      * For example, this method can be used to obtain the latest configuration if an external secret has changed,
      * and the configuration is using variable references such as those compatible with
      * {@link org.apache.kafka.common.config.ConfigTransformer}.
@@ -46,7 +47,7 @@ public interface SourceTaskContext {
      * <p>This method was added in Apache Kafka 3.2. Source tasks that use this method but want to
      * maintain backward compatibility so they can also be deployed to older Connect runtimes
      * should guard the call to this method with a try-catch block, since calling this method will result in a
-     * {@link NoSuchMethodException} or {@link NoClassDefFoundError} when the source connector is deployed to
+     * {@link NoSuchMethodError} or {@link NoClassDefFoundError} when the source connector is deployed to
      * Connect runtimes older than Kafka 3.2. For example:
      * <pre>
      *     TransactionContext transactionContext;
@@ -63,4 +64,26 @@ public interface SourceTaskContext {
     default TransactionContext transactionContext() {
         return null;
     }
+
+    /**
+     * Get a {@link PluginMetrics} that can be used to define metrics
+     *
+     * <p>This method was added in Apache Kafka 4.1. Tasks that use this method but want to
+     * maintain backward compatibility so they can also be deployed to older Connect runtimes
+     * should guard the call to this method with a try-catch block, since calling this method will result in a
+     * {@link NoSuchMethodError} or {@link NoClassDefFoundError} when the connector is deployed to
+     * Connect runtimes older than Kafka 4.1. For example:
+     * <pre>
+     *     PluginMetrics pluginMetrics;
+     *     try {
+     *         pluginMetrics = context.pluginMetrics();
+     *     } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     *         pluginMetrics = null;
+     *     }
+     * </pre>
+     *
+     * @return the pluginMetrics instance
+     * @since 4.1
+     */
+    PluginMetrics pluginMetrics();
 }

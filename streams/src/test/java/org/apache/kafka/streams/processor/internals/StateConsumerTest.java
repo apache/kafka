@@ -18,48 +18,45 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class StateConsumerTest {
 
-    private static final long FLUSH_INTERVAL = 1000L;
     private final TopicPartition topicOne = new TopicPartition("topic-one", 1);
     private final TopicPartition topicTwo = new TopicPartition("topic-two", 1);
-    private final MockTime time = new MockTime();
-    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
     private final Map<TopicPartition, Long> partitionOffsets = new HashMap<>();
     private final LogContext logContext = new LogContext("test ");
     private GlobalStreamThread.StateConsumer stateConsumer;
     private TaskStub stateMaintainer;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         partitionOffsets.put(topicOne, 20L);
         partitionOffsets.put(topicTwo, 30L);
         stateMaintainer = new TaskStub(partitionOffsets);
-        stateConsumer = new GlobalStreamThread.StateConsumer(logContext, consumer, stateMaintainer, time, Duration.ofMillis(10L), FLUSH_INTERVAL);
+        stateConsumer = new GlobalStreamThread.StateConsumer(logContext, consumer, stateMaintainer, Duration.ofMillis(10L));
     }
 
     @Test
     public void shouldAssignPartitionsToConsumer() {
         stateConsumer.initialize();
-        assertEquals(Utils.mkSet(topicOne, topicTwo), consumer.assignment());
+        assertEquals(Set.of(topicOne, topicTwo), consumer.assignment());
     }
 
     @Test
@@ -76,6 +73,7 @@ public class StateConsumerTest {
         consumer.addRecord(new ConsumerRecord<>("topic-one", 1, 21L, new byte[0], new byte[0]));
         stateConsumer.pollAndUpdate();
         assertEquals(2, stateMaintainer.updatedPartitions.get(topicOne).intValue());
+        assertTrue(stateMaintainer.flushed);
     }
 
     @Test
@@ -87,25 +85,7 @@ public class StateConsumerTest {
         stateConsumer.pollAndUpdate();
         assertEquals(1, stateMaintainer.updatedPartitions.get(topicOne).intValue());
         assertEquals(2, stateMaintainer.updatedPartitions.get(topicTwo).intValue());
-    }
-
-    @Test
-    public void shouldFlushStoreWhenFlushIntervalHasLapsed() {
-        stateConsumer.initialize();
-        consumer.addRecord(new ConsumerRecord<>("topic-one", 1, 20L, new byte[0], new byte[0]));
-        time.sleep(FLUSH_INTERVAL);
-
-        stateConsumer.pollAndUpdate();
         assertTrue(stateMaintainer.flushed);
-    }
-
-    @Test
-    public void shouldNotFlushOffsetsWhenFlushIntervalHasNotLapsed() {
-        stateConsumer.initialize();
-        consumer.addRecord(new ConsumerRecord<>("topic-one", 1, 20L, new byte[0], new byte[0]));
-        time.sleep(FLUSH_INTERVAL / 2);
-        stateConsumer.pollAndUpdate();
-        assertFalse(stateMaintainer.flushed);
     }
 
     @Test
@@ -161,6 +141,10 @@ public class StateConsumerTest {
             updatedPartitions.put(tp, updatedPartitions.get(tp) + 1);
         }
 
+        @Override
+        public void maybeCheckpoint() {
+            flushState();
+        }
     }
 
 }

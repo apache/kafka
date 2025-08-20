@@ -105,9 +105,10 @@ public abstract class SourceTask implements Task {
     public abstract List<SourceRecord> poll() throws InterruptedException;
 
     /**
-     * <p>
-     * Commit the offsets, up to the offsets that have been returned by {@link #poll()}. This
-     * method should block until the commit is complete.
+     * This method is invoked periodically when offsets are committed for this source task. Note that the offsets
+     * being committed won't necessarily correspond to the latest offsets returned by this source task via
+     * {@link #poll()}. Also see {@link #commitRecord(SourceRecord, RecordMetadata)} which allows for a more
+     * fine-grained tracking of records that have been successfully delivered.
      * <p>
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
      * automatically. This hook is provided for systems that also need to store offsets internally
@@ -122,35 +123,13 @@ public abstract class SourceTask implements Task {
      * trying to poll for new data and interrupt any outstanding poll() requests. It is not required that the task has
      * fully stopped. Note that this method necessarily may be invoked from a different thread than {@link #poll()} and
      * {@link #commit()}.
-     *
+     * <p>
      * For example, if a task uses a {@link java.nio.channels.Selector} to receive data over the network, this method
      * could set a flag that will force {@link #poll()} to exit immediately and invoke
      * {@link java.nio.channels.Selector#wakeup() wakeup()} to interrupt any ongoing requests.
      */
     @Override
     public abstract void stop();
-
-    /**
-     * <p>
-     * Commit an individual {@link SourceRecord} when the callback from the producer client is received. This method is
-     * also called when a record is filtered by a transformation, and thus will never be ACK'd by a broker.
-     * <p>
-     * This is an alias for {@link #commitRecord(SourceRecord, RecordMetadata)} for backwards compatibility. The default
-     * implementation of {@link #commitRecord(SourceRecord, RecordMetadata)} just calls this method. It is not necessary
-     * to override both methods.
-     * <p>
-     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
-     * automatically. This hook is provided for systems that also need to store offsets internally
-     * in their own system.
-     *
-     * @param record {@link SourceRecord} that was successfully sent via the producer or filtered by a transformation
-     * @throws InterruptedException
-     * @deprecated Use {@link #commitRecord(SourceRecord, RecordMetadata)} instead.
-     */
-    @Deprecated
-    public void commitRecord(SourceRecord record) throws InterruptedException {
-        // This space intentionally left blank.
-    }
 
     /**
      * <p>
@@ -163,8 +142,7 @@ public abstract class SourceTask implements Task {
      * automatically. This hook is provided for systems that also need to store offsets internally
      * in their own system.
      * <p>
-     * The default implementation just calls {@link #commitRecord(SourceRecord)}, which is a nop by default. It is
-     * not necessary to implement both methods.
+     * The default implementation is a nop. It is not necessary to implement the method.
      *
      * @param record {@link SourceRecord} that was successfully sent via the producer, filtered by a transformation, or dropped on producer exception
      * @param metadata {@link RecordMetadata} record metadata returned from the broker, or null if the record was filtered or if producer exceptions are ignored
@@ -172,7 +150,6 @@ public abstract class SourceTask implements Task {
      */
     public void commitRecord(SourceRecord record, RecordMetadata metadata)
             throws InterruptedException {
-        // by default, just call other method for backwards compatibility
-        commitRecord(record);
+        // by default, just do nothing
     }
 }

@@ -26,13 +26,18 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 
-import java.util.Arrays;
-import java.util.Collections;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.kafka.connect.json.JsonConverterConfig.SCHEMAS_ENABLE_CONFIG;
@@ -40,18 +45,20 @@ import static org.apache.kafka.connect.storage.KafkaStatusBackingStore.CONNECTOR
 import static org.apache.kafka.connect.storage.KafkaStatusBackingStore.TASK_STATUS_PREFIX;
 import static org.apache.kafka.connect.storage.KafkaStatusBackingStore.TOPIC_STATUS_PREFIX;
 import static org.apache.kafka.connect.storage.KafkaStatusBackingStore.TOPIC_STATUS_SEPARATOR;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 @SuppressWarnings("unchecked")
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KafkaStatusBackingStoreFormatTest {
 
     private static final String STATUS_TOPIC = "status-topic";
@@ -61,16 +68,15 @@ public class KafkaStatusBackingStoreFormatTest {
 
     private Time time;
     private KafkaStatusBackingStore store;
-    private JsonConverter converter;
 
-    private KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
+    private final KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
 
-    @Before
+    @BeforeEach
     public void setup() {
         time = new MockTime();
-        converter = new JsonConverter();
-        converter.configure(Collections.singletonMap(SCHEMAS_ENABLE_CONFIG, false), false);
-        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
+        JsonConverter converter = new JsonConverter();
+        converter.configure(Map.of(SCHEMAS_ENABLE_CONFIG, false), false);
+        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, () -> null, kafkaBasedLog);
     }
 
     @Test
@@ -176,7 +182,7 @@ public class KafkaStatusBackingStoreFormatTest {
         store.read(statusRecord);
         assertTrue(store.topics.containsKey("bar"));
         assertFalse(store.topics.get("bar").containsKey("foo"));
-        assertEquals(Collections.emptyMap(), store.topics.get("bar"));
+        assertEquals(Map.of(), store.topics.get("bar"));
     }
 
     @Test
@@ -198,7 +204,7 @@ public class KafkaStatusBackingStoreFormatTest {
         ConsumerRecord<String, byte[]> statusRecord = new ConsumerRecord<>(STATUS_TOPIC, 0, 0, key, valueCaptor.getValue());
         store.read(statusRecord);
         assertEquals(topicStatus, store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
-        assertEquals(Collections.singleton(topicStatus), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
+        assertEquals(Set.of(topicStatus), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
     }
 
     @Test
@@ -216,7 +222,7 @@ public class KafkaStatusBackingStoreFormatTest {
         }).when(kafkaBasedLog).send(eq(key), valueCaptor.capture(), any(Callback.class));
 
         store.put(topicStatus);
-        verify(kafkaBasedLog, times(2)).send(any(), any(), any());
+        verify(kafkaBasedLog, timeout(1000).times(2)).send(any(), any(), any());
 
         // check capture state
         assertEquals(topicStatus, store.parseTopicStatus(valueCaptor.getValue()));
@@ -271,7 +277,7 @@ public class KafkaStatusBackingStoreFormatTest {
         assertEquals(secondTopicStatus, store.parseTopicStatus(valueCaptor.getValue()));
         assertEquals(firstTopicStatus, store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
         assertEquals(secondTopicStatus, store.getTopic(FOO_CONNECTOR, BAR_TOPIC));
-        assertEquals(new HashSet<>(Arrays.asList(firstTopicStatus, secondTopicStatus)), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
+        assertEquals(Set.of(firstTopicStatus, secondTopicStatus), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
     }
 
 }

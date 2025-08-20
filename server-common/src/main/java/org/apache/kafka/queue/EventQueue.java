@@ -17,12 +17,9 @@
 
 package org.apache.kafka.queue;
 
-import org.slf4j.Logger;
 
 import java.util.OptionalLong;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 
 public interface EventQueue extends AutoCloseable {
@@ -40,35 +37,17 @@ public interface EventQueue extends AutoCloseable {
          *              its deadline before it could be scheduled.
          *              It will be a RejectedExecutionException if the event could not be
          *              scheduled because the event queue has already been closed.
-         *              Otherweise, it will be whatever exception was thrown by run().
+         *              Otherwise, it will be whatever exception was thrown by run().
          */
         default void handleException(Throwable e) {}
     }
 
-    abstract class FailureLoggingEvent implements Event {
-        private final Logger log;
-
-        public FailureLoggingEvent(Logger log) {
-            this.log = log;
-        }
-
-        @Override
-        public void handleException(Throwable e) {
-            if (e instanceof RejectedExecutionException) {
-                log.info("Not processing {} because the event queue is closed.", this);
-            } else {
-                log.error("Unexpected error handling {}", this, e);
-            }
-        }
-
-        @Override
-        public String toString() {
-            return this.getClass().getSimpleName();
-        }
-    }
-
-    class NoDeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class NoDeadlineFunction implements UnaryOperator<OptionalLong> {
         public static final NoDeadlineFunction INSTANCE = new NoDeadlineFunction();
+        
+        private NoDeadlineFunction() {
+            
+        }
 
         @Override
         public OptionalLong apply(OptionalLong ignored) {
@@ -76,7 +55,7 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
-    class DeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class DeadlineFunction implements UnaryOperator<OptionalLong> {
         private final long deadlineNs;
 
         public DeadlineFunction(long deadlineNs) {
@@ -89,7 +68,7 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
-    class EarliestDeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class EarliestDeadlineFunction implements UnaryOperator<OptionalLong> {
         private final long newDeadlineNs;
 
         public EarliestDeadlineFunction(long newDeadlineNs) {
@@ -98,7 +77,7 @@ public interface EventQueue extends AutoCloseable {
 
         @Override
         public OptionalLong apply(OptionalLong prevDeadlineNs) {
-            if (!prevDeadlineNs.isPresent()) {
+            if (prevDeadlineNs.isEmpty()) {
                 return OptionalLong.of(newDeadlineNs);
             } else if (prevDeadlineNs.getAsLong() < newDeadlineNs) {
                 return prevDeadlineNs;
@@ -109,8 +88,12 @@ public interface EventQueue extends AutoCloseable {
     }
 
     class VoidEvent implements Event {
-        public final static VoidEvent INSTANCE = new VoidEvent();
-
+        public static final VoidEvent INSTANCE = new VoidEvent();
+        
+        private VoidEvent() {
+            
+        }
+        
         @Override
         public void run() throws Exception {
         }
@@ -164,7 +147,7 @@ public interface EventQueue extends AutoCloseable {
      * @param event                 The event to schedule.
      */
     default void scheduleDeferred(String tag,
-                                  Function<OptionalLong, OptionalLong> deadlineNsCalculator,
+                                  UnaryOperator<OptionalLong> deadlineNsCalculator,
                                   Event event) {
         enqueue(EventInsertionType.DEFERRED, tag, deadlineNsCalculator, event);
     }
@@ -206,47 +189,31 @@ public interface EventQueue extends AutoCloseable {
      */
     void enqueue(EventInsertionType insertionType,
                  String tag,
-                 Function<OptionalLong, OptionalLong> deadlineNsCalculator,
+                 UnaryOperator<OptionalLong> deadlineNsCalculator,
                  Event event);
 
     /**
-     * Asynchronously shut down the event queue with no unnecessary delay.
-     * @see #beginShutdown(String, Event, long, TimeUnit)
-     *
-     * @param source                The source of the shutdown.
-     */
-    default void beginShutdown(String source) {
-        beginShutdown(source, new VoidEvent());
-    }
-
-    /**
-     * Asynchronously shut down the event queue with no unnecessary delay.
-     *
-     * @param source        The source of the shutdown.
-     * @param cleanupEvent  The mandatory event to invoke after all other events have
-     *                      been processed.
-     * @see #beginShutdown(String, Event, long, TimeUnit)
-     */
-    default void beginShutdown(String source, Event cleanupEvent) {
-        beginShutdown(source, cleanupEvent, 0, TimeUnit.SECONDS);
-    }
-
-    /**
      * Asynchronously shut down the event queue.
-     *
-     * No new events will be accepted, and the timeout will be initiated
-     * for all existing events.
+     * <br>
+     * No new events will be accepted, and the queue thread will exit after running the existing events.
+     * Deferred events will receive TimeoutExceptions.
      *
      * @param source        The source of the shutdown.
-     * @param cleanupEvent  The mandatory event to invoke after all other events have
-     *                      been processed.
-     * @param timeSpan      The amount of time to use for the timeout.
-     *                      Once the timeout elapses, any remaining queued
-     *                      events will get a
-     *                      {@link org.apache.kafka.common.errors.TimeoutException}.
-     * @param timeUnit      The time unit to use for the timeout.
      */
-    void beginShutdown(String source, Event cleanupEvent, long timeSpan, TimeUnit timeUnit);
+    void beginShutdown(String source);
+
+    /**
+     * @return The number of pending and running events. If this is 0, there is no running event and
+     * no events queued.
+     */
+    int size();
+
+    /**
+     * @return True if there are no pending or running events.
+     */
+    default boolean isEmpty() {
+        return size() == 0;
+    }
 
     /**
      * This method is used during unit tests where MockTime is in use.

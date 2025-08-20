@@ -20,9 +20,11 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,7 +66,7 @@ public class DescribeUserScramCredentialsResultTest {
         int iterations = 4096;
         dataFuture.complete(new DescribeUserScramCredentialsResponseData().setErrorCode(Errors.NONE.code()).setResults(Arrays.asList(
                 new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(goodUser).setCredentialInfos(
-                        Arrays.asList(new DescribeUserScramCredentialsResponseData.CredentialInfo().setMechanism(scramSha256.type()).setIterations(iterations))),
+                        Collections.singletonList(new DescribeUserScramCredentialsResponseData.CredentialInfo().setMechanism(scramSha256.type()).setIterations(iterations))),
                 new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(unknownUser).setErrorCode(Errors.RESOURCE_NOT_FOUND.code()),
                 new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(failedUser).setErrorCode(Errors.DUPLICATE_RESOURCE.code()))));
         DescribeUserScramCredentialsResult results = new DescribeUserScramCredentialsResult(dataFuture);
@@ -76,7 +78,7 @@ public class DescribeUserScramCredentialsResultTest {
         }
         assertEquals(Arrays.asList(goodUser, failedUser), results.users().get(), "Expected 2 users with credentials");
         UserScramCredentialsDescription goodUserDescription = results.description(goodUser).get();
-        assertEquals(new UserScramCredentialsDescription(goodUser, Arrays.asList(new ScramCredentialInfo(scramSha256, iterations))), goodUserDescription);
+        assertEquals(new UserScramCredentialsDescription(goodUser, Collections.singletonList(new ScramCredentialInfo(scramSha256, iterations))), goodUserDescription);
         try {
             results.description(failedUser).get();
             fail("expected description(failedUser) to fail when there is a user-level error");
@@ -98,15 +100,15 @@ public class DescribeUserScramCredentialsResultTest {
         KafkaFutureImpl<DescribeUserScramCredentialsResponseData> dataFuture = new KafkaFutureImpl<>();
         ScramMechanism scramSha256 = ScramMechanism.SCRAM_SHA_256;
         int iterations = 4096;
-        dataFuture.complete(new DescribeUserScramCredentialsResponseData().setErrorCode(Errors.NONE.code()).setResults(Arrays.asList(
+        dataFuture.complete(new DescribeUserScramCredentialsResponseData().setErrorCode(Errors.NONE.code()).setResults(Collections.singletonList(
                 new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(goodUser).setCredentialInfos(
-                        Arrays.asList(new DescribeUserScramCredentialsResponseData.CredentialInfo().setMechanism(scramSha256.type()).setIterations(iterations))))));
+                        Collections.singletonList(new DescribeUserScramCredentialsResponseData.CredentialInfo().setMechanism(scramSha256.type()).setIterations(iterations))))));
         DescribeUserScramCredentialsResult results = new DescribeUserScramCredentialsResult(dataFuture);
-        assertEquals(Arrays.asList(goodUser), results.users().get(), "Expected 1 user with credentials");
+        assertEquals(Collections.singletonList(goodUser), results.users().get(), "Expected 1 user with credentials");
         Map<String, UserScramCredentialsDescription> allResults = results.all().get();
         assertEquals(1, allResults.size());
         UserScramCredentialsDescription goodUserDescriptionViaAll = allResults.get(goodUser);
-        assertEquals(new UserScramCredentialsDescription(goodUser, Arrays.asList(new ScramCredentialInfo(scramSha256, iterations))), goodUserDescriptionViaAll);
+        assertEquals(new UserScramCredentialsDescription(goodUser, Collections.singletonList(new ScramCredentialInfo(scramSha256, iterations))), goodUserDescriptionViaAll);
         assertEquals(goodUserDescriptionViaAll, results.description(goodUser).get(), "Expected same thing via all() and description()");
         try {
             results.description(unknownUser).get();

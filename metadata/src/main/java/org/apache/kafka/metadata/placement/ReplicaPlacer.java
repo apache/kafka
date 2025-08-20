@@ -17,8 +17,6 @@
 
 package org.apache.kafka.metadata.placement;
 
-import java.util.List;
-
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 
@@ -34,11 +32,11 @@ public interface ReplicaPlacer {
      * @param placement     What we're trying to place.
      * @param cluster       A description of the cluster we're trying to place in.
      *
-     * @return              A list of replica lists.
+     * @return              A topic assignment.
      *
      * @throws InvalidReplicationFactorException    If too many replicas were requested.
      */
-    List<List<Integer>> place(
+    TopicAssignment place(
         PlacementSpec placement,
         ClusterDescriber cluster
     ) throws InvalidReplicationFactorException;

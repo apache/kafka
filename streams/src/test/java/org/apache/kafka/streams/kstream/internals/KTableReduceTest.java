@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
@@ -23,15 +24,16 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.GenericInMemoryTimestampedKeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
 import java.util.Set;
 
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class KTableReduceTest {
 
@@ -41,7 +43,7 @@ public class KTableReduceTest {
 
         final Processor<String, Change<Set<String>>, String, Change<Set<String>>> reduceProcessor =
             new KTableReduce<String, Set<String>>(
-                "myStore",
+                new MaterializedInternal<>(Materialized.as("myStore")),
                 this::unionNotNullArgs,
                 this::differenceNotNullArgs
             ).get();

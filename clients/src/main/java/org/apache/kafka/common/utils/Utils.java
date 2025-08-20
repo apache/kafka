@@ -16,18 +16,14 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.nio.BufferUnderflowException;
-import java.nio.file.StandardOpenOption;
-import java.util.AbstractMap;
-import java.util.EnumSet;
-import java.util.Map.Entry;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import java.io.Closeable;
 import java.io.DataOutput;
@@ -39,7 +35,10 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -49,13 +48,23 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
+import java.util.EnumSet;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -63,9 +72,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
@@ -77,27 +90,24 @@ import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 public final class Utils {
 
     private Utils() {}
 
-    // This matches URIs of formats: host:port and protocol:\\host:port
+    // This matches URIs of formats: host:port and protocol://host:port
     // IPv6 is supported with [ip] pattern
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile("^(?:[0-9a-zA-Z\\-%._]*://)?\\[?([0-9a-zA-Z\\-%._:]*)]?:([0-9]+)");
 
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
-    // Prints up to 2 decimal digits. Used for human readable printing
+    // Prints up to 2 decimal digits. Used for human-readable printing
     private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##",
         DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
     private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
-    public static final String NL = System.getProperty("line.separator");
+    public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
@@ -337,7 +347,7 @@ public final class Utils {
      * Compares two character arrays for equality using a constant-time algorithm, which is needed
      * for comparing passwords. Two arrays are equal if they have the same length and all
      * characters at corresponding positions are equal.
-     *
+     * <p>
      * All characters in the first array are examined to determine equality.
      * The calculation time depends only on the length of this first character array; it does not
      * depend on the length of the second character array or the contents of either array.
@@ -416,7 +426,14 @@ public final class Utils {
      * @return the new class
      */
     public static <T> Class<? extends T> loadClass(String klass, Class<T> base) throws ClassNotFoundException {
-        return Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base);
+        ClassLoader contextOrKafkaClassLoader = Utils.getContextOrKafkaClassLoader();
+        // Use loadClass here instead of Class.forName because the name we use here may be an alias
+        // and not match the name of the class that gets loaded. If that happens, Class.forName can
+        // throw an exception.
+        Class<?> loadedClass = contextOrKafkaClassLoader.loadClass(klass);
+        // Invoke forName here with the true name of the requested class to cause class
+        // initialization to take place.
+        return Class.forName(loadedClass.getName(), true, contextOrKafkaClassLoader).asSubclass(base);
     }
 
     /**
@@ -445,7 +462,7 @@ public final class Utils {
         Class<?>[] argTypes = new Class<?>[params.length / 2];
         Object[] args = new Object[params.length / 2];
         try {
-            Class<?> c = Class.forName(className, true, Utils.getContextOrKafkaClassLoader());
+            Class<?> c = Utils.loadClass(className, Object.class);
             for (int i = 0; i < params.length / 2; i++) {
                 argTypes[i] = (Class<?>) params[2 * i];
                 args[i] = params[(2 * i) + 1];
@@ -455,7 +472,7 @@ public final class Utils {
             return constructor.newInstance(args);
         } catch (NoSuchMethodException e) {
             throw new ClassNotFoundException(String.format("Failed to find " +
-                "constructor with %s for %s", Utils.join(argTypes, ", "), className), e);
+                "constructor with %s for %s", Arrays.stream(argTypes).map(Object::toString).collect(Collectors.joining(", ")), className), e);
         } catch (InstantiationException e) {
             throw new ClassNotFoundException(String.format("Failed to instantiate " +
                 "%s", className), e);
@@ -556,9 +573,12 @@ public final class Utils {
     }
 
     /**
-     * Formats a byte number as a human readable String ("3.2 MB")
-     * @param bytes some size in bytes
-     * @return
+     * Formats a byte value into a human-readable string with an appropriate unit
+     * (e.g., "3.2 KB", "1.5 MB", "2.1 GB"). The format includes two decimal places.
+     *
+     * @param bytes the size in bytes
+     * @return a string representing the size with the appropriate unit (e.g., "3.2 KB", "1.5 MB").
+     *         If the value is negative or too large, the input is returned as a string (e.g., "-500", "999999999999999").
      */
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
@@ -575,34 +595,6 @@ public final class Utils {
             //huge number?
             return String.valueOf(asDouble);
         }
-    }
-
-    /**
-     * Create a string representation of an array joined by the given separator
-     * @param strs The array of items
-     * @param separator The separator
-     * @return The string representation.
-     */
-    public static <T> String join(T[] strs, String separator) {
-        return join(Arrays.asList(strs), separator);
-    }
-
-    /**
-     * Create a string representation of a collection joined by the given separator
-     * @param collection The list of items
-     * @param separator The separator
-     * @return The string representation.
-     */
-    public static <T> String join(Collection<T> collection, String separator) {
-        Objects.requireNonNull(collection);
-        StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = collection.iterator();
-        while (iter.hasNext()) {
-            sb.append(iter.next());
-            if (iter.hasNext())
-                sb.append(separator);
-        }
-        return sb.toString();
     }
 
     /**
@@ -627,7 +619,7 @@ public final class Utils {
 
     /**
      *  Converts an extensions string into a {@code Map<String, String>}.
-     *
+     * <p>
      *  Example:
      *      {@code parseMap("key=hey,keyTwo=hi,keyThree=hello", "=", ",") => { key: "hey", keyTwo: "hi", keyThree: "hello" }}
      *
@@ -727,6 +719,36 @@ public final class Utils {
     }
 
     /**
+     * Reads bytes from a source buffer and returns a new buffer.
+     * <p> The content of the new buffer will start at this buffer's current
+     * position.  Changes to this buffer's content will be visible in the new
+     * buffer, and vice versa; the two buffers' position, limit, and mark
+     * values will be independent.
+     *
+     * <p> The new buffer's position will be zero, its limit will be the number of bytes
+     * read i.e. <code>bytesToRead</code>, it's capacity will be the number of bytes remaining in
+     * source buffer , its mark will be undefined, and its byte order will be {@link ByteOrder#BIG_ENDIAN BIG_ENDIAN}.
+     *
+     * <p>Since JDK 13, this method could be replaced with slice(int index, int length).
+     *
+     * @param srcBuf Source buffer where data is read from
+     * @param bytesToRead Number of bytes to read
+     * @return Destination buffer or null if bytesToRead is < 0
+     *
+     * @see ByteBuffer#slice()
+     */
+    public static ByteBuffer readBytes(ByteBuffer srcBuf, int bytesToRead) {
+        if (bytesToRead < 0)
+            return null;
+
+        final ByteBuffer dstBuf = srcBuf.slice();
+        dstBuf.limit(bytesToRead);
+        srcBuf.position(srcBuf.position() + bytesToRead);
+
+        return dstBuf;
+    }
+
+    /**
      * Read a file as string and return the content. The file is treated as a stream and no seek is performed.
      * This allows the program to read from a regular file as well as from a pipe/fifo.
      */
@@ -753,20 +775,6 @@ public final class Utils {
             return newBuffer;
         }
         return existingBuffer;
-    }
-
-    /**
-     * Creates a set
-     * @param elems the elements
-     * @param <T> the type of element
-     * @return Set
-     */
-    @SafeVarargs
-    public static <T> Set<T> mkSet(T... elems) {
-        Set<T> result = new HashSet<>((int) (elems.length / 0.75) + 1);
-        for (T elem : elems)
-            result.add(elem);
-        return result;
     }
 
     /**
@@ -852,15 +860,21 @@ public final class Utils {
         Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
-                // If the root path did not exist, ignore the error; otherwise throw it.
-                if (exc instanceof NoSuchFileException && path.toFile().equals(rootFile))
-                    return FileVisitResult.TERMINATE;
+                if (exc instanceof NoSuchFileException) {
+                    if (path.toFile().equals(rootFile)) {
+                        // If the root path did not exist, ignore the error and terminate;
+                        return FileVisitResult.TERMINATE;
+                    } else {
+                        // Otherwise, just continue walking as the file might already be deleted by other threads.
+                        return FileVisitResult.CONTINUE;
+                    }
+                }
                 throw exc;
             }
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
 
@@ -871,16 +885,19 @@ public final class Utils {
                     throw exc;
                 }
 
-                Files.delete(path);
+                Files.deleteIfExists(path);
                 return FileVisitResult.CONTINUE;
             }
         });
     }
 
     /**
-     * Returns an empty collection if this list is null
-     * @param other
-     * @return
+     * Returns an empty list if the provided list is null, otherwise returns the list itself.
+     * <p>
+     * This method is useful for avoiding {@code NullPointerException} when working with potentially null lists.
+     *
+     * @param other the list to check for null
+     * @return an empty list if the provided list is null, otherwise the original list
      */
     public static <T> List<T> safe(List<T> other) {
         return other == null ? Collections.emptyList() : other;
@@ -896,7 +913,7 @@ public final class Utils {
     /**
      * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
      * loaded Kafka.
-     *
+     * <p>
      * This should be used whenever passing a ClassLoader to Class.forName
      */
     public static ClassLoader getContextOrKafkaClassLoader() {
@@ -931,9 +948,9 @@ public final class Utils {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException outer) {
             try {
+                log.warn("Failed atomic move of {} to {} retrying with a non-atomic move", source, target, outer);
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
-                        outer.getMessage());
+                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed", source, target);
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
@@ -947,7 +964,7 @@ public final class Utils {
 
     /**
      * Flushes dirty directories to guarantee crash consistency.
-     *
+     * <p>
      * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
      *
      * @throws IOException if flushing the directory fails.
@@ -957,6 +974,30 @@ public final class Utils {
             try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
             }
+        }
+    }
+
+    /**
+     * Flushes dirty directories to guarantee crash consistency with swallowing {@link NoSuchFileException}
+     *
+     * @throws IOException if flushing the directory fails.
+     */
+    public static void flushDirIfExists(Path path) throws IOException {
+        try {
+            flushDir(path);
+        } catch (NoSuchFileException e) {
+            log.warn("Failed to flush directory {}", path);
+        }
+    }
+
+    /**
+     * Flushes dirty file with swallowing {@link NoSuchFileException}
+     */
+    public static void flushFileIfExists(Path path) throws IOException {
+        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
+            fileChannel.force(true);
+        } catch (NoSuchFileException e) {
+            log.warn("Failed to flush file {}", path, e);
         }
     }
 
@@ -983,9 +1024,50 @@ public final class Utils {
             throw exception;
     }
 
+    @FunctionalInterface
+    public interface SwallowAction {
+        void run() throws Throwable;
+    }
+
+    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code) {
+        swallow(log, level, what, code, null);
+    }
+
+    /**
+     * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
+     */
+    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code,
+                               final AtomicReference<Throwable> firstException) {
+        if (code != null) {
+            try {
+                code.run();
+            } catch (Throwable t) {
+                switch (level) {
+                    case INFO:
+                        log.info(what, t);
+                        break;
+                    case DEBUG:
+                        log.debug(what, t);
+                        break;
+                    case ERROR:
+                        log.error(what, t);
+                        break;
+                    case TRACE:
+                        log.trace(what, t);
+                        break;
+                    case WARN:
+                    default:
+                        log.warn(what, t);
+                }
+                if (firstException != null)
+                    firstException.compareAndSet(null, t);
+            }
+        }
+    }
+
     /**
      * An {@link AutoCloseable} interface without a throws clause in the signature
-     *
+     * <p>
      * This is used with lambda expressions in try-with-resources clauses
      * to avoid casting un-checked exceptions to checked exceptions unnecessarily.
      */
@@ -993,6 +1075,15 @@ public final class Utils {
     public interface UncheckedCloseable extends AutoCloseable {
         @Override
         void close();
+    }
+
+    /**
+     * Closes {@code maybeCloseable} if it implements the {@link AutoCloseable} interface,
+     * and if an exception is thrown, it is logged at the WARN level.
+     */
+    public static void maybeCloseQuietly(Object maybeCloseable, String name) {
+        if (maybeCloseable instanceof AutoCloseable)
+            closeQuietly((AutoCloseable) maybeCloseable, name);
     }
 
     /**
@@ -1007,11 +1098,26 @@ public final class Utils {
      * use a method reference from it.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
+        closeQuietly(closeable, name, log);
+    }
+
+    /**
+     * Closes {@code closeable} and if an exception is thrown, it is logged with the provided logger at the WARN level.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
+     */
+    public static void closeQuietly(AutoCloseable closeable, String name, Logger logger) {
         if (closeable != null) {
             try {
                 closeable.close();
             } catch (Throwable t) {
-                log.warn("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
+                logger.warn("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
             }
         }
     }
@@ -1049,11 +1155,35 @@ public final class Utils {
     }
 
     /**
+     * Invokes every function in `all` even if one or more functions throws an exception.
+     * <p>
+     * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
+     * added as suppressed exceptions.
+     */
+    // Note that this is a generalised version of `closeAll`. We could potentially make it more general by
+    // changing the signature to `public <R> List<R> tryAll(all: List[Callable<R>])`
+    public static void tryAll(List<Callable<Void>> all) throws Throwable {
+        Throwable exception = null;
+        for (Callable<Void> call : all) {
+            try {
+                call.call();
+            } catch (Throwable t) {
+                if (exception != null)
+                    exception.addSuppressed(t);
+                else
+                    exception = t;
+            }
+        }
+        if (exception != null)
+            throw exception;
+    }
+
+    /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
      * positive, the original value is returned. When the input number is negative, the returned
      * positive value is the original value bit AND against 0x7fffffff which is not its absolute
      * value.
-     *
+     * <p>
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition since it is used
      * in producer's partition selection logic {@link org.apache.kafka.clients.producer.KafkaProducer}
@@ -1141,12 +1271,12 @@ public final class Utils {
      * Read data from the input stream to the given byte buffer until there are no bytes remaining in the buffer or the
      * end of the stream has been reached.
      *
-     * @param inputStream Input stream to read from
+     * @param inputStream       Input stream to read from
      * @param destinationBuffer The buffer into which bytes are to be transferred (it must be backed by an array)
-     *
+     * @return number of byte read from the input stream
      * @throws IOException If an I/O error occurs
      */
-    public static void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
+    public static int readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
         if (!destinationBuffer.hasArray())
             throw new IllegalArgumentException("destinationBuffer must be backed by an array");
         int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
@@ -1160,6 +1290,7 @@ public final class Utils {
             totalBytesRead += bytesRead;
         } while (length > totalBytesRead);
         destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
+        return totalBytesRead;
     }
 
     public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
@@ -1179,7 +1310,7 @@ public final class Utils {
      * @return The length of the actual written data
      * @throws IOException If an I/O error occurs
      */
-    public static long tryWriteTo(TransferableChannel destChannel,
+    public static int tryWriteTo(TransferableChannel destChannel,
                                   int position,
                                   int length,
                                   ByteBuffer sourceBuffer) throws IOException {
@@ -1230,15 +1361,6 @@ public final class Utils {
         return res;
     }
 
-    public static <T> List<T> concatListsUnmodifiable(List<T> left, List<T> right) {
-        return concatLists(left, right, Collections::unmodifiableList);
-    }
-
-    public static <T> List<T> concatLists(List<T> left, List<T> right, Function<List<T>, List<T>> finisher) {
-        return Stream.concat(left.stream(), right.stream())
-                .collect(Collectors.collectingAndThen(Collectors.toList(), finisher));
-    }
-
     public static int to32BitField(final Set<Byte> bytes) {
         int value = 0;
         for (final byte b : bytes)
@@ -1262,18 +1384,6 @@ public final class Utils {
             count++;
         }
         return result;
-    }
-
-    public static <K1, V1, K2, V2> Map<K2, V2> transformMap(
-            Map<? extends K1, ? extends V1> map,
-            Function<K1, K2> keyMapper,
-            Function<V1, V2> valueMapper) {
-        return map.entrySet().stream().collect(
-            Collectors.toMap(
-                entry -> keyMapper.apply(entry.getKey()),
-                entry -> valueMapper.apply(entry.getValue())
-            )
-        );
     }
 
     /**
@@ -1360,13 +1470,43 @@ public final class Utils {
      * @return a map including all elements in properties
      */
     public static Map<String, Object> propsToMap(Properties properties) {
-        Map<String, Object> map = new HashMap<>(properties.size());
-        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
+        // This try catch block is to handle the case when the Properties object has non-String keys
+        // when calling the propertyNames() method. This is a workaround for the lack of a method that
+        // returns all properties including defaults and does not attempt to convert all keys to Strings.
+        Enumeration<?> enumeration;
+        try {
+            enumeration = properties.propertyNames();
+        } catch (ClassCastException e) {
+            throw new ConfigException("One or more keys is not a string.");
+        }
+        Map<String, Object> map = new HashMap<>();
+        while (enumeration.hasMoreElements()) {
+            String key = (String) enumeration.nextElement();
+            // properties.get(key) returns null for defaults, but properties.getProperty(key) returns null for
+            // non-string values. A combination of the two methods is used to cover all cases
+            Object value = (properties.get(key) != null) ? properties.get(key) : properties.getProperty(key);
+            map.put(key, value);
+        }
+        return map;
+    }
+
+    /**
+     * Cast a map with arbitrary type keys to be keyed on String.
+     * @param inputMap A map with unknown type keys
+     * @return A map with the same contents as the input map, but with String keys
+     * @throws ConfigException if any key is not a String
+     */
+    public static Map<String, Object> castToStringObjectMap(Map<?, ?> inputMap) {
+        if (inputMap instanceof Properties) {
+            return propsToMap((Properties) inputMap);
+        }
+        Map<String, Object> map = new HashMap<>(inputMap.size());
+        for (Map.Entry<?, ?> entry : inputMap.entrySet()) {
             if (entry.getKey() instanceof String) {
                 String k = (String) entry.getKey();
-                map.put(k, properties.get(k));
+                map.put(k, entry.getValue());
             } else {
-                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
+                throw new ConfigException(String.valueOf(entry.getKey()), entry.getValue(), "Key must be a string.");
             }
         }
         return map;
@@ -1413,24 +1553,13 @@ public final class Utils {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
-        return (Iterator<S>) iterator;
-    }
-
     /**
      * Checks if a string is null, empty or whitespace only.
      * @param str a string to be checked
      * @return true if the string is null, empty or whitespace only; otherwise, return false.
-     */    
+     */
     public static boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
-    }
-
-    public static <K, V> Map<K, V> initializeMap(Collection<K> keys, Supplier<V> valueSupplier) {
-        Map<K, V> res = new HashMap<>(keys.size());
-        keys.forEach(key -> res.put(key, valueSupplier.get()));
-        return res;
     }
 
     /**
@@ -1450,4 +1579,157 @@ public final class Utils {
                 .toArray(String[]::new);
     }
 
+    /**
+     * Ensure that the class is concrete (i.e., not abstract), and that it subclasses a given base class.
+     * If it is abstract or does not subclass the given base class, throw a {@link ConfigException}
+     * with a friendly error message suggesting a list of concrete child subclasses (if any are known).
+     * @param baseClass the expected superclass; may not be null
+     * @param klass the class to check; may not be null
+     * @throws ConfigException if the class is not concrete
+     */
+    public static void ensureConcreteSubclass(Class<?> baseClass, Class<?> klass) {
+        Objects.requireNonNull(baseClass);
+        Objects.requireNonNull(klass);
+
+        if (!baseClass.isAssignableFrom(klass)) {
+            String inheritFrom = baseClass.isInterface() ? "implement" : "extend";
+            String baseClassType = baseClass.isInterface() ? "interface" : "class";
+            throw new ConfigException("Class " + klass + " does not " + inheritFrom + " the " + baseClass.getSimpleName() + " " + baseClassType);
+        }
+
+        if (Modifier.isAbstract(klass.getModifiers())) {
+            String childClassNames = Stream.of(klass.getClasses())
+                    .filter(baseClass::isAssignableFrom)
+                    .filter(c -> !Modifier.isAbstract(c.getModifiers()))
+                    .filter(c -> Modifier.isPublic(c.getModifiers()))
+                    .map(Class::getName)
+                    .collect(Collectors.joining(", "));
+            String message = "This class is abstract and cannot be created.";
+            if (!Utils.isBlank(childClassNames))
+                message += " Did you mean " + childClassNames + "?";
+            throw new ConfigException(message);
+        }
+    }
+
+    /**
+     * Convert time instant to readable string for logging
+     * @param timestamp the timestamp of the instant to be converted.
+     *
+     * @return string value of a given timestamp in the format "yyyy-MM-dd HH:mm:ss,SSS"
+     */
+    public static String toLogDateTimeFormat(long timestamp) {
+        final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS XXX");
+        return Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).format(dateTimeFormatter);
+    }
+
+    /**
+     * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
+     */
+    public static String replaceSuffix(String str, String oldSuffix, String newSuffix) {
+        if (!str.endsWith(oldSuffix))
+            throw new IllegalArgumentException("Expected string to end with " + oldSuffix + " but string is " + str);
+        return str.substring(0, str.length() - oldSuffix.length()) + newSuffix;
+    }
+
+    /**
+     * Find all key/value pairs whose keys begin with the given prefix, and remove that prefix from all
+     * resulting keys.
+     * @param map the map to filter key/value pairs from
+     * @param prefix the prefix to search keys for
+     * @return a {@link Map} containing a key/value pair for every key/value pair in the {@code map}
+     * parameter whose key begins with the given {@code prefix} and whose corresponding keys have
+     * the prefix stripped from them; may be empty, but never null
+     * @param <V> the type of values stored in the map
+     */
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix) {
+        return entriesWithPrefix(map, prefix, true);
+    }
+
+    /**
+     * Find all key/value pairs whose keys begin with the given prefix, optionally removing that prefix
+     * from all resulting keys.
+     * @param map the map to filter key/value pairs from
+     * @param prefix the prefix to search keys for
+     * @param strip whether the keys of the returned map should not include the prefix
+     * @return a {@link Map} containing a key/value pair for every key/value pair in the {@code map}
+     * parameter whose key begins with the given {@code prefix}; may be empty, but never null
+     * @param <V> the type of values stored in the map
+     */
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip) {
+        return entriesWithPrefix(map, prefix, strip, false);
+    }
+
+    /**
+     * Find all key/value pairs whose keys begin with the given prefix, optionally removing that prefix
+     * from all resulting keys.
+     * @param map the map to filter key/value pairs from
+     * @param prefix the prefix to search keys for
+     * @param strip whether the keys of the returned map should not include the prefix
+     * @param allowMatchingLength whether to include keys that are exactly the same length as the prefix
+     * @return a {@link Map} containing a key/value pair for every key/value pair in the {@code map}
+     * parameter whose key begins with the given {@code prefix}; may be empty, but never null
+     * @param <V> the type of values stored in the map
+     */
+    public static <V> Map<String, V> entriesWithPrefix(Map<String, V> map, String prefix, boolean strip, boolean allowMatchingLength) {
+        Map<String, V> result = new HashMap<>();
+        for (Map.Entry<String, V> entry : map.entrySet()) {
+            if (entry.getKey().startsWith(prefix) && (allowMatchingLength || entry.getKey().length() > prefix.length())) {
+                if (strip)
+                    result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+                else
+                    result.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Checks requirement. Throw {@link IllegalArgumentException} if {@code requirement} failed.
+     * @param requirement Requirement to check.
+     */
+    public static void require(boolean requirement) {
+        if (!requirement)
+            throw new IllegalArgumentException("requirement failed");
+    }
+
+    /**
+     * Checks requirement. Throw {@link IllegalArgumentException} if {@code requirement} failed.
+     * @param requirement Requirement to check.
+     * @param errorMessage String to include in the failure message
+     */
+    public static void require(boolean requirement, String errorMessage) {
+        if (!requirement)
+            throw new IllegalArgumentException(errorMessage);
+    }
+
+    /**
+     * Merge multiple {@link ConfigDef} into one
+     * @param configDefs List of {@link ConfigDef}
+     */
+    public static ConfigDef mergeConfigs(List<ConfigDef> configDefs) {
+        ConfigDef all = new ConfigDef();
+        configDefs.forEach(configDef -> configDef.configKeys().values().forEach(all::define));
+        return all;
+    }
+
+    /**
+     * A runnable that can throw checked exception.
+     */
+    @FunctionalInterface
+    public interface ThrowingRunnable {
+        void run() throws Exception;
+    }
+
+    /**
+     * convert millisecond to nanosecond, or throw exception if overflow
+     * @param timeMs the time in millisecond
+     * @return the converted nanosecond
+     */
+    public static long msToNs(long timeMs) {
+        try {
+            return Math.multiplyExact(1000 * 1000, timeMs);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Cannot convert " + timeMs + " millisecond to nanosecond due to arithmetic overflow", e);
+        }
+    }
 }

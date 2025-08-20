@@ -20,9 +20,9 @@ import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
-
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -58,11 +58,11 @@ public class RemoveMembersFromConsumerGroupResultTest {
     }
 
     @Test
-    public void testTopLevelErrorConstructor() throws InterruptedException {
+    public void testTopLevelErrorConstructor() {
         memberFutures.completeExceptionally(Errors.GROUP_AUTHORIZATION_FAILED.exception());
         RemoveMembersFromConsumerGroupResult topLevelErrorResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, membersToRemove);
-        TestUtils.assertFutureError(topLevelErrorResult.all(), GroupAuthorizationException.class);
+        TestUtils.assertFutureThrows(GroupAuthorizationException.class, topLevelErrorResult.all());
     }
 
     @Test
@@ -78,9 +78,9 @@ public class RemoveMembersFromConsumerGroupResultTest {
         RemoveMembersFromConsumerGroupResult missingMemberResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, membersToRemove);
 
-        TestUtils.assertFutureError(missingMemberResult.all(), IllegalArgumentException.class);
+        TestUtils.assertFutureThrows(IllegalArgumentException.class, missingMemberResult.all());
         assertNull(missingMemberResult.memberResult(instanceOne).get());
-        TestUtils.assertFutureError(missingMemberResult.memberResult(instanceTwo), IllegalArgumentException.class);
+        TestUtils.assertFutureThrows(IllegalArgumentException.class, missingMemberResult.memberResult(instanceTwo));
     }
 
     @Test
@@ -111,9 +111,9 @@ public class RemoveMembersFromConsumerGroupResultTest {
         RemoveMembersFromConsumerGroupResult memberLevelErrorResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, membersToRemove);
 
-        TestUtils.assertFutureError(memberLevelErrorResult.all(), FencedInstanceIdException.class);
+        TestUtils.assertFutureThrows(FencedInstanceIdException.class, memberLevelErrorResult.all());
         assertNull(memberLevelErrorResult.memberResult(instanceOne).get());
-        TestUtils.assertFutureError(memberLevelErrorResult.memberResult(instanceTwo), FencedInstanceIdException.class);
+        TestUtils.assertFutureThrows(FencedInstanceIdException.class, memberLevelErrorResult.memberResult(instanceTwo));
         return memberLevelErrorResult;
     }
 }

@@ -17,14 +17,9 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * Represents information about deleted records
- *
- * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
-@InterfaceStability.Evolving
 public class DeletedRecords {
 
     private final long lowWatermark;

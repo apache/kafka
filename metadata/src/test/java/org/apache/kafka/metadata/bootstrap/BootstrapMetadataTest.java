@@ -20,72 +20,117 @@ package org.apache.kafka.metadata.bootstrap;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.MetadataVersionTestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
 import java.util.List;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.emptyList;
-import static java.util.Collections.unmodifiableList;
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 @Timeout(60)
 public class BootstrapMetadataTest {
-    final static List<ApiMessageAndVersion> SAMPLE_RECORDS1 = unmodifiableList(asList(
+    static final List<ApiMessageAndVersion> SAMPLE_RECORDS1 = List.of(
         new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(FEATURE_NAME).
-            setFeatureLevel((short) 7), (short) 0),
+            setFeatureLevel((short) 8), (short) 0),
         new ApiMessageAndVersion(new NoOpRecord(), (short) 0),
         new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(FEATURE_NAME).
-            setFeatureLevel((short) 6), (short) 0)));
+            setFeatureLevel((short) 7), (short) 0));
 
     @Test
-    public void testFromVersion() throws Exception {
-        assertEquals(new BootstrapMetadata(Collections.singletonList(
+    public void testFromVersion() {
+        assertEquals(new BootstrapMetadata(List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
-                setFeatureLevel((short) 6), (short) 0)),
-                    IBP_3_3_IV2, "foo"),
-            BootstrapMetadata.fromVersion(IBP_3_3_IV2, "foo"));
+                setFeatureLevel((short) 7), (short) 0)),
+                    IBP_3_3_IV3.featureLevel(), "foo"),
+            BootstrapMetadata.fromVersion(IBP_3_3_IV3, "foo"));
     }
 
     @Test
-    public void testFromRecordsList() throws Exception {
-        assertEquals(new BootstrapMetadata(SAMPLE_RECORDS1, IBP_3_3_IV2, "bar"),
+    public void testFromRecordsList() {
+        assertEquals(new BootstrapMetadata(SAMPLE_RECORDS1, IBP_3_3_IV3.featureLevel(), "bar"),
             BootstrapMetadata.fromRecords(SAMPLE_RECORDS1, "bar"));
     }
 
     @Test
-    public void testFromRecordsListWithoutMetadataVersion() throws Exception {
+    public void testFromRecordsListWithoutMetadataVersion() {
         assertEquals("No FeatureLevelRecord for metadata.version was found in the bootstrap " +
             "metadata from quux", assertThrows(RuntimeException.class,
-                () -> BootstrapMetadata.fromRecords(emptyList(), "quux")).getMessage());
+                () -> BootstrapMetadata.fromRecords(List.of(), "quux")).getMessage());
+    }
+
+    private static final ApiMessageAndVersion MV_10 =
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(FEATURE_NAME).
+            setFeatureLevel((short) 10), (short) 0);
+
+    private static final ApiMessageAndVersion MV_11 =
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(FEATURE_NAME).
+            setFeatureLevel((short) 11), (short) 0);
+
+    private static final ApiMessageAndVersion FOO_1 =
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("foo").
+            setFeatureLevel((short) 1), (short) 0);
+
+    private static final ApiMessageAndVersion FOO_2 =
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("foo").
+            setFeatureLevel((short) 2), (short) 0);
+
+    @Test
+    public void testCopyWithNewFeatureRecord() {
+        assertEquals(BootstrapMetadata.fromRecords(List.of(MV_10, FOO_1), "src"),
+            BootstrapMetadata.fromRecords(List.of(MV_10), "src").
+                copyWithFeatureRecord("foo", (short) 1));
     }
 
     @Test
-    public void testCopyWithOnlyVersion() throws Exception {
-        assertEquals(new BootstrapMetadata(SAMPLE_RECORDS1.subList(2, 3), IBP_3_3_IV2, "baz"),
-                BootstrapMetadata.fromRecords(SAMPLE_RECORDS1, "baz").copyWithOnlyVersion());
+    public void testFeatureLevelForMetadataVersion() {
+        assertEquals((short) 11, BootstrapMetadata.
+            fromRecords(List.of(MV_10, MV_11), "src").
+                featureLevel(FEATURE_NAME));
     }
 
-    final static List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = unmodifiableList(asList(
+    @Test
+    public void testCopyWithModifiedFeatureRecord() {
+        assertEquals(BootstrapMetadata.fromRecords(List.of(MV_10, FOO_2), "src"),
+            BootstrapMetadata.fromRecords(List.of(MV_10, FOO_1), "src").
+                copyWithFeatureRecord("foo", (short) 2));
+    }
+
+    @Test
+    public void testFeatureLevelForFeatureThatIsNotSet() {
+        assertEquals((short) 0, BootstrapMetadata.
+            fromRecords(List.of(MV_10), "src").featureLevel("foo"));
+    }
+
+    @Test
+    public void testFeatureLevelForFeature() {
+        assertEquals((short) 2, BootstrapMetadata.
+            fromRecords(List.of(MV_10, FOO_2), "src").featureLevel("foo"));
+    }
+
+    static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
-                setFeatureLevel(IBP_3_0_IV1.featureLevel()), (short) 0)));
+                setFeatureLevel(MetadataVersionTestUtils.IBP_3_0_IV1_FEATURE_LEVEL), (short) 0));
 
     @Test
-    public void testFromRecordsListWithOldMetadataVersion() throws Exception {
-        RuntimeException exception = assertThrows(RuntimeException.class,
-            () -> BootstrapMetadata.fromRecords(RECORDS_WITH_OLD_METADATA_VERSION, "quux"));
-        assertEquals("Bootstrap metadata versions before 3.3-IV0 are not supported. Can't load " +
-            "metadata from quux", exception.getMessage());
+    public void testFromRecordsListWithOldMetadataVersion() {
+        BootstrapMetadata bootstrapMetadata = BootstrapMetadata.fromRecords(RECORDS_WITH_OLD_METADATA_VERSION, "quux");
+        assertEquals("No MetadataVersion with feature level 1. Valid feature levels are from " + MetadataVersion.MINIMUM_VERSION.featureLevel()
+            + " to " + MetadataVersion.latestTesting().featureLevel() + ".",
+                assertThrows(RuntimeException.class, bootstrapMetadata::metadataVersion).getMessage());
     }
 }

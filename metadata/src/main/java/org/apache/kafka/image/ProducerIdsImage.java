@@ -18,8 +18,8 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
+import org.apache.kafka.image.node.ProducerIdsImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Objects;
 
@@ -30,19 +30,22 @@ import java.util.Objects;
  * This class is thread-safe.
  */
 public final class ProducerIdsImage {
-    public final static ProducerIdsImage EMPTY = new ProducerIdsImage(-1L);
+    public static final ProducerIdsImage EMPTY = new ProducerIdsImage(-1L);
 
+    /**
+     * The next producer ID, or -1 in the special case where no producer IDs have been issued.
+     */
     private final long nextProducerId;
 
     public ProducerIdsImage(long nextProducerId) {
         this.nextProducerId = nextProducerId;
     }
 
-    public long highestSeenProducerId() {
+    public long nextProducerId() {
         return nextProducerId;
     }
 
-    public void write(ImageWriter writer, ImageWriterOptions options) {
+    public void write(ImageWriter writer) {
         if (nextProducerId >= 0) {
             writer.write(0, new ProducerIdsRecord().
                     setBrokerId(-1).
@@ -51,10 +54,13 @@ public final class ProducerIdsImage {
         }
     }
 
+    public boolean isEmpty() {
+        return nextProducerId == EMPTY.nextProducerId;
+    }
+
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ProducerIdsImage)) return false;
-        ProducerIdsImage other = (ProducerIdsImage) o;
+        if (!(o instanceof ProducerIdsImage other)) return false;
         return nextProducerId == other.nextProducerId;
     }
 
@@ -65,10 +71,6 @@ public final class ProducerIdsImage {
 
     @Override
     public String toString() {
-        return "ProducerIdsImage(highestSeenProducerId=" + nextProducerId + ")";
-    }
-
-    public boolean isEmpty() {
-        return nextProducerId < 0;
+        return new ProducerIdsImageNode(this).stringify();
     }
 }

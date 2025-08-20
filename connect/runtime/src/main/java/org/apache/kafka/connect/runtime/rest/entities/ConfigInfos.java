@@ -85,17 +85,15 @@ public class ConfigInfos {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("[")
-            .append(name)
-            .append(",")
-            .append(errorCount)
-            .append(",")
-            .append(groups)
-            .append(",")
-            .append(configs)
-            .append("]");
-        return sb.toString();
+        return "[" +
+                name +
+                "," +
+                errorCount +
+                "," +
+                groups +
+                "," +
+                configs +
+                "]";
     }
 
 }

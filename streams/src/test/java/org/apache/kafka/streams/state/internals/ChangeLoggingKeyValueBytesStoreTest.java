@@ -28,9 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -41,10 +39,14 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -54,23 +56,25 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("rawtypes")
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ChangeLoggingKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
     private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private final StreamsConfig streamsConfig = streamsConfigMock();
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());
@@ -81,11 +85,11 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     private static final Integer INPUT_PARTITION = 0;
     private static final Long INPUT_OFFSET = 100L;
 
-    @Before
+    @BeforeEach
     public void before() {
         context = mockContext();
         context.setTime(0);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
     private InternalMockProcessorContext mockContext() {
@@ -93,7 +97,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
             streamsConfig,
             () -> collector,
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
@@ -101,34 +105,18 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         );
     }
 
-    @After
+    @AfterEach
     public void after() {
         store.close();
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
-        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
-        innerMock.init((ProcessorContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(innerMock);
-        outer.init((ProcessorContext) context, outer);
-        EasyMock.verify(innerMock);
     }
 
     @Test
     public void shouldDelegateInit() {
         final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> innerMock = EasyMock.mock(InMemoryKeyValueStore.class);
+        final KeyValueStore<Bytes, byte[]> innerMock = mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
-        innerMock.init((StateStoreContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(innerMock);
-        outer.init((StateStoreContext) context, outer);
-        EasyMock.verify(innerMock);
+        outer.init(context, outer);
+        verify(innerMock).init(context, outer);
     }
 
     @Test
@@ -280,12 +268,9 @@ public class ChangeLoggingKeyValueBytesStoreTest {
 
         final Map<String, Object> myValues = new HashMap<>();
         myValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
-        expect(streamsConfig.originals()).andStubReturn(myValues);
-        expect(streamsConfig.values()).andStubReturn(Collections.emptyMap());
-        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andStubReturn("add-id");
-        expect(streamsConfig.defaultValueSerde()).andStubReturn(Serdes.ByteArray());
-        expect(streamsConfig.defaultKeySerde()).andStubReturn(Serdes.ByteArray());
-        replay(streamsConfig);
+        when(streamsConfig.originals()).thenReturn(myValues);
+        when(streamsConfig.values()).thenReturn(Collections.emptyMap());
+        when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");
         return streamsConfig;
     }
 }

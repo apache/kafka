@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.common.security.plain.internals;
 
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,10 +30,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import org.apache.kafka.common.errors.SaslAuthenticationException;
-import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 
 public class PlainSaslServerTest {
 
@@ -54,19 +54,19 @@ public class PlainSaslServerTest {
     }
 
     @Test
-    public void noAuthorizationIdSpecified() throws Exception {
+    public void noAuthorizationIdSpecified() {
         byte[] nextChallenge = saslServer.evaluateResponse(saslMessage("", USER_A, PASSWORD_A));
         assertEquals(0, nextChallenge.length);
     }
 
     @Test
-    public void authorizatonIdEqualsAuthenticationId() throws Exception {
+    public void authorizationIdEqualsAuthenticationId() {
         byte[] nextChallenge = saslServer.evaluateResponse(saslMessage(USER_A, USER_A, PASSWORD_A));
         assertEquals(0, nextChallenge.length);
     }
 
     @Test
-    public void authorizatonIdNotEqualsAuthenticationId() {
+    public void authorizationIdNotEqualsAuthenticationId() {
         assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(saslMessage(USER_B, USER_A, PASSWORD_A)));
     }
 

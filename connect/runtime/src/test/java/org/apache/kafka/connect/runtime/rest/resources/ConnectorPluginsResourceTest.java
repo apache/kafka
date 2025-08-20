@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -24,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Recommender;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.converters.LongConverter;
@@ -33,17 +33,18 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.SampleSinkConnector;
 import org.apache.kafka.connect.runtime.SampleSourceConnector;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
-import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
+import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoaderTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
-import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
+import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.tools.MockSinkConnector;
@@ -56,15 +57,21 @@ import org.apache.kafka.connect.transforms.TimestampConverter;
 import org.apache.kafka.connect.transforms.predicates.HasHeaderKey;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.util.Callback;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 
-import javax.ws.rs.BadRequestException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -76,21 +83,26 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import jakarta.ws.rs.BadRequestException;
+
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.anyBoolean;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.anyBoolean;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ConnectorPluginsResourceTest {
 
     private static final Map<String, String> PROPS;
@@ -109,84 +121,88 @@ public class ConnectorPluginsResourceTest {
     private static final ConfigInfos PARTIAL_CONFIG_INFOS;
     private static final int ERROR_COUNT = 0;
     private static final int PARTIAL_CONFIG_ERROR_COUNT = 1;
-    private static final Set<MockConnectorPluginDesc<?>> SINK_CONNECTOR_PLUGINS = new TreeSet<>();
-    private static final Set<MockConnectorPluginDesc<?>> SOURCE_CONNECTOR_PLUGINS = new TreeSet<>();
-    private static final Set<MockConnectorPluginDesc<?>> CONVERTER_PLUGINS = new TreeSet<>();
-    private static final Set<MockConnectorPluginDesc<?>> HEADER_CONVERTER_PLUGINS = new TreeSet<>();
-    private static final Set<MockConnectorPluginDesc<?>> TRANSFORMATION_PLUGINS = new TreeSet<>();
-    private static final Set<MockConnectorPluginDesc<?>> PREDICATE_PLUGINS = new TreeSet<>();
+    private static final Set<PluginDesc<?>> SINK_CONNECTOR_PLUGINS = new TreeSet<>();
+    private static final Set<PluginDesc<?>> SOURCE_CONNECTOR_PLUGINS = new TreeSet<>();
+    private static final Set<PluginDesc<?>> CONVERTER_PLUGINS = new TreeSet<>();
+    private static final Set<PluginDesc<?>> HEADER_CONVERTER_PLUGINS = new TreeSet<>();
+    private static final Set<PluginDesc<?>> TRANSFORMATION_PLUGINS = new TreeSet<>();
+    private static final Set<PluginDesc<?>> PREDICATE_PLUGINS = new TreeSet<>();
 
     static {
         try {
-            SINK_CONNECTOR_PLUGINS.add(new MockConnectorPluginDesc<>(VerifiableSinkConnector.class));
-            SINK_CONNECTOR_PLUGINS.add(new MockConnectorPluginDesc<>(MockSinkConnector.class));
+            ClassLoader classLoader = ConnectorPluginsResourceTest.class.getClassLoader();
+            ClassLoader pluginClassLoader = new PluginClassLoader(DelegatingClassLoaderTest.ARBITRARY_URL, new URL[]{}, classLoader);
+            String appVersion = AppInfoParser.getVersion();
+            SINK_CONNECTOR_PLUGINS.add(new PluginDesc<>(VerifiableSinkConnector.class, appVersion, PluginType.SINK, classLoader));
+            SINK_CONNECTOR_PLUGINS.add(new PluginDesc<>(MockSinkConnector.class, appVersion, PluginType.SINK, classLoader));
 
-            SOURCE_CONNECTOR_PLUGINS.add(new MockConnectorPluginDesc<>(VerifiableSourceConnector.class));
-            SOURCE_CONNECTOR_PLUGINS.add(new MockConnectorPluginDesc<>(MockSourceConnector.class));
-            SOURCE_CONNECTOR_PLUGINS.add(new MockConnectorPluginDesc<>(SchemaSourceConnector.class));
-            SOURCE_CONNECTOR_PLUGINS.add(new MockConnectorPluginDesc<>(ConnectorPluginsResourceTestConnector.class));
+            SOURCE_CONNECTOR_PLUGINS.add(new PluginDesc<>(VerifiableSourceConnector.class, appVersion, PluginType.SOURCE, classLoader));
+            SOURCE_CONNECTOR_PLUGINS.add(new PluginDesc<>(MockSourceConnector.class, appVersion, PluginType.SOURCE, classLoader));
+            SOURCE_CONNECTOR_PLUGINS.add(new PluginDesc<>(SchemaSourceConnector.class, appVersion, PluginType.SOURCE, classLoader));
+            SOURCE_CONNECTOR_PLUGINS.add(new PluginDesc<>(ConnectorPluginsResourceTestConnector.class, appVersion, PluginType.SOURCE, classLoader));
 
-            CONVERTER_PLUGINS.add(new MockConnectorPluginDesc<>(StringConverter.class));
-            CONVERTER_PLUGINS.add(new MockConnectorPluginDesc<>(LongConverter.class));
+            CONVERTER_PLUGINS.add(new PluginDesc<>(StringConverter.class, appVersion, PluginType.CONVERTER, classLoader));
+            CONVERTER_PLUGINS.add(new PluginDesc<>(LongConverter.class, appVersion, PluginType.CONVERTER, classLoader));
 
-            HEADER_CONVERTER_PLUGINS.add(new MockConnectorPluginDesc<>(StringConverter.class));
-            HEADER_CONVERTER_PLUGINS.add(new MockConnectorPluginDesc<>(LongConverter.class));
+            // Same class, version, and type, but loaded from a different classloader
+            CONVERTER_PLUGINS.add(new PluginDesc<>(StringConverter.class, appVersion, PluginType.CONVERTER, pluginClassLoader));
+            CONVERTER_PLUGINS.add(new PluginDesc<>(LongConverter.class, appVersion, PluginType.CONVERTER, pluginClassLoader));
 
-            TRANSFORMATION_PLUGINS.add(new MockConnectorPluginDesc<>(RegexRouter.class));
-            TRANSFORMATION_PLUGINS.add(new MockConnectorPluginDesc<>(TimestampConverter.class));
+            HEADER_CONVERTER_PLUGINS.add(new PluginDesc<>(StringConverter.class, appVersion, PluginType.HEADER_CONVERTER, classLoader));
+            HEADER_CONVERTER_PLUGINS.add(new PluginDesc<>(LongConverter.class, appVersion, PluginType.HEADER_CONVERTER, classLoader));
 
-            PREDICATE_PLUGINS.add(new MockConnectorPluginDesc<>(HasHeaderKey.class));
-            PREDICATE_PLUGINS.add(new MockConnectorPluginDesc<>(RecordIsTombstone.class));
+            TRANSFORMATION_PLUGINS.add(new PluginDesc<>(RegexRouter.class, appVersion, PluginType.TRANSFORMATION, classLoader));
+            TRANSFORMATION_PLUGINS.add(new PluginDesc<>(TimestampConverter.Key.class, appVersion, PluginType.TRANSFORMATION, classLoader));
+
+            PREDICATE_PLUGINS.add(new PluginDesc<>(HasHeaderKey.class, appVersion, PluginType.PREDICATE, classLoader));
+            PREDICATE_PLUGINS.add(new PluginDesc<>(RecordIsTombstone.class, appVersion, PluginType.PREDICATE, classLoader));
         } catch (Exception e) {
             fail("Failed setting up plugins");
         }
     }
 
     static {
-        List<ConfigInfo> configs = new LinkedList<>();
-        List<ConfigInfo> partialConfigs = new LinkedList<>();
-
         ConfigDef connectorConfigDef = ConnectorConfig.configDef();
         List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(PROPS);
         List<ConfigValue> partialConnectorConfigValues = connectorConfigDef.validate(PARTIAL_PROPS);
-        ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, Collections.emptyList());
-        ConfigInfos partialResult = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), partialConnectorConfigValues, Collections.emptyList());
-        configs.addAll(result.values());
-        partialConfigs.addAll(partialResult.values());
+        ConfigInfos result = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), connectorConfigValues, List.of());
+        ConfigInfos partialResult = AbstractHerder.generateResult(ConnectorPluginsResourceTestConnector.class.getName(), connectorConfigDef.configKeys(), partialConnectorConfigValues, List.of());
+        List<ConfigInfo> configs = new LinkedList<>(result.values());
+        List<ConfigInfo> partialConfigs = new LinkedList<>(partialResult.values());
 
-        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", Collections.emptyList());
-        ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", Collections.emptyList(), Collections.emptyList(), true);
+        ConfigKeyInfo configKeyInfo = new ConfigKeyInfo("test.string.config", "STRING", true, null, "HIGH", "Test configuration for string type.", null, -1, "NONE", "test.string.config", List.of());
+        ConfigValueInfo configValueInfo = new ConfigValueInfo("test.string.config", "testString", List.of(), List.of(), true);
         ConfigInfo configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, null, "MEDIUM", "Test configuration for integer type.", "Test", 1, "MEDIUM", "test.int.config", Collections.emptyList());
-        configValueInfo = new ConfigValueInfo("test.int.config", "1", asList("1", "2", "3"), Collections.emptyList(), true);
+        configKeyInfo = new ConfigKeyInfo("test.int.config", "INT", true, null, "MEDIUM", "Test configuration for integer type.", "Test", 1, "MEDIUM", "test.int.config", List.of());
+        configValueInfo = new ConfigValueInfo("test.int.config", "1", List.of("1", "2", "3"), List.of(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.string.config.default", "STRING", false, "", "LOW", "Test configuration with default value.", null, -1, "NONE", "test.string.config.default", Collections.emptyList());
-        configValueInfo = new ConfigValueInfo("test.string.config.default", "", Collections.emptyList(), Collections.emptyList(), true);
+        configKeyInfo = new ConfigKeyInfo("test.string.config.default", "STRING", false, "", "LOW", "Test configuration with default value.", null, -1, "NONE", "test.string.config.default", List.of());
+        configValueInfo = new ConfigValueInfo("test.string.config.default", "", List.of(), List.of(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", Collections.emptyList());
-        configValueInfo = new ConfigValueInfo("test.list.config", "a,b", asList("a", "b", "c"), Collections.emptyList(), true);
+        configKeyInfo = new ConfigKeyInfo("test.list.config", "LIST", true, null, "HIGH", "Test configuration for list type.", "Test", 2, "LONG", "test.list.config", List.of());
+        configValueInfo = new ConfigValueInfo("test.list.config", "a,b", List.of("a", "b", "c"), List.of(), true);
         configInfo = new ConfigInfo(configKeyInfo, configValueInfo);
         configs.add(configInfo);
         partialConfigs.add(configInfo);
 
-        CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), ERROR_COUNT, Collections.singletonList("Test"), configs);
-        PARTIAL_CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), PARTIAL_CONFIG_ERROR_COUNT, Collections.singletonList("Test"), partialConfigs);
+        CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), ERROR_COUNT, List.of("Test"), configs);
+        PARTIAL_CONFIG_INFOS = new ConfigInfos(ConnectorPluginsResourceTestConnector.class.getName(), PARTIAL_CONFIG_ERROR_COUNT, List.of("Test"), partialConfigs);
     }
 
     private final Herder herder = mock(DistributedHerder.class);
     private final Plugins plugins = mock(Plugins.class);
     private ConnectorPluginsResource connectorPluginsResource;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         doReturn(plugins).when(herder).plugins();
         doReturn(SINK_CONNECTOR_PLUGINS).when(plugins).sinkConnectors();
@@ -195,7 +211,11 @@ public class ConnectorPluginsResourceTest {
         doReturn(HEADER_CONVERTER_PLUGINS).when(plugins).headerConverters();
         doReturn(TRANSFORMATION_PLUGINS).when(plugins).transformations();
         doReturn(PREDICATE_PLUGINS).when(plugins).predicates();
-        connectorPluginsResource = new ConnectorPluginsResource(herder);
+        RestRequestTimeout requestTimeout = RestRequestTimeout.constant(
+                DEFAULT_REST_REQUEST_TIMEOUT_MS,
+                DEFAULT_HEALTH_CHECK_TIMEOUT_MS
+        );
+        connectorPluginsResource = new ConnectorPluginsResource(herder, requestTimeout);
     }
 
     @Test
@@ -220,7 +240,7 @@ public class ConnectorPluginsResourceTest {
                 ConnectorPluginsResourceTestConnector.class.getName(),
                 resultConfigKeys,
                 configValues,
-                Collections.singletonList("Test")
+                List.of("Test")
             );
             configInfosCallback.getValue().onCompletion(null, configInfos);
             return null;
@@ -264,7 +284,7 @@ public class ConnectorPluginsResourceTest {
                     ConnectorPluginsResourceTestConnector.class.getName(),
                     resultConfigKeys,
                     configValues,
-                    Collections.singletonList("Test")
+                    List.of("Test")
             );
             configInfosCallback.getValue().onCompletion(null, configInfos);
             return null;
@@ -304,7 +324,7 @@ public class ConnectorPluginsResourceTest {
                     ConnectorPluginsResourceTestConnector.class.getName(),
                     resultConfigKeys,
                     configValues,
-                    Collections.singletonList("Test")
+                    List.of("Test")
             );
             configInfosCallback.getValue().onCompletion(null, configInfos);
             return null;
@@ -338,13 +358,9 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testListConnectorPlugins() {
-        Set<Class<?>> excludes = Stream.of(ConnectorPluginsResource.SINK_CONNECTOR_EXCLUDES, ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES)
-                .flatMap(Collection::stream)
-                .collect(Collectors.toSet());
         Set<PluginInfo> expectedConnectorPlugins = Stream.of(SINK_CONNECTOR_PLUGINS, SOURCE_CONNECTOR_PLUGINS)
                 .flatMap(Collection::stream)
-                .filter(p -> !excludes.contains(p.pluginClass()))
-                .map(ConnectorPluginsResourceTest::newInfo)
+                .map(PluginInfo::new)
                 .collect(Collectors.toSet());
         Set<PluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(true));
         assertEquals(expectedConnectorPlugins, actualConnectorPlugins);
@@ -353,8 +369,9 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testConnectorPluginsIncludesClassTypeAndVersionInformation() throws Exception {
-        PluginInfo sinkInfo = newInfo(SampleSinkConnector.class);
-        PluginInfo sourceInfo = newInfo(SampleSourceConnector.class);
+        ClassLoader classLoader = ConnectorPluginsResourceTest.class.getClassLoader();
+        PluginInfo sinkInfo = new PluginInfo(new PluginDesc<>(SampleSinkConnector.class, SampleSinkConnector.VERSION, PluginType.SINK, classLoader));
+        PluginInfo sourceInfo = new PluginInfo(new PluginDesc<>(SampleSourceConnector.class, SampleSourceConnector.VERSION, PluginType.SOURCE, classLoader));
         assertEquals(PluginType.SINK.toString(), sinkInfo.type());
         assertEquals(PluginType.SOURCE.toString(), sourceInfo.type());
         assertEquals(SampleSinkConnector.VERSION, sinkInfo.version());
@@ -385,13 +402,7 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testListAllPlugins() {
-        Set<Class<?>> excludes = Stream.of(
-                        ConnectorPluginsResource.SINK_CONNECTOR_EXCLUDES,
-                        ConnectorPluginsResource.SOURCE_CONNECTOR_EXCLUDES,
-                        ConnectorPluginsResource.TRANSFORM_EXCLUDES
-                ).flatMap(Collection::stream)
-                .collect(Collectors.toSet());
-        Set<PluginInfo> expectedConnectorPlugins = Stream.of(
+        List<PluginInfo> expectedConnectorPlugins = Stream.of(
                         SINK_CONNECTOR_PLUGINS,
                         SOURCE_CONNECTOR_PLUGINS,
                         CONVERTER_PLUGINS,
@@ -399,10 +410,15 @@ public class ConnectorPluginsResourceTest {
                         TRANSFORMATION_PLUGINS,
                         PREDICATE_PLUGINS
                 ).flatMap(Collection::stream)
-                .filter(p -> !excludes.contains(p.pluginClass()))
-                .map(ConnectorPluginsResourceTest::newInfo)
-                .collect(Collectors.toSet());
-        Set<PluginInfo> actualConnectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins(false));
+                .map(PluginInfo::new)
+                .distinct()
+                .collect(Collectors.toList());
+        List<PluginInfo> actualConnectorPlugins = new ArrayList<>(connectorPluginsResource.listConnectorPlugins(false));
+        Comparator<PluginInfo> compare = Comparator.comparing(PluginInfo::className)
+                .thenComparing(PluginInfo::type)
+                .thenComparing(PluginInfo::version);
+        actualConnectorPlugins.sort(compare);
+        expectedConnectorPlugins.sort(compare);
         assertEquals(expectedConnectorPlugins, actualConnectorPlugins);
         verify(herder, atLeastOnce()).plugins();
     }
@@ -410,53 +426,18 @@ public class ConnectorPluginsResourceTest {
     @Test
     public void testGetConnectorConfigDef() {
         String connName = ConnectorPluginsResourceTestConnector.class.getName();
-        when(herder.connectorPluginConfig(eq(connName))).thenAnswer(answer -> {
+        when(herder.connectorPluginConfig(eq(connName), eq(null))).thenAnswer(answer -> {
             List<ConfigKeyInfo> results = new ArrayList<>();
             for (ConfigDef.ConfigKey configKey : ConnectorPluginsResourceTestConnector.CONFIG_DEF.configKeys().values()) {
                 results.add(AbstractHerder.convertConfigKey(configKey));
             }
             return results;
         });
-        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName);
+        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName, null);
         assertEquals(ConnectorPluginsResourceTestConnector.CONFIG_DEF.names().size(), connectorConfigDef.size());
         for (String config : ConnectorPluginsResourceTestConnector.CONFIG_DEF.names()) {
             Optional<ConfigKeyInfo> cki = connectorConfigDef.stream().filter(c -> c.name().equals(config)).findFirst();
             assertTrue(cki.isPresent());
-        }
-    }
-
-    protected static PluginInfo newInfo(PluginDesc<?> pluginDesc) {
-        return new PluginInfo(new MockConnectorPluginDesc<>(pluginDesc.pluginClass(), pluginDesc.version()));
-    }
-
-    protected static PluginInfo newInfo(Class<?> klass)
-            throws Exception {
-        return new PluginInfo(new MockConnectorPluginDesc<>(klass));
-    }
-
-    public static class MockPluginClassLoader extends PluginClassLoader {
-
-        public MockPluginClassLoader(URL pluginLocation, URL[] urls) {
-            super(pluginLocation, urls);
-        }
-
-        @Override
-        public String location() {
-            return "/tmp/mockpath";
-        }
-    }
-
-    public static class MockConnectorPluginDesc<T> extends PluginDesc<T> {
-        public MockConnectorPluginDesc(Class<T> klass, String version) {
-            super(klass, version, new MockPluginClassLoader(null, new URL[0]));
-        }
-
-        public MockConnectorPluginDesc(Class<T> klass) throws Exception {
-            super(
-                    klass,
-                    DelegatingClassLoader.versionFor(klass),
-                    new MockPluginClassLoader(null, new URL[0])
-            );
         }
     }
 
@@ -477,7 +458,7 @@ public class ConnectorPluginsResourceTest {
 
         @Override
         public String version() {
-            return "1.0";
+            return AppInfoParser.getVersion();
         }
 
         @Override
@@ -510,7 +491,7 @@ public class ConnectorPluginsResourceTest {
 
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return asList(1, 2, 3);
+            return List.of(1, 2, 3);
         }
 
         @Override
@@ -522,7 +503,7 @@ public class ConnectorPluginsResourceTest {
     private static class ListRecommender implements Recommender {
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return asList("a", "b", "c");
+            return List.of("a", "b", "c");
         }
 
         @Override

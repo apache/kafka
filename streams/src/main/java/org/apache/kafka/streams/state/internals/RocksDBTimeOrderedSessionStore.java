@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -28,6 +27,8 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.TimeFirstSessionKeySchema;
+
+import java.util.Objects;
 
 public class RocksDBTimeOrderedSessionStore
     extends WrappedStateStore<RocksDBTimeOrderedSessionSegmentedBytesStore, Object, Object>
@@ -41,9 +42,9 @@ public class RocksDBTimeOrderedSessionStore
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        wrapped().init(context, root);
-        this.stateStoreContext = context;
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        wrapped().init(stateStoreContext, root);
+        this.stateStoreContext = stateStoreContext;
     }
 
     @Override

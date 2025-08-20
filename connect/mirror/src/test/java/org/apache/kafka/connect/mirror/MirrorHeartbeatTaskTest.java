@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -34,9 +35,9 @@ public class MirrorHeartbeatTaskTest {
         List<SourceRecord> records = heartbeatTask.poll();
         assertEquals(1, records.size());
         Map<String, ?> sourcePartition = records.iterator().next().sourcePartition();
-        assertEquals(sourcePartition.get(Heartbeat.SOURCE_CLUSTER_ALIAS_KEY), "testSource",
+        assertEquals("testSource", sourcePartition.get(Heartbeat.SOURCE_CLUSTER_ALIAS_KEY),
                 "sourcePartition's " + Heartbeat.SOURCE_CLUSTER_ALIAS_KEY + " record was not created");
-        assertEquals(sourcePartition.get(Heartbeat.TARGET_CLUSTER_ALIAS_KEY), "testTarget",
+        assertEquals("testTarget", sourcePartition.get(Heartbeat.TARGET_CLUSTER_ALIAS_KEY),
                 "sourcePartition's " + Heartbeat.TARGET_CLUSTER_ALIAS_KEY + " record was not created");
     }
 }

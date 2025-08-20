@@ -17,10 +17,11 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.SecurityConfig;
-import org.apache.kafka.common.security.auth.SecurityProviderCreator;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.SecurityProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestPlainSaslServerProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestScramSaslServerProviderCreator;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,11 +35,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SecurityUtilsTest {
 
-    private SecurityProviderCreator testScramSaslServerProviderCreator = new TestScramSaslServerProviderCreator();
-    private SecurityProviderCreator testPlainSaslServerProviderCreator = new TestPlainSaslServerProviderCreator();
+    private final SecurityProviderCreator testScramSaslServerProviderCreator = new TestScramSaslServerProviderCreator();
+    private final SecurityProviderCreator testPlainSaslServerProviderCreator = new TestPlainSaslServerProviderCreator();
 
-    private Provider testScramSaslServerProvider = testScramSaslServerProviderCreator.getProvider();
-    private Provider testPlainSaslServerProvider = testPlainSaslServerProviderCreator.getProvider();
+    private final Provider testScramSaslServerProvider = testScramSaslServerProviderCreator.getProvider();
+    private final Provider testPlainSaslServerProvider = testPlainSaslServerProviderCreator.getProvider();
 
     private void clearTestProviders() {
         Security.removeProvider(testScramSaslServerProvider.getName());

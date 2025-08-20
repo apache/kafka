@@ -23,56 +23,59 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
+
 import org.hamcrest.CoreMatchers;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KeyValueStoreBuilderTest {
 
-    @Mock(type = MockType.NICE)
+    @Mock
     private KeyValueBytesStoreSupplier supplier;
-    @Mock(type = MockType.NICE)
+    @Mock
     private KeyValueStore<Bytes, byte[]> inner;
     private KeyValueStoreBuilder<String, String> builder;
 
-    @Before
-    public void setUp() {
-        EasyMock.expect(supplier.get()).andReturn(inner);
-        EasyMock.expect(supplier.name()).andReturn("name");
-        expect(supplier.metricsScope()).andReturn("metricScope");
-        EasyMock.replay(supplier);
+    public void setUpWithoutInner() {
+        when(supplier.name()).thenReturn("name");
+        when(supplier.metricsScope()).thenReturn("metricScope");
         builder = new KeyValueStoreBuilder<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
+                supplier,
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime()
         );
+    }
+
+    public void setUp() {
+        when(supplier.get()).thenReturn(inner);
+        setUpWithoutInner();
     }
 
     @Test
     public void shouldHaveMeteredStoreAsOuterStore() {
+        setUp();
         final KeyValueStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
+        setUp();
         final KeyValueStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));
         final StateStore next = ((WrappedStateStore) store).wrapped();
@@ -81,6 +84,7 @@ public class KeyValueStoreBuilderTest {
 
     @Test
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
+        setUp();
         final KeyValueStore<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, CoreMatchers.equalTo(inner));
@@ -88,6 +92,7 @@ public class KeyValueStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingStoreWhenEnabled() {
+        setUp();
         final KeyValueStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));
@@ -96,6 +101,7 @@ public class KeyValueStoreBuilderTest {
 
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
+        setUp();
         final KeyValueStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .build();
@@ -107,6 +113,7 @@ public class KeyValueStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
+        setUp();
         final KeyValueStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .withCachingEnabled()
@@ -122,31 +129,22 @@ public class KeyValueStoreBuilderTest {
     @SuppressWarnings("all")
     @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
+        setUpWithoutInner();
         assertThrows(NullPointerException.class, () -> new KeyValueStoreBuilder<>(null, Serdes.String(),
             Serdes.String(), new MockTime()));
     }
 
     @Test
-    public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        assertThrows(NullPointerException.class, () -> new KeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime()));
-    }
-
-    @Test
-    public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        assertThrows(NullPointerException.class, () -> new KeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime()));
-    }
-
-    @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
+        setUpWithoutInner();
         assertThrows(NullPointerException.class, () -> new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        reset(supplier);
-        expect(supplier.get()).andReturn(new RocksDBStore("name", null));
-        expect(supplier.name()).andReturn("name");
-        replay(supplier);
+        setUpWithoutInner();
+        when(supplier.name()).thenReturn("name");
+        when(supplier.metricsScope()).thenReturn(null);
 
         final Exception e = assertThrows(NullPointerException.class,
             () -> new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));

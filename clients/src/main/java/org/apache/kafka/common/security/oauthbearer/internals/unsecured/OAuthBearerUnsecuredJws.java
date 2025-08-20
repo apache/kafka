@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.utils.Utils;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeType;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,19 +30,11 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
-
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.utils.Utils;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.JsonNodeType;
 
 /**
  * A simple unsecured JWS implementation. The '{@code nbf}' claim is ignored if
@@ -121,7 +120,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *
      * @return the 3 or 5 dot-separated sections of the JWT compact serialization
      */
-    public List<String> splits() {
+    public final List<String> splits() {
         return splits;
     }
 
@@ -130,7 +129,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *
      * @return the JOSE header
      */
-    public Map<String, Object> header() {
+    public final Map<String, Object> header() {
         return header;
     }
 
@@ -159,7 +158,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *
      * @return the (always non-null but possibly empty) claims
      */
-    public Map<String, Object> claims() {
+    public final Map<String, Object> claims() {
         return claims;
     }
 
@@ -191,7 +190,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *            Number.class, or List.class
      * @return true if the claim exists and is the given type, otherwise false
      */
-    public boolean isClaimType(String claimName, Class<?> type) {
+    public final boolean isClaimType(String claimName, Class<?> type) {
         Object value = rawClaim(claimName);
         Objects.requireNonNull(type);
         if (value == null)
@@ -215,7 +214,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      * @throws OAuthBearerIllegalTokenException
      *             if the claim exists but is not the given type
      */
-    public <T> T claim(String claimName, Class<T> type) throws OAuthBearerIllegalTokenException {
+    public final <T> T claim(String claimName, Class<T> type) throws OAuthBearerIllegalTokenException {
         Object value = rawClaim(claimName);
         try {
             return Objects.requireNonNull(type).cast(value);
@@ -233,7 +232,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *            the mandatory JWT claim name
      * @return the raw claim value, if it exists, otherwise null
      */
-    public Object rawClaim(String claimName) {
+    public final Object rawClaim(String claimName) {
         return claims().get(Objects.requireNonNull(claimName));
     }
 
@@ -248,7 +247,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      * @throws OAuthBearerIllegalTokenException
      *             if the claim value is the incorrect type
      */
-    public Number expirationTime() throws OAuthBearerIllegalTokenException {
+    public final Number expirationTime() throws OAuthBearerIllegalTokenException {
         return claim("exp", Number.class);
     }
 
@@ -295,12 +294,11 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
     public static Map<String, Object> toMap(String split) throws OAuthBearerIllegalTokenException {
         Map<String, Object> retval = new HashMap<>();
         try {
-            byte[] decode = Base64.getDecoder().decode(split);
+            byte[] decode = Base64.getUrlDecoder().decode(split);
             JsonNode jsonNode = new ObjectMapper().readTree(decode);
             if (jsonNode == null)
                 throw new OAuthBearerIllegalTokenException(OAuthBearerValidationResult.newFailure("malformed JSON"));
-            for (Iterator<Entry<String, JsonNode>> iterator = jsonNode.fields(); iterator.hasNext();) {
-                Entry<String, JsonNode> entry = iterator.next();
+            for (Entry<String, JsonNode> entry : jsonNode.properties()) {
                 retval.put(entry.getKey(), convert(entry.getValue()));
             }
             return Collections.unmodifiableMap(retval);
@@ -343,15 +341,13 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
     }
 
     private Set<String> calculateScope() {
-        String scopeClaimName = scopeClaimName();
+        String scopeClaimName = this.scopeClaimName;
         if (isClaimType(scopeClaimName, String.class)) {
             String scopeClaimValue = claim(scopeClaimName, String.class);
             if (Utils.isBlank(scopeClaimValue))
                 return Collections.emptySet();
             else {
-                Set<String> retval = new HashSet<>();
-                retval.add(scopeClaimValue.trim());
-                return Collections.unmodifiableSet(retval);
+                return Set.of(scopeClaimValue.trim());
             }
         }
         List<?> scopeClaimValue = claim(scopeClaimName, List.class);

@@ -17,24 +17,24 @@
 
 package org.apache.kafka.trogdor.common;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.apache.kafka.trogdor.agent.Agent;
 import org.apache.kafka.trogdor.basic.BasicNode;
 import org.apache.kafka.trogdor.basic.BasicTopology;
-
 import org.apache.kafka.trogdor.coordinator.Coordinator;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import org.junit.jupiter.api.Timeout;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@Timeout(value = 120)
 public class TopologyTest {
 
     @Test
@@ -42,7 +42,7 @@ public class TopologyTest {
         TreeMap<String, Node> nodes = new TreeMap<>();
         final int numNodes = 5;
         for (int i = 0; i < numNodes; i++) {
-            HashMap<String, String> conf = new HashMap<>();
+            Map<String, String> conf = new HashMap<>();
             if (i == 0) {
                 conf.put(Platform.Config.TROGDOR_COORDINATOR_PORT, String.valueOf(Coordinator.DEFAULT_PORT));
             } else {

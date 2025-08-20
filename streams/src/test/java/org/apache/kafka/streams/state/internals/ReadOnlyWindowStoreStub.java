@@ -21,8 +21,8 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -110,7 +110,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -149,7 +149,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -191,7 +191,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -235,7 +235,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -268,7 +268,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 final NavigableMap<K, V> kvSubMap;
-                if (keyFrom == null && keyFrom == null) {
+                if (keyFrom == null && keyTo == null) {
                     kvSubMap = kvMap;
                 } else if (keyFrom == null) {
                     kvSubMap = kvMap.headMap(keyTo, true);
@@ -286,7 +286,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -324,7 +324,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 final NavigableMap<K, V> kvSubMap;
-                if (keyFrom == null && keyFrom == null) {
+                if (keyFrom == null && keyTo == null) {
                     kvSubMap = kvMap;
                 } else if (keyFrom == null) {
                     kvSubMap = kvMap.headMap(keyTo, true);
@@ -342,7 +342,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final Iterator<KeyValue<Windowed<K>, V>> iterator = results.iterator();
 
-        return new KeyValueIterator<Windowed<K>, V>() {
+        return new KeyValueIterator<>() {
             @Override
             public void close() {
             }
@@ -377,10 +377,8 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         return null;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-    }
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
 
     @Override
     public void flush() {

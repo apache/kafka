@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -23,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,5 +80,12 @@ public class FileStreamSinkConnector extends SinkConnector {
     @Override
     public ConfigDef config() {
         return CONFIG_DEF;
+    }
+
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<TopicPartition, Long> offsets) {
+        // Nothing to do here since FileStreamSinkConnector does not manage offsets externally nor does it require any
+        // custom offset validation
+        return true;
     }
 }

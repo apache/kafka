@@ -17,18 +17,24 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.apache.kafka.streams.state.WindowStoreIterator;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -37,7 +43,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ChangeLoggingWindowBytesStoreTest {
 
     private final byte[] value = {0};
@@ -49,25 +56,17 @@ public class ChangeLoggingWindowBytesStoreTest {
     private ProcessorContextImpl context;
     private ChangeLoggingWindowBytesStore store;
 
-    private final static Position POSITION = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
+    private static final Position POSITION = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
 
-    @Before
+    @BeforeEach
     public void setUp() {
         store = new ChangeLoggingWindowBytesStore(inner, false, WindowKeySchema::toStoreKeyBinary);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
-        verify(inner).init((StateStoreContext) context, store);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        store.init((ProcessorContext) context, store);
-
-        verify(inner).init((ProcessorContext) context, store);
+        verify(inner).init(context, store);
     }
 
     @Test
@@ -79,8 +78,9 @@ public class ChangeLoggingWindowBytesStoreTest {
     public void shouldLogPuts() {
         final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
+        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
-        store.put(bytesKey, value, context.timestamp());
+        store.put(bytesKey, value, context.recordContext().timestamp());
 
         verify(inner).put(bytesKey, value, 0);
         verify(context).logChange(store.name(), key, value, 0L, Position.emptyPosition());
@@ -90,52 +90,58 @@ public class ChangeLoggingWindowBytesStoreTest {
     public void shouldLogPutsWithPosition() {
         final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
         when(inner.getPosition()).thenReturn(POSITION);
+        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
-        store.put(bytesKey, value, context.timestamp());
+        store.put(bytesKey, value, context.recordContext().timestamp());
 
         verify(inner).put(bytesKey, value, 0);
         verify(context).logChange(store.name(), key, value, 0L, POSITION);
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetching() {
-        store.fetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
-
-        verify(inner).fetch(bytesKey, 0, 10);
+        try (final WindowStoreIterator<byte[]> unused = store.fetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10))) {
+            verify(inner).fetch(bytesKey, 0, 10);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
-        store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
-
-        verify(inner).backwardFetch(bytesKey, 0, 10);
+        try (final WindowStoreIterator<byte[]> unused = store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10))) {
+            verify(inner).backwardFetch(bytesKey, 0, 10);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
-        store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
-
-        verify(inner).fetch(bytesKey, bytesKey, 0, 1);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
+            verify(inner).fetch(bytesKey, bytesKey, 0, 1);
+        }
     }
 
+    @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
-        store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
-
-        verify(inner).backwardFetch(bytesKey, bytesKey, 0, 1);
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused =  store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
+            verify(inner).backwardFetch(bytesKey, bytesKey, 0, 1);
+        }
     }
 
     @Test
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingWindowBytesStore(inner, true, WindowKeySchema::toStoreKeyBinary);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
+        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
         final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);
         final Bytes key2 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2);
 
-        store.put(bytesKey, value, context.timestamp());
-        store.put(bytesKey, value, context.timestamp());
+        store.put(bytesKey, value, context.recordContext().timestamp());
+        store.put(bytesKey, value, context.recordContext().timestamp());
 
         verify(inner, times(2)).put(bytesKey, value, 0);
         verify(context).logChange(store.name(), key1, value, 0L, Position.emptyPosition());

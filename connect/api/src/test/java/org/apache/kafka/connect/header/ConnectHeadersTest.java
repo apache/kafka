@@ -28,6 +28,7 @@ import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.header.Headers.HeaderTransform;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -36,10 +37,11 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -379,9 +381,9 @@ public class ConnectHeadersTest {
         assertSchemaMatches(Schema.FLOAT64_SCHEMA, 1.0d);
         assertSchemaMatches(Schema.STRING_SCHEMA, "value");
         assertSchemaMatches(SchemaBuilder.array(Schema.STRING_SCHEMA), new ArrayList<String>());
-        assertSchemaMatches(SchemaBuilder.array(Schema.STRING_SCHEMA), Collections.singletonList("value"));
+        assertSchemaMatches(SchemaBuilder.array(Schema.STRING_SCHEMA), List.of("value"));
         assertSchemaMatches(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA), new HashMap<String, Integer>());
-        assertSchemaMatches(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA), Collections.singletonMap("a", 0));
+        assertSchemaMatches(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA), Map.of("a", 0));
         Schema emptyStructSchema = SchemaBuilder.struct();
         assertSchemaMatches(emptyStructSchema, new Struct(emptyStructSchema));
         Schema structSchema = SchemaBuilder.struct().field("foo", Schema.OPTIONAL_BOOLEAN_SCHEMA).field("bar", Schema.STRING_SCHEMA)

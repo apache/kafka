@@ -28,8 +28,10 @@ import java.util.Set;
 public interface ChangelogReader extends ChangelogRegister {
     /**
      * Restore all registered state stores by reading from their changelogs
+     *
+     * @return the total number of records restored in this call
      */
-    void restore(final Map<TaskId, Task> tasks);
+    long restore(final Map<TaskId, Task> tasks);
 
     /**
      * Transit to restore active changelogs mode
@@ -40,6 +42,12 @@ public interface ChangelogReader extends ChangelogRegister {
      * Transit to update standby changelogs mode
      */
     void transitToUpdateStandby();
+
+    /**
+     * @return true if the reader is in restoring active changelog mode;
+     *         false if the reader is in updating standby changelog mode
+     */
+    boolean isRestoringActive();
 
     /**
      * @return the changelog partitions that have been completed restoring

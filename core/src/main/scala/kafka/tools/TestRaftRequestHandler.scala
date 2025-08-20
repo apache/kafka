@@ -19,13 +19,15 @@ package kafka.tools
 
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
-import kafka.server.{ApiRequestHandler, ApiVersionManager, RequestLocal}
+import kafka.server.ApiRequestHandler
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.ApiVersionManager
+import org.apache.kafka.server.common.RequestLocal
 
 /**
  * Simple request handler implementation for use by [[TestRaftServer]].
@@ -64,7 +66,7 @@ class TestRaftRequestHandler(
   }
 
   private def handleApiVersions(request: RequestChannel.Request): Unit = {
-    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(throttleTimeMs = 0), None)
+    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(0, request.header.apiVersion() < 4), None)
   }
 
   private def handleVote(request: RequestChannel.Request): Unit = {
@@ -80,7 +82,7 @@ class TestRaftRequestHandler(
   }
 
   private def handleFetch(request: RequestChannel.Request): Unit = {
-    handle(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
+    handle(request, response => FetchResponse.of(response.asInstanceOf[FetchResponseData]))
   }
 
   private def handleFetchSnapshot(request: RequestChannel.Request): Unit = {
@@ -94,6 +96,7 @@ class TestRaftRequestHandler(
     val requestBody = request.body[AbstractRequest]
 
     val future = raftManager.handleRequest(
+      request.context,
       request.header,
       requestBody.data,
       time.milliseconds()

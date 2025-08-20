@@ -97,15 +97,12 @@ public class StringFormatter {
             widths.add(w);
         }
         StringBuilder bld = new StringBuilder();
-        for (int y = 0; y < lines.size(); y++) {
-            List<String> cols = lines.get(y);
+        for (List<String> cols : lines) {
             for (int x = 0; x < cols.size(); x++) {
                 String val = cols.get(x);
                 int minWidth = widths.get(x);
                 bld.append(val);
-                for (int i = 0; i < minWidth - val.length(); i++) {
-                    bld.append(" ");
-                }
+                bld.append(" ".repeat(Math.max(0, minWidth - val.length())));
             }
             bld.append(String.format("%n"));
         }

@@ -16,36 +16,54 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+
 import org.slf4j.Logger;
 
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
 public class FollowerState implements EpochState {
+    private final Logger log;
+
     private final int fetchTimeoutMs;
     private final int epoch;
     private final int leaderId;
+    private final Endpoints leaderEndpoints;
+    private final Optional<ReplicaKey> votedKey;
     private final Set<Integer> voters;
     // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
-    private Optional<LogOffsetMetadata> highWatermark;
-    /* Used to track the currently fetching snapshot. When fetching snapshot regular
-     * Fetch request are paused
-     */
-    private Optional<RawSnapshotWriter> fetchingSnapshot;
+    // Used to track when to send another add, remove, or update voter request
+    private final Timer updateVoterSetPeriodTimer;
 
-    private final Logger log;
+    /* Used to track if the replica has fetched successfully from the leader at least once since
+     * the transition to follower in this epoch. If the replica has not yet fetched successfully,
+     * it may be able to grant PreVotes.
+     */
+    private boolean hasFetchedFromLeader = false;
+    private Optional<LogOffsetMetadata> highWatermark;
+    /* For kraft.version 0, track if the leader has received updated voter information from this
+     * follower.
+     */
+    private boolean hasUpdatedLeader = false;
+    /* Used to track the currently fetching snapshot. When fetching snapshot regular Fetch request
+     * are paused
+     */
+    private Optional<RawSnapshotWriter> fetchingSnapshot = Optional.empty();
 
     public FollowerState(
         Time time,
         int epoch,
         int leaderId,
+        Endpoints leaderEndpoints,
+        Optional<ReplicaKey> votedKey,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         int fetchTimeoutMs,
@@ -54,26 +72,28 @@ public class FollowerState implements EpochState {
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.epoch = epoch;
         this.leaderId = leaderId;
+        this.leaderEndpoints = leaderEndpoints;
+        this.votedKey = votedKey;
         this.voters = voters;
         this.fetchTimer = time.timer(fetchTimeoutMs);
+        this.updateVoterSetPeriodTimer = time.timer(updateVoterPeriodMs());
         this.highWatermark = highWatermark;
-        this.fetchingSnapshot = Optional.empty();
         this.log = logContext.logger(FollowerState.class);
     }
 
     @Override
     public ElectionState election() {
-        return new ElectionState(
-            epoch,
-            OptionalInt.of(leaderId),
-            OptionalInt.empty(),
-            voters
-        );
+        return ElectionState.withElectedLeader(epoch, leaderId, votedKey, voters);
     }
 
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public Endpoints leaderEndpoints() {
+        return leaderEndpoints;
     }
 
     @Override
@@ -90,41 +110,103 @@ public class FollowerState implements EpochState {
         return leaderId;
     }
 
+    public Node leaderNode(ListenerName listener) {
+        return leaderEndpoints
+            .address(listener)
+            .map(address -> new Node(leaderId, address.getHostString(), address.getPort()))
+            .orElseThrow(() ->
+                new IllegalArgumentException(
+                    String.format(
+                        "Unknown endpoint for leader %d and listener %s, known endpoints are %s",
+                        leaderId,
+                        listener,
+                        leaderEndpoints
+                    )
+                )
+            );
+    }
+
     public boolean hasFetchTimeoutExpired(long currentTimeMs) {
         fetchTimer.update(currentTimeMs);
         return fetchTimer.isExpired();
     }
 
-    public void resetFetchTimeout(long currentTimeMs) {
-        fetchTimer.update(currentTimeMs);
-        fetchTimer.reset(fetchTimeoutMs);
+    /**
+     * Reset the fetch timeout after successful fetch from leader.
+     */
+    public void resetFetchTimeoutForSuccessfulFetch(long currentTimeMs) {
+        overrideFetchTimeout(currentTimeMs, fetchTimeoutMs);
+        hasFetchedFromLeader = true;
     }
 
+    /**
+     * Override the fetch timeout to a specific value. This is useful for short-circuiting followers' timeouts after
+     * they receive end quorum requests
+     */
     public void overrideFetchTimeout(long currentTimeMs, long timeoutMs) {
         fetchTimer.update(currentTimeMs);
         fetchTimer.reset(timeoutMs);
     }
 
-    public boolean updateHighWatermark(OptionalLong highWatermark) {
-        if (!highWatermark.isPresent() && this.highWatermark.isPresent())
-            throw new IllegalArgumentException("Attempt to overwrite current high watermark " + this.highWatermark +
-                " with unknown value");
+    private long updateVoterPeriodMs() {
+        // Allow for a few rounds of fetch request before attempting to update
+        // the voter state
+        return fetchTimeoutMs;
+    }
 
-        if (this.highWatermark.isPresent()) {
-            long previousHighWatermark = this.highWatermark.get().offset;
-            long updatedHighWatermark = highWatermark.getAsLong();
+    public boolean hasUpdateVoterSetPeriodExpired(long currentTimeMs) {
+        updateVoterSetPeriodTimer.update(currentTimeMs);
+        return updateVoterSetPeriodTimer.isExpired();
+    }
 
-            if (updatedHighWatermark < 0)
-                throw new IllegalArgumentException("Illegal negative high watermark update");
-            if (previousHighWatermark > updatedHighWatermark)
-                throw new IllegalArgumentException("Non-monotonic update of high watermark attempted");
-            if (previousHighWatermark == updatedHighWatermark)
-                return false;
+    public void resetUpdateVoterSetPeriod(long currentTimeMs) {
+        updateVoterSetPeriodTimer.update(currentTimeMs);
+        updateVoterSetPeriodTimer.reset(updateVoterPeriodMs());
+    }
+
+    public boolean hasUpdatedLeader() {
+        return hasUpdatedLeader;
+    }
+
+    public void setHasUpdatedLeader() {
+        this.hasUpdatedLeader = true;
+    }
+
+    public boolean updateHighWatermark(OptionalLong newHighWatermark) {
+        if (newHighWatermark.isEmpty() && highWatermark.isPresent()) {
+            throw new IllegalArgumentException(
+                String.format("Attempt to overwrite current high watermark %s with unknown value", highWatermark)
+            );
         }
 
-        this.highWatermark = highWatermark.isPresent() ?
-            Optional.of(new LogOffsetMetadata(highWatermark.getAsLong())) :
+        if (highWatermark.isPresent()) {
+            long previousHighWatermark = highWatermark.get().offset();
+            long updatedHighWatermark = newHighWatermark.getAsLong();
+
+            if (updatedHighWatermark < 0) {
+                throw new IllegalArgumentException(
+                    String.format("Illegal negative (%d) high watermark update", updatedHighWatermark)
+                );
+            } else if (previousHighWatermark > updatedHighWatermark) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Non-monotonic update of high watermark from %d to %d",
+                        previousHighWatermark,
+                        updatedHighWatermark
+                    )
+                );
+            } else if (previousHighWatermark == updatedHighWatermark) {
+                return false;
+            }
+        }
+
+        Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
+        highWatermark = newHighWatermark.isPresent() ?
+            Optional.of(new LogOffsetMetadata(newHighWatermark.getAsLong())) :
             Optional.empty();
+
+        logHighWatermarkUpdate(oldHighWatermark, highWatermark);
+
         return true;
     }
 
@@ -138,35 +220,68 @@ public class FollowerState implements EpochState {
     }
 
     public void setFetchingSnapshot(Optional<RawSnapshotWriter> newSnapshot) {
-        if (fetchingSnapshot.isPresent()) {
-            fetchingSnapshot.get().close();
-        }
+        fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
         fetchingSnapshot = newSnapshot;
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we already have a leader {} in epoch {}",
-                candidateId, leaderId(), epoch);
+    public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
+        if (isPreVote && !hasFetchedFromLeader && isLogUpToDate) {
+            return true;
+        }
+        log.debug(
+            "Rejecting Vote request (preVote={}) from replica ({}) since we are in FollowerState with leader {} in " +
+                "epoch {}, hasFetchedFromLeader={}, replica's log is up-to-date={}",
+            isPreVote,
+            replicaKey,
+            leaderId,
+            epoch,
+            hasFetchedFromLeader,
+            isLogUpToDate
+        );
         return false;
     }
 
     @Override
     public String toString() {
-        return "FollowerState(" +
-            "fetchTimeoutMs=" + fetchTimeoutMs +
-            ", epoch=" + epoch +
-            ", leaderId=" + leaderId +
-            ", voters=" + voters +
-            ", highWatermark=" + highWatermark +
-            ", fetchingSnapshot=" + fetchingSnapshot +
-            ')';
+        return String.format(
+            "FollowerState(fetchTimeoutMs=%d, epoch=%d, leader=%d, leaderEndpoints=%s, votedKey=%s, " +
+            "voters=%s, highWatermark=%s, fetchingSnapshot=%s)",
+            fetchTimeoutMs,
+            epoch,
+            leaderId,
+            leaderEndpoints,
+            votedKey,
+            voters,
+            highWatermark,
+            fetchingSnapshot
+        );
     }
 
     @Override
     public void close() {
-        if (fetchingSnapshot.isPresent()) {
-            fetchingSnapshot.get().close();
+        fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
+    }
+
+    private void logHighWatermarkUpdate(
+        Optional<LogOffsetMetadata> oldHighWatermark,
+        Optional<LogOffsetMetadata> newHighWatermark
+    ) {
+        if (!oldHighWatermark.equals(newHighWatermark)) {
+            if (oldHighWatermark.isPresent()) {
+                log.trace(
+                    "High watermark set to {} from {} for epoch {}",
+                    newHighWatermark,
+                    oldHighWatermark.get(),
+                    epoch
+                );
+            } else {
+                log.info(
+                    "High watermark set to {} for the first time for epoch {}",
+                    newHighWatermark,
+                    epoch
+                );
+            }
         }
     }
 }

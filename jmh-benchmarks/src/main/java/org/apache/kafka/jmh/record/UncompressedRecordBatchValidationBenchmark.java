@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.jmh.record;
 
-import kafka.common.LongRef;
-import kafka.log.AppendOrigin;
-import kafka.log.LogValidator;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.PrimitiveRef;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.storage.internals.log.AppendOrigin;
+import org.apache.kafka.storage.internals.log.LogValidator;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
@@ -38,16 +41,16 @@ import org.openjdk.jmh.infra.Blackhole;
 public class UncompressedRecordBatchValidationBenchmark extends BaseRecordBatchBenchmark {
 
     @Override
-    CompressionType compressionType() {
-        return CompressionType.NONE;
+    Compression compression() {
+        return Compression.NONE;
     }
 
     @Benchmark
     public void measureAssignOffsetsNonCompressed(Blackhole bh) {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
-        LogValidator.assignOffsetsNonCompressed(records, new TopicPartition("a", 0),
-                new LongRef(startingOffset), System.currentTimeMillis(), false,
-                TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
-                new AppendOrigin.Client$(), messageVersion, brokerTopicStats);
+        new LogValidator(records, new TopicPartition("a", 0),
+            Time.SYSTEM, CompressionType.NONE, Compression.NONE, false,
+            messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT
+        ).assignOffsetsNonCompressed(PrimitiveRef.ofLong(startingOffset), validatorMetricsRecorder);
     }
 }

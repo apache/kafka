@@ -15,14 +15,36 @@
 # specific language governing permissions and limitations
 # under the License.
 
+# Enable the next-gen .asf.yaml parser
+meta:
+  nextgen: true
+
 notifications:
-  commits:      commits@kafka.apache.org
-  issues:       jira@kafka.apache.org
+  commits: commits@kafka.apache.org
+  issues: jira@kafka.apache.org
   pullrequests: jira@kafka.apache.org
   jira_options: link label
 
-jenkins:
-  github_whitelist:
-    - ConcurrencyPractitioner
-    - ableegoldman
-    - cadonna
+# This list allows you to triage pull requests and trigger workflow runs on GitHub Actions. It can have a maximum of 10 collaborators.
+# Read more here: https://github.com/apache/infrastructure-asfyaml
+github:
+  collaborators:
+    - m1a2st
+    - smjn
+    - TaiJuWu
+    - brandboat
+    - Yunyung
+    - xijiu
+    - chirag-wadhwa5
+    - mingyen066
+    - ShivsundarR
+    - Rancho-7
+  enabled_merge_buttons:
+    squash: true
+    squash_commit_message: PR_TITLE_AND_DESC
+    merge: false
+    rebase: false
+
+  # Disable legacy branch protections. We have manual rulesets which protect trunk
+  # and our release branches. See INFRA-26603
+  protected_branches: ~

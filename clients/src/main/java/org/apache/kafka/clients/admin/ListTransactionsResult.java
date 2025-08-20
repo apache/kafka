@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 import java.util.ArrayList;
@@ -31,9 +30,7 @@ import java.util.Set;
 /**
  * The result of the {@link Admin#listTransactions()} call.
  * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListTransactionsResult {
     private final KafkaFuture<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> future;
 
@@ -103,7 +100,7 @@ public class ListTransactionsResult {
             }
 
             Set<Integer> remainingResponses = new HashSet<>(map.keySet());
-            map.forEach((brokerId, future) -> {
+            map.forEach((brokerId, future) ->
                 future.whenComplete((listings, brokerException) -> {
                     if (brokerException != null) {
                         allFuture.completeExceptionally(brokerException);
@@ -115,8 +112,8 @@ public class ListTransactionsResult {
                             allFuture.complete(allListingsMap);
                         }
                     }
-                });
-            });
+                })
+            );
         });
 
         return allFuture;

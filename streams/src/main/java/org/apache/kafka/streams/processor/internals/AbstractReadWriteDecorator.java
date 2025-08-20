@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -28,6 +27,8 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.VersionedKeyValueStore;
+import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -41,15 +42,8 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         super(inner);
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        throw new UnsupportedOperationException(ERROR_MESSAGE);
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
@@ -59,9 +53,11 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
 
-    static StateStore getReadWriteStore(final StateStore store) {
+    static StateStore wrapWithReadWriteStore(final StateStore store) {
         if (store instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
+        } else if (store instanceof VersionedKeyValueStore) {
+            return new VersionedKeyValueStoreReadWriteDecorator<>((VersionedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {
@@ -150,6 +146,35 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
 
         TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
             super(inner);
+        }
+    }
+
+    static class VersionedKeyValueStoreReadWriteDecorator<K, V>
+        extends AbstractReadWriteDecorator<VersionedKeyValueStore<K, V>, K, V>
+        implements VersionedKeyValueStore<K, V> {
+
+        VersionedKeyValueStoreReadWriteDecorator(final VersionedKeyValueStore<K, V> inner) {
+            super(inner);
+        }
+
+        @Override
+        public long put(final K key, final V value, final long timestamp) {
+            return wrapped().put(key, value, timestamp);
+        }
+
+        @Override
+        public VersionedRecord<V> delete(final K key, final long timestamp) {
+            return wrapped().delete(key, timestamp);
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key) {
+            return wrapped().get(key);
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key, final long asOfTimestamp) {
+            return wrapped().get(key, asOfTimestamp);
         }
     }
 

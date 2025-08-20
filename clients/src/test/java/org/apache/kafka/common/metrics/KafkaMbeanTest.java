@@ -19,9 +19,13 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.lang.management.ManagementFactory;
+import java.util.List;
 
 import javax.management.Attribute;
 import javax.management.AttributeList;
@@ -29,8 +33,6 @@ import javax.management.AttributeNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.management.RuntimeMBeanException;
-import java.lang.management.ManagementFactory;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -116,21 +118,21 @@ public class KafkaMbeanTest {
     }
 
     @Test
-    public void testInvoke() throws Exception {
+    public void testInvoke() {
         RuntimeMBeanException e = assertThrows(RuntimeMBeanException.class,
             () -> mBeanServer.invoke(objectName(countMetricName), "something", null, null));
         assertEquals(UnsupportedOperationException.class, e.getCause().getClass());
     }
 
     @Test
-    public void testSetAttribute() throws Exception {
+    public void testSetAttribute() {
         RuntimeMBeanException e = assertThrows(RuntimeMBeanException.class,
             () -> mBeanServer.setAttribute(objectName(countMetricName), new Attribute("anything", 1)));
         assertEquals(UnsupportedOperationException.class, e.getCause().getClass());
     }
 
     @Test
-    public void testSetAttributes() throws Exception {
+    public void testSetAttributes() {
         RuntimeMBeanException e = assertThrows(RuntimeMBeanException.class,
             () -> mBeanServer.setAttributes(objectName(countMetricName), new AttributeList(1)));
         assertEquals(UnsupportedOperationException.class, e.getCause().getClass());

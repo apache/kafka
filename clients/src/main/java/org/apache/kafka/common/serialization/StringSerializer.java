@@ -18,8 +18,10 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.UnsupportedCharsetException;
 import java.util.Map;
 
 /**
@@ -27,7 +29,7 @@ import java.util.Map;
  *  value.serializer.encoding or serializer.encoding. The first two take precedence over the last.
  */
 public class StringSerializer implements Serializer<String> {
-    private String encoding = StandardCharsets.UTF_8.name();
+    private Charset encoding = StandardCharsets.UTF_8;
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
@@ -35,19 +37,21 @@ public class StringSerializer implements Serializer<String> {
         Object encodingValue = configs.get(propertyName);
         if (encodingValue == null)
             encodingValue = configs.get("serializer.encoding");
-        if (encodingValue instanceof String)
-            encoding = (String) encodingValue;
+        if (encodingValue instanceof String) {
+            String encodingName = (String) encodingValue;
+            try {
+                encoding = Charset.forName(encodingName);
+            } catch (UnsupportedCharsetException | IllegalCharsetNameException e) {
+                throw new SerializationException("Unsupported encoding " + encodingName, e);
+            }
+        }
     }
 
     @Override
     public byte[] serialize(String topic, String data) {
-        try {
-            if (data == null)
-                return null;
-            else
-                return data.getBytes(encoding);
-        } catch (UnsupportedEncodingException e) {
-            throw new SerializationException("Error when serializing string to byte[] due to unsupported encoding " + encoding);
-        }
+        if (data == null)
+            return null;
+        else
+            return data.getBytes(encoding);
     }
 }

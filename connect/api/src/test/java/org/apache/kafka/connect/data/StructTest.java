@@ -21,8 +21,6 @@ import org.apache.kafka.connect.errors.DataException;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -93,8 +91,8 @@ public class StructTest {
 
     @Test
     public void testComplexStruct() {
-        List<Byte> array = Arrays.asList((byte) 1, (byte) 2);
-        Map<Integer, String> map = Collections.singletonMap(1, "string");
+        List<Byte> array = List.of((byte) 1, (byte) 2);
+        Map<Integer, String> map = Map.of(1, "string");
         Struct struct = new Struct(NESTED_SCHEMA)
                 .put("array", array)
                 .put("map", map)
@@ -124,13 +122,13 @@ public class StructTest {
     @Test
     public void testInvalidArrayFieldElements() {
         assertThrows(DataException.class,
-            () -> new Struct(NESTED_SCHEMA).put("array", Collections.singletonList("should fail since elements should be int8s")));
+            () -> new Struct(NESTED_SCHEMA).put("array", List.of("should fail since elements should be int8s")));
     }
 
     @Test
     public void testInvalidMapKeyElements() {
         assertThrows(DataException.class,
-            () -> new Struct(NESTED_SCHEMA).put("map", Collections.singletonMap("should fail because keys should be int8s", (byte) 12)));
+            () -> new Struct(NESTED_SCHEMA).put("map", Map.of("should fail because keys should be int8s", (byte) 12)));
     }
 
     @Test
@@ -219,20 +217,20 @@ public class StructTest {
         assertEquals(struct1, struct2);
         assertNotEquals(struct1, struct3);
 
-        List<Byte> array = Arrays.asList((byte) 1, (byte) 2);
-        Map<Integer, String> map = Collections.singletonMap(1, "string");
+        List<Byte> array = List.of((byte) 1, (byte) 2);
+        Map<Integer, String> map = Map.of(1, "string");
         struct1 = new Struct(NESTED_SCHEMA)
                 .put("array", array)
                 .put("map", map)
                 .put("nested", new Struct(NESTED_CHILD_SCHEMA).put("int8", (byte) 12));
-        List<Byte> array2 = Arrays.asList((byte) 1, (byte) 2);
-        Map<Integer, String> map2 = Collections.singletonMap(1, "string");
+        List<Byte> array2 = List.of((byte) 1, (byte) 2);
+        Map<Integer, String> map2 = Map.of(1, "string");
         struct2 = new Struct(NESTED_SCHEMA)
                 .put("array", array2)
                 .put("map", map2)
                 .put("nested", new Struct(NESTED_CHILD_SCHEMA).put("int8", (byte) 12));
-        List<Byte> array3 = Arrays.asList((byte) 1, (byte) 2, (byte) 3);
-        Map<Integer, String> map3 = Collections.singletonMap(2, "string");
+        List<Byte> array3 = List.of((byte) 1, (byte) 2, (byte) 3);
+        Map<Integer, String> map3 = Map.of(2, "string");
         struct3 = new Struct(NESTED_SCHEMA)
                 .put("array", array3)
                 .put("map", map3)
@@ -302,39 +300,6 @@ public class StructTest {
         Exception e = assertThrows(DataException.class, struct::validate);
         assertEquals("Invalid value: null used for required field: \"one\", schema type: STRING",
             e.getMessage());
-    }
-
-    @Test
-    public void testValidateFieldWithInvalidValueType() {
-        String fieldName = "field";
-        FakeSchema fakeSchema = new FakeSchema();
-
-        Exception e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
-            fakeSchema, new Object()));
-        assertEquals("Invalid Java object for schema \"fake\" with type null: class java.lang.Object for field: \"field\"",
-            e.getMessage());
-
-        e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
-            Schema.INT8_SCHEMA, new Object()));
-        assertEquals("Invalid Java object for schema with type INT8: class java.lang.Object for field: \"field\"",
-            e.getMessage());
-
-        e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(Schema.INT8_SCHEMA, new Object()));
-        assertEquals("Invalid Java object for schema with type INT8: class java.lang.Object", e.getMessage());
-    }
-
-    @Test
-    public void testValidateFieldWithInvalidValueMismatchTimestamp() {
-        String fieldName = "field";
-        long longValue = 1000L;
-
-        // Does not throw
-        ConnectSchema.validateValue(fieldName, Schema.INT64_SCHEMA, longValue);
-
-        Exception e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
-            Timestamp.SCHEMA, longValue));
-        assertEquals("Invalid Java object for schema \"org.apache.kafka.connect.data.Timestamp\" " +
-                "with type INT64: class java.lang.Long for field: \"field\"", e.getMessage());
     }
 
     @Test

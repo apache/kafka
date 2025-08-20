@@ -34,7 +34,7 @@ public class Throttle {
         this.lastTimeMs = 0;
     }
 
-    synchronized public boolean increment() throws InterruptedException {
+    public synchronized boolean increment() throws InterruptedException {
         boolean throttled = false;
         while (true) {
             if (count < maxPerPeriod) {

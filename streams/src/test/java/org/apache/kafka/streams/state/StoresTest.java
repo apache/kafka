@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
@@ -27,17 +28,19 @@ import org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytes
 import org.apache.kafka.streams.state.internals.RocksDBTimestampedStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class StoresTest {
 
@@ -51,6 +54,33 @@ public class StoresTest {
     public void shouldThrowIfPersistentTimestampedKeyValueStoreStoreNameIsNull() {
         final Exception e = assertThrows(NullPointerException.class, () -> Stores.persistentTimestampedKeyValueStore(null));
         assertEquals("name cannot be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldThrowIfPersistentVersionedKeyValueStoreStoreNameIsNull() {
+        Exception e = assertThrows(NullPointerException.class, () -> Stores.persistentVersionedKeyValueStore(null, ZERO));
+        assertEquals("name cannot be null", e.getMessage());
+
+        e = assertThrows(NullPointerException.class, () -> Stores.persistentVersionedKeyValueStore(null, ZERO, ofMillis(1)));
+        assertEquals("name cannot be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldThrowIfPersistentVersionedKeyValueStoreHistoryRetentionIsNegative() {
+        Exception e = assertThrows(IllegalArgumentException.class, () -> Stores.persistentVersionedKeyValueStore("anyName", ofMillis(-1)));
+        assertEquals("historyRetention cannot be negative", e.getMessage());
+
+        e = assertThrows(IllegalArgumentException.class, () -> Stores.persistentVersionedKeyValueStore("anyName", ofMillis(-1), ofMillis(1)));
+        assertEquals("historyRetention cannot be negative", e.getMessage());
+    }
+
+    @Test
+    public void shouldThrowIfPersistentVersionedKeyValueStoreSegmentIntervalIsZeroOrNegative() {
+        Exception e = assertThrows(IllegalArgumentException.class, () -> Stores.persistentVersionedKeyValueStore("anyName", ZERO, ZERO));
+        assertEquals("segmentInterval cannot be zero or negative", e.getMessage());
+
+        e = assertThrows(IllegalArgumentException.class, () -> Stores.persistentVersionedKeyValueStore("anyName", ZERO, ofMillis(-1)));
+        assertEquals("segmentInterval cannot be zero or negative", e.getMessage());
     }
 
     @Test
@@ -132,6 +162,12 @@ public class StoresTest {
     }
 
     @Test
+    public void shouldThrowIfSupplierIsNullForVersionedKeyValueStoreBuilder() {
+        final Exception e = assertThrows(NullPointerException.class, () -> Stores.versionedKeyValueStoreBuilder(null, Serdes.ByteArray(), Serdes.ByteArray()));
+        assertEquals("supplier cannot be null", e.getMessage());
+    }
+
+    @Test
     public void shouldThrowIfSupplierIsNullForSessionStoreBuilder() {
         final Exception e = assertThrows(NullPointerException.class, () -> Stores.sessionStoreBuilder(null, Serdes.ByteArray(), Serdes.ByteArray()));
         assertEquals("supplier cannot be null", e.getMessage());
@@ -157,6 +193,13 @@ public class StoresTest {
     @Test
     public void shouldCreateRocksDbTimestampedStore() {
         assertThat(Stores.persistentTimestampedKeyValueStore("store").get(), instanceOf(RocksDBTimestampedStore.class));
+    }
+
+    @Test
+    public void shouldCreateRocksDbVersionedStore() {
+        final KeyValueStore<Bytes, byte[]> store = Stores.persistentVersionedKeyValueStore("store", ofMillis(1)).get();
+        assertThat(store, instanceOf(VersionedBytesStore.class));
+        assertThat(store.persistent(), equalTo(true));
     }
 
     @Test
@@ -219,6 +262,16 @@ public class StoresTest {
         ).withLoggingDisabled().withCachingDisabled().build();
         assertThat(store, not(nullValue()));
         assertThat(((WrappedStateStore) store).wrapped(), instanceOf(TimestampedBytesStore.class));
+    }
+
+    @Test
+    public void shouldBuildVersionedKeyValueStore() {
+        final VersionedKeyValueStore<String, String> store = Stores.versionedKeyValueStoreBuilder(
+            Stores.persistentVersionedKeyValueStore("name", ofMillis(1)),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
     }
 
     @Test

@@ -119,9 +119,9 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
      *
      * @return          All of the matching elements.
      */
-    final public List<E> findAll(E key) {
+    public final List<E> findAll(E key) {
         if (key == null || size() == 0) {
-            return Collections.<E>emptyList();
+            return Collections.emptyList();
         }
         ArrayList<E> results = new ArrayList<>();
         int slot = slot(elements, key);

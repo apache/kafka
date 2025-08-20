@@ -19,12 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 /**
@@ -48,7 +47,7 @@ public class DescribeQuorumResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errors = new HashMap<>();
+        Map<Errors, Integer> errors = new EnumMap<>(Errors.class);
 
         errors.put(Errors.forCode(data.errorCode()), 1);
 
@@ -84,22 +83,29 @@ public class DescribeQuorumResponse extends AbstractResponse {
                 .setTopicName(topicPartition.topic())
                 .setPartitions(Collections.singletonList(new DescribeQuorumResponseData.PartitionData()
                     .setPartitionIndex(topicPartition.partition())
-                    .setErrorCode(error.code())))));
+                    .setErrorCode(error.code())
+                    .setErrorMessage(error.message())))));
     }
 
 
     public static DescribeQuorumResponseData singletonResponse(
         TopicPartition topicPartition,
-        DescribeQuorumResponseData.PartitionData partitionData
+        DescribeQuorumResponseData.PartitionData partitionData,
+        DescribeQuorumResponseData.NodeCollection nodes
     ) {
-        return new DescribeQuorumResponseData()
+        DescribeQuorumResponseData res = new DescribeQuorumResponseData()
             .setTopics(Collections.singletonList(new DescribeQuorumResponseData.TopicData()
                 .setTopicName(topicPartition.topic())
                 .setPartitions(Collections.singletonList(partitionData
                     .setPartitionIndex(topicPartition.partition())))));
+
+        if (nodes != null)
+            res.setNodes(nodes);
+
+        return res;
     }
 
-    public static DescribeQuorumResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeQuorumResponse(new DescribeQuorumResponseData(new ByteBufferAccessor(buffer), version));
+    public static DescribeQuorumResponse parse(Readable readable, short version) {
+        return new DescribeQuorumResponse(new DescribeQuorumResponseData(readable, version));
     }
 }

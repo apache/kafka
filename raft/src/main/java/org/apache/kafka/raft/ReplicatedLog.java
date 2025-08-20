@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 
@@ -31,6 +32,8 @@ public interface ReplicatedLog extends AutoCloseable {
      * be written atomically in a single batch or the call will fail and raise an
      * exception.
      *
+     * @param records records batches to append
+     * @param epoch the epoch of the replica
      * @return the metadata information of the appended batch
      * @throws IllegalArgumentException if the record set is empty
      * @throws RuntimeException if the batch base offset doesn't match the log end offset
@@ -42,11 +45,16 @@ public interface ReplicatedLog extends AutoCloseable {
      * difference from appendAsLeader is that we do not need to assign the epoch
      * or do additional validation.
      *
+     * The log will append record batches up to and including batches that have a partition
+     * leader epoch less than or equal to the passed epoch.
+     *
+     * @param records records batches to append
+     * @param epoch the epoch of the replica
      * @return the metadata information of the appended batch
      * @throws IllegalArgumentException if the record set is empty
      * @throws RuntimeException if the batch base offset doesn't match the log end offset
      */
-    LogAppendInfo appendAsFollower(Records records);
+    LogAppendInfo appendAsFollower(Records records, int epoch);
 
     /**
      * Read a set of records within a range of offsets.
@@ -99,7 +107,7 @@ public interface ReplicatedLog extends AutoCloseable {
              */
             OffsetAndEpoch latestSnapshotId = latestSnapshotId().orElseThrow(() -> new IllegalStateException(
                 String.format(
-                    "Log start offset (%s) is greater than zero but latest snapshot was not found",
+                    "Log start offset (%d) is greater than zero but latest snapshot was not found",
                     startOffset()
                 )
             ));
@@ -168,7 +176,7 @@ public interface ReplicatedLog extends AutoCloseable {
     /**
      * Update the high watermark and associated metadata (which is used to avoid
      * index lookups when handling reads with {@link #read(long, Isolation)} with
-     * the {@link Isolation#COMMITTED} isolation level.
+     * the {@link Isolation#COMMITTED} isolation level).
      *
      * @param offsetMetadata The offset and optional metadata
      */
@@ -195,11 +203,6 @@ public interface ReplicatedLog extends AutoCloseable {
     boolean maybeClean();
 
     /**
-     * Get the last offset which has been flushed to disk.
-     */
-    long lastFlushedOffset();
-
-    /**
      * Return the topic partition associated with the log.
      */
     TopicPartition topicPartition();
@@ -219,7 +222,7 @@ public interface ReplicatedLog extends AutoCloseable {
         final long truncationOffset;
         int leaderEpoch = endOffset.epoch();
         if (leaderEpoch == 0) {
-            truncationOffset = Math.min(endOffset.offset(), endOffset().offset);
+            truncationOffset = Math.min(endOffset.offset(), endOffset().offset());
         } else {
             OffsetAndEpoch localEndOffset = endOffsetForEpoch(leaderEpoch);
             if (localEndOffset.epoch() == leaderEpoch) {
@@ -241,14 +244,14 @@ public interface ReplicatedLog extends AutoCloseable {
      * snapshot already exists or it is less than log start offset then return an
      * {@link Optional#empty()}.
      *
-     * Snapshots created using this method will be validated against the existing snapshots
-     * and the replicated log.
+     * The snapshot id will be validated against the existing snapshots and the log. The snapshot id
+     * must not already exist, it must be greater than the log start offset, it must be less than
+     * the high-watermark and it must exist in the log.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot if it doesn't already exists and greater than the log start
-     *         offset
-     * @throws IllegalArgumentException if validate is true and end offset is greater than the
-     *         high-watermark
+     * @return a writable snapshot
+     * @throws IllegalArgumentException if the snapshot id is greater than the high-watermark or not
+     *         a valid epoch and offset in the log
      */
     Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId);
 
@@ -259,14 +262,15 @@ public interface ReplicatedLog extends AutoCloseable {
      * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
      * snapshot already exists then return an {@link Optional#empty()}.
      *
-     * Snapshots created using this method will not be validated against the existing snapshots
-     * and the replicated log. This is useful when creating snapshot from a trusted source like
-     * the quorum leader.
+     * The snapshot id will not be validated against the log. The snapshot id is not checked against
+     * the log start offset, the high-watermark or against existing epochs and offsets in the log.
+     *
+     * This is useful when creating snapshots from a trusted source like the quorum leader.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot if it doesn't already exists
+     * @return a writable snapshot if it doesn't already exist
      */
-    Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId);
+    Optional<RawSnapshotWriter> createNewSnapshotUnchecked(OffsetAndEpoch snapshotId);
 
     /**
      * Opens a readable snapshot for the given snapshot id.
@@ -292,7 +296,7 @@ public interface ReplicatedLog extends AutoCloseable {
      /**
       * Returns the latest snapshot id if one exists.
       *
-      * @return an Optional snapshot id of the latest snashot if one exists, otherwise returns an
+      * @return an Optional snapshot id of the latest snapshot if one exists, otherwise returns an
       *         empty Optional
       */
     Optional<OffsetAndEpoch> latestSnapshotId();

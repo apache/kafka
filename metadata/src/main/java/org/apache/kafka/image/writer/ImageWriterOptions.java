@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image.writer;
 
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.function.Consumer;
@@ -27,26 +28,37 @@ import java.util.function.Consumer;
  */
 public final class ImageWriterOptions {
     public static class Builder {
-        private MetadataVersion metadataVersion = MetadataVersion.latest();
+        private MetadataVersion metadataVersion;
         private Consumer<UnwritableMetadataException> lossHandler = e -> {
             throw e;
         };
+        private boolean isEligibleLeaderReplicasEnabled = false;
+
+        public Builder(MetadataVersion metadataVersion) {
+            this.metadataVersion = metadataVersion;
+        }
+
+        public Builder(MetadataImage image) {
+            this.metadataVersion = image.features().metadataVersionOrThrow();
+            this.isEligibleLeaderReplicasEnabled = image.features().isElrEnabled();
+        }
 
         public Builder setMetadataVersion(MetadataVersion metadataVersion) {
-            if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION)) {
-                // When writing an image, all versions less than 3.3-IV0 are treated as 3.0-IV1.
-                // This is because those versions don't support FeatureLevelRecord.
-                setRawMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION);
-            } else {
-                setRawMetadataVersion(metadataVersion);
-            }
+            this.metadataVersion = metadataVersion;
             return this;
         }
 
-        // Package-private for testing
-        public Builder setRawMetadataVersion(MetadataVersion metadataVersion) {
-            this.metadataVersion = metadataVersion;
+        public Builder setEligibleLeaderReplicasEnabled(boolean isEligibleLeaderReplicasEnabled) {
+            this.isEligibleLeaderReplicasEnabled = isEligibleLeaderReplicasEnabled;
             return this;
+        }
+
+        public MetadataVersion metadataVersion() {
+            return metadataVersion;
+        }
+
+        public boolean isEligibleLeaderReplicasEnabled() {
+            return isEligibleLeaderReplicasEnabled;
         }
 
         public Builder setLossHandler(Consumer<UnwritableMetadataException> lossHandler) {
@@ -55,27 +67,32 @@ public final class ImageWriterOptions {
         }
 
         public ImageWriterOptions build() {
-            return new ImageWriterOptions(metadataVersion, lossHandler);
+            return new ImageWriterOptions(metadataVersion, lossHandler, isEligibleLeaderReplicasEnabled);
         }
     }
 
     private final MetadataVersion metadataVersion;
     private final Consumer<UnwritableMetadataException> lossHandler;
+    private final boolean isEligibleLeaderReplicasEnabled;
 
     private ImageWriterOptions(
         MetadataVersion metadataVersion,
-        Consumer<UnwritableMetadataException> lossHandler
+        Consumer<UnwritableMetadataException> lossHandler,
+        boolean isEligibleLeaderReplicasEnabled
     ) {
         this.metadataVersion = metadataVersion;
         this.lossHandler = lossHandler;
+        this.isEligibleLeaderReplicasEnabled = isEligibleLeaderReplicasEnabled;
     }
 
     public MetadataVersion metadataVersion() {
         return metadataVersion;
+    }
+    public boolean isEligibleLeaderReplicasEnabled() {
+        return isEligibleLeaderReplicasEnabled;
     }
 
     public void handleLoss(String loss) {
         lossHandler.accept(new UnwritableMetadataException(metadataVersion, loss));
     }
 }
-

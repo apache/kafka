@@ -18,28 +18,29 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
 @Timeout(value = 40)
 public class ProducerIdsImageTest {
-    final static ProducerIdsImage IMAGE1;
+    public static final ProducerIdsImage IMAGE1;
 
-    final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    final static ProducerIdsDelta DELTA1;
+    static final ProducerIdsDelta DELTA1;
 
-    final static ProducerIdsImage IMAGE2;
+    static final ProducerIdsImage IMAGE2;
 
     static {
         IMAGE1 = new ProducerIdsImage(123);
@@ -52,40 +53,65 @@ public class ProducerIdsImageTest {
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
             setBrokerId(3).
             setBrokerEpoch(100).
-            setNextProducerId(789), (short) 0));
+            setNextProducerId(780), (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
+            setBrokerId(3).
+            setBrokerEpoch(100).
+            setNextProducerId(785), (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ProducerIdsRecord().
+            setBrokerId(2).
+            setBrokerEpoch(100).
+            setNextProducerId(800), (short) 0));
 
         DELTA1 = new ProducerIdsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
-        IMAGE2 = new ProducerIdsImage(789);
+        IMAGE2 = new ProducerIdsImage(800);
     }
 
     @Test
-    public void testEmptyImageRoundTrip() throws Throwable {
-        testToImageAndBack(ProducerIdsImage.EMPTY);
+    public void testEmptyImageRoundTrip() {
+        testToImage(ProducerIdsImage.EMPTY);
     }
 
     @Test
-    public void testImage1RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE1);
+    public void testImage1RoundTrip() {
+        testToImage(IMAGE1);
     }
 
     @Test
-    public void testApplyDelta1() throws Throwable {
+    public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply());
+        // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        records.addAll(DELTA1_RECORDS);
+        testToImage(IMAGE2, records);
     }
 
     @Test
-    public void testImage2RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE2);
+    public void testImage2RoundTrip() {
+        testToImage(IMAGE2);
     }
 
-    private void testToImageAndBack(ProducerIdsImage image) throws Throwable {
+    private static void testToImage(ProducerIdsImage image) {
+        testToImage(image, Optional.empty());
+    }
+
+    private static void testToImage(ProducerIdsImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private static void testToImage(ProducerIdsImage image, List<ApiMessageAndVersion> fromRecords) {
+        // test from empty image stopping each of the various intermediate images along the way
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> ProducerIdsImage.EMPTY,
+            ProducerIdsDelta::new
+        ).test(image, fromRecords);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(ProducerIdsImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
-        ProducerIdsDelta delta = new ProducerIdsDelta(ProducerIdsImage.EMPTY);
-        RecordTestUtils.replayAll(delta, writer.records());
-        ProducerIdsImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
+        image.write(writer);
+        return writer.records();
     }
 }

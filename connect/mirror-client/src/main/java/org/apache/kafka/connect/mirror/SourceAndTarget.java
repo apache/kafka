@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.connect.mirror;
 
-/** Directional pair of clusters, where source is replicated to target. */
+/**
+ * Directional pair of clusters, where source is mirrored to target.
+ */
 public class SourceAndTarget {
     private final String source;
     private final String target;
@@ -46,7 +48,6 @@ public class SourceAndTarget {
 
     @Override
     public boolean equals(Object other) {
-        return other != null && toString().equals(other.toString());
+        return other instanceof SourceAndTarget && toString().equals(other.toString());
     }
 }
-

@@ -21,7 +21,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -33,20 +32,20 @@ public class ConnectorReconfigurationTest {
     @Test
     public void testDefaultReconfigure() {
         TestConnector conn = new TestConnector(false);
-        conn.reconfigure(Collections.emptyMap());
-        assertEquals(conn.stopOrder, 0);
-        assertEquals(conn.configureOrder, 1);
+        conn.reconfigure(Map.of());
+        assertEquals(0, conn.stopOrder);
+        assertEquals(1, conn.configureOrder);
     }
 
     @Test
     public void testReconfigureStopException() {
         TestConnector conn = new TestConnector(true);
-        assertThrows(ConnectException.class, () -> conn.reconfigure(Collections.emptyMap()));
+        assertThrows(ConnectException.class, () -> conn.reconfigure(Map.of()));
     }
 
     private static class TestConnector extends Connector {
 
-        private boolean stopException;
+        private final boolean stopException;
         private int order = 0;
         public int stopOrder = -1;
         public int configureOrder = -1;

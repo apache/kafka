@@ -21,14 +21,13 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class JoinGroupRequestTest {
 
@@ -49,12 +48,9 @@ public class JoinGroupRequestTest {
         String[] invalidGroupInstanceIds = {"", "foo bar", "..", "foo:bar", "foo=bar", ".", new String(longString)};
 
         for (String instanceId : invalidGroupInstanceIds) {
-            try {
-                JoinGroupRequest.validateGroupInstanceId(instanceId);
-                fail("No exception was thrown for invalid instance id: " + instanceId);
-            } catch (InvalidConfigurationException e) {
-                // Good
-            }
+            assertThrows(InvalidConfigurationException.class,
+                () -> JoinGroupRequest.validateGroupInstanceId(instanceId),
+                "InvalidConfigurationException expected as instance id is invalid.");
         }
     }
     @Test
@@ -73,7 +69,7 @@ public class JoinGroupRequestTest {
         int sessionTimeoutMs = 30000;
         short version = 0;
 
-        ByteBuffer buffer = MessageUtil.toByteBuffer(new JoinGroupRequestData()
+        var buffer = MessageUtil.toByteBufferAccessor(new JoinGroupRequestData()
                 .setGroupId("groupId")
                 .setMemberId("consumerId")
                 .setProtocolType("consumer")

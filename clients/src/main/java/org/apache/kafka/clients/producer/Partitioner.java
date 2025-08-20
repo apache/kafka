@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Configurable;
 
 import java.io.Closeable;
 
 /**
  * Partitioner Interface
+ * <br/>
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the partitioner to register metrics. The following tags are automatically added to
+ * all metrics registered: <code>config</code> set to <code>partitioner.class</code>, and <code>class</code> set to the Partitioner class name.
  */
 public interface Partitioner extends Configurable, Closeable {
 
@@ -42,18 +45,4 @@ public interface Partitioner extends Configurable, Closeable {
      * This is called when partitioner is closed.
      */
     void close();
-
-    /**
-     * Note this method is only implemented in DefatultPartitioner and UniformStickyPartitioner which
-     * are now deprecated.  See KIP-794 for more info.
-     *
-     * Notifies the partitioner a new batch is about to be created. When using the sticky partitioner,
-     * this method can change the chosen sticky partition for the new batch.
-     * @param topic The topic name
-     * @param cluster The current cluster metadata
-     * @param prevPartition The partition previously selected for the record that triggered a new batch
-     */
-    @Deprecated
-    default void onNewBatch(String topic, Cluster cluster, int prevPartition) {
-    }
 }

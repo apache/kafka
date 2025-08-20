@@ -22,11 +22,13 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.junit.Before;
-import org.junit.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertFalse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
 
 public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
@@ -34,7 +36,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     private KeyValueStore<Bytes, byte[]> store;
     private ThreadCache cache;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         store = new InMemoryKeyValueStore(namespace);
         cache = new ThreadCache(new LogContext("testCache "), 10000L, new MockStreamsMetrics(new Metrics()));
@@ -147,18 +149,50 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     }
 
     @Test
+    public void shouldIterateCacheOnly() {
+        final byte[][] bytes = {{0}, {1}, {2}};
+        for (final byte[] aByte : bytes) {
+            cache.put(namespace, Bytes.wrap(aByte), new LRUCacheEntry(aByte));
+        }
+
+        try (final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator()) {
+            assertArrayEquals(bytes[0], iterator.next().key.get());
+            assertArrayEquals(bytes[1], iterator.next().key.get());
+            assertArrayEquals(bytes[2], iterator.next().key.get());
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldIterateStoreOnly() {
+        final byte[][] bytes = {{0}, {1}, {2}};
+        for (final byte[] aByte : bytes) {
+            store.put(Bytes.wrap(aByte), aByte);
+        }
+
+        try (final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator()) {
+            assertArrayEquals(bytes[0], iterator.next().key.get());
+            assertArrayEquals(bytes[1], iterator.next().key.get());
+            assertArrayEquals(bytes[2], iterator.next().key.get());
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
     public void shouldSkipAllDeletedFromCache() {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
         for (final byte[] aByte : bytes) {
             final Bytes aBytes = Bytes.wrap(aByte);
             store.put(aBytes, aByte);
-            cache.put(namespace, aBytes, new LRUCacheEntry(aByte));
         }
+
+        cache.put(namespace, Bytes.wrap(new byte[]{-1}), new LRUCacheEntry(null));
         cache.put(namespace, Bytes.wrap(bytes[1]), new LRUCacheEntry(null));
         cache.put(namespace, Bytes.wrap(bytes[2]), new LRUCacheEntry(null));
         cache.put(namespace, Bytes.wrap(bytes[3]), new LRUCacheEntry(null));
         cache.put(namespace, Bytes.wrap(bytes[8]), new LRUCacheEntry(null));
         cache.put(namespace, Bytes.wrap(bytes[11]), new LRUCacheEntry(null));
+        cache.put(namespace, Bytes.wrap(new byte[]{14}), new LRUCacheEntry(null));
 
         try (final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator()) {
             assertArrayEquals(bytes[0], iterator.next().key.get());
@@ -168,6 +202,13 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
             assertArrayEquals(bytes[7], iterator.next().key.get());
             assertArrayEquals(bytes[9], iterator.next().key.get());
             assertArrayEquals(bytes[10], iterator.next().key.get());
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldNotHaveNextIfBothIteratorsInitializedEmpty() {
+        try (final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator()) {
             assertFalse(iterator.hasNext());
         }
     }

@@ -23,7 +23,7 @@ package org.apache.kafka.common.errors;
  * In the context of the transactional coordinator, it returns this error when it receives a transactional
  * request with a transactionalId the coordinator doesn't own.
  */
-public class NotCoordinatorException extends RetriableException {
+public class NotCoordinatorException extends RefreshRetriableException {
 
     private static final long serialVersionUID = 1L;
 

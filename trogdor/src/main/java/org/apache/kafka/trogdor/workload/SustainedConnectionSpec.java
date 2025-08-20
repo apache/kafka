@@ -17,14 +17,15 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
-import java.util.Collections;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The specification for a benchmark that creates sustained connections.
@@ -64,7 +65,7 @@ import java.util.Map;
  *   }
  *  }
  */
-public class SustainedConnectionSpec extends TaskSpec {
+public final class SustainedConnectionSpec extends TaskSpec {
     private final String clientNode;
     private final String bootstrapServers;
     private final Map<String, String> producerConf;
@@ -186,7 +187,7 @@ public class SustainedConnectionSpec extends TaskSpec {
     }
 
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(clientNode);
+        return topology -> Set.of(clientNode);
     }
 
     @Override

@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+
+import java.nio.ByteBuffer;
 
 class SerdeThatDoesntHandleNull implements Serde<String> {
     @Override
@@ -37,6 +40,14 @@ class SerdeThatDoesntHandleNull implements Serde<String> {
                     throw new NullPointerException();
                 }
                 return super.deserialize(topic, data);
+            }
+
+            @Override
+            public String deserialize(final String topic, final Headers headers, final ByteBuffer data) {
+                if (data == null) {
+                    throw new NullPointerException();
+                }
+                return super.deserialize(topic, headers, data);
             }
         };
     }

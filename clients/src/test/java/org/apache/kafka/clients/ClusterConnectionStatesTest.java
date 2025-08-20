@@ -17,25 +17,28 @@
 
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Stream;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
 public class ClusterConnectionStatesTest {
 
@@ -72,14 +75,15 @@ public class ClusterConnectionStatesTest {
     private final String nodeId2 = "2002";
     private final String nodeId3 = "3003";
     private final String hostTwoIps = "multiple.ip.address";
-    private ClusterConnectionStates connectionStates;
 
     // For testing nodes with a single IP address, use localhost and default DNS resolution
-    private DefaultHostResolver singleIPHostResolver = new DefaultHostResolver();
+    private final DefaultHostResolver singleIPHostResolver = new DefaultHostResolver();
 
     // For testing nodes with multiple IP addresses, mock DNS resolution to get consistent results
-    private AddressChangeHostResolver multipleIPHostResolver = new AddressChangeHostResolver(
+    private final AddressChangeHostResolver multipleIPHostResolver = new AddressChangeHostResolver(
             initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
+
+    private ClusterConnectionStates connectionStates;
 
     @BeforeEach
     public void setup() {
@@ -183,7 +187,7 @@ public class ClusterConnectionStatesTest {
         connectionStates.authenticationFailed(nodeId1, time.milliseconds(), new AuthenticationException("No path to CA for certificate!"));
         time.sleep(1000);
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.AUTHENTICATION_FAILED);
-        assertTrue(connectionStates.authenticationException(nodeId1) instanceof AuthenticationException);
+        assertNotNull(connectionStates.authenticationException(nodeId1));
         assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
         assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
@@ -263,7 +267,14 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testSingleIP() throws UnknownHostException {
-        assertEquals(1, ClientUtils.resolve("localhost", singleIPHostResolver).size());
+        InetAddress[] localhostIps = Stream.of(InetAddress.getByName("127.0.0.1")).toArray(InetAddress[]::new);
+        HostResolver hostResolver = host -> {
+            assertEquals("localhost", host);
+            return localhostIps;
+        };
+
+        connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
+            connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), hostResolver);
 
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);
@@ -410,6 +421,25 @@ public class ClusterConnectionStatesTest {
         assertEquals(0, connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).size());
     }
 
+    @Test
+    public void testSkipLastAttemptedIp() throws UnknownHostException {
+        setupMultipleIPs();
+
+        assertTrue(ClientUtils.resolve(hostTwoIps, multipleIPHostResolver).size() > 1);
+
+        // Connect to the first IP
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
+        InetAddress addr1 = connectionStates.currentAddress(nodeId1);
+
+        // Disconnect, which will trigger re-resolution with the first IP still first
+        connectionStates.disconnected(nodeId1, time.milliseconds());
+
+        // Connect again, the first IP should get skipped
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
+        InetAddress addr2 = connectionStates.currentAddress(nodeId1);
+        assertNotSame(addr1, addr2);
+    }
+    
     private void setupMultipleIPs() {
         this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
                 connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.multipleIPHostResolver);

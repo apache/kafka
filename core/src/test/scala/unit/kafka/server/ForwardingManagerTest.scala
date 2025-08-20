@@ -20,10 +20,8 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.network
 import kafka.network.RequestChannel
-import kafka.utils.MockTime
 import org.apache.kafka.clients.{MockClient, NodeApiVersions}
 import org.apache.kafka.clients.MockClient.RequestMatcher
 import org.apache.kafka.common.Node
@@ -31,11 +29,14 @@ import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.{AlterConfigsResponseData, ApiVersionsResponseData}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AlterConfigsRequest, AlterConfigsResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.network.metrics.RequestChannelMetrics
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
@@ -46,10 +47,14 @@ class ForwardingManagerTest {
   private val time = new MockTime()
   private val client = new MockClient(time)
   private val controllerNodeProvider = Mockito.mock(classOf[ControllerNodeProvider])
-  private val brokerToController = new MockBrokerToControllerChannelManager(
+  private val brokerToController = new MockNodeToControllerChannelManager(
     client, time, controllerNodeProvider, controllerApiVersions)
-  private val forwardingManager = new ForwardingManagerImpl(brokerToController)
+  private val metrics = new Metrics()
+  private val forwardingManager = new ForwardingManagerImpl(brokerToController, metrics)
   private val principalBuilder = new DefaultKafkaPrincipalBuilder(null, null)
+  private val queueTimeMsP999 = metrics.metrics().get(forwardingManager.forwardingManagerMetrics.queueTimeMsHist.latencyP999Name)
+  private val queueLength = metrics.metrics().get(forwardingManager.forwardingManagerMetrics.queueLengthName())
+  private val remoteTimeMsP999 = metrics.metrics().get(forwardingManager.forwardingManagerMetrics.remoteTimeMsHist.latencyP999Name)
 
   private def controllerApiVersions: NodeApiVersions = {
     // The Envelope API is not yet included in the standard set of APIs
@@ -58,6 +63,14 @@ class ForwardingManagerTest {
       .setMinVersion(ApiKeys.ENVELOPE.oldestVersion)
       .setMaxVersion(ApiKeys.ENVELOPE.latestVersion)
     NodeApiVersions.create(List(envelopeApiVersion).asJava)
+  }
+
+  private def controllerInfo = {
+    ControllerInformation(Some(new Node(0, "host", 1234)), new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
+  }
+
+  private def emptyControllerInfo = {
+    ControllerInformation(None, new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
   }
 
   @Test
@@ -71,9 +84,9 @@ class ForwardingManagerTest {
     val responseBuffer = RequestTestUtils.serializeResponseWithHeader(responseBody, requestHeader.apiVersion,
       requestCorrelationId + 1)
 
-    Mockito.when(controllerNodeProvider.get()).thenReturn(Some(new Node(0, "host", 1234)))
+    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
-    client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.NONE));
+    client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.NONE))
 
     val responseOpt = new AtomicReference[Option[AbstractResponse]]()
     forwardingManager.forwardRequest(request, responseOpt.set)
@@ -95,9 +108,9 @@ class ForwardingManagerTest {
     val responseBuffer = RequestTestUtils.serializeResponseWithHeader(responseBody,
       requestHeader.apiVersion, requestCorrelationId)
 
-    Mockito.when(controllerNodeProvider.get()).thenReturn(Some(new Node(0, "host", 1234)))
+    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
-    client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.UNSUPPORTED_VERSION));
+    client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.UNSUPPORTED_VERSION))
 
     val responseOpt = new AtomicReference[Option[AbstractResponse]]()
     forwardingManager.forwardRequest(request, responseOpt.set)
@@ -112,7 +125,7 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    Mockito.when(controllerNodeProvider.get()).thenReturn(None)
+    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
 
     val response = new AtomicReference[AbstractResponse]()
     forwardingManager.forwardRequest(request, res => res.foreach(response.set))
@@ -136,7 +149,7 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    Mockito.when(controllerNodeProvider.get()).thenReturn(Some(new Node(0, "host", 1234)))
+    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
 
     val response = new AtomicReference[AbstractResponse]()
     forwardingManager.forwardRequest(request, res => res.foreach(response.set))
@@ -162,10 +175,10 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    val controllerNode = new Node(0, "host", 1234)
-    Mockito.when(controllerNodeProvider.get()).thenReturn(Some(controllerNode))
+    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
 
-    client.prepareUnsupportedVersionResponse(req => req.apiKey == requestHeader.apiKey)
+    val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
+    client.prepareUnsupportedVersionResponse(isEnvelopeRequest)
 
     val response = new AtomicReference[AbstractResponse]()
     forwardingManager.forwardRequest(request, res => res.foreach(response.set))
@@ -183,10 +196,9 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    val controllerNode = new Node(0, "host", 1234)
-    Mockito.when(controllerNodeProvider.get()).thenReturn(Some(controllerNode))
+    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
 
-    client.createPendingAuthenticationError(controllerNode, 50)
+    client.createPendingAuthenticationError(controllerInfo.node.get, 50)
 
     val response = new AtomicReference[AbstractResponse]()
     forwardingManager.forwardRequest(request, res => res.foreach(response.set))
@@ -195,6 +207,52 @@ class ForwardingManagerTest {
 
     val alterConfigResponse = response.get.asInstanceOf[AlterConfigsResponse]
     assertEquals(Map(Errors.UNKNOWN_SERVER_ERROR -> 1).asJava, alterConfigResponse.errorCounts)
+  }
+
+  @Test
+  def testForwardingManagerMetricsOnComplete(): Unit = {
+    val requestCorrelationId = 27
+    val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
+    val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
+    val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
+
+    val responseBody = new AlterConfigsResponse(new AlterConfigsResponseData())
+    val responseBuffer = RequestTestUtils.serializeResponseWithHeader(responseBody,
+      requestHeader.apiVersion, requestCorrelationId)
+
+    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
+    val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
+    client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.UNSUPPORTED_VERSION))
+
+    val responseOpt = new AtomicReference[Option[AbstractResponse]]()
+    forwardingManager.forwardRequest(request, responseOpt.set)
+    assertEquals(1, queueLength.metricValue.asInstanceOf[Int])
+
+    brokerToController.poll()
+    client.poll(10000, time.milliseconds())
+    assertEquals(0, queueLength.metricValue.asInstanceOf[Int])
+    assertNotEquals(Double.NaN, queueTimeMsP999.metricValue.asInstanceOf[Double])
+    assertNotEquals(Double.NaN, remoteTimeMsP999.metricValue.asInstanceOf[Double])
+  }
+
+  @Test
+  def testForwardingManagerMetricsOnTimeout(): Unit = {
+    val requestCorrelationId = 27
+    val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
+    val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
+    val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
+
+    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
+
+    val response = new AtomicReference[AbstractResponse]()
+    forwardingManager.forwardRequest(request, res => res.foreach(response.set))
+    assertEquals(1, queueLength.metricValue.asInstanceOf[Int])
+
+    time.sleep(brokerToController.retryTimeoutMs)
+    brokerToController.poll()
+    assertEquals(0, queueLength.metricValue.asInstanceOf[Int])
+    assertEquals(brokerToController.retryTimeoutMs * 0.999, queueTimeMsP999.metricValue.asInstanceOf[Double])
+    assertEquals(Double.NaN, remoteTimeMsP999.metricValue.asInstanceOf[Double])
   }
 
   private def buildRequest(
@@ -224,6 +282,7 @@ class ForwardingManagerTest {
       requestHeader,
       "1",
       InetAddress.getLocalHost,
+      Optional.empty(),
       principal,
       new ListenerName("client"),
       SecurityProtocol.SASL_PLAINTEXT,
@@ -238,7 +297,7 @@ class ForwardingManagerTest {
       startTimeNanos = time.nanoseconds(),
       memoryPool = MemoryPool.NONE,
       buffer = requestBuffer,
-      metrics = new RequestChannel.Metrics(ListenerType.CONTROLLER),
+      metrics = new RequestChannelMetrics(ListenerType.CONTROLLER),
       envelope = None
     )
   }

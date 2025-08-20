@@ -16,78 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Collection;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.Stores;
-
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-
-import static java.time.Duration.ofMillis;
-import static java.util.Arrays.asList;
-
-@RunWith(Parameterized.class)
 public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
 
-    private static final String STORE_NAME = "rocksDB session store";
-
-    @Parameter
-    public StoreType storeType;
-
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> getParamStoreType() {
-        return asList(new Object[][] {
-            {StoreType.RocksDBSessionStore},
-            {StoreType.RocksDBTimeOrderedSessionStoreWithIndex},
-            {StoreType.RocksDBTimeOrderedSessionStoreWithoutIndex}
-        });
-    }
-
     @Override
-    StoreType getStoreType() {
-        return storeType;
+    StoreType storeType() {
+        return StoreType.RocksDBSessionStore;
     }
-
-    @Override
-    <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
-                                                 final Serde<K> keySerde,
-                                                 final Serde<V> valueSerde) {
-        switch (storeType) {
-            case RocksDBSessionStore: {
-                return Stores.sessionStoreBuilder(
-                    Stores.persistentSessionStore(
-                        STORE_NAME,
-                        ofMillis(retentionPeriod)),
-                    keySerde,
-                    valueSerde).build();
-            }
-            case RocksDBTimeOrderedSessionStoreWithIndex: {
-                return Stores.sessionStoreBuilder(
-                    new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                        STORE_NAME,
-                        retentionPeriod,
-                        true
-                    ),
-                    keySerde,
-                    valueSerde
-                ).build();
-            }
-            case RocksDBTimeOrderedSessionStoreWithoutIndex: {
-                return Stores.sessionStoreBuilder(
-                    new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                        STORE_NAME,
-                        retentionPeriod,
-                       false
-                    ),
-                    keySerde,
-                    valueSerde
-                ).build();
-            }
-            default:
-                throw new IllegalStateException("Unknown StoreType: " + storeType);
-        }
-    }
-
 }

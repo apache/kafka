@@ -22,6 +22,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.source.SourceTask;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,9 +33,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.common.utils.Utils.enumOptions;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUESTED;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
@@ -46,13 +48,12 @@ import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CON
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.DEFAULT;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.INTERVAL;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.POLL;
-import static org.apache.kafka.common.utils.Utils.enumOptions;
 
-public class SourceConnectorConfig extends ConnectorConfig {
+public final class SourceConnectorConfig extends ConnectorConfig {
 
     private static final Logger log = LoggerFactory.getLogger(SourceConnectorConfig.class);
 
-    protected static final String TOPIC_CREATION_GROUP = "Topic Creation";
+    static final String TOPIC_CREATION_GROUP = "Topic Creation";
 
     public static final String TOPIC_CREATION_PREFIX = "topic.creation.";
 
@@ -61,7 +62,7 @@ public class SourceConnectorConfig extends ConnectorConfig {
             + "created by source connectors";
     private static final String TOPIC_CREATION_GROUPS_DISPLAY = "Topic Creation Groups";
 
-    protected static final String EXACTLY_ONCE_SUPPORT_GROUP = "Exactly Once Support";
+    static final String EXACTLY_ONCE_SUPPORT_GROUP = "Exactly Once Support";
 
     public enum ExactlyOnceSupportLevel {
         REQUESTED,
@@ -79,8 +80,8 @@ public class SourceConnectorConfig extends ConnectorConfig {
 
     public static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
     private static final String EXACTLY_ONCE_SUPPORT_DOC = "Permitted values are " + String.join(", ", enumOptions(ExactlyOnceSupportLevel.class)) + ". "
-            + "If set to \"" + REQUIRED + "\", forces a preflight check for the connector to ensure that it can provide exactly-once delivery "
-            + "with the given configuration. Some connectors may be capable of providing exactly-once delivery but not signal to "
+            + "If set to \"" + REQUIRED + "\", forces a preflight check for the connector to ensure that it can provide exactly-once semantics "
+            + "with the given configuration. Some connectors may be capable of providing exactly-once semantics but not signal to "
             + "Connect that they support this; in that case, documentation for the connector should be consulted carefully before "
             + "creating it, and the value for this property should be set to \"" + REQUESTED + "\". "
             + "Additionally, if the value is set to \"" + REQUIRED + "\" but the worker that performs preflight validation does not have "
@@ -102,7 +103,7 @@ public class SourceConnectorConfig extends ConnectorConfig {
             + TRANSACTION_BOUNDARY_CONFIG + " is specified.";
     private static final String TRANSACTION_BOUNDARY_INTERVAL_DISPLAY = "Transaction boundary interval";
 
-    protected static final String OFFSETS_TOPIC_GROUP = "offsets.topic";
+    static final String OFFSETS_TOPIC_GROUP = "offsets.topic";
 
     public static final String OFFSETS_TOPIC_CONFIG = "offsets.storage.topic";
     private static final String OFFSETS_TOPIC_DOC = "The name of a separate offsets topic to use for this connector. "
@@ -117,10 +118,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
             super(plugins, configDef, props);
         }
 
-        @Override
-        public Object get(String key) {
-            return super.get(key);
-        }
     }
 
     private final TransactionBoundary transactionBoundary;
@@ -128,10 +125,10 @@ public class SourceConnectorConfig extends ConnectorConfig {
     private final EnrichedSourceConnectorConfig enrichedSourceConfig;
     private final String offsetsTopic;
 
-    public static ConfigDef configDef() {
+    private static ConfigDef configDef(ConfigDef baseConfigDef) {
         ConfigDef.Validator atLeastZero = ConfigDef.Range.atLeast(0);
         int orderInGroup = 0;
-        return new ConfigDef(ConnectorConfig.configDef())
+        return new ConfigDef(baseConfigDef)
                 .define(
                         TOPIC_CREATION_GROUPS_CONFIG,
                         ConfigDef.Type.LIST,
@@ -206,6 +203,18 @@ public class SourceConnectorConfig extends ConnectorConfig {
                         OFFSETS_TOPIC_DISPLAY);
     }
 
+    public static ConfigDef configDef() {
+        return configDef(ConnectorConfig.configDef());
+    }
+
+    public static ConfigDef enrichedConfigDef(Plugins plugins, Map<String, String> connProps, WorkerConfig workerConfig) {
+        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connProps, workerConfig));
+    }
+
+    public static ConfigDef enrichedConfigDef(Plugins plugins, String connectorClass) {
+        return configDef(ConnectorConfig.enrichedConfigDef(plugins, connectorClass));
+    }
+
     public static ConfigDef embedDefaultGroup(ConfigDef baseConfigDef) {
         String defaultGroup = "default";
         ConfigDef newDefaultDef = new ConfigDef(baseConfigDef);
@@ -239,10 +248,9 @@ public class SourceConnectorConfig extends ConnectorConfig {
         short defaultGroupReplicationFactor = defaultGroupConfig.getShort(defaultGroupPrefix + REPLICATION_FACTOR_CONFIG);
         int defaultGroupPartitions = defaultGroupConfig.getInt(defaultGroupPrefix + PARTITIONS_CONFIG);
         topicCreationGroups.stream().distinct().forEach(group -> {
-            if (!(group instanceof String)) {
+            if (!(group instanceof String alias)) {
                 throw new ConfigException("Item in " + TOPIC_CREATION_GROUPS_CONFIG + " property is not of type String");
             }
-            String alias = (String) group;
             String prefix = TOPIC_CREATION_PREFIX + alias + ".";
             String configGroup = TOPIC_CREATION_GROUP + ": " + alias;
             newDef.embed(prefix, configGroup, 0,

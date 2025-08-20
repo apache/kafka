@@ -25,7 +25,7 @@ import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
@@ -69,6 +70,11 @@ public class FetchSessionHandler {
     public FetchSessionHandler(LogContext logContext, int node) {
         this.log = logContext.logger(FetchSessionHandler.class);
         this.node = node;
+    }
+
+    // visible for testing
+    public int sessionId() {
+        return nextMetadata.sessionId();
     }
 
     /**
@@ -223,6 +229,8 @@ public class FetchSessionHandler {
     }
 
     public class Builder {
+        private final Map<Uuid, String> topicNames;
+        private final boolean copySessionPartitions;
         /**
          * The next partitions which we want to fetch.
          *
@@ -237,8 +245,6 @@ public class FetchSessionHandler {
          * incremental fetch requests (see below).
          */
         private LinkedHashMap<TopicPartition, PartitionData> next;
-        private Map<Uuid, String> topicNames;
-        private final boolean copySessionPartitions;
         private int partitionsWithoutTopicIds = 0;
 
         Builder() {
@@ -387,14 +393,14 @@ public class FetchSessionHandler {
         if (!log.isTraceEnabled()) {
             return String.format("%d partition(s)", partitions.size());
         }
-        return "(" + Utils.join(partitions, ", ") + ")";
+        return "(" + partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")) + ")";
     }
 
     private String topicIdPartitionsToLogString(Collection<TopicIdPartition> partitions) {
         if (!log.isTraceEnabled()) {
             return String.format("%d partition(s)", partitions.size());
         }
-        return "(" + Utils.join(partitions, ", ") + ")";
+        return "(" + partitions.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) + ")";
     }
 
     /**
@@ -433,16 +439,16 @@ public class FetchSessionHandler {
             extraIds = findMissing(ids, sessionTopicNames.keySet());
         }
         if (!omitted.isEmpty()) {
-            bld.append("omittedPartitions=(").append(Utils.join(omitted, ", ")).append(", ");
+            bld.append("omittedPartitions=(").append(omitted.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append("), ");
         }
         if (!extra.isEmpty()) {
-            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append(", ");
+            bld.append("extraPartitions=(").append(extra.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append("), ");
         }
         if (!extraIds.isEmpty()) {
-            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append(", ");
+            bld.append("extraIds=(").append(extraIds.stream().map(Uuid::toString).collect(Collectors.joining(", "))).append("), ");
         }
         if ((!omitted.isEmpty()) || (!extra.isEmpty()) || (!extraIds.isEmpty())) {
-            bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");
+            bld.append("response=(").append(topicPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append(")");
             return bld.toString();
         }
         return null;
@@ -465,11 +471,11 @@ public class FetchSessionHandler {
             findMissing(topicPartitions, sessionPartitions.keySet());
         StringBuilder bld = new StringBuilder();
         if (!extra.isEmpty())
-            bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
+            bld.append("extraPartitions=(").append(extra.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append("), ");
         if (!extraIds.isEmpty())
-            bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
+            bld.append("extraIds=(").append(extraIds.stream().map(Uuid::toString).collect(Collectors.joining(", "))).append("), ");
         if ((!extra.isEmpty()) || (!extraIds.isEmpty())) {
-            bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");
+            bld.append("response=(").append(topicPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).append(")");
             return bld.toString();
         }
         return null;
@@ -494,7 +500,7 @@ public class FetchSessionHandler {
         }
         StringBuilder bld = new StringBuilder();
         bld.append(" with response=(").
-            append(Utils.join(topicPartitions, ", ")).
+            append(topicPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))).
             append(")");
         String prefix = ", implied=(";
         String suffix = "";
@@ -525,7 +531,7 @@ public class FetchSessionHandler {
             if (response.error() == Errors.FETCH_SESSION_ID_NOT_FOUND) {
                 nextMetadata = FetchMetadata.INITIAL;
             } else {
-                nextMetadata = nextMetadata.nextCloseExisting();
+                nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             }
             return false;
         }
@@ -567,7 +573,7 @@ public class FetchSessionHandler {
             String problem = verifyIncrementalFetchResponsePartitions(topicPartitions, response.topicIds(), version);
             if (problem != null) {
                 log.info("Node {} sent an invalid incremental fetch response with {}", node, problem);
-                nextMetadata = nextMetadata.nextCloseExisting();
+                nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
                 return false;
             } else if (response.sessionId() == INVALID_SESSION_ID) {
                 // The incremental fetch session was closed by the server.
@@ -591,6 +597,16 @@ public class FetchSessionHandler {
     }
 
     /**
+     * The client will initiate the session close on next fetch request.
+     */
+    public void notifyClose() {
+        if (log.isDebugEnabled()) {
+            log.debug("Set the metadata for next fetch request to close the existing session ID={}", nextMetadata.sessionId());
+        }
+        nextMetadata = nextMetadata.nextCloseExisting();
+    }
+
+    /**
      * Handle an error sending the prepared request.
      *
      * When a network error occurs, we close any existing fetch session on our next request,
@@ -600,6 +616,13 @@ public class FetchSessionHandler {
      */
     public void handleError(Throwable t) {
         log.info("Error sending fetch request {} to node {}:", nextMetadata, node, t);
-        nextMetadata = nextMetadata.nextCloseExisting();
+        nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
+    }
+
+    /**
+     * Get the fetch request session's partitions.
+     */
+    public Set<TopicPartition> sessionTopicPartitions() {
+        return sessionPartitions.keySet();
     }
 }

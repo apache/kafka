@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -24,16 +25,16 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.crypto.KeyGenerator;
-import javax.crypto.Mac;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
 import java.security.Security;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -42,15 +43,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
+import javax.crypto.KeyGenerator;
+
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.common.utils.Utils.enumOptions;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_VALIDATOR;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_VALIDATOR;
 
-public class DistributedConfig extends WorkerConfig {
+/**
+ * Provides configuration for Kafka Connect workers running in distributed mode.
+ */
+public final class DistributedConfig extends WorkerConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DistributedConfig.class);
 
@@ -91,6 +98,14 @@ public class DistributedConfig extends WorkerConfig {
      */
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG;
     private static final String REBALANCE_TIMEOUT_MS_DOC = CommonClientConfigs.REBALANCE_TIMEOUT_MS_DOC;
+
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+    private static final String METADATA_RECOVERY_STRATEGY_DOC = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC;
+    public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY;
+
+    public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG;
+    private static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC;
+    public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS;
 
     /**
      * <code>worker.sync.timeout.ms</code>
@@ -208,8 +223,9 @@ public class DistributedConfig extends WorkerConfig {
         + "which must include the algorithm used for the " + INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG + " property. "
         + "The algorithm(s) '" + INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT + "' will be used as a default on JVMs that provide them; "
         + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
+    private final Crypto crypto;
 
-    private enum ExactlyOnceSourceSupport {
+    public enum ExactlyOnceSourceSupport {
         DISABLED(false),
         PREPARING(true),
         ENABLED(true);
@@ -232,14 +248,17 @@ public class DistributedConfig extends WorkerConfig {
 
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG = "exactly.once.source.support";
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DOC = "Whether to enable exactly-once support for source connectors in the cluster "
-            + "by using transactions to write source records and their source offsets, and by proactively fencing out old task generations before bringing up new ones. ";
-            // TODO: https://issues.apache.org/jira/browse/KAFKA-13709
-            //       + "See the exactly-once source support documentation at [add docs link here] for more information on this feature.";
+            + "by using transactions to write source records and their source offsets, and by proactively fencing out old task generations before bringing up new ones.\n"
+            + "To enable exactly-once source support on a new cluster, set this property to '" + ExactlyOnceSourceSupport.ENABLED + "'. "
+            + "To enable support on an existing cluster, first set to '" + ExactlyOnceSourceSupport.PREPARING + "' on every worker in the cluster, "
+            + "then set to '" + ExactlyOnceSourceSupport.ENABLED + "'. A rolling upgrade may be used for both changes. "
+            + "For more information on this feature, see the "
+            + "<a href=\"https://kafka.apache.org/documentation.html#connect_exactlyoncesource\">exactly-once source support documentation</a>.";
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT = ExactlyOnceSourceSupport.DISABLED.toString();
 
-    private static Object defaultKeyGenerationAlgorithm() {
+    private static Object defaultKeyGenerationAlgorithm(Crypto crypto) {
         try {
-            validateKeyAlgorithm(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
+            validateKeyAlgorithm(crypto, INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
             return INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT;
         } catch (Throwable t) {
             log.info(
@@ -252,9 +271,9 @@ public class DistributedConfig extends WorkerConfig {
         }
     }
 
-    private static Object defaultSignatureAlgorithm() {
+    private static Object defaultSignatureAlgorithm(Crypto crypto) {
         try {
-            validateSignatureAlgorithm(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
+            validateSignatureAlgorithm(crypto, INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
             return INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT;
         } catch (Throwable t) {
             log.info(
@@ -267,11 +286,11 @@ public class DistributedConfig extends WorkerConfig {
         }
     }
 
-    private static Object defaultVerificationAlgorithms() {
+    private static Object defaultVerificationAlgorithms(Crypto crypto) {
         List<String> result = new ArrayList<>();
         for (String verificationAlgorithm : INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT) {
             try {
-                validateSignatureAlgorithm(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, verificationAlgorithm);
+                validateSignatureAlgorithm(crypto, INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, verificationAlgorithm);
                 result.add(verificationAlgorithm);
             } catch (Throwable t) {
                 log.trace("Verification algorithm '{}' not found", verificationAlgorithm);
@@ -290,7 +309,8 @@ public class DistributedConfig extends WorkerConfig {
     }
 
     @SuppressWarnings("unchecked")
-    private static final ConfigDef CONFIG = baseConfigDef()
+    private static ConfigDef config(Crypto crypto) {
+        return baseConfigDef()
             .define(GROUP_ID_CONFIG,
                     ConfigDef.Type.STRING,
                     ConfigDef.Importance.HIGH,
@@ -313,7 +333,7 @@ public class DistributedConfig extends WorkerConfig {
             .define(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG,
                     ConfigDef.Type.STRING,
                     EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT,
-                    ConfigDef.CaseInsensitiveValidString.in(enumOptions(ExactlyOnceSourceSupport.class)),
+                    in(enumOptions(ExactlyOnceSourceSupport.class)),
                     ConfigDef.Importance.HIGH,
                     EXACTLY_ONCE_SOURCE_SUPPORT_DOC)
             .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
@@ -330,13 +350,13 @@ public class DistributedConfig extends WorkerConfig {
             .define(CommonClientConfigs.SEND_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     128 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SEND_BUFFER_DOC)
             .define(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     32 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.RECEIVE_BUFFER_DOC)
             .define(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG,
@@ -365,17 +385,23 @@ public class DistributedConfig extends WorkerConfig {
                     CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
             .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    100L,
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+            .define(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
                     atLeast(0),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
-                    /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
+            /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
             .define(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG,
                     ConfigDef.Type.LONG,
                     TimeUnit.MINUTES.toMillis(9),
@@ -453,7 +479,8 @@ public class DistributedConfig extends WorkerConfig {
                                         + "compatibility");
                             }
                         },
-                        () -> "[" + Utils.join(ConnectProtocolCompatibility.values(), ", ") + "]"),
+                        () -> Arrays.stream(ConnectProtocolCompatibility.values()).map(ConnectProtocolCompatibility::toString)
+                                .collect(Collectors.joining(", ", "[", "]"))),
                     ConfigDef.Importance.LOW,
                     CONNECT_PROTOCOL_DOC)
             .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,
@@ -470,9 +497,9 @@ public class DistributedConfig extends WorkerConfig {
                     INTER_WORKER_KEY_TTL_MS_MS_DOC)
             .define(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                    defaultKeyGenerationAlgorithm(),
+                    defaultKeyGenerationAlgorithm(crypto),
                     ConfigDef.LambdaValidator.with(
-                            (name, value) -> validateKeyAlgorithm(name, (String) value),
+                            (name, value) -> validateKeyAlgorithm(crypto, name, (String) value),
                             () -> "Any KeyGenerator algorithm supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
                     INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC)
@@ -483,25 +510,40 @@ public class DistributedConfig extends WorkerConfig {
                     INTER_WORKER_KEY_SIZE_DOC)
             .define(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                    defaultSignatureAlgorithm(),
+                    defaultSignatureAlgorithm(crypto),
                     ConfigDef.LambdaValidator.with(
-                            (name, value) -> validateSignatureAlgorithm(name, (String) value),
+                            (name, value) -> validateSignatureAlgorithm(crypto, name, (String) value),
                             () -> "Any MAC algorithm supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
                     INTER_WORKER_SIGNATURE_ALGORITHM_DOC)
             .define(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG,
                     ConfigDef.Type.LIST,
-                    defaultVerificationAlgorithms(),
+                    defaultVerificationAlgorithms(crypto),
                     ConfigDef.LambdaValidator.with(
-                            (name, value) -> validateVerificationAlgorithms(name, (List<String>) value),
+                            (name, value) -> validateVerificationAlgorithms(crypto, name, (List<String>) value),
                             () -> "A list of one or more MAC algorithms, each supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
-                    INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
+                    INTER_WORKER_VERIFICATION_ALGORITHMS_DOC)
+            .define(METADATA_RECOVERY_STRATEGY_CONFIG,
+                    ConfigDef.Type.STRING,
+                    DEFAULT_METADATA_RECOVERY_STRATEGY,
+                    ConfigDef.CaseInsensitiveValidString
+                            .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
+                    ConfigDef.Importance.LOW,
+                    METADATA_RECOVERY_STRATEGY_DOC)
+            .define(METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
+                    atLeast(0),
+                    ConfigDef.Importance.LOW,
+                    METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+
+    }
 
     private final ExactlyOnceSourceSupport exactlyOnceSourceSupport;
 
     @Override
-    public Integer getRebalanceTimeout() {
+    public Integer rebalanceTimeout() {
         return getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
     }
 
@@ -546,19 +588,31 @@ public class DistributedConfig extends WorkerConfig {
         return getString(GROUP_ID_CONFIG);
     }
 
+    @Override
+    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        CommonClientConfigs.warnDisablingExponentialBackoff(this);
+        return super.postProcessParsedConfig(parsedValues);
+    }
+
     public DistributedConfig(Map<String, String> props) {
-        super(CONFIG, props);
+        this(Crypto.SYSTEM, props);
+    }
+
+    // Visible for testing
+    DistributedConfig(Crypto crypto, Map<String, String> props) {
+        super(config(crypto), props);
+        this.crypto = crypto;
         exactlyOnceSourceSupport = ExactlyOnceSourceSupport.fromProperty(getString(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG));
         validateInterWorkerKeyConfigs();
     }
 
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtml(4, config -> "connectconfigs_" + config));
+        System.out.println(config(Crypto.SYSTEM).toHtml(4, config -> "connectconfigs_" + config));
     }
 
     public KeyGenerator getInternalRequestKeyGenerator() {
         try {
-            KeyGenerator result = KeyGenerator.getInstance(getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG));
+            KeyGenerator result = crypto.keyGenerator(getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG));
             Optional.ofNullable(getInt(INTER_WORKER_KEY_SIZE_CONFIG)).ifPresent(result::init);
             return result;
         } catch (NoSuchAlgorithmException | InvalidParameterException e) {
@@ -615,7 +669,7 @@ public class DistributedConfig extends WorkerConfig {
         }
     }
 
-    private static void validateVerificationAlgorithms(String configName, List<String> algorithms) {
+    private static void validateVerificationAlgorithms(Crypto crypto, String configName, List<String> algorithms) {
         if (algorithms.isEmpty()) {
             throw new ConfigException(
                     configName,
@@ -625,24 +679,24 @@ public class DistributedConfig extends WorkerConfig {
         }
         for (String algorithm : algorithms) {
             try {
-                Mac.getInstance(algorithm);
+                crypto.mac(algorithm);
             } catch (NoSuchAlgorithmException e) {
                 throw unsupportedAlgorithmException(configName, algorithm, "Mac");
             }
         }
     }
 
-    private static void validateSignatureAlgorithm(String configName, String algorithm) {
+    private static void validateSignatureAlgorithm(Crypto crypto, String configName, String algorithm) {
         try {
-            Mac.getInstance(algorithm);
+            crypto.mac(algorithm);
         } catch (NoSuchAlgorithmException e) {
             throw unsupportedAlgorithmException(configName, algorithm, "Mac");
         }
     }
 
-    private static void validateKeyAlgorithm(String configName, String algorithm) {
+    private static void validateKeyAlgorithm(Crypto crypto, String configName, String algorithm) {
         try {
-            KeyGenerator.getInstance(algorithm);
+            crypto.keyGenerator(algorithm);
         } catch (NoSuchAlgorithmException e) {
             throw unsupportedAlgorithmException(configName, algorithm, "KeyGenerator");
         }

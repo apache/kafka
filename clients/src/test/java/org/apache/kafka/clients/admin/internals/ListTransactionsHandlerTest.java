@@ -22,11 +22,13 @@ import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy.BrokerKey;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListTransactionsRequest;
 import org.apache.kafka.common.requests.ListTransactionsResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
@@ -34,6 +36,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -41,6 +44,8 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ListTransactionsHandlerTest {
     private final LogContext logContext = new LogContext();
@@ -81,6 +86,66 @@ public class ListTransactionsHandlerTest {
         ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
         assertEquals(Collections.singletonList(filteredState.toString()), request.data().stateFilters());
         assertEquals(Collections.emptyList(), request.data().producerIdFilters());
+    }
+
+
+    @Test
+    public void testBuildRequestWithFilteredTransactionalIdPattern() {
+        int brokerId = 1;
+        BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
+        String filteredTransactionalIdPattern = "^special-.*";
+        ListTransactionsOptions options = new ListTransactionsOptions()
+            .filterOnTransactionalIdPattern(filteredTransactionalIdPattern);
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
+        assertEquals(filteredTransactionalIdPattern, request.data().transactionalIdPattern());
+        assertEquals(List.of(), request.data().stateFilters());
+    }
+
+    @Test
+    public void testBuildRequestWithNullFilteredTransactionalIdPattern() {
+        int brokerId = 1;
+        BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
+        ListTransactionsOptions options = new ListTransactionsOptions()
+            .filterOnTransactionalIdPattern(null);
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
+        assertNull(request.data().transactionalIdPattern());
+    }
+
+    @Test
+    public void testBuildRequestWithEmptyFilteredTransactionalIdPattern() {
+        int brokerId = 1;
+        BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
+        ListTransactionsOptions options = new ListTransactionsOptions()
+            .filterOnTransactionalIdPattern("");
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
+        assertNull(request.data().transactionalIdPattern());
+    }
+
+    @Test
+    public void testBuildRequestWithDurationFilter() {
+        int brokerId = 1;
+        BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
+        ListTransactionsOptions options = new ListTransactionsOptions();
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        // case 1: check the default value (-1L) for durationFilter
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 1);
+        assertEquals(-1L, request.data().durationFilter());
+        request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 0);
+        assertEquals(-1L, request.data().durationFilter());
+        // case 2: able to set a valid duration filter when using API version 1
+        options.filterOnDuration(10L);
+        request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 1);
+        assertEquals(10L, request.data().durationFilter());
+        assertEquals(Collections.emptyList(), request.data().producerIdFilters());
+        // case 3: unable to set a valid duration filter when using API version 0
+        assertThrows(UnsupportedVersionException.class, () -> handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 0));
+        // case 4: able to set duration filter to -1L when using API version 0
+        options.filterOnDuration(-1L);
+        ListTransactionsRequest request1 = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build((short) 0);
+        assertEquals(-1L, request1.data().durationFilter());
     }
 
     @Test

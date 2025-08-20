@@ -17,13 +17,16 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
+import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Possible error codes:
@@ -44,6 +47,84 @@ import java.util.Map;
  */
 public class OffsetDeleteResponse extends AbstractResponse {
 
+    public static class Builder {
+        OffsetDeleteResponseData data = new OffsetDeleteResponseData();
+
+        private OffsetDeleteResponseTopic getOrCreateTopic(
+            String topicName
+        ) {
+            OffsetDeleteResponseTopic topic = data.topics().find(topicName);
+            if (topic == null) {
+                topic = new OffsetDeleteResponseTopic().setName(topicName);
+                data.topics().add(topic);
+            }
+            return topic;
+        }
+
+        public Builder addPartition(
+            String topicName,
+            int partitionIndex,
+            Errors error
+        ) {
+            final OffsetDeleteResponseTopic topicResponse = getOrCreateTopic(topicName);
+
+            topicResponse.partitions().add(new OffsetDeleteResponsePartition()
+                .setPartitionIndex(partitionIndex)
+                .setErrorCode(error.code()));
+
+            return this;
+        }
+
+        public <P> Builder addPartitions(
+            String topicName,
+            List<P> partitions,
+            Function<P, Integer> partitionIndex,
+            Errors error
+        ) {
+            final OffsetDeleteResponseTopic topicResponse = getOrCreateTopic(topicName);
+            partitions.forEach(partition ->
+                topicResponse.partitions().add(new OffsetDeleteResponsePartition()
+                    .setPartitionIndex(partitionIndex.apply(partition))
+                    .setErrorCode(error.code()))
+            );
+            return this;
+        }
+
+        public Builder merge(
+            OffsetDeleteResponseData newData
+        ) {
+            if (newData.errorCode() != Errors.NONE.code()) {
+                // If the top-level error exists, we can discard it and use the new data.
+                data = newData;
+            } else if (data.topics().isEmpty()) {
+                // If the current data is empty, we can discard it and use the new data.
+                data = newData;
+            } else {
+                // Otherwise, we have to merge them together.
+                newData.topics().forEach(newTopic -> {
+                    OffsetDeleteResponseTopic existingTopic = data.topics().find(newTopic.name());
+                    if (existingTopic == null) {
+                        // If no topic exists, we can directly copy the new topic data.
+                        data.topics().add(newTopic.duplicate());
+                    } else {
+                        // Otherwise, we add the partitions to the existing one. Note we
+                        // expect non-overlapping partitions here as we don't verify
+                        // if the partition is already in the list before adding it.
+                        newTopic.partitions().forEach(partition ->
+                            existingTopic.partitions().add(partition.duplicate())
+                        );
+                    }
+                });
+            }
+
+            return this;
+        }
+
+        public OffsetDeleteResponse build() {
+            return new OffsetDeleteResponse(data);
+        }
+    }
+
     private final OffsetDeleteResponseData data;
 
     public OffsetDeleteResponse(OffsetDeleteResponseData data) {
@@ -58,7 +139,7 @@ public class OffsetDeleteResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.topics().forEach(topic ->
             topic.partitions().forEach(partition ->
@@ -68,8 +149,8 @@ public class OffsetDeleteResponse extends AbstractResponse {
         return counts;
     }
 
-    public static OffsetDeleteResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetDeleteResponse(new OffsetDeleteResponseData(new ByteBufferAccessor(buffer), version));
+    public static OffsetDeleteResponse parse(Readable readable, short version) {
+        return new OffsetDeleteResponse(new OffsetDeleteResponseData(readable, version));
     }
 
     @Override

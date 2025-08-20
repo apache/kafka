@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.connect.transforms;
 
-import java.util.ArrayList;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -29,6 +30,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,7 +42,7 @@ import java.util.function.Function;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public abstract class MaskField<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class MaskField<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC =
             "Mask specified fields with a valid null value for the field type (i.e. 0, false, empty string, and so on)."
@@ -50,51 +52,59 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     private static final String FIELDS_CONFIG = "fields";
     private static final String REPLACEMENT_CONFIG = "replacement";
+    private static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(),
                     ConfigDef.Importance.HIGH, "Names of fields to mask.")
             .define(REPLACEMENT_CONFIG, ConfigDef.Type.STRING, null, new ConfigDef.NonEmptyString(),
                     ConfigDef.Importance.LOW, "Custom value replacement, that will be applied to all"
-                            + " 'fields' values (numeric or non-empty string values only).");
+                            + " 'fields' values (numeric or non-empty string values only).")
+            .define(REPLACE_NULL_WITH_DEFAULT_CONFIG, ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.MEDIUM,
+                    "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private static final String PURPOSE = "mask fields";
 
-    private static final Map<Class<?>, Function<String, ?>> REPLACEMENT_MAPPING_FUNC = new HashMap<>();
-    private static final Map<Class<?>, Object> PRIMITIVE_VALUE_MAPPING = new HashMap<>();
-
-    static {
-        PRIMITIVE_VALUE_MAPPING.put(Boolean.class, Boolean.FALSE);
-        PRIMITIVE_VALUE_MAPPING.put(Byte.class, (byte) 0);
-        PRIMITIVE_VALUE_MAPPING.put(Short.class, (short) 0);
-        PRIMITIVE_VALUE_MAPPING.put(Integer.class, 0);
-        PRIMITIVE_VALUE_MAPPING.put(Long.class, 0L);
-        PRIMITIVE_VALUE_MAPPING.put(Float.class, 0f);
-        PRIMITIVE_VALUE_MAPPING.put(Double.class, 0d);
-        PRIMITIVE_VALUE_MAPPING.put(BigInteger.class, BigInteger.ZERO);
-        PRIMITIVE_VALUE_MAPPING.put(BigDecimal.class, BigDecimal.ZERO);
-        PRIMITIVE_VALUE_MAPPING.put(Date.class, new Date(0));
-        PRIMITIVE_VALUE_MAPPING.put(String.class, "");
-
-        REPLACEMENT_MAPPING_FUNC.put(Byte.class, v -> Values.convertToByte(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Short.class, v -> Values.convertToShort(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Integer.class, v -> Values.convertToInteger(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Long.class, v -> Values.convertToLong(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Float.class, v -> Values.convertToFloat(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(Double.class, v -> Values.convertToDouble(null, v));
-        REPLACEMENT_MAPPING_FUNC.put(String.class, Function.identity());
-        REPLACEMENT_MAPPING_FUNC.put(BigDecimal.class, BigDecimal::new);
-        REPLACEMENT_MAPPING_FUNC.put(BigInteger.class, BigInteger::new);
-    }
+    private static final Map<Class<?>, Function<String, ?>> REPLACEMENT_MAPPING_FUNC = Map.of(
+        Byte.class, v -> Values.convertToByte(null, v),
+        Short.class, v -> Values.convertToShort(null, v),
+        Integer.class, v -> Values.convertToInteger(null, v),
+        Long.class, v -> Values.convertToLong(null, v),
+        Float.class, v -> Values.convertToFloat(null, v),
+        Double.class, v -> Values.convertToDouble(null, v),
+        String.class, Function.identity(),
+        BigDecimal.class, BigDecimal::new,
+        BigInteger.class, BigInteger::new
+    );
+    private static final Map<Class<?>, Object> PRIMITIVE_VALUE_MAPPING = Map.ofEntries(
+        Map.entry(Boolean.class, Boolean.FALSE),
+        Map.entry(Byte.class, (byte) 0),
+        Map.entry(Short.class, (short) 0),
+        Map.entry(Integer.class, 0),
+        Map.entry(Long.class, 0L),
+        Map.entry(Float.class, 0f),
+        Map.entry(Double.class, 0d),
+        Map.entry(BigInteger.class, BigInteger.ZERO),
+        Map.entry(BigDecimal.class, BigDecimal.ZERO),
+        Map.entry(Date.class, new Date(0)),
+        Map.entry(String.class, "")
+    );
 
     private Set<String> maskedFields;
     private String replacement;
+    private boolean replaceNullWithDefault;
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         maskedFields = new HashSet<>(config.getList(FIELDS_CONFIG));
         replacement = config.getString(REPLACEMENT_CONFIG);
+        replaceNullWithDefault = config.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
 
     @Override
@@ -119,10 +129,17 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         final Struct value = requireStruct(operatingValue(record), PURPOSE);
         final Struct updatedValue = new Struct(value.schema());
         for (Field field : value.schema().fields()) {
-            final Object origFieldValue = value.get(field);
+            final Object origFieldValue = getFieldValue(value, field);
             updatedValue.put(field, maskedFields.contains(field.name()) ? masked(origFieldValue) : origFieldValue);
         }
         return newRecord(record, updatedValue);
+    }
+
+    private Object getFieldValue(Struct value, Field field) {
+        if (replaceNullWithDefault) {
+            return value.get(field);
+        }
+        return value.getWithoutDefault(field.name());
     }
 
     private Object masked(Object value) {

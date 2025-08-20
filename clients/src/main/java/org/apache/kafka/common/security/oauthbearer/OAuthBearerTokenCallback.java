@@ -20,8 +20,6 @@ import java.util.Objects;
 
 import javax.security.auth.callback.Callback;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * A {@code Callback} for use by the {@code SaslClient} and {@code Login}
  * implementations when they require an OAuth 2 bearer token. Callback handlers
@@ -30,14 +28,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * <a href="https://tools.ietf.org/html/rfc6749#section-5.2">RFC 6749: The OAuth
  * 2.0 Authorization Framework</a>. Callback handlers should communicate other
  * problems by raising an {@code IOException}.
- * <p>
- * This class was introduced in 2.0.0 and, while it feels stable, it could
- * evolve. We will try to evolve the API in a compatible manner, but we reserve
- * the right to make breaking changes in minor releases, if necessary. We will
- * update the {@code InterfaceStability} annotation and this notice once the API
- * is considered stable.
  */
-@InterfaceStability.Evolving
 public class OAuthBearerTokenCallback implements Callback {
     private OAuthBearerToken token = null;
     private String errorCode = null;

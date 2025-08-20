@@ -16,19 +16,22 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Optional;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 
 /**
  * This interface is used to define custom partition assignment for use in
@@ -37,11 +40,13 @@ import org.apache.kafka.common.utils.Utils;
  * as the group coordinator. The coordinator selects one member to perform the group assignment and
  * propagates the subscriptions of all members to it. Then {@link #assign(Cluster, GroupSubscription)} is called
  * to perform the assignment and the results are forwarded back to each respective members
- *
+ * <p>
  * In some cases, it is useful to forward additional metadata to the assignor in order to make
  * assignment decisions. For this, you can override {@link #subscriptionUserData(Set)} and provide custom
  * userData in the returned Subscription. For example, to have a rack-aware assignor, an implementation
  * can use this user data to forward the rackId belonging to each member.
+ * <p>
+ * The implementation can extend {@link Configurable} to get configs from consumer.
  */
 public interface ConsumerPartitionAssignor {
 
@@ -101,21 +106,29 @@ public interface ConsumerPartitionAssignor {
         private final List<String> topics;
         private final ByteBuffer userData;
         private final List<TopicPartition> ownedPartitions;
+        private final Optional<String> rackId;
         private Optional<String> groupInstanceId;
+        private final Optional<Integer> generationId;
 
-        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions, int generationId, Optional<String> rackId) {
             this.topics = topics;
             this.userData = userData;
             this.ownedPartitions = ownedPartitions;
             this.groupInstanceId = Optional.empty();
+            this.generationId = generationId < 0 ? Optional.empty() : Optional.of(generationId);
+            this.rackId = rackId;
+        }
+
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+            this(topics, userData, ownedPartitions, DEFAULT_GENERATION, Optional.empty());
         }
 
         public Subscription(List<String> topics, ByteBuffer userData) {
-            this(topics, userData, Collections.emptyList());
+            this(topics, userData, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
         }
 
         public Subscription(List<String> topics) {
-            this(topics, null, Collections.emptyList());
+            this(topics, null, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
         }
 
         public List<String> topics() {
@@ -130,6 +143,10 @@ public interface ConsumerPartitionAssignor {
             return ownedPartitions;
         }
 
+        public Optional<String> rackId() {
+            return rackId;
+        }
+
         public void setGroupInstanceId(Optional<String> groupInstanceId) {
             this.groupInstanceId = groupInstanceId;
         }
@@ -138,20 +155,26 @@ public interface ConsumerPartitionAssignor {
             return groupInstanceId;
         }
 
+        public Optional<Integer> generationId() {
+            return generationId;
+        }
+
         @Override
         public String toString() {
             return "Subscription(" +
                 "topics=" + topics +
                 (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
                 ", ownedPartitions=" + ownedPartitions +
-                ", groupInstanceId=" + (groupInstanceId.map(String::toString).orElse("null")) +
+                ", groupInstanceId=" + groupInstanceId.map(String::toString).orElse("null") +
+                ", generationId=" + generationId.orElse(-1) +
+                ", rackId=" + (rackId.orElse("null")) +
                 ")";
         }
     }
 
     final class Assignment {
-        private List<TopicPartition> partitions;
-        private ByteBuffer userData;
+        private final List<TopicPartition> partitions;
+        private final ByteBuffer userData;
 
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
             this.partitions = partitions;
@@ -275,7 +298,7 @@ public interface ConsumerPartitionAssignor {
             // first try to get the class if passed in as a string
             if (klass instanceof String) {
                 try {
-                    klass = Class.forName((String) klass, true, Utils.getContextOrKafkaClassLoader());
+                    klass = Utils.loadClass((String) klass, Object.class);
                 } catch (ClassNotFoundException classNotFound) {
                     throw new KafkaException(klass + " ClassNotFoundException exception occurred", classNotFound);
                 }

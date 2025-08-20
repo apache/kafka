@@ -24,23 +24,22 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntityData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.image.node.ClientQuotasImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map.Entry;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
 import static org.apache.kafka.common.quota.ClientQuotaEntity.IP;
 import static org.apache.kafka.common.quota.ClientQuotaEntity.USER;
-import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_EXACT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_DEFAULT;
+import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_EXACT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_SPECIFIED;
 
 
@@ -50,7 +49,7 @@ import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH
  * This class is thread-safe.
  */
 public final class ClientQuotasImage {
-    public final static ClientQuotasImage EMPTY = new ClientQuotasImage(Collections.emptyMap());
+    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Map.of());
 
     private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
 
@@ -62,15 +61,16 @@ public final class ClientQuotasImage {
         return entities.isEmpty();
     }
 
-    Map<ClientQuotaEntity, ClientQuotaImage> entities() {
+    // Visible for testing
+    public Map<ClientQuotaEntity, ClientQuotaImage> entities() {
         return entities;
     }
 
-    public void write(ImageWriter writer, ImageWriterOptions options) {
+    public void write(ImageWriter writer) {
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             ClientQuotaImage clientQuotaImage = entry.getValue();
-            clientQuotaImage.write(entity, writer, options);
+            clientQuotaImage.write(entity, writer);
         }
     }
 
@@ -175,8 +175,7 @@ public final class ClientQuotasImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotasImage)) return false;
-        ClientQuotasImage other = (ClientQuotasImage) o;
+        if (!(o instanceof ClientQuotasImage other)) return false;
         return entities.equals(other.entities);
     }
 
@@ -187,8 +186,6 @@ public final class ClientQuotasImage {
 
     @Override
     public String toString() {
-        return "ClientQuotasImage(entities=" + entities.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ")";
+        return new ClientQuotasImageNode(this).stringify();
     }
 }

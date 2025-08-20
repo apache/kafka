@@ -23,6 +23,7 @@ package org.apache.kafka.streams.errors;
  * This could happen because the store moved to some other instance during a rebalance so
  * rediscovery of the state store is required before retrying.
  */
+@SuppressWarnings("unused")
 public class StateStoreMigratedException extends InvalidStateStoreException {
 
     private static final long serialVersionUID = 1L;

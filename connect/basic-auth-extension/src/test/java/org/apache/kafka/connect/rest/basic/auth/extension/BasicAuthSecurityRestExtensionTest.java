@@ -19,18 +19,20 @@ package org.apache.kafka.connect.rest.basic.auth.extension;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import javax.security.auth.login.Configuration;
-import javax.ws.rs.core.Configurable;
-
 import java.io.IOException;
-import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+
+import javax.security.auth.login.Configuration;
+
+import jakarta.ws.rs.core.Configurable;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -105,7 +107,7 @@ public class BasicAuthSecurityRestExtensionTest {
 
         BasicAuthSecurityRestExtension extension = new BasicAuthSecurityRestExtension(configuration);
 
-        Exception thrownException = assertThrows(Exception.class, () -> extension.configure(Collections.emptyMap()));
+        Exception thrownException = assertThrows(Exception.class, () -> extension.configure(Map.of()));
         assertEquals(jaasConfigurationException, thrownException);
 
         thrownException = assertThrows(Exception.class, () -> extension.register(mock(ConnectRestExtensionContext.class)));

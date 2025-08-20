@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
@@ -24,13 +25,10 @@ import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class OffsetCommitRequest extends AbstractRequest {
@@ -48,16 +46,39 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         private final OffsetCommitRequestData data;
 
-        public Builder(OffsetCommitRequestData data) {
-            super(ApiKeys.OFFSET_COMMIT);
+        private Builder(OffsetCommitRequestData data, short oldestAllowedVersion, short latestAllowedVersion) {
+            super(ApiKeys.OFFSET_COMMIT, oldestAllowedVersion, latestAllowedVersion);
             this.data = data;
+        }
+
+        public static Builder forTopicIdsOrNames(OffsetCommitRequestData data, boolean enableUnstableLastVersion) {
+            return new Builder(data, ApiKeys.OFFSET_COMMIT.oldestVersion(), ApiKeys.OFFSET_COMMIT.latestVersion(enableUnstableLastVersion));
+        }
+
+        public static Builder forTopicNames(OffsetCommitRequestData data) {
+            return new Builder(data, ApiKeys.OFFSET_COMMIT.oldestVersion(), (short) 9);
         }
 
         @Override
         public OffsetCommitRequest build(short version) {
             if (data.groupInstanceId() != null && version < 7) {
-                throw new UnsupportedVersionException("The broker offset commit protocol version " +
-                        version + " does not support usage of config group.instance.id.");
+                throw new UnsupportedVersionException("The broker offset commit api version " +
+                    version + " does not support usage of config group.instance.id.");
+            }
+            if (version >= 10) {
+                data.topics().forEach(topic -> {
+                    if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
+                        throw new UnsupportedVersionException("The broker offset commit api version " +
+                            version + " does require usage of topic ids.");
+                    }
+                });
+            } else {
+                data.topics().forEach(topic -> {
+                    if (topic.name() == null || topic.name().isEmpty()) {
+                        throw new UnsupportedVersionException("The broker offset commit api version " +
+                            version + " does require usage of topic names.");
+                    }
+                });
             }
             return new OffsetCommitRequest(data, version);
         }
@@ -89,36 +110,38 @@ public class OffsetCommitRequest extends AbstractRequest {
         return offsets;
     }
 
-    public static List<OffsetCommitResponseTopic> getErrorResponseTopics(
-            List<OffsetCommitRequestTopic> requestTopics,
-            Errors e) {
-        List<OffsetCommitResponseTopic> responseTopicData = new ArrayList<>();
-        for (OffsetCommitRequestTopic entry : requestTopics) {
-            List<OffsetCommitResponsePartition> responsePartitions =
-                    new ArrayList<>();
-            for (OffsetCommitRequestData.OffsetCommitRequestPartition requestPartition : entry.partitions()) {
-                responsePartitions.add(new OffsetCommitResponsePartition()
-                                           .setPartitionIndex(requestPartition.partitionIndex())
-                                           .setErrorCode(e.code()));
-            }
-            responseTopicData.add(new OffsetCommitResponseTopic()
-                    .setName(entry.name())
-                    .setPartitions(responsePartitions)
+    public static OffsetCommitResponseData getErrorResponse(
+        OffsetCommitRequestData request,
+        Errors error
+    ) {
+        OffsetCommitResponseData response = new OffsetCommitResponseData();
+        request.topics().forEach(topic -> {
+            OffsetCommitResponseTopic responseTopic = new OffsetCommitResponseTopic()
+                .setTopicId(topic.topicId())
+                .setName(topic.name());
+            response.topics().add(responseTopic);
+
+            topic.partitions().forEach(partition ->
+                responseTopic.partitions().add(new OffsetCommitResponsePartition()
+                    .setPartitionIndex(partition.partitionIndex())
+                    .setErrorCode(error.code()))
             );
-        }
-        return responseTopicData;
+        });
+        return response;
     }
 
     @Override
     public OffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        List<OffsetCommitResponseTopic>
-                responseTopicData = getErrorResponseTopics(data.topics(), Errors.forException(e));
-        return new OffsetCommitResponse(new OffsetCommitResponseData()
-                .setTopics(responseTopicData)
-                .setThrottleTimeMs(throttleTimeMs));
+        return new OffsetCommitResponse(getErrorResponse(data, Errors.forException(e))
+            .setThrottleTimeMs(throttleTimeMs));
     }
 
-    public static OffsetCommitRequest parse(ByteBuffer buffer, short version) {
-        return new OffsetCommitRequest(new OffsetCommitRequestData(new ByteBufferAccessor(buffer), version), version);
+    @Override
+    public OffsetCommitResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
+    }
+
+    public static OffsetCommitRequest parse(Readable readable, short version) {
+        return new OffsetCommitRequest(new OffsetCommitRequestData(readable, version), version);
     }
 }

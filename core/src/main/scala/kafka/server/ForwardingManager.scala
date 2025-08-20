@@ -18,17 +18,23 @@
 package kafka.server
 
 import java.nio.ByteBuffer
-
 import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.metrics.ForwardingManagerMetrics
 
-import scala.compat.java8.OptionConverters._
+import java.util.Optional
+import java.util.concurrent.TimeUnit
+import scala.jdk.OptionConverters.RichOptional
 
 trait ForwardingManager {
+  def close(): Unit
+
   def forwardRequest(
     originalRequest: RequestChannel.Request,
     responseCallback: Option[AbstractResponse] => Unit
@@ -37,6 +43,7 @@ trait ForwardingManager {
     buffer.flip()
     forwardRequest(originalRequest.context,
       buffer,
+      originalRequest.startTimeNanos,
       originalRequest.body[AbstractRequest],
       () => originalRequest.toString,
       responseCallback)
@@ -50,6 +57,7 @@ trait ForwardingManager {
     val buffer = newRequestBody.serializeWithHeader(originalRequest.header)
     forwardRequest(originalRequest.context,
       buffer,
+      originalRequest.startTimeNanos,
       newRequestBody,
       () => originalRequest.toString,
       responseCallback)
@@ -63,7 +71,7 @@ trait ForwardingManager {
    *                            byte buffer from the envelope request, since we will be mutating
    *                            the position and limit fields. It should be a copy.
    * @param requestBody         The AbstractRequest we are sending.
-   * @param requestToString     A callback which can be invoked to produce a human-readable decription
+   * @param requestToString     A callback which can be invoked to produce a human-readable description
    *                            of the request.
    * @param responseCallback    A callback which takes in an `Option[AbstractResponse]`.
    *                            We will call this function with Some(x) after the controller responds with x.
@@ -73,24 +81,26 @@ trait ForwardingManager {
   def forwardRequest(
     requestContext: RequestContext,
     requestBufferCopy: ByteBuffer,
+    requestCreationNs: Long,
     requestBody: AbstractRequest,
     requestToString: () => String,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit
 
-  def controllerApiVersions: Option[NodeApiVersions]
+  def controllerApiVersions: Optional[NodeApiVersions]
 }
 
 object ForwardingManager {
   def apply(
-    channelManager: BrokerToControllerChannelManager
+    channelManager: NodeToControllerChannelManager,
+    metrics: Metrics
   ): ForwardingManager = {
-    new ForwardingManagerImpl(channelManager)
+    new ForwardingManagerImpl(channelManager, metrics)
   }
 
   private[server] def buildEnvelopeRequest(context: RequestContext,
                                            forwardRequestBuffer: ByteBuffer): EnvelopeRequest.Builder = {
-    val principalSerde = context.principalSerde.asScala.getOrElse(
+    val principalSerde = context.principalSerde.toScala.getOrElse(
       throw new IllegalArgumentException(s"Cannot deserialize principal from request context $context " +
         "since there is no serde defined")
     )
@@ -104,20 +114,29 @@ object ForwardingManager {
 }
 
 class ForwardingManagerImpl(
-  channelManager: BrokerToControllerChannelManager
-) extends ForwardingManager with Logging {
+  channelManager: NodeToControllerChannelManager,
+  metrics: Metrics
+) extends ForwardingManager with AutoCloseable with Logging {
+
+  val forwardingManagerMetrics: ForwardingManagerMetrics = new ForwardingManagerMetrics(metrics, channelManager.getTimeoutMs)
 
   override def forwardRequest(
     requestContext: RequestContext,
     requestBufferCopy: ByteBuffer,
+    requestCreationNs: Long,
     requestBody: AbstractRequest,
     requestToString: () => String,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
     val envelopeRequest = ForwardingManager.buildEnvelopeRequest(requestContext, requestBufferCopy)
+    val requestCreationTimeMs = TimeUnit.NANOSECONDS.toMillis(requestCreationNs)
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {
+
+        forwardingManagerMetrics.decrementQueueLength()
+        forwardingManagerMetrics.remoteTimeMsHist.record(clientResponse.requestLatencyMs())
+        forwardingManagerMetrics.queueTimeMsHist.record(clientResponse.receivedTimeMs() - clientResponse.requestLatencyMs() - requestCreationTimeMs)
 
         if (clientResponse.versionMismatch != null) {
           debug(s"Returning `UNKNOWN_SERVER_ERROR` in response to ${requestToString()} " +
@@ -156,16 +175,22 @@ class ForwardingManagerImpl(
 
       override def onTimeout(): Unit = {
         debug(s"Forwarding of the request ${requestToString()} failed due to timeout exception")
+        forwardingManagerMetrics.decrementQueueLength()
+        forwardingManagerMetrics.queueTimeMsHist.record(channelManager.getTimeoutMs)
         val response = requestBody.getErrorResponse(new TimeoutException())
         responseCallback(Option(response))
       }
     }
 
+    forwardingManagerMetrics.incrementQueueLength()
     channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
   }
 
-  override def controllerApiVersions: Option[NodeApiVersions] =
-    channelManager.controllerApiVersions()
+  override def close(): Unit =
+    forwardingManagerMetrics.close()
+
+  override def controllerApiVersions: Optional[NodeApiVersions] =
+    channelManager.controllerApiVersions
 
   private def parseResponse(
     buffer: ByteBuffer,

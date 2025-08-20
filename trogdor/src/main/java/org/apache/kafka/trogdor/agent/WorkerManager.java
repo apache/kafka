@@ -29,11 +29,12 @@ import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.rest.WorkerStarting;
-import org.apache.kafka.trogdor.rest.WorkerStopping;
 import org.apache.kafka.trogdor.rest.WorkerState;
+import org.apache.kafka.trogdor.rest.WorkerStopping;
 import org.apache.kafka.trogdor.task.AgentWorkerStatusTracker;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -332,7 +333,7 @@ public final class WorkerManager {
                 return worker.doneFuture;
             }
             KafkaFutureImpl<String> haltFuture = new KafkaFutureImpl<>();
-            haltFuture.thenApply((KafkaFuture.BaseFunction<String, Void>) errorString -> {
+            haltFuture.thenApply(errorString -> {
                 if (errorString == null)
                     errorString = "";
                 if (errorString.isEmpty()) {

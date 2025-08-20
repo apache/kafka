@@ -16,16 +16,19 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.io.File;
 import java.time.Duration;
@@ -104,6 +107,12 @@ public interface ProcessingContext {
     /**
      * Get the state store given the store name.
      *
+     * <p>The returned state store represent one shard of the overall state, which belongs to the current task.
+     * The returned shard of the state store may only be used by the current {@link Processor} or
+     * {@link FixedKeyProcessor} instance.
+     * Sharing a shard across different processors (ie, from different "sibling" tasks; same sub-topology but different
+     * partition) may lead to data corruption and/or data loss.
+     *
      * @param name The store name
      * @param <S> The type or interface of the store to return
      * @return The state store instance
@@ -151,7 +160,9 @@ public interface ProcessingContext {
                          final Punctuator callback);
 
     /**
-     * Request a commit.
+     * Request a commit. Note that calling {@code commit()} is only a request for a commit, but it does not execute one.
+     * Hence, when {@code commit()} returns, no commit was executed yet. However, Kafka Streams will commit as soon
+     * as possible, instead of waiting for next {@code commit.interval.ms} to pass.
      */
     void commit();
 
@@ -199,8 +210,9 @@ public interface ProcessingContext {
      * (including the currently processed record), i.e., it can be considered a high-watermark.
      * Stream-time is tracked on a per-task basis and is preserved across restarts and during task migration.
      *
-     * <p> Note: this method is not supported for global processors (cf. {@link Topology#addGlobalStore} (...)
-     * and {@link StreamsBuilder#addGlobalStore} (...),
+     * <p> Note: this method is not supported for global processors (cf.
+     * {@link Topology#addGlobalStore(StoreBuilder, String, TimestampExtractor, Deserializer, Deserializer, String, String, ProcessorSupplier) Topology#addGlobalStore(...)}
+     * and {@link StreamsBuilder#addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier) StreamsBuilder.addGlobalStore(...)}),
      * because there is no concept of stream-time for this case.
      * Calling this method in a global processor will result in an {@link UnsupportedOperationException}.
      *

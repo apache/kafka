@@ -16,23 +16,25 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
-import java.util.Map;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 import java.util.function.Supplier;
 
-public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<SubscriptionWrapper<K>, K, Void> {
+public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<SubscriptionWrapper<KLeft>, KLeft, Void> {
+
     public SubscriptionWrapperSerde(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
-                                    final Serde<K> primaryKeySerde) {
+                                    final Serde<KLeft> primaryKeySerde) {
         super(
             new SubscriptionWrapperSerializer<>(primaryKeySerializationPseudoTopicSupplier,
                                                 primaryKeySerde == null ? null : primaryKeySerde.serializer()),
@@ -41,25 +43,25 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
         );
     }
 
-    private static class SubscriptionWrapperSerializer<K>
-        implements Serializer<SubscriptionWrapper<K>>, WrappingNullableSerializer<SubscriptionWrapper<K>, K, Void> {
+    private static class SubscriptionWrapperSerializer<KLeft>
+        implements Serializer<SubscriptionWrapper<KLeft>>, WrappingNullableSerializer<SubscriptionWrapper<KLeft>, KLeft, Void> {
 
         private final Supplier<String> primaryKeySerializationPseudoTopicSupplier;
         private String primaryKeySerializationPseudoTopic = null;
-        private Serializer<K> primaryKeySerializer;
+        private Serializer<KLeft> primaryKeySerializer;
         private boolean upgradeFromV0 = false;
 
         SubscriptionWrapperSerializer(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
-                                      final Serializer<K> primaryKeySerializer) {
+                                      final Serializer<KLeft> primaryKeySerializer) {
             this.primaryKeySerializationPseudoTopicSupplier = primaryKeySerializationPseudoTopicSupplier;
             this.primaryKeySerializer = primaryKeySerializer;
         }
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "resource"})
         @Override
         public void setIfUnset(final SerdeGetter getter) {
             if (primaryKeySerializer == null) {
-                primaryKeySerializer = (Serializer<K>) getter.keySerde().serializer();
+                primaryKeySerializer = (Serializer<KLeft>) getter.keySerde().serializer();
             }
         }
 
@@ -74,25 +76,27 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 return false;
             }
 
-            switch ((String) upgradeFrom) {
-                case StreamsConfig.UPGRADE_FROM_0100:
-                case StreamsConfig.UPGRADE_FROM_0101:
-                case StreamsConfig.UPGRADE_FROM_0102:
-                case StreamsConfig.UPGRADE_FROM_0110:
-                case StreamsConfig.UPGRADE_FROM_10:
-                case StreamsConfig.UPGRADE_FROM_11:
-                case StreamsConfig.UPGRADE_FROM_20:
-                case StreamsConfig.UPGRADE_FROM_21:
-                case StreamsConfig.UPGRADE_FROM_22:
-                case StreamsConfig.UPGRADE_FROM_23:
-                case StreamsConfig.UPGRADE_FROM_24:
-                case StreamsConfig.UPGRADE_FROM_25:
-                case StreamsConfig.UPGRADE_FROM_26:
-                case StreamsConfig.UPGRADE_FROM_27:
-                case StreamsConfig.UPGRADE_FROM_28:
-                case StreamsConfig.UPGRADE_FROM_30:
-                case StreamsConfig.UPGRADE_FROM_31:
-                case StreamsConfig.UPGRADE_FROM_32:
+            switch (UpgradeFromValues.fromString((String) upgradeFrom)) {
+                case UPGRADE_FROM_0100:
+                case UPGRADE_FROM_0101:
+                case UPGRADE_FROM_0102:
+                case UPGRADE_FROM_0110:
+                case UPGRADE_FROM_10:
+                case UPGRADE_FROM_11:
+                case UPGRADE_FROM_20:
+                case UPGRADE_FROM_21:
+                case UPGRADE_FROM_22:
+                case UPGRADE_FROM_23:
+                case UPGRADE_FROM_24:
+                case UPGRADE_FROM_25:
+                case UPGRADE_FROM_26:
+                case UPGRADE_FROM_27:
+                case UPGRADE_FROM_28:
+                case UPGRADE_FROM_30:
+                case UPGRADE_FROM_31:
+                case UPGRADE_FROM_32:
+                case UPGRADE_FROM_33:
+                    // there is no need to add new versions here
                     return true;
                 default:
                     return false;
@@ -100,40 +104,39 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
         }
 
         @Override
-        public byte[] serialize(final String ignored, final SubscriptionWrapper<K> data) {
+        public byte[] serialize(final String ignored, final SubscriptionWrapper<KLeft> data) {
             //{1-bit-isHashNull}{7-bits-version}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
 
-            //7-bit (0x7F) maximum for data version.
-            if (Byte.compare((byte) 0x7F, data.getVersion()) < 0) {
-                throw new UnsupportedVersionException("SubscriptionWrapper version is larger than maximum supported 0x7F");
+            if (data.version() < 0) {
+                throw new UnsupportedVersionException("SubscriptionWrapper version cannot be negative");
             }
 
-            final int version = data.getVersion();
+            final int version = data.version();
             if (upgradeFromV0 || version == 0) {
                 return serializeV0(data);
             } else if (version == 1) {
                 return serializeV1(data);
             } else {
-                throw new UnsupportedVersionException("Unsupported SubscriptionWrapper version " + data.getVersion());
+                throw new UnsupportedVersionException("Unsupported SubscriptionWrapper version " + data.version());
             }
         }
 
-        private byte[] serializePrimaryKey(final SubscriptionWrapper<K> data) {
+        private byte[] serializePrimaryKey(final SubscriptionWrapper<KLeft> data) {
             if (primaryKeySerializationPseudoTopic == null) {
                 primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopicSupplier.get();
             }
 
             return  primaryKeySerializer.serialize(
                 primaryKeySerializationPseudoTopic,
-                data.getPrimaryKey()
+                data.primaryKey()
             );
         }
 
-        private ByteBuffer serializeCommon(final SubscriptionWrapper<K> data, final byte version, final int extraLength) {
+        private ByteBuffer serializeCommon(final SubscriptionWrapper<KLeft> data, final byte version, final int extraLength) {
             final byte[] primaryKeySerializedData = serializePrimaryKey(data);
             final ByteBuffer buf;
             int dataLength = 2 + primaryKeySerializedData.length + extraLength;
-            if (data.getHash() != null) {
+            if (data.hash() != null) {
                 dataLength += 2 * Long.BYTES;
                 buf = ByteBuffer.allocate(dataLength);
                 buf.put(version);
@@ -142,9 +145,9 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 buf = ByteBuffer.allocate(dataLength);
                 buf.put((byte) (version | (byte) 0x80));
             }
-            buf.put(data.getInstruction().getValue());
-            final long[] elem = data.getHash();
-            if (data.getHash() != null) {
+            buf.put(data.instruction().value());
+            final long[] elem = data.hash();
+            if (data.hash() != null) {
                 buf.putLong(elem[0]);
                 buf.putLong(elem[1]);
             }
@@ -152,40 +155,40 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
             return buf;
         }
 
-        private byte[] serializeV0(final SubscriptionWrapper<K> data) {
+        private byte[] serializeV0(final SubscriptionWrapper<KLeft> data) {
             return serializeCommon(data, (byte) 0, 0).array();
         }
 
-        private byte[] serializeV1(final SubscriptionWrapper<K> data) {
-            final ByteBuffer buf = serializeCommon(data, data.getVersion(), Integer.BYTES);
-            buf.putInt(data.getPrimaryPartition());
+        private byte[] serializeV1(final SubscriptionWrapper<KLeft> data) {
+            final ByteBuffer buf = serializeCommon(data, data.version(), Integer.BYTES);
+            buf.putInt(data.primaryPartition());
             return buf.array();
         }
     }
 
-    private static class SubscriptionWrapperDeserializer<K>
-        implements Deserializer<SubscriptionWrapper<K>>, WrappingNullableDeserializer<SubscriptionWrapper<K>, K, Void> {
+    private static class SubscriptionWrapperDeserializer<KLeft>
+        implements Deserializer<SubscriptionWrapper<KLeft>>, WrappingNullableDeserializer<SubscriptionWrapper<KLeft>, KLeft, Void> {
 
         private final Supplier<String> primaryKeySerializationPseudoTopicSupplier;
         private String primaryKeySerializationPseudoTopic = null;
-        private Deserializer<K> primaryKeyDeserializer;
+        private Deserializer<KLeft> primaryKeyDeserializer;
 
         SubscriptionWrapperDeserializer(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
-                                        final Deserializer<K> primaryKeyDeserializer) {
+                                        final Deserializer<KLeft> primaryKeyDeserializer) {
             this.primaryKeySerializationPseudoTopicSupplier = primaryKeySerializationPseudoTopicSupplier;
             this.primaryKeyDeserializer = primaryKeyDeserializer;
         }
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "resource"})
         @Override
         public void setIfUnset(final SerdeGetter getter) {
             if (primaryKeyDeserializer == null) {
-                primaryKeyDeserializer = (Deserializer<K>) getter.keySerde().deserializer();
+                primaryKeyDeserializer = (Deserializer<KLeft>) getter.keySerde().deserializer();
             }
         }
 
         @Override
-        public SubscriptionWrapper<K> deserialize(final String ignored, final byte[] data) {
+        public SubscriptionWrapper<KLeft> deserialize(final String ignored, final byte[] data) {
             //{7-bits-version}{1-bit-isHashNull}{1-byte-instruction}{Optional-16-byte-Hash}{PK-serialized}{4-bytes-primaryPartition}
             final ByteBuffer buf = ByteBuffer.wrap(data);
             final byte versionAndIsHashNull = buf.get();
@@ -217,7 +220,7 @@ public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<Subscript
                 primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopicSupplier.get();
             }
 
-            final K primaryKey = primaryKeyDeserializer.deserialize(
+            final KLeft primaryKey = primaryKeyDeserializer.deserialize(
                 primaryKeySerializationPseudoTopic,
                 primaryKeyRaw
             );

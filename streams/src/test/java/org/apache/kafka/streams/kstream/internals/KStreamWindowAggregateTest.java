@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Collection;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -30,6 +27,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -48,81 +46,82 @@ import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForwa
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.hamcrest.Matcher;
-import org.junit.Before;
-import org.junit.Test;
 
+import org.hamcrest.Matcher;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.utils.TestUtils.mockStoreFactory;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
 public class KStreamWindowAggregateTest {
     private static final String WINDOW_STORE_NAME = "dummy-store-name";
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final String threadId = Thread.currentThread().getName();
+    private final StoreFactory storeFactory = mockStoreFactory(WINDOW_STORE_NAME);
 
-    @Parameter
     public StrategyType type;
 
-    @Parameter(1)
     public boolean withCache;
 
     private EmitStrategy emitStrategy;
 
     private boolean emitFinal;
 
-    @Parameterized.Parameters(name = "{0}_cache:{1}")
-    public static Collection<Object[]> getEmitStrategy() {
-        return asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true},
-            {StrategyType.ON_WINDOW_UPDATE, false},
-            {StrategyType.ON_WINDOW_CLOSE, true},
-            {StrategyType.ON_WINDOW_CLOSE, false}
-        });
+    public static Stream<Arguments> getEmitStrategy() {
+        return Stream.of(
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false)
+        );
     }
-
-    @Before
-    public void before() {
+    
+    public void setup(final StrategyType inputType, final boolean inputWithCache) {
+        type = inputType;
+        withCache = inputWithCache;
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
-        // Set interval to 0 so that it always tries to emit
-        props.setProperty(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, "0");
     }
 
-    @Test
-    public void testAggBasic() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void testAggBasic(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -215,8 +214,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void testJoin() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void testJoin(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
@@ -286,11 +287,12 @@ public class KStreamWindowAggregateTest {
         inputTopic1.pipeInput("A", "1", 20L);
 
         processors.get(0).checkAndClearProcessResult(
-            new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1", 10),
-            new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+2+2", 13),
-            new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)), "0+3", 14),
-            new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+4", 12)
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1", 10),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+2+2", 13),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)), "0+3", 14),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+4", 12)
         );
+
         processors.get(1).checkAndClearProcessResult();
         processors.get(2).checkAndClearProcessResult();
 
@@ -301,18 +303,24 @@ public class KStreamWindowAggregateTest {
         inputTopic2.pipeInput("A", "a", 15L);
 
         processors.get(0).checkAndClearProcessResult();
-        processors.get(1).checkAndClearProcessResult(
-            new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
-            new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
-            new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2)
-        );
-        processors.get(2).checkAndClearProcessResult(
-            new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),
-                "0+1+1%0+a", 9),
-            new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),
-                "0+2%0+b", 1),
-            new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+3%0+c",
-                2));
+
+        if (withCache) {
+            processors.get(1).checkAndClearProcessResult(
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2)
+            );
+            processors.get(2).checkAndClearProcessResult(
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),
+                            "0+1+1%0+a", 9),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),
+                            "0+2%0+b", 1),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+3%0+c",
+                            2));
+        } else {
+            processors.get(0).checkAndClearProcessResult();
+            processors.get(2).checkAndClearProcessResult();
+        }
 
         inputTopic2.pipeInput("A", "a", 5L);
         inputTopic2.pipeInput("B", "b", 6L);
@@ -321,11 +329,23 @@ public class KStreamWindowAggregateTest {
         inputTopic2.pipeInput("A", "a", 21L);
 
         processors.get(0).checkAndClearProcessResult();
-        processors.get(1).checkAndClearProcessResult(
-            new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
-            new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
-            new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
-        );
+        if (withCache) {
+            processors.get(1).checkAndClearProcessResult(
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
+                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
+            );
+        } else {
+            processors.get(1).checkAndClearProcessResult(
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
+                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2),
+                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
+                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
+                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
+            );
+
+        }
         processors.get(2).checkAndClearProcessResult(
             new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1%0+a",
                 10),
@@ -444,8 +464,10 @@ public class KStreamWindowAggregateTest {
         );
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullKey() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldLogAndMeterWhenSkippingNullKey(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -470,8 +492,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingExpiredWindow() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldLogAndMeterWhenSkippingExpiredWindow(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -554,8 +578,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -609,8 +635,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldNotEmitFinalIfNotProgressEnough() throws IOException {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldNotEmitFinalIfNotProgressEnough(final StrategyType inputType, final boolean inputWithCache) throws IOException {
+        setup(inputType, inputWithCache);
         final File stateDir = TestUtils.tempDirectory();
         final long windowSize = 10L;
         final Windows<TimeWindow> windows = TimeWindows.ofSizeAndGrace(ofMillis(windowSize), ofMillis(5)).advanceBy(ofMillis(5));
@@ -618,10 +646,10 @@ public class KStreamWindowAggregateTest {
         try {
             // Always process
             props.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
-            final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
+            final MockInternalProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
             final KStreamWindowAggregate<String, String, String, TimeWindow> processorSupplier = new KStreamWindowAggregate<>(
                 windows,
-                WINDOW_STORE_NAME,
+                storeFactory,
                 emitStrategy,
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER
@@ -697,8 +725,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldEmitWithInterval0() throws IOException {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldEmitWithInterval0(final StrategyType inputType, final boolean inputWithCache) throws IOException {
+        setup(inputType, inputWithCache);
         final File stateDir = TestUtils.tempDirectory();
         final long windowSize = 10L;
         final Windows<TimeWindow> windows = TimeWindows.ofSizeAndGrace(ofMillis(windowSize), ofMillis(5)).advanceBy(ofMillis(5));
@@ -706,10 +736,10 @@ public class KStreamWindowAggregateTest {
         try {
             // Always process
             props.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
-            final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
+            final MockInternalProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
             final KStreamWindowAggregate<String, String, String, TimeWindow> processorSupplier = new KStreamWindowAggregate<>(
                 windows,
-                WINDOW_STORE_NAME,
+                storeFactory,
                 emitStrategy,
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER
@@ -764,8 +794,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldEmitWithLargeInterval() throws IOException {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldEmitWithLargeInterval(final StrategyType inputType, final boolean inputWithCache) throws IOException {
+        setup(inputType, inputWithCache);
         final File stateDir = TestUtils.tempDirectory();
         final long windowSize = 10L;
         final Windows<TimeWindow> windows = TimeWindows.ofSizeAndGrace(ofMillis(windowSize), ofMillis(5)).advanceBy(ofMillis(5));
@@ -773,10 +805,10 @@ public class KStreamWindowAggregateTest {
         try {
             // Emit final every second
             props.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 1000L);
-            final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
+            final MockInternalProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
             final KStreamWindowAggregate<String, String, String, TimeWindow> processorSupplier = new KStreamWindowAggregate<>(
                 windows,
-                WINDOW_STORE_NAME,
+                storeFactory,
                 emitStrategy,
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER
@@ -863,8 +895,10 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldEmitFromLastEmitTime() throws IOException {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void shouldEmitFromLastEmitTime(final StrategyType inputType, final boolean inputWithCache) throws IOException {
+        setup(inputType, inputWithCache);
         final File stateDir = TestUtils.tempDirectory();
         final long windowSize = 10L;
         final Windows<TimeWindow> windows = TimeWindows.ofSizeAndGrace(ofMillis(windowSize), ofMillis(5)).advanceBy(ofMillis(5));
@@ -872,10 +906,10 @@ public class KStreamWindowAggregateTest {
         try {
             // Always process
             props.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
-            final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
+            final MockInternalProcessorContext<Windowed<String>, Change<String>> context = makeContext(stateDir, windowSize);
             final KStreamWindowAggregate<String, String, String, TimeWindow> processorSupplier = new KStreamWindowAggregate<>(
                 windows,
-                WINDOW_STORE_NAME,
+                storeFactory,
                 emitStrategy,
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER
@@ -943,13 +977,15 @@ public class KStreamWindowAggregateTest {
         }
     }
 
-    @Test
-    public void showThrowIfEmitFinalUsedWithUnlimitedWindow() {
+    @ParameterizedTest
+    @MethodSource("getEmitStrategy")
+    public void showThrowIfEmitFinalUsedWithUnlimitedWindow(final StrategyType inputType, final boolean inputWithCache) {
+        setup(inputType, inputWithCache);
         if (emitFinal) {
             final IllegalArgumentException e = assertThrows(
                 IllegalArgumentException.class, () -> new KStreamWindowAggregate<>(
                     UnlimitedWindows.of(),
-                    WINDOW_STORE_NAME,
+                    storeFactory,
                     emitStrategy,
                     MockInitializer.STRING_INIT,
                     MockAggregator.TOSTRING_ADDER)
@@ -959,7 +995,7 @@ public class KStreamWindowAggregateTest {
         } else {
             new KStreamWindowAggregate<>(
                 UnlimitedWindows.of(),
-                WINDOW_STORE_NAME,
+                storeFactory,
                 emitStrategy,
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER
@@ -992,18 +1028,18 @@ public class KStreamWindowAggregateTest {
             .build();
     }
 
-    private MockInternalNewProcessorContext<Windowed<String>, Change<String>> makeContext(final File stateDir, final long windowSize) {
-        final MockInternalNewProcessorContext<Windowed<String>, Change<String>> context = new MockInternalNewProcessorContext<>(
+    private MockInternalProcessorContext<Windowed<String>, Change<String>> makeContext(final File stateDir, final long windowSize) {
+        final MockInternalProcessorContext<Windowed<String>, Change<String>> context = new MockInternalProcessorContext<>(
             props,
             new TaskId(0, 0),
             stateDir
         );
 
-        context.setCurrentNode(new ProcessorNode("testNode"));
+        context.setCurrentNode(new ProcessorNode<>("testNode"));
 
         // Create, initialize, and register the state store.
         final TimestampedWindowStore<String, String> store = getWindowStore(windowSize);
-        store.init(context.getStateStoreContext(), store);
+        store.init(context, store);
         context.getStateStoreContext().register(store, null);
 
         return context;

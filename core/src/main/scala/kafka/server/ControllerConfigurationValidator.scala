@@ -19,13 +19,14 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-
-import kafka.log.LogConfig
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.coordinator.group.GroupConfigManager
+import org.apache.kafka.server.metrics.ClientMetricsConfigs
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.mutable
 
@@ -41,13 +42,13 @@ import scala.collection.mutable
  *
  * This validator does not handle changes to BROKER_LOGGER resources. Despite being bundled
  * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
- * as the others. It is not persisted to the metadata log (or to ZK, when we're in that mode).
+ * as the others. It is not persisted to the metadata log.
  */
-class ControllerConfigurationValidator extends ConfigurationValidator {
+class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends ConfigurationValidator {
   private def validateTopicName(
     name: String
   ): Unit = {
-    if (name.isEmpty()) {
+    if (name.isEmpty) {
       throw new InvalidRequestException("Default topic resources are not allowed.")
     }
     Topic.validate(name)
@@ -56,7 +57,7 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
   private def validateBrokerName(
     name: String
   ): Unit = {
-    if (!name.isEmpty()) {
+    if (name.nonEmpty) {
       val brokerId = try {
         Integer.valueOf(name)
       } catch {
@@ -66,6 +67,14 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
       if (brokerId < 0) {
         throw new InvalidRequestException("Invalid negative broker ID.")
       }
+    }
+  }
+
+  private def validateGroupName(
+    name: String
+  ): Unit = {
+    if (name.isEmpty) {
+      throw new InvalidRequestException("Default group resources are not allowed.")
     }
   }
 
@@ -89,26 +98,48 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
 
   override def validate(
     resource: ConfigResource,
-    config: util.Map[String, String]
+    newConfigs: util.Map[String, String],
+    oldConfigs: util.Map[String, String]
   ): Unit = {
     resource.`type`() match {
       case TOPIC =>
         validateTopicName(resource.name())
         val properties = new Properties()
         val nullTopicConfigs = new mutable.ArrayBuffer[String]()
-        config.entrySet().forEach(e => {
-          if (e.getValue() == null) {
-            nullTopicConfigs += e.getKey()
+        newConfigs.forEach((key, value) => {
+          if (value == null) {
+            nullTopicConfigs += key
           } else {
-            properties.setProperty(e.getKey(), e.getValue())
+            properties.setProperty(key, value)
           }
         })
         if (nullTopicConfigs.nonEmpty) {
           throw new InvalidConfigurationException("Null value not supported for topic configs: " +
             nullTopicConfigs.mkString(","))
         }
-        LogConfig.validate(properties)
+        LogConfig.validate(oldConfigs, properties, kafkaConfig.extractLogConfigMap,
+          kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
       case BROKER => validateBrokerName(resource.name())
+      case CLIENT_METRICS =>
+        val properties = new Properties()
+        newConfigs.forEach((key, value) => properties.setProperty(key, value))
+        ClientMetricsConfigs.validate(resource.name(), properties)
+      case GROUP =>
+        validateGroupName(resource.name())
+        val properties = new Properties()
+        val nullGroupConfigs = new mutable.ArrayBuffer[String]()
+        newConfigs.forEach((key, value) => {
+          if (value == null) {
+            nullGroupConfigs += key
+          } else {
+            properties.setProperty(key, value)
+          }
+        })
+        if (nullGroupConfigs.nonEmpty) {
+          throw new InvalidConfigurationException("Null value not supported for group configs: " +
+            nullGroupConfigs.mkString(","))
+        }
+        GroupConfigManager.validate(properties, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

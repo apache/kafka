@@ -17,9 +17,6 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -30,14 +27,19 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,7 +62,6 @@ import java.util.stream.Collectors;
 
 public class SustainedConnectionWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(SustainedConnectionWorker.class);
-    private static final SystemTime SYSTEM_TIME = new SystemTime();
 
     // This is the metadata for the test itself.
     private final String id;
@@ -142,7 +143,7 @@ public class SustainedConnectionWorker implements TaskWorker {
         void claim();
     }
 
-    private abstract class ClaimableConnection implements SustainedConnection {
+    private abstract static class ClaimableConnection implements SustainedConnection {
 
         protected long nextUpdate = 0;
         protected boolean inUse = false;
@@ -159,12 +160,12 @@ public class SustainedConnectionWorker implements TaskWorker {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             this.closeQuietly();
         }
 
         protected void completeRefresh() {
-            this.nextUpdate = SustainedConnectionWorker.SYSTEM_TIME.milliseconds() + this.refreshRate;
+            this.nextUpdate = Time.SYSTEM.milliseconds() + this.refreshRate;
             this.inUse = false;
         }
 
@@ -342,15 +343,15 @@ public class SustainedConnectionWorker implements TaskWorker {
                     this.consumer = new KafkaConsumer<>(this.props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
                     List<TopicPartition> partitions = this.consumer.partitionsFor(this.topicName).stream()
                             .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
-                            .collect(Collectors.toList());
+                            .toList();
 
                     // Select a random partition and assign it.
                     this.activePartition = partitions.get(this.rand.nextInt(partitions.size()));
-                    this.consumer.assign(Collections.singletonList(this.activePartition));
+                    this.consumer.assign(List.of(this.activePartition));
                 }
 
                 // The behavior when passing in an empty list is to seek to the end of all subscribed partitions.
-                this.consumer.seekToEnd(Collections.emptyList());
+                this.consumer.seekToEnd(List.of());
 
                 // Poll to keep the connection alive, ignoring any records returned.
                 this.consumer.poll(Duration.ofMillis(50));
@@ -388,7 +389,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                     if (currentConnection.isPresent()) {
                         currentConnection.get().refresh();
                     } else {
-                        SustainedConnectionWorker.SYSTEM_TIME.sleep(SustainedConnectionWorker.BACKOFF_PERIOD_MS);
+                        Time.SYSTEM.sleep(SustainedConnectionWorker.BACKOFF_PERIOD_MS);
                     }
                 }
             } catch (Exception e) {
@@ -399,7 +400,7 @@ public class SustainedConnectionWorker implements TaskWorker {
     }
 
     private synchronized Optional<SustainedConnection> findConnectionToMaintain() {
-        final long milliseconds = SustainedConnectionWorker.SYSTEM_TIME.milliseconds();
+        final long milliseconds = Time.SYSTEM.milliseconds();
         for (SustainedConnection connection : this.connections) {
             if (connection.needsRefresh(milliseconds)) {
                 connection.claim();
@@ -422,7 +423,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                             SustainedConnectionWorker.this.totalMetadataConnections.get(),
                             SustainedConnectionWorker.this.totalMetadataFailedConnections.get(),
                             SustainedConnectionWorker.this.totalAbortedThreads.get(),
-                            SustainedConnectionWorker.SYSTEM_TIME.milliseconds()));
+                            Time.SYSTEM.milliseconds()));
                 status.update(node);
             } catch (Exception e) {
                 SustainedConnectionWorker.log.error("Aborted test while running StatusUpdater", e);

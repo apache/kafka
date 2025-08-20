@@ -18,11 +18,12 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
 
-import javax.security.auth.callback.Callback;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+
+import javax.security.auth.callback.Callback;
 
 import static org.apache.kafka.common.utils.CollectionUtils.subtractMap;
 

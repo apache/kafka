@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import java.util.zip.CRC32;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -27,6 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.zip.CRC32;
 
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
 
@@ -76,7 +76,7 @@ public final class LegacyRecord {
      * Specifies the mask for the compression code. 3 bits to hold the compression codec. 0 is reserved to indicate no
      * compression
      */
-    private static final int COMPRESSION_CODEC_MASK = 0x07;
+    private static final byte COMPRESSION_CODEC_MASK = 0x07;
 
     /**
      * Specify the mask of timestamp type: 0 for CreateTime, 1 for LogAppendTime.
@@ -123,16 +123,8 @@ public final class LegacyRecord {
         return sizeInBytes() >= RECORD_OVERHEAD_V0 && checksum() == computeChecksum();
     }
 
-    public Long wrapperRecordTimestamp() {
-        return wrapperRecordTimestamp;
-    }
-
-    public TimestampType wrapperRecordTimestampType() {
-        return wrapperRecordTimestampType;
-    }
-
     /**
-     * Throw an InvalidRecordException if isValid is false for this record
+     * Throw an CorruptRecordException if isValid is false for this record
      */
     public void ensureValid() {
         if (sizeInBytes() < RECORD_OVERHEAD_V0)
@@ -385,8 +377,7 @@ public final class LegacyRecord {
                               ByteBuffer value,
                               CompressionType compressionType,
                               TimestampType timestampType) {
-        try {
-            DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
+        try (DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer))) {
             write(out, magic, timestamp, key, value, compressionType, timestampType);
         } catch (IOException e) {
             throw new KafkaException(e);
@@ -497,7 +488,7 @@ public final class LegacyRecord {
     public static byte computeAttributes(byte magic, CompressionType type, TimestampType timestampType) {
         byte attributes = 0;
         if (type.id > 0)
-            attributes |= COMPRESSION_CODEC_MASK & type.id;
+            attributes |= (byte) (COMPRESSION_CODEC_MASK & type.id);
         if (magic > RecordBatch.MAGIC_VALUE_V0) {
             if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
                 throw new IllegalArgumentException("Timestamp type must be provided to compute attributes for " +

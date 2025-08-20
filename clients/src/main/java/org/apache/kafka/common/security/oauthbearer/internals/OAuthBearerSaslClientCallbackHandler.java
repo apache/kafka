@@ -16,8 +16,18 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals;
 
+import org.apache.kafka.common.internals.SecurityManagerCompatibility;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
-import java.security.AccessController;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
@@ -31,15 +41,6 @@ import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
-
-import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * An implementation of {@code AuthenticateCallbackHandler} that recognizes
@@ -82,7 +83,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
             if (callback instanceof OAuthBearerTokenCallback)
                 handleCallback((OAuthBearerTokenCallback) callback);
             else if (callback instanceof SaslExtensionsCallback)
-                handleCallback((SaslExtensionsCallback) callback, Subject.getSubject(AccessController.getContext()));
+                handleCallback((SaslExtensionsCallback) callback, SecurityManagerCompatibility.get().current());
             else
                 throw new UnsupportedCallbackException(callback);
         }
@@ -96,11 +97,11 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
     private void handleCallback(OAuthBearerTokenCallback callback) throws IOException {
         if (callback.token() != null)
             throw new IllegalArgumentException("Callback had a token already");
-        Subject subject = Subject.getSubject(AccessController.getContext());
+        Subject subject = SecurityManagerCompatibility.get().current();
         Set<OAuthBearerToken> privateCredentials = subject != null
             ? subject.getPrivateCredentials(OAuthBearerToken.class)
             : Collections.emptySet();
-        if (privateCredentials.size() == 0)
+        if (privateCredentials.isEmpty())
             throw new IOException("No OAuth Bearer tokens in Subject's private credentials");
         if (privateCredentials.size() == 1)
             callback.token(privateCredentials.iterator().next());
@@ -116,12 +117,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
              */
             SortedSet<OAuthBearerToken> sortedByLifetime =
                 new TreeSet<>(
-                    new Comparator<OAuthBearerToken>() {
-                        @Override
-                        public int compare(OAuthBearerToken o1, OAuthBearerToken o2) {
-                            return Long.compare(o1.lifetimeMs(), o2.lifetimeMs());
-                        }
-                    });
+                        Comparator.comparingLong(OAuthBearerToken::lifetimeMs));
             sortedByLifetime.addAll(privateCredentials);
             log.warn("Found {} OAuth Bearer tokens in Subject's private credentials; the oldest expires at {}, will use the newest, which expires at {}",
                 sortedByLifetime.size(),

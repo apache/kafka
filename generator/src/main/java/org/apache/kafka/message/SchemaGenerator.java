@@ -79,7 +79,7 @@ final class SchemaGenerator {
         this.messages = new HashMap<>();
     }
 
-    void generateSchemas(MessageSpec message) throws Exception {
+    void generateSchemas(MessageSpec message) {
         this.messageFlexibleVersions = message.flexibleVersions();
 
         // First generate schemas for common structures so that they are
@@ -95,7 +95,7 @@ final class SchemaGenerator {
     }
 
     void generateSchemas(String className, StructSpec struct,
-                         Versions parentVersions) throws Exception {
+                         Versions parentVersions) {
         Versions versions = parentVersions.intersect(struct.versions());
         MessageInfo messageInfo = messages.get(className);
         if (messageInfo != null) {
@@ -127,7 +127,7 @@ final class SchemaGenerator {
 
     private void generateSchemaForVersion(StructSpec struct,
                                           short version,
-                                          CodeBuffer buffer) throws Exception {
+                                          CodeBuffer buffer) {
         // Find the last valid field index.
         int lastValidIndex = struct.fields().size() - 1;
         while (true) {
@@ -172,7 +172,7 @@ final class SchemaGenerator {
     }
 
     private void generateTaggedFieldsSchemaForVersion(StructSpec struct,
-            short version, CodeBuffer buffer) throws Exception {
+            short version, CodeBuffer buffer) {
         headerGenerator.addStaticImport(MessageGenerator.TAGGED_FIELDS_SECTION_CLASS);
 
         // Find the last valid tagged field index.
@@ -317,10 +317,7 @@ final class SchemaGenerator {
                         fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
             }
         } else if (type.isStruct()) {
-            if (nullable) {
-                throw new RuntimeException("Type " + type + " cannot be nullable.");
-            }
-            return String.format("%s.SCHEMA_%d", type.toString(),
+            return String.format("%s.SCHEMA_%d", type,
                 floorVersion(type.toString(), version));
         } else {
             throw new RuntimeException("Unsupported type " + type);
@@ -342,7 +339,7 @@ final class SchemaGenerator {
      * @param className     The class name.
      * @param buffer        The destination buffer.
      */
-    void writeSchema(String className, CodeBuffer buffer) throws Exception {
+    void writeSchema(String className, CodeBuffer buffer) {
         MessageInfo messageInfo = messages.get(className);
         Versions versions = messageInfo.versions;
 

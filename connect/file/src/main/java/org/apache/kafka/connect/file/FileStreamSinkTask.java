@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +69,7 @@ public class FileStreamSinkTask extends SinkTask {
                 outputStream = new PrintStream(
                     Files.newOutputStream(Paths.get(filename), StandardOpenOption.CREATE, StandardOpenOption.APPEND),
                     false,
-                    StandardCharsets.UTF_8.name());
+                    StandardCharsets.UTF_8);
             } catch (IOException e) {
                 throw new ConnectException("Couldn't find or create file '" + filename + "' for FileStreamSinkTask", e);
             }

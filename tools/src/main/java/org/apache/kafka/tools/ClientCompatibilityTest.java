@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -50,6 +46,12 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +59,6 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -65,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -289,13 +291,13 @@ public class ClientCompatibilityTest {
             tryFeature("createTopics", testConfig.createTopicsSupported,
                 () -> {
                     try {
-                        client.createTopics(Collections.singleton(
+                        client.createTopics(Set.of(
                             new NewTopic("newtopic", 1, (short) 1))).all().get();
                     } catch (ExecutionException e) {
                         throw e.getCause();
                     }
                 },
-                () ->  createTopicsResultTest(client, Collections.singleton("newtopic"))
+                () ->  createTopicsResultTest(client, Set.of("newtopic"))
             );
 
             while (true) {
@@ -335,7 +337,7 @@ public class ClientCompatibilityTest {
                     );
 
                     Map<ConfigResource, Config> brokerConfig =
-                        client.describeConfigs(Collections.singleton(configResource)).all().get();
+                        client.describeConfigs(Set.of(configResource)).all().get();
 
                     if (brokerConfig.get(configResource).entries().isEmpty()) {
                         throw new KafkaException("Expected to see config entries, but got zero entries");
@@ -415,7 +417,7 @@ public class ClientCompatibilityTest {
             new ClientCompatibilityTestDeserializer(testConfig.expectClusterId);
         try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer)) {
             final List<PartitionInfo> partitionInfos = consumer.partitionsFor(testConfig.topic);
-            if (partitionInfos.size() < 1)
+            if (partitionInfos.isEmpty())
                 throw new RuntimeException("Expected at least one partition for topic " + testConfig.topic);
             final Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
             final LinkedList<TopicPartition> topicPartitions = new LinkedList<>();

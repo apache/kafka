@@ -17,17 +17,12 @@
 
 package org.apache.kafka.common.acl;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.HashMap;
 import java.util.Locale;
 
 /**
  * Represents whether an ACL grants or denies permissions.
- *
- * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
-@InterfaceStability.Evolving
 public enum AclPermissionType {
     /**
      * Represents any AclPermissionType which this client cannot understand,
@@ -50,7 +45,7 @@ public enum AclPermissionType {
      */
     ALLOW((byte) 3);
 
-    private final static HashMap<Byte, AclPermissionType> CODE_TO_VALUE = new HashMap<>();
+    private static final HashMap<Byte, AclPermissionType> CODE_TO_VALUE = new HashMap<>();
 
     static {
         for (AclPermissionType permissionType : AclPermissionType.values()) {

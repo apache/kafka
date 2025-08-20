@@ -33,15 +33,16 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
 
@@ -58,12 +59,14 @@ public final class SnapshotFileReader implements AutoCloseable {
     private FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
     private final MetadataRecordSerde serde = new MetadataRecordSerde();
+    private long lastOffset = -1L;
+    private volatile OptionalLong highWaterMark = OptionalLong.empty();
 
     public SnapshotFileReader(String snapshotPath, RaftClient.Listener<ApiMessageAndVersion> listener) {
         this.snapshotPath = snapshotPath;
         this.listener = listener;
         this.queue = new KafkaEventQueue(Time.SYSTEM,
-            new LogContext("[snapshotReaderQueue] "), "snapshotReaderQueue_");
+            new LogContext("[snapshotReaderQueue] "), "snapshotReaderQueue_", new ShutdownEvent());
         this.caughtUpFuture = new CompletableFuture<>();
     }
 
@@ -93,6 +96,10 @@ public final class SnapshotFileReader implements AutoCloseable {
             return;
         }
         FileChannelRecordBatch batch = batchIterator.next();
+        lastOffset = batch.lastOffset();
+        if (!batchIterator.hasNext()) {
+            highWaterMark = OptionalLong.of(lastOffset);
+        }
         if (batch.isControlBatch()) {
             handleControlBatch(batch);
         } else {
@@ -116,9 +123,12 @@ public final class SnapshotFileReader implements AutoCloseable {
         });
     }
 
+    public OptionalLong highWaterMark() {
+        return highWaterMark;
+    }
+
     private void handleControlBatch(FileChannelRecordBatch batch) {
-        for (Iterator<Record> iter = batch.iterator(); iter.hasNext(); ) {
-            Record record = iter.next();
+        for (Record record : batch) {
             try {
                 short typeId = ControlRecordType.parseTypeId(record.key());
                 ControlRecordType type = ControlRecordType.fromTypeId(typeId);
@@ -154,7 +164,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         }
         listener.handleCommit(
             MemoryBatchReader.of(
-                Collections.singletonList(
+                List.of(
                     Batch.data(
                         batch.baseOffset(),
                         batch.partitionLeaderEpoch(),
@@ -174,31 +184,29 @@ public final class SnapshotFileReader implements AutoCloseable {
         } else {
             caughtUpFuture.completeExceptionally(new RuntimeException(reason));
         }
-        queue.beginShutdown(reason, new EventQueue.Event() {
-            @Override
-            public void run() throws Exception {
-                listener.beginShutdown();
-                if (fileRecords != null) {
-                    fileRecords.close();
-                    fileRecords = null;
-                }
-                batchIterator = null;
-            }
+        queue.beginShutdown(reason);
+    }
 
-            @Override
-            public void handleException(Throwable e) {
-                log.error("shutdown error", e);
+    class ShutdownEvent implements EventQueue.Event {
+        @Override
+        public void run() throws Exception {
+
+            if (fileRecords != null) {
+                fileRecords.close();
+                fileRecords = null;
             }
-        });
+            batchIterator = null;
+        }
+
+        @Override
+        public void handleException(Throwable e) {
+            log.error("shutdown error", e);
+        }
     }
 
     @Override
     public void close() throws Exception {
         beginShutdown("closing");
         queue.close();
-    }
-
-    public CompletableFuture<Void> caughtUpFuture() {
-        return caughtUpFuture;
     }
 }

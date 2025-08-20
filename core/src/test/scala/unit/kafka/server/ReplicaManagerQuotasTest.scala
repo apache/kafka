@@ -19,16 +19,21 @@ package kafka.server
 import java.io.File
 import java.util.{Collections, Optional, Properties}
 import kafka.cluster.{Partition, PartitionTest}
-import kafka.log.{LogManager, LogOffsetSnapshot, UnifiedLog}
+import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils._
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.KRaftVersion
+import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
+import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -38,7 +43,7 @@ import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 import scala.jdk.CollectionConverters._
 
 class ReplicaManagerQuotasTest {
-  val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, new Properties()))
+  val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps(_, new Properties()))
   val time = new MockTime
   val metrics = new Metrics
   val record = new SimpleRecord("some-data-in-a-message".getBytes())
@@ -65,7 +70,7 @@ class ReplicaManagerQuotasTest {
       .thenReturn(true)
 
     val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
-    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
+    val fetch = replicaManager.readFromLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(1, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with only one throttled, we should get the first")
     assertEquals(0, fetch.find(_._1 == topicIdPartition2).get._2.info.records.batches.asScala.size,
@@ -83,7 +88,7 @@ class ReplicaManagerQuotasTest {
       .thenReturn(true)
 
     val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
-    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
+    val fetch = replicaManager.readFromLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(0, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with both throttled, we should get no messages")
     assertEquals(0, fetch.find(_._1 == topicIdPartition2).get._2.info.records.batches.asScala.size,
@@ -101,7 +106,7 @@ class ReplicaManagerQuotasTest {
       .thenReturn(false)
 
     val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
-    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
+    val fetch = replicaManager.readFromLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(1, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with both non-throttled, we should get both messages")
     assertEquals(1, fetch.find(_._1 == topicIdPartition2).get._2.info.records.batches.asScala.size,
@@ -119,7 +124,7 @@ class ReplicaManagerQuotasTest {
       .thenReturn(true)
 
     val fetchParams = PartitionTest.followerFetchParams(followerReplicaId)
-    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
+    val fetch = replicaManager.readFromLog(fetchParams, fetchInfo, quota, readFromPurgatory = false)
     assertEquals(1, fetch.find(_._1 == topicIdPartition1).get._2.info.records.batches.asScala.size,
       "Given two partitions, with only one throttled, we should get the first")
 
@@ -135,7 +140,7 @@ class ReplicaManagerQuotasTest {
     when(quota.isQuotaExceeded).thenReturn(true)
 
     val fetchParams = PartitionTest.consumerFetchParams()
-    val fetch = replicaManager.readFromLocalLog(fetchParams, fetchInfo, quota, readFromPurgatory = false).toMap
+    val fetch = replicaManager.readFromLog(fetchParams, fetchInfo, quota, readFromPurgatory = false).toMap
     assertEquals(1, fetch(topicIdPartition1).info.records.batches.asScala.size,
       "Replication throttled partitions should return data for consumer fetch")
     assertEquals(1, fetch(topicIdPartition2).info.records.batches.asScala.size,
@@ -146,14 +151,14 @@ class ReplicaManagerQuotasTest {
   def testCompleteInDelayedFetchWithReplicaThrottling(): Unit = {
     // Set up DelayedFetch where there is data to return to a follower replica, either in-sync or out of sync
     def setupDelayedFetch(isReplicaInSync: Boolean): DelayedFetch = {
-      val endOffsetMetadata = LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
+      val endOffsetMetadata = new LogOffsetMetadata(100L, 0L, 500)
       val partition: Partition = mock(classOf[Partition])
 
-      val offsetSnapshot = LogOffsetSnapshot(
-        logStartOffset = 0L,
-        logEndOffset = endOffsetMetadata,
-        highWatermark = endOffsetMetadata,
-        lastStableOffset = endOffsetMetadata)
+      val offsetSnapshot = new LogOffsetSnapshot(
+        0L,
+        endOffsetMetadata,
+        endOffsetMetadata,
+        endOffsetMetadata)
       when(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
           .thenReturn(offsetSnapshot)
 
@@ -166,16 +171,17 @@ class ReplicaManagerQuotasTest {
       when(partition.getReplica(1)).thenReturn(None)
 
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
-         relativePositionInSegment = 250), new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = 1,
-        maxWaitMs = 600,
-        minBytes = 1,
-        maxBytes = 1000,
-        isolation = FetchLogEnd,
-        clientMetadata = None
+      val fetchPartitionStatus = FetchPartitionStatus(
+        new LogOffsetMetadata(50L, 0L, 250),
+        new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
+      val fetchParams = new FetchParams(
+        1,
+        1,
+        600,
+        1,
+        1000,
+        FetchIsolation.LOG_END,
+        Optional.empty()
       )
 
       new DelayedFetch(
@@ -198,16 +204,16 @@ class ReplicaManagerQuotasTest {
     // Set up DelayedFetch where there is data to return to a consumer, either for the current segment or an older segment
     def setupDelayedFetch(isFetchFromOlderSegment: Boolean): DelayedFetch = {
       val endOffsetMetadata = if (isFetchFromOlderSegment)
-        LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
+        new LogOffsetMetadata(100L, 0L, 500)
       else
-        LogOffsetMetadata(messageOffset = 150L, segmentBaseOffset = 50L, relativePositionInSegment = 500)
+        new LogOffsetMetadata(150L, 50L, 500)
       val partition: Partition = mock(classOf[Partition])
 
-      val offsetSnapshot = LogOffsetSnapshot(
-        logStartOffset = 0L,
-        logEndOffset = endOffsetMetadata,
-        highWatermark = endOffsetMetadata,
-        lastStableOffset = endOffsetMetadata)
+      val offsetSnapshot = new LogOffsetSnapshot(
+        0L,
+        endOffsetMetadata,
+        endOffsetMetadata,
+        endOffsetMetadata)
       when(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
         .thenReturn(offsetSnapshot)
 
@@ -216,16 +222,17 @@ class ReplicaManagerQuotasTest {
         .thenReturn(partition)
 
       val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
-        relativePositionInSegment = 250), new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
-      val fetchParams = FetchParams(
-        requestVersion = ApiKeys.FETCH.latestVersion,
-        replicaId = FetchRequest.CONSUMER_REPLICA_ID,
-        maxWaitMs = 600,
-        minBytes = 1,
-        maxBytes = 1000,
-        isolation = FetchHighWatermark,
-        clientMetadata = None
+      val fetchPartitionStatus = FetchPartitionStatus(
+        new LogOffsetMetadata(50L, 0L, 250),
+        new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
+      val fetchParams = new FetchParams(
+        FetchRequest.CONSUMER_REPLICA_ID,
+        -1,
+        600L,
+        1,
+        1000,
+        FetchIsolation.HIGH_WATERMARK,
+        Optional.empty()
       )
 
       new DelayedFetch(
@@ -253,32 +260,33 @@ class ReplicaManagerQuotasTest {
     when(log.logEndOffset).thenReturn(20L)
     when(log.highWatermark).thenReturn(5)
     when(log.lastStableOffset).thenReturn(5)
-    when(log.logEndOffsetMetadata).thenReturn(LogOffsetMetadata(20L))
-    when(log.topicId).thenReturn(Some(topicId))
+    when(log.logEndOffsetMetadata).thenReturn(new LogOffsetMetadata(20L))
+    when(log.topicId).thenReturn(Optional.of(topicId))
+    when(log.config).thenReturn(new LogConfig(Collections.emptyMap()))
 
     //if we ask for len 1 return a message
     when(log.read(anyLong,
-      maxLength = AdditionalMatchers.geq(1),
-      isolation = any[FetchIsolation],
-      minOneMessage = anyBoolean)).thenReturn(
-      FetchDataInfo(
-        LogOffsetMetadata(0L, 0L, 0),
-        MemoryRecords.withRecords(CompressionType.NONE, record)
+      AdditionalMatchers.geq(1),
+      any[FetchIsolation],
+      anyBoolean)).thenReturn(
+      new FetchDataInfo(
+        new LogOffsetMetadata(0L, 0L, 0),
+        MemoryRecords.withRecords(Compression.NONE, record)
       ))
 
     //if we ask for len = 0, return 0 messages
     when(log.read(anyLong,
-      maxLength = ArgumentMatchers.eq(0),
-      isolation = any[FetchIsolation],
-      minOneMessage = anyBoolean)).thenReturn(
-      FetchDataInfo(
-        LogOffsetMetadata(0L, 0L, 0),
+      ArgumentMatchers.eq(0),
+      any[FetchIsolation],
+      anyBoolean)).thenReturn(
+      new FetchDataInfo(
+        new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY
       ))
 
     when(log.maybeIncrementHighWatermark(
       any[LogOffsetMetadata]
-    )).thenReturn(None)
+    )).thenReturn(Optional.empty)
 
     //Create log manager
     val logManager: LogManager = mock(classOf[LogManager])
@@ -290,7 +298,7 @@ class ReplicaManagerQuotasTest {
     val alterIsrManager: AlterPartitionManager = mock(classOf[AlterPartitionManager])
 
     val leaderBrokerId = configs.head.brokerId
-    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")
     replicaManager = new ReplicaManager(
       metrics = metrics,
       config = configs.head,
@@ -298,7 +306,7 @@ class ReplicaManagerQuotasTest {
       scheduler = scheduler,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(leaderBrokerId, configs.head.interBrokerProtocolVersion),
+      metadataCache = new KRaftMetadataCache(leaderBrokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
       alterPartitionManager = alterIsrManager)
 

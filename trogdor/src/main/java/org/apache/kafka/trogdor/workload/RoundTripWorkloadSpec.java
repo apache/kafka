@@ -17,14 +17,15 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
-import java.util.Collections;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The specification for a workload that sends messages to a broker and then
@@ -122,7 +123,7 @@ public class RoundTripWorkloadSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(clientNode);
+        return topology -> Set.of(clientNode);
     }
 
     @Override

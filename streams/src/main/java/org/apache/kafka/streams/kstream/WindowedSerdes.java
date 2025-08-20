@@ -23,15 +23,10 @@ import org.apache.kafka.common.serialization.Serializer;
 
 public class WindowedSerdes {
 
-    static public class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+    public static class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
         // Default constructor needed for reflection object creation
         public TimeWindowedSerde() {
             super(new TimeWindowedSerializer<>(), new TimeWindowedDeserializer<>());
-        }
-
-        @Deprecated
-        public TimeWindowedSerde(final Serde<T> inner) {
-            super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer()));
         }
 
         // This constructor can be used for serialize/deserialize a windowed topic
@@ -41,13 +36,13 @@ public class WindowedSerdes {
 
         // Helper method for users to specify whether the input topic is a changelog topic for deserializing the key properly.
         public TimeWindowedSerde<T> forChangelog(final boolean isChangelogTopic) {
-            final TimeWindowedDeserializer deserializer = (TimeWindowedDeserializer) this.deserializer();
+            final TimeWindowedDeserializer<T> deserializer = (TimeWindowedDeserializer<T>) this.deserializer();
             deserializer.setIsChangelogTopic(isChangelogTopic);
             return this;
         }
     }
 
-    static public class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+    public static class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
         // Default constructor needed for reflection object creation
         public SessionWindowedSerde() {
             super(new SessionWindowedSerializer<>(), new SessionWindowedDeserializer<>());
@@ -59,28 +54,21 @@ public class WindowedSerdes {
     }
 
     /**
-     * Construct a {@code TimeWindowedSerde} object for the specified inner class type.
-     */
-    @Deprecated
-    static public <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type) {
-        return new TimeWindowedSerde<>(Serdes.serdeFrom(type));
-    }
-
-    /**
      * Construct a {@code TimeWindowedSerde} object to deserialize changelog topic
      * for the specified inner class type and window size.
      */
-    static public <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type, final long windowSize) {
+    public static <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type, final long windowSize) {
         return new TimeWindowedSerde<>(Serdes.serdeFrom(type), windowSize);
     }
 
     /**
      * Construct a {@code SessionWindowedSerde} object for the specified inner class type.
      */
-    static public <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
+    public static <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
         return new SessionWindowedSerde<>(Serdes.serdeFrom(type));
     }
 
+    @SuppressWarnings("rawtypes")
     static void verifyInnerSerializerNotNull(final Serializer inner,
                                              final Serializer wrapper) {
         if (inner == null) {
@@ -90,6 +78,7 @@ public class WindowedSerdes {
         }
     }
 
+    @SuppressWarnings("rawtypes")
     static void verifyInnerDeserializerNotNull(final Deserializer inner,
                                                final Deserializer wrapper) {
         if (inner == null) {

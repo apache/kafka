@@ -17,11 +17,12 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -39,7 +40,7 @@ public class NetworkPartitionFaultSpec extends TaskSpec {
                          @JsonProperty("durationMs") long durationMs,
                          @JsonProperty("partitions") List<List<String>> partitions) {
         super(startMs, durationMs);
-        this.partitions = partitions == null ? new ArrayList<List<String>>() : partitions;
+        this.partitions = partitions == null ? new ArrayList<>() : partitions;
     }
 
     @JsonProperty

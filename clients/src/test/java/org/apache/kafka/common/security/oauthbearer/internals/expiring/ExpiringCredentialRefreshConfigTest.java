@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.expiring;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.SaslConfigs;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ExpiringCredentialRefreshConfigTest {
     @Test

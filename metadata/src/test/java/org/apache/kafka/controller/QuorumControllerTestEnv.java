@@ -17,10 +17,10 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.metadata.FakeKafkaConfigSchema;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
@@ -34,26 +34,26 @@ import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 public class QuorumControllerTestEnv implements AutoCloseable {
     private final List<QuorumController> controllers;
-    private final LocalLogManagerTestEnv logEnv;
+    private final MockRaftClientTestEnv clientEnv;
     private final Map<Integer, MockFaultHandler> fatalFaultHandlers = new HashMap<>();
+    private final Map<Integer, MockFaultHandler> nonFatalFaultHandlers = new HashMap<>();
 
     public static class Builder {
-        private final LocalLogManagerTestEnv logEnv;
+        private final MockRaftClientTestEnv clientEnv;
         private Consumer<QuorumController.Builder> controllerBuilderInitializer = __ -> { };
         private OptionalLong sessionTimeoutMillis = OptionalLong.empty();
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-                fromVersion(MetadataVersion.latest(), "test-provided version");
+                fromVersion(MetadataVersion.latestTesting(), "test-provided version");
 
-        public Builder(LocalLogManagerTestEnv logEnv) {
-            this.logEnv = logEnv;
+        public Builder(MockRaftClientTestEnv clientEnv) {
+            this.clientEnv = clientEnv;
         }
 
         public Builder setControllerBuilderInitializer(Consumer<QuorumController.Builder> controllerBuilderInitializer) {
@@ -78,41 +78,53 @@ public class QuorumControllerTestEnv implements AutoCloseable {
 
         public QuorumControllerTestEnv build() throws Exception {
             return new QuorumControllerTestEnv(
-                logEnv,
+                clientEnv,
                 controllerBuilderInitializer,
                 sessionTimeoutMillis,
                 leaderImbalanceCheckIntervalNs,
+                bootstrapMetadata.metadataVersion().isElrSupported(),
                 bootstrapMetadata);
         }
     }
 
     private QuorumControllerTestEnv(
-        LocalLogManagerTestEnv logEnv,
+        MockRaftClientTestEnv clientEnv,
         Consumer<QuorumController.Builder> controllerBuilderInitializer,
         OptionalLong sessionTimeoutMillis,
         OptionalLong leaderImbalanceCheckIntervalNs,
+        boolean eligibleLeaderReplicasEnabled,
         BootstrapMetadata bootstrapMetadata
     ) throws Exception {
-        this.logEnv = logEnv;
-        int numControllers = logEnv.logManagers().size();
+        this.clientEnv = clientEnv;
+        int numControllers = clientEnv.raftClients().size();
         this.controllers = new ArrayList<>(numControllers);
         try {
-            ApiVersions apiVersions = new ApiVersions();
-            List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().collect(Collectors.toList());
+            List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().toList();
             for (int nodeId = 0; nodeId < numControllers; nodeId++) {
-                QuorumController.Builder builder = new QuorumController.Builder(nodeId, logEnv.clusterId());
-                builder.setRaftClient(logEnv.logManagers().get(nodeId));
+                QuorumController.Builder builder = new QuorumController.Builder(nodeId, clientEnv.clusterId());
+                builder.setRaftClient(clientEnv.raftClients().get(nodeId));
+                if (eligibleLeaderReplicasEnabled) {
+                    bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(
+                        EligibleLeaderReplicasVersion.FEATURE_NAME,
+                        EligibleLeaderReplicasVersion.ELRV_1.featureLevel()
+                    );
+                }
                 builder.setBootstrapMetadata(bootstrapMetadata);
                 builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
-                builder.setQuorumFeatures(new QuorumFeatures(nodeId, apiVersions, QuorumFeatures.defaultFeatureMap(), nodeIds));
-                sessionTimeoutMillis.ifPresent(timeout -> {
-                    builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
-                });
+                builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultSupportedFeatureMap(true), nodeIds));
+                sessionTimeoutMillis.ifPresent(timeout ->
+                    builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS))
+                );
                 MockFaultHandler fatalFaultHandler = new MockFaultHandler("fatalFaultHandler");
                 builder.setFatalFaultHandler(fatalFaultHandler);
                 fatalFaultHandlers.put(nodeId, fatalFaultHandler);
+                MockFaultHandler nonFatalFaultHandler = new MockFaultHandler("nonFatalFaultHandler");
+                builder.setNonFatalFaultHandler(nonFatalFaultHandler);
+                builder.setConfigSchema(FakeKafkaConfigSchema.INSTANCE);
+                nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
-                this.controllers.add(builder.build());
+                QuorumController controller = builder.build();
+                this.controllers.add(controller);
             }
         } catch (Exception e) {
             close();
@@ -121,9 +133,13 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     }
 
     QuorumController activeController() throws InterruptedException {
+        return activeController(false);
+    }
+
+    QuorumController activeController(boolean waitForActivation) throws InterruptedException {
         AtomicReference<QuorumController> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
-            LeaderAndEpoch leader = logEnv.leaderAndEpoch();
+            LeaderAndEpoch leader = clientEnv.leaderAndEpoch();
             for (QuorumController controller : controllers) {
                 if (OptionalInt.of(controller.nodeId()).equals(leader.leaderId()) &&
                     controller.curClaimEpoch() == leader.epoch()) {
@@ -136,6 +152,18 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 throw new RuntimeException(String.format("Expected to see %s as leader", leader));
             }
         });
+
+        if (waitForActivation) {
+            try {
+                // ControllerActivation happens after curClaimEpoch is set, so we need to put something on
+                // the end of the queue and wait for it to complete before returning the active controller.
+                value.get()
+                    .appendReadEvent("wait for activation", OptionalLong.empty(), () -> null)
+                    .get(20000, TimeUnit.MILLISECONDS);
+            } catch (Throwable t) {
+                throw new RuntimeException("Failed while waiting for controller activation", t);
+            }
+        }
 
         return value.get();
     }
@@ -163,6 +191,9 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             controller.close();
         }
         for (MockFaultHandler faultHandler : fatalFaultHandlers.values()) {
+            faultHandler.maybeRethrowFirstException();
+        }
+        for (MockFaultHandler faultHandler : nonFatalFaultHandlers.values()) {
             faultHandler.maybeRethrowFirstException();
         }
     }

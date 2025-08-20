@@ -41,4 +41,3 @@ public class ShortConverterTest extends NumberConverterTest<Short> {
         return new ShortSerializer();
     }
 }
-

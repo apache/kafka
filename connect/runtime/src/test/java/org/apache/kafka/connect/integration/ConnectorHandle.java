@@ -18,18 +18,17 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -100,16 +99,6 @@ public class ConnectorHandle {
      */
     public Collection<TaskHandle> tasks() {
         return taskHandles.values();
-    }
-
-    /**
-     * Delete the task handle for this task id.
-     *
-     * @param taskId the task id.
-     */
-    public void deleteTask(String taskId) {
-        log.info("Removing handle for {} task in connector {}", taskId, connectorName);
-        taskHandles.remove(taskId);
     }
 
     /**
@@ -292,8 +281,8 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStarts(expectedStarts))
-                .collect(Collectors.toList())
-                : Collections.emptyList();
+                .toList()
+                : List.of();
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
 
@@ -301,8 +290,8 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStarts(expectedTasksStarts.get(task.taskId())))
-                .collect(Collectors.toList())
-                : Collections.emptyList();
+                .toList()
+                : List.of();
         return startAndStopCounter.expectedStarts(expectedStarts, taskLatches);
     }
 
@@ -354,8 +343,8 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStops(expectedStops))
-                .collect(Collectors.toList())
-                : Collections.emptyList();
+                .toList()
+                : List.of();
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
 
@@ -363,8 +352,8 @@ public class ConnectorHandle {
         List<StartAndStopLatch> taskLatches = includeTasks
                 ? taskHandles.values().stream()
                 .map(task -> task.expectedStops(expectedTasksStops.get(task.taskId())))
-                .collect(Collectors.toList())
-                : Collections.emptyList();
+                .toList()
+                : List.of();
         return startAndStopCounter.expectedStops(expectedStops, taskLatches);
     }
 

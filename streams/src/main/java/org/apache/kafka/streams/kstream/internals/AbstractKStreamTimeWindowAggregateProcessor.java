@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
-import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emitFinalLatencySensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emittedRecordsSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
@@ -40,7 +35,13 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+
 import org.slf4j.Logger;
+
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
+import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emitFinalLatencySensor;
+import static org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics.emittedRecordsSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg> extends ContextualProcessor<KIn, VIn, Windowed<KIn>, Change<VAgg>> {
 
@@ -200,31 +201,32 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
                               final long emitRangeUpperBound) {
         final long startMs = time.milliseconds();
 
-        final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit = windowStore
-            .fetchAll(emitRangeLowerBound, emitRangeUpperBound);
+        try (final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit
+                 = windowStore.fetchAll(emitRangeLowerBound, emitRangeUpperBound)) {
 
-        int emittedCount = 0;
-        while (windowToEmit.hasNext()) {
-            emittedCount++;
-            final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
+            int emittedCount = 0;
+            while (windowToEmit.hasNext()) {
+                emittedCount++;
+                final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
 
-            tupleForwarder.maybeForward(
-                record.withKey(kv.key)
-                    .withValue(new Change<>(kv.value.value(), null))
-                    .withTimestamp(kv.value.timestamp())
-                    .withHeaders(record.headers()));
+                tupleForwarder.maybeForward(
+                    record.withKey(kv.key)
+                        .withValue(new Change<>(kv.value.value(), null))
+                        .withTimestamp(kv.value.timestamp())
+                        .withHeaders(record.headers()));
+            }
+            emittedRecordsSensor.record(emittedCount);
+            emitFinalLatencySensor.record(time.milliseconds() - startMs);
         }
-        emittedRecordsSensor.record(emittedCount);
-        emitFinalLatencySensor.record(time.milliseconds() - startMs);
 
         lastEmitWindowCloseTime = windowCloseTime;
         internalProcessorContext.addProcessorMetadataKeyValue(storeName, windowCloseTime);
     }
 
     // upper and lower bound are inclusive; the bounds could be negative in which case we would skip range fetching and emitting
-    abstract protected long emitRangeLowerBound(final long windowCloseTime);
+    protected abstract long emitRangeLowerBound(final long windowCloseTime);
 
-    abstract protected long emitRangeUpperBound(final long windowCloseTime);
+    protected abstract long emitRangeUpperBound(final long windowCloseTime);
 
-    abstract protected boolean shouldRangeFetch(final long emitRangeLowerBound, final long emitRangeUpperBound);
+    protected abstract boolean shouldRangeFetch(final long emitRangeLowerBound, final long emitRangeUpperBound);
 }

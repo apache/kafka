@@ -25,7 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-abstract public class AbstractStoreBuilder<K, V, T extends StateStore> implements StoreBuilder<T> {
+public abstract class AbstractStoreBuilder<K, V, T extends StateStore> implements StoreBuilder<T> {
     protected Map<String, String> logConfig = new HashMap<>();
     protected final String name;
     final Serde<K> keySerde;

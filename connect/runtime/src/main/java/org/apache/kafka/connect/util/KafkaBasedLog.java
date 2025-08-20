@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +47,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -53,6 +54,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 
@@ -76,6 +78,10 @@ import java.util.function.Supplier;
  *     calling class keeps track of state based on the log and only writes to it when consume callbacks are invoked
  *     and only reads it in {@link #readToEnd(Callback)} callbacks then no additional synchronization will be required.
  * </p>
+ * <p>
+ *     This is a useful utility that has been used outside of Connect. This isn't in Connect's public API,
+ *     but we've tried to maintain the method signatures and backward compatibility since early Kafka versions.
+ * </p>
  */
 public class KafkaBasedLog<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaBasedLog.class);
@@ -97,39 +103,13 @@ public class KafkaBasedLog<K, V> {
     private Consumer<K, V> consumer;
     private Optional<Producer<K, V>> producer;
     private TopicAdmin admin;
-
-    private Thread thread;
+    // Visible for testing
+    Thread thread;
     private boolean stopRequested;
     private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private final java.util.function.Consumer<TopicAdmin> initializer;
-
-    /**
-     * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
-     * {@link #start()} is invoked.
-     *
-     * @param topic the topic to treat as a log
-     * @param producerConfigs configuration options to use when creating the internal producer. At a minimum this must
-     *                        contain compatible serializer settings for the generic types used on this class. Some
-     *                        setting, such as the number of acks, will be overridden to ensure correct behavior of this
-     *                        class.
-     * @param consumerConfigs configuration options to use when creating the internal consumer. At a minimum this must
-     *                        contain compatible serializer settings for the generic types used on this class. Some
-     *                        setting, such as the auto offset reset policy, will be overridden to ensure correct
-     *                        behavior of this class.
-     * @param consumedCallback callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
-     * @param time Time interface
-     * @param initializer the component that should be run when this log is {@link #start() started}; may be null
-     * @deprecated Replaced by {@link #KafkaBasedLog(String, Map, Map, Supplier, Callback, Time, java.util.function.Consumer)}
-     */
-    @Deprecated
-    public KafkaBasedLog(String topic,
-                         Map<String, Object> producerConfigs,
-                         Map<String, Object> consumerConfigs,
-                         Callback<ConsumerRecord<K, V>> consumedCallback,
-                         Time time,
-                         Runnable initializer) {
-        this(topic, producerConfigs, consumerConfigs, () -> null, consumedCallback, time, initializer != null ? admin -> initializer.run() : null);
-    }
+    // initialized as false for backward compatibility
+    private volatile boolean reportErrorsToCallback = false;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -151,12 +131,12 @@ public class KafkaBasedLog<K, V> {
      * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
      */
     public KafkaBasedLog(String topic,
-            Map<String, Object> producerConfigs,
-            Map<String, Object> consumerConfigs,
-            Supplier<TopicAdmin> topicAdminSupplier,
-            Callback<ConsumerRecord<K, V>> consumedCallback,
-            Time time,
-            java.util.function.Consumer<TopicAdmin> initializer) {
+                         Map<String, Object> producerConfigs,
+                         Map<String, Object> consumerConfigs,
+                         Supplier<TopicAdmin> topicAdminSupplier,
+                         Callback<ConsumerRecord<K, V>> consumedCallback,
+                         Time time,
+                         java.util.function.Consumer<TopicAdmin> initializer) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
@@ -173,7 +153,7 @@ public class KafkaBasedLog<K, V> {
         // as it will not take records from currently-open transactions into account. We want to err on the side of caution in that
         // case: when users request a read to the end of the log, we will read up to the point where the latest offsets visible to the
         // consumer are at least as high as the (possibly-part-of-a-transaction) end offsets of the topic.
-        this.requireAdminForOffsets = IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+        this.requireAdminForOffsets = IsolationLevel.READ_COMMITTED.toString()
                 .equals(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG));
     }
 
@@ -190,6 +170,7 @@ public class KafkaBasedLog<K, V> {
      * @param consumedCallback   callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time               Time interface
      * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
+     * @param readTopicPartition A predicate which returns true for each {@link TopicPartition} that should be read
      * @return a {@link KafkaBasedLog} using the given clients
      */
     public static <K, V> KafkaBasedLog<K, V> withExistingClients(String topic,
@@ -198,9 +179,12 @@ public class KafkaBasedLog<K, V> {
                                                                  TopicAdmin topicAdmin,
                                                                  Callback<ConsumerRecord<K, V>> consumedCallback,
                                                                  Time time,
-                                                                 java.util.function.Consumer<TopicAdmin> initializer) {
+                                                                 java.util.function.Consumer<TopicAdmin> initializer,
+                                                                 Predicate<TopicPartition> readTopicPartition
+    ) {
         Objects.requireNonNull(topicAdmin);
-        return new KafkaBasedLog<K, V>(topic,
+        Objects.requireNonNull(readTopicPartition);
+        return new KafkaBasedLog<>(topic,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 () -> topicAdmin,
@@ -217,11 +201,29 @@ public class KafkaBasedLog<K, V> {
             protected Consumer<K, V> createConsumer() {
                 return consumer;
             }
+
+            @Override
+            protected boolean readPartition(TopicPartition topicPartition) {
+                return readTopicPartition.test(topicPartition);
+            }
+
+            @Override
+            public void stop() {
+                super.stop();
+                // Close the clients here, if the thread that was responsible for closing them was never started.
+                Utils.closeQuietly(producer, "producer");
+                Utils.closeQuietly(consumer, "consumer");
+            }
         };
     }
 
     public void start() {
-        log.info("Starting KafkaBasedLog with topic " + topic);
+        start(false);
+    }
+
+    public void start(boolean reportErrorsToCallback) {
+        this.reportErrorsToCallback = reportErrorsToCallback;
+        log.info("Starting KafkaBasedLog with topic {} reportErrorsToCallback={}", topic, reportErrorsToCallback);
 
         // Create the topic admin client and initialize the topic ...
         admin = topicAdminSupplier.get();   // may be null
@@ -229,15 +231,15 @@ public class KafkaBasedLog<K, V> {
             throw new ConnectException(
                     "Must provide a TopicAdmin to KafkaBasedLog when consumer is configured with "
                             + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to "
-                            + IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+                            + IsolationLevel.READ_COMMITTED
             );
         }
         initializer.accept(admin);
 
         // Then create the producer and consumer
         producer = Optional.ofNullable(createProducer());
-        if (!producer.isPresent())
-            log.trace("Creating read-only KafkaBasedLog for topic " + topic);
+        if (producer.isEmpty())
+            log.trace("Creating read-only KafkaBasedLog for topic {}", topic);
         consumer = createConsumer();
 
         List<TopicPartition> partitions = new ArrayList<>();
@@ -252,12 +254,20 @@ public class KafkaBasedLog<K, V> {
             partitionInfos = consumer.partitionsFor(topic);
         }
         if (partitionInfos.isEmpty())
-            throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +
+            throw new ConnectException("Could not look up partition metadata for topic '" + topic + "' in the" +
                     " allotted period. This could indicate a connectivity issue, unavailable topic partitions, or if" +
                     " this is your first use of the topic it may have taken too long to create.");
 
-        for (PartitionInfo partition : partitionInfos)
-            partitions.add(new TopicPartition(partition.topic(), partition.partition()));
+        for (PartitionInfo partition : partitionInfos) {
+            TopicPartition topicPartition = new TopicPartition(partition.topic(), partition.partition());
+            if (readPartition(topicPartition)) {
+                partitions.add(topicPartition);
+            }
+        }
+        if (partitions.isEmpty()) {
+            throw new ConnectException("Some partitions for " + topic + " exist, but no partitions matched the " +
+                    "required filter.");
+        }
         partitionCount = partitions.size();
         consumer.assign(partitions);
 
@@ -270,13 +280,13 @@ public class KafkaBasedLog<K, V> {
         thread = new WorkThread();
         thread.start();
 
-        log.info("Finished reading KafkaBasedLog for topic " + topic);
+        log.info("Finished reading KafkaBasedLog for topic {}", topic);
 
-        log.info("Started KafkaBasedLog for topic " + topic);
+        log.info("Started KafkaBasedLog for topic {}", topic);
     }
 
     public void stop() {
-        log.info("Stopping KafkaBasedLog for topic " + topic);
+        log.info("Stopping KafkaBasedLog for topic {}", topic);
 
         synchronized (this) {
             stopRequested = true;
@@ -300,7 +310,7 @@ public class KafkaBasedLog<K, V> {
         // do not close the admin client, since we don't own it
         admin = null;
 
-        log.info("Stopped KafkaBasedLog for topic " + topic);
+        log.info("Stopped KafkaBasedLog for topic {}", topic);
     }
 
     /**
@@ -308,11 +318,11 @@ public class KafkaBasedLog<K, V> {
      * Note that this checks the current offsets, reads to them, and invokes the callback regardless of whether
      * additional records have been written to the log. If the caller needs to ensure they have truly reached the end
      * of the log, they must ensure there are no other writers during this period.
-     *
+     * <p>
      * This waits until the end of all partitions has been reached.
-     *
+     * <p>
      * This method is asynchronous. If you need a synchronous version, pass an instance of
-     * {@link org.apache.kafka.connect.util.FutureCallback} as the {@param callback} parameter and wait on it to block.
+     * {@link org.apache.kafka.connect.util.FutureCallback} as the {@code callback} parameter and wait on it to block.
      *
      * @param callback the callback to invoke once the end of the log has been reached.
      */
@@ -342,12 +352,54 @@ public class KafkaBasedLog<K, V> {
         return future;
     }
 
+    /**
+     * Send a record asynchronously to the configured {@link #topic} without using a producer callback.
+     * <p>
+     * This method exists for backward compatibility reasons and delegates to the newer
+     * {@link #sendWithReceipt(Object, Object)} method that returns a future.
+     * @param key the key for the {@link ProducerRecord}
+     * @param value the value for the {@link ProducerRecord}
+     */
     public void send(K key, V value) {
-        send(key, value, null);
+        sendWithReceipt(key, value);
     }
 
+    /**
+     * Send a record asynchronously to the configured {@link #topic}.
+     * <p>
+     * This method exists for backward compatibility reasons and delegates to the newer
+     * {@link #sendWithReceipt(Object, Object, org.apache.kafka.clients.producer.Callback)} method that returns a future.
+     * @param key the key for the {@link ProducerRecord}
+     * @param value the value for the {@link ProducerRecord}
+     * @param callback the callback to invoke after completion; can be null if no callback is desired
+     */
     public void send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
-        producer.orElseThrow(() ->
+        sendWithReceipt(key, value, callback);
+    }
+
+    /**
+     * Send a record asynchronously to the configured {@link #topic} without using a producer callback.
+     * @param key the key for the {@link ProducerRecord}
+     * @param value the value for the {@link ProducerRecord}
+     *
+     * @return the future from the call to {@link Producer#send}. {@link Future#get} can be called on this returned
+     *         future if synchronous behavior is desired.
+     */
+    public Future<RecordMetadata> sendWithReceipt(K key, V value) {
+        return sendWithReceipt(key, value, null);
+    }
+
+    /**
+     * Send a record asynchronously to the configured {@link #topic}.
+     * @param key the key for the {@link ProducerRecord}
+     * @param value the value for the {@link ProducerRecord}
+     * @param callback the callback to invoke after completion; can be null if no callback is desired
+     *
+     * @return the future from the call to {@link Producer#send}. {@link Future#get} can be called on this returned
+     *         future if synchronous behavior is desired.
+     */
+    public Future<RecordMetadata> sendWithReceipt(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
+        return producer.orElseThrow(() ->
                 new IllegalStateException("This KafkaBasedLog was created in read-only mode and does not support write operations")
         ).send(new ProducerRecord<>(topic, key, value), callback);
     }
@@ -374,16 +426,31 @@ public class KafkaBasedLog<K, V> {
         return new KafkaConsumer<>(consumerConfigs);
     }
 
-    private void poll(long timeoutMs) {
+    /**
+     * Signals whether a topic partition should be read by this log. Invoked on {@link #start() startup} once
+     * for every partition found in the log's backing topic.
+     * <p>This method can be overridden by subclasses when only a subset of the assigned partitions
+     * should be read into memory. By default, all partitions are read.
+     * @param topicPartition A topic partition which could be read by this log.
+     * @return true if the partition should be read by this log, false if its contents should be ignored.
+     */
+    protected boolean readPartition(TopicPartition topicPartition) {
+        return true;
+    }
+
+    private void poll() {
         try {
-            ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(timeoutMs));
+            ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(Integer.MAX_VALUE));
             for (ConsumerRecord<K, V> record : records)
                 consumedCallback.onCompletion(null, record);
         } catch (WakeupException e) {
             // Expected on get() or stop(). The calling code should handle this
             throw e;
         } catch (KafkaException e) {
-            log.error("Error polling: " + e);
+            log.error("Error polling: ", e);
+            if (reportErrorsToCallback) {
+                consumedCallback.onCompletion(e, null);
+            }
         }
     }
 
@@ -412,7 +479,7 @@ public class KafkaBasedLog<K, V> {
                 } else {
                     log.trace("Behind end offset {} for {}; last-read offset is {}",
                             endOffset, topicPartition, lastConsumedOffset);
-                    poll(Integer.MAX_VALUE);
+                    poll();
                     break;
                 }
             }
@@ -473,13 +540,12 @@ public class KafkaBasedLog<K, V> {
         public WorkThread() {
             super("KafkaBasedLog Work Thread - " + topic);
         }
-
         @Override
         public void run() {
-            try {
-                log.trace("{} started execution", this);
-                while (true) {
-                    int numCallbacks;
+            log.trace("{} started execution", this);
+            while (true) {
+                int numCallbacks = 0;
+                try {
                     synchronized (KafkaBasedLog.this) {
                         if (stopRequested)
                             break;
@@ -492,11 +558,11 @@ public class KafkaBasedLog<K, V> {
                             log.trace("Finished read to end log for topic {}", topic);
                         } catch (TimeoutException e) {
                             log.warn("Timeout while reading log to end for topic '{}'. Retrying automatically. " +
-                                     "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
+                                "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (RetriableException | org.apache.kafka.connect.errors.RetriableException e) {
                             log.warn("Retriable error while reading log to end for topic '{}'. Retrying automatically. " +
-                                     "Reason: {}", topic, e.getMessage());
+                                "Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (WakeupException e) {
                             // Either received another get() call and need to retry reading to end of log or stop() was
@@ -515,14 +581,23 @@ public class KafkaBasedLog<K, V> {
                     }
 
                     try {
-                        poll(Integer.MAX_VALUE);
+                        poll();
                     } catch (WakeupException e) {
                         // See previous comment, both possible causes of this wakeup are handled by starting this loop again
                         continue;
                     }
+                } catch (Throwable t) {
+                    log.error("Unexpected exception in {}", this, t);
+                    synchronized (KafkaBasedLog.this) {
+                        // Only fail exactly the number of callbacks we found before triggering the read to log end
+                        // since it is possible for another write + readToEnd to sneak in the meantime which we don't
+                        // want to fail.
+                        for (int i = 0; i < numCallbacks; i++) {
+                            Callback<Void> cb = readLogEndOffsetCallbacks.poll();
+                            cb.onCompletion(t, null);
+                        }
+                    }
                 }
-            } catch (Throwable t) {
-                log.error("Unexpected exception in {}", this, t);
             }
         }
     }

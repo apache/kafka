@@ -32,13 +32,9 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
-import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 
@@ -94,12 +90,6 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         return doCount(named, materialized);
     }
 
-    @Override
-    public SessionWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
-        this.emitStrategy = emitStrategy;
-        return this;
-    }
-
     private KTable<Windowed<K>, Long> doCount(final Named named,
                                               final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, Long, SessionStore<Bytes, byte[]>> materializedInternal =
@@ -113,19 +103,24 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        return aggregateBuilder.build(
+        final StoreFactory storeFactory = new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy);
+        final long gracePeriod = windows.gracePeriodMs() + windows.inactivityGap();
+
+        return aggregateBuilder.buildWindowed(
             new NamedInternal(aggregateName),
-            materialize(materializedInternal),
+            storeFactory.storeName(),
+            gracePeriod,
             new KStreamSessionWindowAggregate<>(
                 windows,
-                materializedInternal.storeName(),
+                storeFactory,
                 emitStrategy,
                 aggregateBuilder.countInitializer,
                 aggregateBuilder.countAggregator,
                 countMerger),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            false);
     }
 
     @Override
@@ -151,7 +146,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final Aggregator<K, V, V> reduceAggregator = aggregatorForReducer(reducer);
+        final Aggregator<K, V, V> reduceAggregator = aggregatorFromReducer(reducer);
         final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, REDUCE_NAME);
         if (materializedInternal.keySerde() == null) {
@@ -162,56 +157,69 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         }
 
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
-        return aggregateBuilder.build(
+        final StoreFactory storeFactory = new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy);
+        final long gracePeriod = windows.gracePeriodMs() + windows.inactivityGap();
+
+        return aggregateBuilder.buildWindowed(
             new NamedInternal(reduceName),
-            materialize(materializedInternal),
+            storeFactory.storeName(),
+            gracePeriod,
             new KStreamSessionWindowAggregate<>(
                 windows,
-                materializedInternal.storeName(),
+                storeFactory,
                 emitStrategy,
                 aggregateBuilder.reduceInitializer,
                 reduceAggregator,
-                mergerForAggregator(reduceAggregator)
+                mergerFromAggregator(reduceAggregator)
             ),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            false);
+    }
+
+    private Aggregator<K, V, V> aggregatorFromReducer(final Reducer<V> reducer) {
+        return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
+    }
+
+    private Merger<K, V> mergerFromAggregator(final Aggregator<K, V, V> aggregator) {
+        return (aggKey, aggOne, aggTwo) -> aggregator.apply(aggKey, aggTwo, aggOne);
     }
 
     @Override
-    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                                final Aggregator<? super K, ? super V, T> aggregator,
-                                                final Merger<? super K, T> sessionMerger) {
+    public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
+                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
+                                                      final Merger<? super K, VOut> sessionMerger) {
         return aggregate(initializer, aggregator, sessionMerger, NamedInternal.empty());
     }
 
     @Override
-    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
-                                                final Aggregator<? super K, ? super V, T> aggregator,
-                                                final Merger<? super K, T> sessionMerger,
-                                                final Named named) {
+    public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
+                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
+                                                      final Merger<? super K, VOut> sessionMerger,
+                                                      final Named named) {
         return aggregate(initializer, aggregator, sessionMerger, named, Materialized.with(keySerde, null));
     }
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
-                                                  final Aggregator<? super K, ? super V, VR> aggregator,
-                                                  final Merger<? super K, VR> sessionMerger,
-                                                  final Materialized<K, VR, SessionStore<Bytes, byte[]>> materialized) {
+    public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
+                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
+                                                      final Merger<? super K, VOut> sessionMerger,
+                                                      final Materialized<K, VOut, SessionStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, aggregator, sessionMerger, NamedInternal.empty(), materialized);
     }
 
     @Override
-    public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
-                                                  final Aggregator<? super K, ? super V, VR> aggregator,
-                                                  final Merger<? super K, VR> sessionMerger,
-                                                  final Named named,
-                                                  final Materialized<K, VR, SessionStore<Bytes, byte[]>> materialized) {
+    public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
+                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
+                                                      final Merger<? super K, VOut> sessionMerger,
+                                                      final Named named,
+                                                      final Materialized<K, VOut, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materializedInternal =
+        final MaterializedInternal<K, VOut, SessionStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
@@ -219,88 +227,30 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final StoreFactory storeFactory = new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy);
+        final long gracePeriod = windows.gracePeriodMs() + windows.inactivityGap();
 
-        return aggregateBuilder.build(
+        return aggregateBuilder.buildWindowed(
             new NamedInternal(aggregateName),
-            materialize(materializedInternal),
+            storeFactory.storeName(),
+            gracePeriod,
             new KStreamSessionWindowAggregate<>(
                 windows,
-                materializedInternal.storeName(),
+                storeFactory,
                 emitStrategy,
                 initializer,
                 aggregator,
                 sessionMerger),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            false);
     }
 
-    private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
-        SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            final long retentionPeriod = materialized.retention() != null ?
-                materialized.retention().toMillis() : windows.inactivityGap() + windows.gracePeriodMs();
-
-            if ((windows.inactivityGap() + windows.gracePeriodMs()) > retentionPeriod) {
-                throw new IllegalArgumentException("The retention period of the session store "
-                                                       + materialized.storeName()
-                                                       + " must be no smaller than the session inactivity gap plus the"
-                                                       + " grace period."
-                                                       + " Got gap=[" + windows.inactivityGap() + "],"
-                                                       + " grace=[" + windows.gracePeriodMs() + "],"
-                                                       + " retention=[" + retentionPeriod + "]");
-            }
-
-            switch (materialized.storeType()) {
-                case IN_MEMORY:
-                    supplier = Stores.inMemorySessionStore(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod)
-                    );
-                    break;
-                case ROCKS_DB:
-                    supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
-                        new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                            materialized.storeName(),
-                            retentionPeriod,
-                            true) :
-                        Stores.persistentSessionStore(
-                            materialized.storeName(),
-                            Duration.ofMillis(retentionPeriod)
-                        );
-                    break;
-                default:
-                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
-            }
-        }
-
-        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde()
-        );
-
-        if (materialized.loggingEnabled()) {
-            builder.withLoggingEnabled(materialized.logConfig());
-        } else {
-            builder.withLoggingDisabled();
-        }
-
-        // do not enable cache if the emit final strategy is used
-        if (materialized.cachingEnabled() && emitStrategy.type() != EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
-            builder.withCachingEnabled();
-        } else {
-            builder.withCachingDisabled();
-        }
-
-        return builder;
+    @Override
+    public SessionWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
+        this.emitStrategy = emitStrategy;
+        return this;
     }
 
-    private Merger<K, V> mergerForAggregator(final Aggregator<K, V, V> aggregator) {
-        return (aggKey, aggOne, aggTwo) -> aggregator.apply(aggKey, aggTwo, aggOne);
-    }
-
-    private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
-        return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
-    }
 }

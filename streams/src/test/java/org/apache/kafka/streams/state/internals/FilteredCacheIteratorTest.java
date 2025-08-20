@@ -19,22 +19,23 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.GenericInMemoryKeyValueStore;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FilteredCacheIteratorTest {
 
@@ -63,25 +64,15 @@ public class FilteredCacheIteratorTest {
     private FilteredCacheIterator allIterator;
     private FilteredCacheIterator firstEntryIterator;
 
-    @Before
+    @BeforeEach
     public void before() {
         store.putAll(entries);
-        final HasNextCondition allCondition = new HasNextCondition() {
-            @Override
-            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-                return iterator.hasNext();
-            }
-        };
+        final HasNextCondition allCondition = Iterator::hasNext;
         allIterator = new FilteredCacheIterator(
             new DelegatingPeekingKeyValueIterator<>("",
                                                     store.all()), allCondition, IDENTITY_FUNCTION);
 
-        final HasNextCondition firstEntryCondition = new HasNextCondition() {
-            @Override
-            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-                return iterator.hasNext() && iterator.peekNextKey().equals(firstEntry.key);
-            }
-        };
+        final HasNextCondition firstEntryCondition = iterator -> iterator.hasNext() && iterator.peekNextKey().equals(firstEntry.key);
         firstEntryIterator = new FilteredCacheIterator(
                 new DelegatingPeekingKeyValueIterator<>("",
                                                         store.all()), firstEntryCondition, IDENTITY_FUNCTION);
@@ -90,7 +81,7 @@ public class FilteredCacheIteratorTest {
 
     @Test
     public void shouldAllowEntryMatchingHasNextCondition() {
-        final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toList(allIterator);
+        final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toListAndCloseIterator(allIterator);
         assertThat(keyValues, equalTo(entries));
     }
 
@@ -121,12 +112,12 @@ public class FilteredCacheIteratorTest {
 
     @Test
     public void shouldFilterEntriesNotMatchingHasNextCondition() {
-        final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toList(firstEntryIterator);
+        final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toListAndCloseIterator(firstEntryIterator);
         assertThat(keyValues, equalTo(Collections.singletonList(firstEntry)));
     }
 
     @Test
-    public void shouldThrowUnsupportedOperationExeceptionOnRemove() {
+    public void shouldThrowUnsupportedOperationExceptionOnRemove() {
         assertThrows(UnsupportedOperationException.class, () -> allIterator.remove());
     }
 

@@ -36,4 +36,10 @@ public interface WorkerRebalanceListener {
      * or tasks might refer to all or some of the connectors and tasks running on the worker.
      */
     void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks);
+
+
+    /**
+     * Invoked when a worker experiences a poll timeout expiry.
+     */
+    void onPollTimeoutExpiry();
 }

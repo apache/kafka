@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -26,9 +27,8 @@ import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
 
-import java.io.DataInputStream;
-import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -57,6 +57,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  ProducerId => Int64
  *  ProducerEpoch => Int16
  *  BaseSequence => Int32
+ *  RecordsCount => Int32
  *  Records => [Record]
  *
  * Note that when compression is enabled (see attributes below), the compressed record data is serialized
@@ -134,8 +135,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     private static final byte DELETE_HORIZON_FLAG_MASK = 0x40;
     private static final byte TIMESTAMP_TYPE_MASK = 0x08;
 
-    private static final int MAX_SKIP_BUFFER_SIZE = 2048;
-
     private final ByteBuffer buffer;
 
     DefaultRecordBatch(ByteBuffer buffer) {
@@ -160,7 +159,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     /**
      * Gets the base timestamp of the batch which is used to calculate the record timestamps from the deltas.
-     * 
+     *
      * @return The base timestamp
      */
     public long baseTimestamp() {
@@ -270,23 +269,20 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
-    public DataInputStream recordInputStream(BufferSupplier bufferSupplier) {
+    public InputStream recordInputStream(BufferSupplier bufferSupplier) {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
-        return new DataInputStream(compressionType().wrapForInput(buffer, magic(), bufferSupplier));
+        return Compression.of(compressionType()).build().wrapForInput(buffer, magic(), bufferSupplier);
     }
 
     private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, boolean skipKeyValue) {
-        final DataInputStream inputStream = recordInputStream(bufferSupplier);
+        final InputStream inputStream = recordInputStream(bufferSupplier);
 
         if (skipKeyValue) {
-            // this buffer is used to skip length delimited fields like key, value, headers
-            byte[] skipArray = new byte[MAX_SKIP_BUFFER_SIZE];
-
             return new StreamRecordIterator(inputStream) {
                 @Override
                 protected Record doReadRecord(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) throws IOException {
-                    return DefaultRecord.readPartiallyFrom(inputStream, skipArray, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                    return DefaultRecord.readPartiallyFrom(inputStream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
                 }
             };
         } else {
@@ -434,7 +430,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (isControl)
             attributes |= CONTROL_FLAG_MASK;
         if (type.id > 0)
-            attributes |= COMPRESSION_CODEC_MASK & type.id;
+            attributes |= (byte) (COMPRESSION_CODEC_MASK & type.id);
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             attributes |= TIMESTAMP_TYPE_MASK;
         if (isDeleteHorizonSet)
@@ -506,6 +502,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     public String toString() {
         return "RecordBatch(magic=" + magic() + ", offsets=[" + baseOffset() + ", " + lastOffset() + "], " +
                 "sequence=[" + baseSequence() + ", " + lastSequence() + "], " +
+                "partitionLeaderEpoch=" + partitionLeaderEpoch() + ", " +
                 "isTransactional=" + isTransactional() + ", isControlBatch=" + isControlBatch() + ", " +
                 "compression=" + compressionType() + ", timestampType=" + timestampType() + ", crc=" + checksum() + ")";
     }
@@ -569,7 +566,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return sequence - decrement;
     }
 
-    private abstract class RecordIterator implements CloseableIterator<Record> {
+    // visible for testing
+    abstract class RecordIterator implements CloseableIterator<Record> {
         private final Long logAppendTime;
         private final long baseOffset;
         private final long baseTimestamp;
@@ -622,10 +620,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     }
 
-    private abstract class StreamRecordIterator extends RecordIterator {
-        private final DataInputStream inputStream;
+    // visible for testing
+    abstract class StreamRecordIterator extends RecordIterator {
+        private final InputStream inputStream;
 
-        StreamRecordIterator(DataInputStream inputStream) {
+        StreamRecordIterator(InputStream inputStream) {
             super();
             this.inputStream = inputStream;
         }
@@ -636,8 +635,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
             try {
                 return doReadRecord(baseOffset, baseTimestamp, baseSequence, logAppendTime);
-            } catch (EOFException e) {
-                throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
+            } catch (IllegalArgumentException e) {
+                throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached", e);
             } catch (IOException e) {
                 throw new KafkaException("Failed to decompress record stream", e);
             }
@@ -705,11 +704,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         @Override
         public int lastSequence() {
             return loadBatchHeader().lastSequence();
-        }
-
-        @Override
-        public long checksum() {
-            return loadBatchHeader().checksum();
         }
 
         @Override

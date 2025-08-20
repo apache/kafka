@@ -17,8 +17,8 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -76,17 +76,16 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
         return name;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         if (rocksdbStore) {
             // cf. RocksDBStore
-            new File(context.stateDir() + File.separator + "rocksdb" + File.separator + name).mkdirs();
+            new File(stateStoreContext.stateDir() + File.separator + "rocksdb" + File.separator + name).mkdirs();
         } else {
-            new File(context.stateDir() + File.separator + name).mkdir();
+            new File(stateStoreContext.stateDir() + File.separator + name).mkdir();
         }
         this.initialized = true;
-        context.register(root, (k, v) -> { });
+        stateStoreContext.register(root, (k, v) -> { });
     }
 
     @Override

@@ -17,15 +17,12 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 /**
@@ -51,7 +48,7 @@ public class EndQuorumEpochResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errors = new HashMap<>();
+        Map<Errors, Integer> errors = new EnumMap<>(Errors.class);
 
         errors.put(Errors.forCode(data.errorCode()), 1);
 
@@ -78,28 +75,7 @@ public class EndQuorumEpochResponse extends AbstractResponse {
         // Not supported by the response schema
     }
 
-    public static EndQuorumEpochResponseData singletonResponse(
-        Errors topLevelError,
-        TopicPartition topicPartition,
-        Errors partitionLevelError,
-        int leaderEpoch,
-        int leaderId
-    ) {
-        return new EndQuorumEpochResponseData()
-                   .setErrorCode(topLevelError.code())
-                   .setTopics(Collections.singletonList(
-                       new EndQuorumEpochResponseData.TopicData()
-                           .setTopicName(topicPartition.topic())
-                           .setPartitions(Collections.singletonList(
-                               new EndQuorumEpochResponseData.PartitionData()
-                                   .setErrorCode(partitionLevelError.code())
-                                   .setLeaderId(leaderId)
-                                   .setLeaderEpoch(leaderEpoch)
-                           )))
-                   );
-    }
-
-    public static EndQuorumEpochResponse parse(ByteBuffer buffer, short version) {
-        return new EndQuorumEpochResponse(new EndQuorumEpochResponseData(new ByteBufferAccessor(buffer), version));
+    public static EndQuorumEpochResponse parse(Readable readable, short version) {
+        return new EndQuorumEpochResponse(new EndQuorumEpochResponseData(readable, version));
     }
 }

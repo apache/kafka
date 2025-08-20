@@ -16,21 +16,24 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
-import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class AdminClientTestUtils {
 
@@ -79,6 +82,40 @@ public class AdminClientTestUtils {
     }
 
     /**
+     * Helper to create a AlterConfigsResult instance for a given Throwable.
+     * AlterConfigsResult's constructor is only accessible from within the
+     * admin package.
+     */
+    public static AlterConfigsResult alterConfigsResult(ConfigResource cr, Throwable t) {
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        Map<ConfigResource, KafkaFuture<Void>> futures = Collections.singletonMap(cr, future);
+        future.completeExceptionally(t);
+        return new AlterConfigsResult(futures);
+    }
+
+    /**
+     * Helper to create a AlterConfigsResult instance for a given ConfigResource.
+     * AlterConfigsResult's constructor is only accessible from within the
+     * admin package.
+     */
+    public static AlterConfigsResult alterConfigsResult(ConfigResource cr) {
+        KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        Map<ConfigResource, KafkaFuture<Void>> futures = Collections.singletonMap(cr, future);
+        future.complete(null);
+        return new AlterConfigsResult(futures);
+    }
+
+    /** Helper to create a DescribeConfigsResult instance for a given ConfigResource.
+     * DescribeConfigsResult's constructor is only accessible from within the
+     * admin package.
+     */
+    public static DescribeConfigsResult describeConfigsResult(ConfigResource cr, Config config) {
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(config);
+        return new DescribeConfigsResult(Collections.singletonMap(cr, future));
+    }
+
+    /**
      * Helper to create a CreatePartitionsResult instance for a given Throwable.
      * CreatePartitionsResult's constructor is only accessible from within the
      * admin package.
@@ -105,6 +142,16 @@ public class AdminClientTestUtils {
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
     }
 
+    public static ListGroupsResult listGroupsResult(GroupListing... groups) {
+        return new ListGroupsResult(
+            KafkaFuture.completedFuture(Arrays.stream(groups)
+                .collect(Collectors.toList())));
+    }
+
+    public static ListGroupsResult listGroupsResult(KafkaException exception) {
+        return new ListGroupsResult(KafkaFuture.completedFuture(Collections.singleton(exception)));
+    }
+
     public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets) {
         Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> resultMap = offsets.entrySet().stream()
             .collect(Collectors.toMap(e -> CoordinatorKey.byGroupId(e.getKey()),
@@ -118,15 +165,50 @@ public class AdminClientTestUtils {
         return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
     }
 
-    /**
-     * Used for benchmark. KafkaAdminClient.getListOffsetsCalls is only accessible
-     * from within the admin package.
-     */
-    public static List<KafkaAdminClient.Call> getListOffsetsCalls(KafkaAdminClient adminClient, 
-                                                                  MetadataOperationContext<ListOffsetsResult.ListOffsetsResultInfo, ListOffsetsOptions> context,
-                                                                  Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                                                  Map<TopicPartition, KafkaFutureImpl<ListOffsetsResult.ListOffsetsResultInfo>> futures) {
-        return adminClient.getListOffsetsCalls(context, topicPartitionOffsets, futures); 
+    public static ListConfigResourcesResult listConfigResourcesResult(Map<ConfigResource.Type, Set<String>> resourceNames) {
+        Collection<ConfigResource> resources = resourceNames.entrySet().stream()
+            .flatMap(entry -> entry.getValue().stream()
+                .map(name -> new ConfigResource(entry.getKey(), name)))
+            .collect(Collectors.toList());
+        return new ListConfigResourcesResult(KafkaFuture.completedFuture(resources));
+    }
+
+    public static ListConfigResourcesResult listConfigResourcesResult(String... names) {
+        return new ListConfigResourcesResult(
+            KafkaFuture.completedFuture(Arrays.stream(names)
+                .map(name -> new ConfigResource(ConfigResource.Type.CLIENT_METRICS, name))
+                .collect(Collectors.toList())));
+    }
+
+    public static ListConfigResourcesResult listConfigResourcesResult(KafkaException exception) {
+        final KafkaFutureImpl<Collection<ConfigResource>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(exception);
+        return new ListConfigResourcesResult(future);
+    }
+
+    public static ListShareGroupOffsetsResult createListShareGroupOffsetsResult(Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> groupOffsets) {
+        Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> coordinatorFutures = groupOffsets.entrySet().stream()
+            .collect(Collectors.toMap(
+                entry -> CoordinatorKey.byGroupId(entry.getKey()),
+                Map.Entry::getValue
+            ));
+        return new ListShareGroupOffsetsResult(coordinatorFutures);
+    }
+
+    public static ListOffsetsResult createListOffsetsResult(Map<TopicPartition, OffsetAndMetadata> partitionOffsets) {
+        Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> futures =
+            partitionOffsets.entrySet().stream()
+                .collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    entry -> KafkaFuture.completedFuture(
+                        new ListOffsetsResult.ListOffsetsResultInfo(
+                            entry.getValue().offset(),
+                            System.currentTimeMillis(),
+                            Optional.of(1)
+                        )
+                    )
+                ));
+        return new ListOffsetsResult(futures);
     }
 
     /**

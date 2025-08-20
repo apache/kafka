@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -38,10 +39,14 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalLong;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -58,14 +63,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MemoryRecordsTest {
 
     private static class Args {
-        final CompressionType compression;
+        final Compression compression;
         final byte magic;
         final long firstOffset;
         final long pid;
         final short epoch;
         final int firstSequence;
 
-        public Args(byte magic, long firstOffset, CompressionType compression) {
+        public Args(byte magic, long firstOffset, Compression compression) {
             this.magic = magic;
             this.compression = compression;
             this.firstOffset = firstOffset;
@@ -84,7 +89,7 @@ public class MemoryRecordsTest {
         public String toString() {
             return "magic=" + magic +
                 ", firstOffset=" + firstOffset +
-                ", compressionType=" + compression;
+                ", compression=" + compression;
         }
     }
 
@@ -98,7 +103,7 @@ public class MemoryRecordsTest {
                             ? Collections.singletonList(RecordBatch.MAGIC_VALUE_V2)
                             : asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2);
                     for (byte magic : magics)
-                        arguments.add(Arguments.of(new Args(magic, firstOffset, type)));
+                        arguments.add(Arguments.of(new Args(magic, firstOffset, Compression.of(type).build())));
                 }
             return arguments.stream();
         }
@@ -110,7 +115,7 @@ public class MemoryRecordsTest {
             List<Arguments> arguments = new ArrayList<>();
             for (long firstOffset : asList(0L, 57L))
                 for (CompressionType type: CompressionType.values()) {
-                    arguments.add(Arguments.of(new Args(RecordBatch.MAGIC_VALUE_V2, firstOffset, type)));
+                    arguments.add(Arguments.of(new Args(RecordBatch.MAGIC_VALUE_V2, firstOffset, Compression.of(type).build())));
                 }
             return arguments.stream();
         }
@@ -121,7 +126,7 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testIterator(Args args) {
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
         byte magic = args.magic;
         long pid = args.pid;
         short epoch = args.epoch;
@@ -130,10 +135,6 @@ public class MemoryRecordsTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
         int partitionLeaderEpoch = 998;
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compression,
-                TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false, false,
-                partitionLeaderEpoch, buffer.limit());
-
         SimpleRecord[] records = new SimpleRecord[] {
             new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
             new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
@@ -143,15 +144,35 @@ public class MemoryRecordsTest {
             new SimpleRecord(6L, (byte[]) null, null)
         };
 
-        for (SimpleRecord record : records)
-            builder.append(record);
+        final MemoryRecords memoryRecords;
+        try (var builder = new MemoryRecordsBuilder(
+                buffer,
+                magic,
+                compression,
+                TimestampType.CREATE_TIME,
+                firstOffset,
+                logAppendTime,
+                pid,
+                epoch,
+                firstSequence,
+                false,
+                false,
+                partitionLeaderEpoch,
+                buffer.limit()
+            )
+        ) {
+            for (SimpleRecord record : records) {
+                builder.append(record);
+            }
 
-        MemoryRecords memoryRecords = builder.build();
+            memoryRecords = builder.build();
+        }
+
         for (int iteration = 0; iteration < 2; iteration++) {
             int total = 0;
             for (RecordBatch batch : memoryRecords.batches()) {
                 assertTrue(batch.isValid());
-                assertEquals(compression, batch.compressionType());
+                assertEquals(compression.type(), batch.compressionType());
                 assertEquals(firstOffset + total, batch.baseOffset());
 
                 if (magic >= RecordBatch.MAGIC_VALUE_V2) {
@@ -243,10 +264,10 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testChecksum(Args args) {
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
         byte magic = args.magic;
         // we get reasonable coverage with uncompressed and one compression type
-        if (compression != CompressionType.NONE && compression != CompressionType.LZ4)
+        if (compression.type() != CompressionType.NONE && compression.type() != CompressionType.LZ4)
             return;
 
         SimpleRecord[] records = {
@@ -256,17 +277,17 @@ public class MemoryRecordsTest {
         RecordBatch batch = MemoryRecords.withRecords(magic, compression, records).batches().iterator().next();
         long expectedChecksum;
         if (magic == RecordBatch.MAGIC_VALUE_V0) {
-            if (compression == CompressionType.NONE)
+            if (compression.type() == CompressionType.NONE)
                 expectedChecksum = 1978725405L;
             else
                 expectedChecksum = 66944826L;
         } else if (magic == RecordBatch.MAGIC_VALUE_V1) {
-            if (compression == CompressionType.NONE)
+            if (compression.type() == CompressionType.NONE)
                 expectedChecksum = 109425508L;
             else
                 expectedChecksum = 1407303399L;
         } else {
-            if (compression == CompressionType.NONE)
+            if (compression.type() == CompressionType.NONE)
                 expectedChecksum = 3851219455L;
             else
                 expectedChecksum = 2745969314L;
@@ -289,8 +310,7 @@ public class MemoryRecordsTest {
         builder.append(12L, null, "c".getBytes());
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        builder.build().filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), filtered,
-                Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        builder.build().filterTo(new RetainNonNullKeysFilter(), filtered, BufferSupplier.NO_CACHING);
 
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
@@ -330,7 +350,7 @@ public class MemoryRecordsTest {
                     builder.close();
                     MemoryRecords records = builder.build();
                     ByteBuffer filtered = ByteBuffer.allocate(2048);
-                    MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
+                    MemoryRecords.FilterResult filterResult = records.filterTo(
                             new MemoryRecords.RecordFilter(0, 0) {
                                 @Override
                                 protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
@@ -343,7 +363,7 @@ public class MemoryRecordsTest {
                                     // delete the records
                                     return false;
                                 }
-                            }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                            }, filtered, BufferSupplier.NO_CACHING);
 
                     // Verify filter result
                     assertEquals(numRecords, filterResult.messagesRead());
@@ -392,7 +412,7 @@ public class MemoryRecordsTest {
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
+        MemoryRecords.FilterResult filterResult = records.filterTo(
                 new MemoryRecords.RecordFilter(0, 0) {
                     @Override
                     protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
@@ -404,7 +424,7 @@ public class MemoryRecordsTest {
                     protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                         return false;
                     }
-                }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                }, filtered, BufferSupplier.NO_CACHING);
 
         // Verify filter result
         assertEquals(0, filterResult.messagesRead());
@@ -440,7 +460,7 @@ public class MemoryRecordsTest {
 
             ByteBuffer filtered = ByteBuffer.allocate(2048);
             MemoryRecords records = MemoryRecords.readableRecords(buffer);
-            MemoryRecords.FilterResult filterResult = records.filterTo(new TopicPartition("foo", 0),
+            MemoryRecords.FilterResult filterResult = records.filterTo(
                     new MemoryRecords.RecordFilter(0, 0) {
                         @Override
                         protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
@@ -451,7 +471,7 @@ public class MemoryRecordsTest {
                         protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                             return false;
                         }
-                    }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+                    }, filtered, BufferSupplier.NO_CACHING);
 
             // Verify filter result
             assertEquals(0, filterResult.outputBuffer().position());
@@ -527,7 +547,7 @@ public class MemoryRecordsTest {
                 return new BatchRetentionResult(BatchRetention.RETAIN_EMPTY, false);
             }
         };
-        builder.build().filterTo(new TopicPartition("random", 0), recordFilter, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        builder.build().filterTo(recordFilter, filtered, BufferSupplier.NO_CACHING);
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
@@ -590,7 +610,7 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToBatchDiscard(Args args) {
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
         byte magic = args.magic;
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
@@ -616,7 +636,7 @@ public class MemoryRecordsTest {
         buffer.flip();
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter(0, 0) {
+        MemoryRecords.readableRecords(buffer).filterTo(new MemoryRecords.RecordFilter(0, 0) {
             @Override
             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 // discard the second and fourth batches
@@ -629,13 +649,13 @@ public class MemoryRecordsTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return true;
             }
-        }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        }, filtered, BufferSupplier.NO_CACHING);
 
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
         List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
-        if (compression != CompressionType.NONE || magic >= MAGIC_VALUE_V2) {
+        if (compression.type() != CompressionType.NONE || magic >= MAGIC_VALUE_V2) {
             assertEquals(2, batches.size());
             assertEquals(0, batches.get(0).lastOffset());
             assertEquals(5, batches.get(1).lastOffset());
@@ -650,7 +670,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToAlreadyCompactedLog(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
@@ -665,8 +685,7 @@ public class MemoryRecordsTest {
         buffer.flip();
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
-                filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        MemoryRecords.readableRecords(buffer).filterTo(new RetainNonNullKeysFilter(), filtered, BufferSupplier.NO_CACHING);
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
@@ -699,7 +718,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToPreservesProducerInfo(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
         // non-idempotent, non-transactional
@@ -741,8 +760,7 @@ public class MemoryRecordsTest {
             buffer.flip();
 
             ByteBuffer filtered = ByteBuffer.allocate(2048);
-            MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
-                    filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+            MemoryRecords.readableRecords(buffer).filterTo(new RetainNonNullKeysFilter(), filtered, BufferSupplier.NO_CACHING);
 
             filtered.flip();
             MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
@@ -802,7 +820,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToWithUndersizedBuffer(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -833,9 +851,8 @@ public class MemoryRecordsTest {
         while (buffer.hasRemaining()) {
             output.rewind();
 
-            MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer)
-                    .filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), output, Integer.MAX_VALUE,
-                            BufferSupplier.NO_CACHING);
+            MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer).filterTo(
+                    new RetainNonNullKeysFilter(), output, BufferSupplier.NO_CACHING);
 
             buffer.position(buffer.position() + result.bytesRead());
             result.outputBuffer().flip();
@@ -856,7 +873,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterTo(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -882,8 +899,7 @@ public class MemoryRecordsTest {
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
         MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer).filterTo(
-                new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), filtered, Integer.MAX_VALUE,
-                BufferSupplier.NO_CACHING);
+                new RetainNonNullKeysFilter(), filtered, BufferSupplier.NO_CACHING);
 
         filtered.flip();
 
@@ -893,7 +909,7 @@ public class MemoryRecordsTest {
         assertEquals(filtered.limit(), result.bytesRetained());
         if (magic > RecordBatch.MAGIC_VALUE_V0) {
             assertEquals(20L, result.maxTimestamp());
-            if (compression == CompressionType.NONE && magic < RecordBatch.MAGIC_VALUE_V2)
+            if (compression.type() == CompressionType.NONE && magic < RecordBatch.MAGIC_VALUE_V2)
                 assertEquals(4L, result.shallowOffsetOfMaxTimestamp());
             else
                 assertEquals(5L, result.shallowOffsetOfMaxTimestamp());
@@ -906,7 +922,7 @@ public class MemoryRecordsTest {
         final List<Long> expectedStartOffsets;
         final List<Long> expectedMaxTimestamps;
 
-        if (magic < RecordBatch.MAGIC_VALUE_V2 && compression == CompressionType.NONE) {
+        if (magic < RecordBatch.MAGIC_VALUE_V2 && compression.type() == CompressionType.NONE) {
             expectedEndOffsets = asList(1L, 4L, 5L, 6L);
             expectedStartOffsets = asList(1L, 4L, 5L, 6L);
             expectedMaxTimestamps = asList(11L, 20L, 15L, 16L);
@@ -926,14 +942,14 @@ public class MemoryRecordsTest {
             RecordBatch batch = batches.get(i);
             assertEquals(expectedStartOffsets.get(i).longValue(), batch.baseOffset());
             assertEquals(expectedEndOffsets.get(i).longValue(), batch.lastOffset());
-            assertEquals(magic, batch.magic());
-            assertEquals(compression, batch.compressionType());
+            assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, batch.magic());
+            assertEquals(compression.type(), batch.compressionType());
             if (magic >= RecordBatch.MAGIC_VALUE_V1) {
                 assertEquals(expectedMaxTimestamps.get(i).longValue(), batch.maxTimestamp());
                 assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             } else {
                 assertEquals(RecordBatch.NO_TIMESTAMP, batch.maxTimestamp());
-                assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
+                assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             }
         }
 
@@ -973,7 +989,7 @@ public class MemoryRecordsTest {
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testFilterToPreservesLogAppendTime(Args args) {
         byte magic = args.magic;
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
         long pid = args.pid;
         short epoch = args.epoch;
         int firstSequence = args.firstSequence;
@@ -1001,17 +1017,16 @@ public class MemoryRecordsTest {
         buffer.flip();
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
-                filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        MemoryRecords.readableRecords(buffer).filterTo(new RetainNonNullKeysFilter(), filtered, BufferSupplier.NO_CACHING);
 
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
         List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
-        assertEquals(magic < RecordBatch.MAGIC_VALUE_V2 && compression == CompressionType.NONE ? 3 : 2, batches.size());
+        assertEquals(magic < RecordBatch.MAGIC_VALUE_V2 && compression.type() == CompressionType.NONE ? 3 : 2, batches.size());
 
         for (RecordBatch batch : batches) {
-            assertEquals(compression, batch.compressionType());
+            assertEquals(compression.type(), batch.compressionType());
             if (magic > RecordBatch.MAGIC_VALUE_V0) {
                 assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
                 assertEquals(logAppendTime, batch.maxTimestamp());
@@ -1054,7 +1069,7 @@ public class MemoryRecordsTest {
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
     public void testWithRecords(Args args) {
-        CompressionType compression = args.compression;
+        Compression compression = args.compression;
         byte magic = args.magic;
         MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
                 new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
@@ -1065,12 +1080,152 @@ public class MemoryRecordsTest {
     @Test
     public void testUnsupportedCompress() {
         BiFunction<Byte, CompressionType, MemoryRecords> builderBiFunction = (magic, compressionType) ->
-                 MemoryRecords.withRecords(magic, compressionType, new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
+                 MemoryRecords.withRecords(magic, Compression.of(compressionType).build(), new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
 
         Arrays.asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1).forEach(magic -> {
             Exception e = assertThrows(IllegalArgumentException.class, () -> builderBiFunction.apply(magic, CompressionType.ZSTD));
             assertEquals(e.getMessage(), "ZStandard compression is not supported for magic " + magic);
         });
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
+    public void testSlice(Args args) {
+        // Create a MemoryRecords instance with multiple batches. Prior RecordBatch.MAGIC_VALUE_V2,
+        // every append in a batch is a new batch. After RecordBatch.MAGIC_VALUE_V2, we can have multiple
+        // batches in a single MemoryRecords instance. Though with compression, we can have multiple
+        // appends resulting in a single batch prior RecordBatch.MAGIC_VALUE_V2 as well.
+        LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
+        recordsPerOffset.put(args.firstOffset, 3);
+        recordsPerOffset.put(args.firstOffset + 6L, 8);
+        recordsPerOffset.put(args.firstOffset + 15L, 4);
+        MemoryRecords records = createMemoryRecords(args, recordsPerOffset);
+
+        // Test slicing from start
+        MemoryRecords sliced = records.slice(0, records.sizeInBytes());
+        assertEquals(records.sizeInBytes(), sliced.sizeInBytes());
+        assertEquals(records.validBytes(), sliced.validBytes());
+        TestUtils.checkEquals(records.batches(), sliced.batches());
+
+        List<RecordBatch> items = batches(records);
+        // Test slicing first message.
+        RecordBatch first = items.get(0);
+        sliced = records.slice(first.sizeInBytes(), records.sizeInBytes() - first.sizeInBytes());
+        assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
+        assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+
+        // Read from second message and size is past the end of the file.
+        sliced = records.slice(first.sizeInBytes(), records.sizeInBytes());
+        assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
+        assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+
+        // Read from second message and position + size overflows.
+        sliced = records.slice(first.sizeInBytes(), Integer.MAX_VALUE);
+        assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
+        assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+
+        // Read a single message starting from second message.
+        RecordBatch second = items.get(1);
+        sliced = records.slice(first.sizeInBytes(), second.sizeInBytes());
+        assertEquals(second.sizeInBytes(), sliced.sizeInBytes());
+        assertEquals(Collections.singletonList(second), batches(sliced), "Read a single message starting from the second message");
+
+        // Read from already sliced view.
+        List<RecordBatch> remainingItems = IntStream.range(0, items.size()).filter(i -> i != 0 && i != 1).mapToObj(items::get).collect(Collectors.toList());
+        int remainingSize = remainingItems.stream().mapToInt(RecordBatch::sizeInBytes).sum();
+        sliced = records.slice(first.sizeInBytes(), records.sizeInBytes() - first.sizeInBytes())
+                        .slice(second.sizeInBytes(), records.sizeInBytes() - first.sizeInBytes() - second.sizeInBytes());
+        assertEquals(remainingSize, sliced.sizeInBytes());
+        assertEquals(remainingItems, batches(sliced), "Read starting from the third message");
+
+        // Read from second message and size is past the end of the file on the already sliced view.
+        sliced = records.slice(1, records.sizeInBytes() - 1)
+            .slice(first.sizeInBytes() - 1, records.sizeInBytes());
+        assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
+        assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+
+        // Read from second message and position + size overflows on the already sliced view.
+        sliced = records.slice(1, records.sizeInBytes() - 1)
+            .slice(first.sizeInBytes() - 1, Integer.MAX_VALUE);
+        assertEquals(records.sizeInBytes() - first.sizeInBytes(), sliced.sizeInBytes());
+        assertEquals(items.subList(1, items.size()), batches(sliced), "Read starting from the second message");
+        assertTrue(sliced.validBytes() <= sliced.sizeInBytes());
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
+    public void testSliceInvalidPosition(Args args) {
+        MemoryRecords records = createMemoryRecords(args, Map.of(args.firstOffset, 1));
+        assertThrows(IllegalArgumentException.class, () -> records.slice(-1, records.sizeInBytes()));
+        assertThrows(IllegalArgumentException.class, () -> records.slice(records.sizeInBytes() + 1, records.sizeInBytes()));
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
+    public void testSliceInvalidSize(Args args) {
+        MemoryRecords records = createMemoryRecords(args, Map.of(args.firstOffset, 1));
+        assertThrows(IllegalArgumentException.class, () -> records.slice(0, -1));
+    }
+
+    @Test
+    public void testSliceEmptyRecords() {
+        MemoryRecords empty = MemoryRecords.EMPTY;
+        Records sliced = empty.slice(0, 0);
+        assertEquals(0, sliced.sizeInBytes());
+        assertEquals(0, batches(sliced).size());
+    }
+
+    /**
+     * Test slice when already sliced memory records have start position greater than available bytes
+     * in the memory records.
+     */
+    @ParameterizedTest
+    @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
+    public void testSliceForAlreadySlicedMemoryRecords(Args args) {
+        LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
+        recordsPerOffset.put(args.firstOffset, 5);
+        recordsPerOffset.put(args.firstOffset + 5L, 10);
+        recordsPerOffset.put(args.firstOffset + 15L, 12);
+        recordsPerOffset.put(args.firstOffset + 27L, 4);
+
+        MemoryRecords records = createMemoryRecords(args, recordsPerOffset);
+        List<RecordBatch> items = batches(records.slice(0, records.sizeInBytes()));
+
+        // Slice from third message until the end.
+        int position = IntStream.range(0, 2).map(i -> items.get(i).sizeInBytes()).sum();
+        Records sliced  = records.slice(position, records.sizeInBytes() - position);
+        assertEquals(records.sizeInBytes() - position, sliced.sizeInBytes());
+        assertEquals(items.subList(2, items.size()), batches(sliced), "Read starting from the third message");
+
+        // Further slice the already sliced memory records, from fourth message until the end. Now the
+        // bytes available in the sliced records are less than the moved position from original records.
+        position = items.get(2).sizeInBytes();
+        Records finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
+        assertEquals(sliced.sizeInBytes() - position, finalSliced.sizeInBytes());
+        assertEquals(items.subList(3, items.size()), batches(finalSliced), "Read starting from the fourth message");
+    }
+
+    private MemoryRecords createMemoryRecords(Args args, Map<Long, Integer> recordsPerOffset) {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        recordsPerOffset.forEach((offset, numOfRecords) -> {
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, args.magic, args.compression,
+                    TimestampType.CREATE_TIME, offset);
+            for (int i = 0; i < numOfRecords; i++) {
+                builder.appendWithOffset(offset + i, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+            }
+            builder.close();
+        });
+        buffer.flip();
+
+        return MemoryRecords.readableRecords(buffer);
+    }
+
+    private static List<RecordBatch> batches(Records buffer) {
+        return TestUtils.toList(buffer.batches());
     }
 
     private static class RetainNonNullKeysFilter extends MemoryRecords.RecordFilter {

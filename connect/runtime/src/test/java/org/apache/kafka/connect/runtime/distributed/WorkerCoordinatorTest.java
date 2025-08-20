@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
@@ -36,41 +37,46 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertThrows;
-import static org.junit.runners.Parameterized.Parameter;
-import static org.junit.runners.Parameterized.Parameters;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(value = Parameterized.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WorkerCoordinatorTest {
 
     private static final String LEADER_URL = "leaderUrl:8083";
@@ -89,6 +95,7 @@ public class WorkerCoordinatorTest {
     private final int rebalanceTimeoutMs = 60;
     private final int heartbeatIntervalMs = 2;
     private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
     private MockTime time;
     private MockClient client;
     private Node node;
@@ -107,27 +114,20 @@ public class WorkerCoordinatorTest {
     // Arguments are:
     // - Protocol type
     // - Expected metadata size
-    @Parameters
-    public static Iterable<?> mode() {
-        return Arrays.asList(new Object[][]{
-                {EAGER, 1},
-                {COMPATIBLE, 2}});
+    static Stream<Arguments> mode() {
+        return Stream.of(
+            Arguments.of(EAGER, 1),
+            Arguments.of(COMPATIBLE, 2)
+        );
     }
 
-    @Parameter
-    public ConnectProtocolCompatibility compatibility;
-
-    @Parameter(1)
-    public int expectedMetadataSize;
-
-    @Before
-    public void setup() {
+    public void setup(ConnectProtocolCompatibility compatibility) {
         LogContext logContext = new LogContext();
 
         this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
+        this.metadata = new Metadata(0, 0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
-        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
+        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
         this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, heartbeatIntervalMs);
         this.metrics = new Metrics(time);
@@ -138,7 +138,9 @@ public class WorkerCoordinatorTest {
                                                         heartbeatIntervalMs,
                                                         groupId,
                                                         Optional.empty(),
+                                                        null,
                                                         retryBackoffMs,
+                                                        retryBackoffMaxMs,
                                                         true);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
                                                  logContext,
@@ -155,14 +157,15 @@ public class WorkerCoordinatorTest {
         configState1 = new ClusterConfigState(
                 4L,
                 null,
-                Collections.singletonMap(connectorId1, 1),
-                Collections.singletonMap(connectorId1, new HashMap<>()),
-                Collections.singletonMap(connectorId1, TargetState.STARTED),
-                Collections.singletonMap(taskId1x0, new HashMap<>()),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptySet(),
-                Collections.emptySet()
+                Map.of(connectorId1, 1),
+                Map.of(connectorId1, new HashMap<>()),
+                Map.of(connectorId1, TargetState.STARTED),
+                Map.of(taskId1x0, new HashMap<>()),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Set.of(),
+                Set.of()
         );
 
         Map<String, Integer> configState2ConnectorTaskCounts = new HashMap<>();
@@ -185,10 +188,11 @@ public class WorkerCoordinatorTest {
                 configState2ConnectorConfigs,
                 configState2TargetStates,
                 configState2TaskConfigs,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptySet(),
-                Collections.emptySet()
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                Set.of(),
+                Set.of()
         );
 
         Map<String, Integer> configStateSingleTaskConnectorsConnectorTaskCounts = new HashMap<>();
@@ -207,6 +211,11 @@ public class WorkerCoordinatorTest {
         configStateSingleTaskConnectorsTaskConfigs.put(taskId1x0, new HashMap<>());
         configStateSingleTaskConnectorsTaskConfigs.put(taskId2x0, new HashMap<>());
         configStateSingleTaskConnectorsTaskConfigs.put(taskId3x0, new HashMap<>());
+        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = configStateSingleTaskConnectorsConnectorConfigs.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> new AppliedConnectorConfig(e.getValue())
+                ));
         configStateSingleTaskConnectors = new ClusterConfigState(
                 12L,
                 null,
@@ -214,14 +223,15 @@ public class WorkerCoordinatorTest {
                 configStateSingleTaskConnectorsConnectorConfigs,
                 configStateSingleTaskConnectorsTargetStates,
                 configStateSingleTaskConnectorsTaskConfigs,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.emptySet(),
-                Collections.emptySet()
+                Map.of(),
+                Map.of(),
+                appliedConnectorConfigs,
+                Set.of(),
+                Set.of()
         );
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         this.metrics.close();
     }
@@ -229,8 +239,10 @@ public class WorkerCoordinatorTest {
     // We only test functionality unique to WorkerCoordinator. Most functionality is already well tested via the tests
     // that cover AbstractCoordinator & ConsumerCoordinator.
 
-    @Test
-    public void testMetadata() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testMetadata(ConnectProtocolCompatibility compatibility, int expectedMetadataSize) {
+        setup(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         JoinGroupRequestData.JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
@@ -247,8 +259,10 @@ public class WorkerCoordinatorTest {
         verify(configStorage).snapshot();
     }
 
-    @Test
-    public void testNormalJoinGroupLeader() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testNormalJoinGroupLeader(ConnectProtocolCompatibility compatibility) {
+        setup(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         final String memberId = "leader";
@@ -266,8 +280,8 @@ public class WorkerCoordinatorTest {
             return sync.data().memberId().equals(memberId) &&
                     sync.data().generationId() == 1 &&
                     sync.groupAssignments().containsKey(memberId);
-        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.singletonList(connectorId1),
-                Collections.emptyList(), Errors.NONE));
+        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), List.of(connectorId1),
+                List.of(), Errors.NONE));
         coordinator.ensureActiveGroup();
 
         assertFalse(coordinator.rejoinNeededOrPending());
@@ -276,14 +290,16 @@ public class WorkerCoordinatorTest {
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(configState1.offset(), rebalanceListener.assignment.offset());
         assertEquals("leader", rebalanceListener.assignment.leader());
-        assertEquals(Collections.singletonList(connectorId1), rebalanceListener.assignment.connectors());
-        assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
+        assertEquals(List.of(connectorId1), rebalanceListener.assignment.connectors());
+        assertEquals(List.of(), rebalanceListener.assignment.tasks());
 
         verify(configStorage).snapshot();
     }
 
-    @Test
-    public void testNormalJoinGroupFollower() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testNormalJoinGroupFollower(ConnectProtocolCompatibility compatibility) {
+        setup(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         final String memberId = "member";
@@ -298,8 +314,8 @@ public class WorkerCoordinatorTest {
             return sync.data().memberId().equals(memberId) &&
                     sync.data().generationId() == 1 &&
                     sync.data().assignments().isEmpty();
-        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
-                Collections.singletonList(taskId1x0), Errors.NONE));
+        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), List.of(),
+                List.of(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
         assertFalse(coordinator.rejoinNeededOrPending());
@@ -307,14 +323,16 @@ public class WorkerCoordinatorTest {
         assertEquals(1, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(configState1.offset(), rebalanceListener.assignment.offset());
-        assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
-        assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.assignment.tasks());
+        assertEquals(List.of(), rebalanceListener.assignment.connectors());
+        assertEquals(List.of(taskId1x0), rebalanceListener.assignment.tasks());
 
         verify(configStorage).snapshot();
     }
 
-    @Test
-    public void testJoinLeaderCannotAssign() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testJoinLeaderCannotAssign(ConnectProtocolCompatibility compatibility) {
+        setup(compatibility);
         // If the selected leader can't get up to the maximum offset, it will fail to assign and we should immediately
         // need to retry the join.
         when(configStorage.snapshot()).thenReturn(configState1);
@@ -333,21 +351,23 @@ public class WorkerCoordinatorTest {
                     sync.data().assignments().isEmpty();
         };
         client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.CONFIG_MISMATCH, "leader", configState2.offset(),
-                Collections.emptyList(), Collections.emptyList(), Errors.NONE));
+                List.of(), List.of(), Errors.NONE));
 
         // When the first round fails, we'll take an updated config snapshot
         when(configStorage.snapshot()).thenReturn(configState2);
 
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
         client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState2.offset(),
-                Collections.emptyList(), Collections.singletonList(taskId1x0), Errors.NONE));
+                List.of(), List.of(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
         verify(configStorage, times(2)).snapshot();
     }
 
-    @Test
-    public void testRejoinGroup() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testRejoinGroup(ConnectProtocolCompatibility compatibility) {
+        setup(compatibility);
         when(configStorage.snapshot()).thenReturn(configState1);
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
@@ -355,38 +375,40 @@ public class WorkerCoordinatorTest {
 
         // join the group once
         client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
-                Collections.singletonList(taskId1x0), Errors.NONE));
+        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), List.of(),
+                List.of(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(configState1.offset(), rebalanceListener.assignment.offset());
-        assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
-        assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.assignment.tasks());
+        assertEquals(List.of(), rebalanceListener.assignment.connectors());
+        assertEquals(List.of(taskId1x0), rebalanceListener.assignment.tasks());
 
         // and join the group again
         coordinator.requestRejoin("test");
         client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.singletonList(connectorId1),
-                Collections.emptyList(), Errors.NONE));
+        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), List.of(connectorId1),
+                List.of(), Errors.NONE));
         coordinator.ensureActiveGroup();
 
         assertEquals(1, rebalanceListener.revokedCount);
-        assertEquals(Collections.emptyList(), rebalanceListener.revokedConnectors);
-        assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.revokedTasks);
+        assertEquals(List.of(), rebalanceListener.revokedConnectors);
+        assertEquals(List.of(taskId1x0), rebalanceListener.revokedTasks);
         assertEquals(2, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(configState1.offset(), rebalanceListener.assignment.offset());
-        assertEquals(Collections.singletonList(connectorId1), rebalanceListener.assignment.connectors());
-        assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
+        assertEquals(List.of(connectorId1), rebalanceListener.assignment.connectors());
+        assertEquals(List.of(), rebalanceListener.assignment.tasks());
 
         verify(configStorage, times(2)).snapshot();
     }
 
-    @Test
-    public void testLeaderPerformAssignment1() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testLeaderPerformAssignment1(ConnectProtocolCompatibility compatibility) {
+        setup(compatibility);
         // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
         // output. So we test it directly here.
 
@@ -412,21 +434,23 @@ public class WorkerCoordinatorTest {
         assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(configState1.offset(), leaderAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
-        assertEquals(Collections.emptyList(), leaderAssignment.tasks());
+        assertEquals(List.of(connectorId1), leaderAssignment.connectors());
+        assertEquals(List.of(), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
         assertFalse(memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
         assertEquals(configState1.offset(), memberAssignment.offset());
-        assertEquals(Collections.emptyList(), memberAssignment.connectors());
-        assertEquals(Collections.singletonList(taskId1x0), memberAssignment.tasks());
+        assertEquals(List.of(), memberAssignment.connectors());
+        assertEquals(List.of(taskId1x0), memberAssignment.tasks());
 
         verify(configStorage).snapshot();
     }
 
-    @Test
-    public void testLeaderPerformAssignment2() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testLeaderPerformAssignment2(ConnectProtocolCompatibility compatibility) {
+        setup(compatibility);
         // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
         // output. So we test it directly here.
 
@@ -453,21 +477,23 @@ public class WorkerCoordinatorTest {
         assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(configState2.offset(), leaderAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
-        assertEquals(Arrays.asList(taskId1x0, taskId2x0), leaderAssignment.tasks());
+        assertEquals(List.of(connectorId1), leaderAssignment.connectors());
+        assertEquals(List.of(taskId1x0, taskId2x0), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
         assertFalse(memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
         assertEquals(configState2.offset(), memberAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
-        assertEquals(Collections.singletonList(taskId1x1), memberAssignment.tasks());
+        assertEquals(List.of(connectorId2), memberAssignment.connectors());
+        assertEquals(List.of(taskId1x1), memberAssignment.tasks());
 
         verify(configStorage).snapshot();
     }
 
-    @Test
-    public void testLeaderPerformAssignmentSingleTaskConnectors() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testLeaderPerformAssignmentSingleTaskConnectors(ConnectProtocolCompatibility compatibility) {
+        setup(compatibility);
         // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
         // output. So we test it directly here.
 
@@ -495,21 +521,23 @@ public class WorkerCoordinatorTest {
         assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(configStateSingleTaskConnectors.offset(), leaderAssignment.offset());
-        assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
-        assertEquals(Collections.singletonList(taskId2x0), leaderAssignment.tasks());
+        assertEquals(List.of(connectorId1, connectorId3), leaderAssignment.connectors());
+        assertEquals(List.of(taskId2x0), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
         assertFalse(memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
         assertEquals(configStateSingleTaskConnectors.offset(), memberAssignment.offset());
-        assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
-        assertEquals(Arrays.asList(taskId1x0, taskId3x0), memberAssignment.tasks());
+        assertEquals(List.of(connectorId2), memberAssignment.connectors());
+        assertEquals(List.of(taskId1x0, taskId3x0), memberAssignment.tasks());
 
         verify(configStorage).snapshot();
     }
 
-    @Test
-    public void testSkippingAssignmentFails() {
+    @ParameterizedTest
+    @MethodSource("mode")
+    public void testSkippingAssignmentFails(ConnectProtocolCompatibility compatibility) {
+        setup(compatibility);
         // Connect does not support static membership so skipping assignment should
         // never be set to true by the group coordinator. It is treated as an
         // illegal state if it would.
@@ -518,7 +546,7 @@ public class WorkerCoordinatorTest {
         coordinator.metadata();
 
         assertThrows(IllegalStateException.class,
-            () -> coordinator.onLeaderElected("leader", EAGER.protocol(), Collections.emptyList(), true));
+            () -> coordinator.onLeaderElected("leader", EAGER.protocol(), List.of(), true));
 
         verify(configStorage).snapshot();
     }
@@ -538,11 +566,12 @@ public class WorkerCoordinatorTest {
         }
         return new JoinGroupResponse(
                 new JoinGroupResponseData().setErrorCode(error.code())
-                .setGenerationId(generationId)
-                .setProtocolName(EAGER.protocol())
-                .setLeader(memberId)
-                .setMemberId(memberId)
-                .setMembers(metadata)
+                        .setGenerationId(generationId)
+                        .setProtocolName(EAGER.protocol())
+                        .setLeader(memberId)
+                        .setMemberId(memberId)
+                        .setMembers(metadata),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 
@@ -553,7 +582,8 @@ public class WorkerCoordinatorTest {
                         .setProtocolName(EAGER.protocol())
                         .setLeader(leaderId)
                         .setMemberId(memberId)
-                        .setMembers(Collections.emptyList())
+                        .setMembers(List.of()),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 
@@ -594,5 +624,8 @@ public class WorkerCoordinatorTest {
             this.revokedTasks = tasks;
             revokedCount++;
         }
+
+        @Override
+        public void onPollTimeoutExpiry() {}
     }
 }

@@ -17,6 +17,8 @@
   "apiKey": 20,
   "type": "response",
   "name": "DeleteTopicsResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Version 1 adds the throttle time.
   //
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
@@ -31,7 +33,7 @@
   // Version 6 adds topic ID to responses. An UNSUPPORTED_VERSION error code will be returned when attempting to
   // delete using topic IDs when IBP < 2.8. UNKNOWN_TOPIC_ID error code will be returned when IBP is at least 2.8, but
   // the topic ID was not found.
-  "validVersions": "0-6",
+  "validVersions": "1-6",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -39,8 +41,8 @@
     { "name": "Responses", "type": "[]DeletableTopicResult", "versions": "0+",
       "about": "The results for each topic we tried to delete.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "nullableVersions": "6+", "mapKey": true, "entityType": "topicName",
-        "about": "The topic name" },
-      {"name": "TopicId", "type": "uuid", "versions": "6+", "ignorable": true, "about": "the unique topic ID"},
+        "about": "The topic name." },
+      {"name": "TopicId", "type": "uuid", "versions": "6+", "ignorable": true, "about": "The unique topic ID."},
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The deletion error, or 0 if the deletion succeeded." },
       { "name": "ErrorMessage", "type": "string", "versions": "5+", "nullableVersions": "5+", "ignorable": true, "default": "null",

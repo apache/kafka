@@ -15,6 +15,7 @@
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.connect import ConnectDistributedService, ConnectRestError, ConnectServiceBase
+from kafkatest.services.kafka import quorum
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
@@ -35,11 +36,15 @@ class ConnectRestApiTest(KafkaTest):
     FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'batch.size',
                            'topic', 'file', 'transforms', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
                            'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'predicates', 'topic.creation.groups',
-                           'exactly.once.support', 'transaction.boundary', 'transaction.boundary.interval.ms', 'offsets.storage.topic'}
+                           'exactly.once.support', 'transaction.boundary', 'transaction.boundary.interval.ms', 'offsets.storage.topic',
+                           'tasks.max.enforce', 'connector.plugin.version', 'key.converter.plugin.version', 'value.converter.plugin.version', 
+                           'header.converter.plugin.version'}
     FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'topics',
                          'file', 'transforms', 'topics.regex', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
                          'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'errors.deadletterqueue.topic.name',
-                         'errors.deadletterqueue.topic.replication.factor', 'errors.deadletterqueue.context.headers.enable', 'predicates'}
+                         'errors.deadletterqueue.topic.replication.factor', 'errors.deadletterqueue.context.headers.enable', 'predicates',
+                         'tasks.max.enforce', 'connector.plugin.version', 'key.converter.plugin.version', 'value.converter.plugin.version', 
+                           'header.converter.plugin.version'}
 
     INPUT_FILE = "/mnt/connect.input"
     INPUT_FILE2 = "/mnt/connect.input2"
@@ -70,7 +75,7 @@ class ConnectRestApiTest(KafkaTest):
     CONNECT_PROTOCOL="compatible"
 
     def __init__(self, test_context):
-        super(ConnectRestApiTest, self).__init__(test_context, num_zk=1, num_brokers=1, topics={
+        super(ConnectRestApiTest, self).__init__(test_context, num_zk=0, num_brokers=1, topics={
             'test': {'partitions': 1, 'replication-factor': 1}
         })
 
@@ -78,8 +83,8 @@ class ConnectRestApiTest(KafkaTest):
                                             include_filestream_connectors=True)
 
     @cluster(num_nodes=4)
-    @matrix(connect_protocol=['compatible', 'eager'])
-    def test_rest_api(self, connect_protocol):
+    @matrix(connect_protocol=['compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_rest_api(self, connect_protocol, metadata_quorum):
         # Template parameters
         self.key_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
@@ -202,7 +207,7 @@ class ConnectRestApiTest(KafkaTest):
 
         self.cc.delete_connector("local-file-source")
         self.cc.delete_connector("local-file-sink")
-        wait_until(lambda: len(self.cc.list_connectors()) == 0, timeout_sec=10, err_msg="Deleted connectors did not disappear from REST listing")
+        wait_until(lambda: not self.cc.list_connectors(), timeout_sec=10, err_msg="Deleted connectors did not disappear from REST listing")
 
     def validate_output(self, input):
         input_set = set(input)

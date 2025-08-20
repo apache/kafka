@@ -16,18 +16,19 @@
  */
 package org.apache.kafka.connect.json;
 
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.Serializer;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Serializer;
+import com.fasterxml.jackson.module.blackbird.BlackbirdModule;
 
-import java.util.Collections;
 import java.util.Set;
 
 /**
- * Serialize Jackson JsonNode tree model objects to UTF-8 JSON. Using the tree model allows handling arbitrarily
+ * Serialize Jackson {@link JsonNode} tree model objects to UTF-8 JSON. Using the tree model allows handling arbitrarily
  * structured data without corresponding Java classes. This serializer also supports Connect schemas.
  */
 public class JsonSerializer implements Serializer<JsonNode> {
@@ -37,11 +38,11 @@ public class JsonSerializer implements Serializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonSerializer() {
-        this(Collections.emptySet(), JsonNodeFactory.withExactBigDecimals(true));
+        this(Set.of(), new JsonNodeFactory(true), true);
     }
 
     /**
-     * A constructor that additionally specifies some {@link SerializationFeature}
+     * A constructor that additionally specifies some {@link SerializationFeature}s
      * for the serializer
      *
      * @param serializationFeatures the specified serialization features
@@ -49,10 +50,14 @@ public class JsonSerializer implements Serializer<JsonNode> {
      */
     JsonSerializer(
         final Set<SerializationFeature> serializationFeatures,
-        final JsonNodeFactory jsonNodeFactory
+        final JsonNodeFactory jsonNodeFactory,
+        final boolean enableBlackbird
     ) {
         serializationFeatures.forEach(objectMapper::enable);
         objectMapper.setNodeFactory(jsonNodeFactory);
+        if (enableBlackbird) {
+            objectMapper.registerModule(new BlackbirdModule());
+        }
     }
 
     @Override

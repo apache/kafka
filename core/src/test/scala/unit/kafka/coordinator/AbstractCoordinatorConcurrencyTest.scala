@@ -17,53 +17,63 @@
 
 package kafka.coordinator
 
-import java.util.concurrent.{ConcurrentHashMap, Executors}
+import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors}
 import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.Lock
-
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.{AppendOrigin, LogConfig, UnifiedLog}
+import kafka.cluster.Partition
+import kafka.log.LogManager
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils._
-import kafka.utils.timer.MockTimer
-import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.metadata.MetadataCache
+import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets, TopicPartitionOperationKey}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
+import org.apache.kafka.server.util.timer.{MockTimer, Timer}
+import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, UnifiedLog, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.mockito.Mockito.{mock, withSettings, CALLS_REAL_METHODS}
+import org.mockito.Mockito.{mock, when, withSettings}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
-abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
-
+abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extends Logging {
   val nThreads = 5
-
-  val time = new MockTime
-  val timer = new MockTimer
-  val executor = Executors.newFixedThreadPool(nThreads)
-  val scheduler = new MockScheduler(time)
-  var replicaManager: TestReplicaManager = _
-  var zkClient: KafkaZkClient = _
-  val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+  val serverProps = TestUtils.createBrokerConfig(0)
   val random = new Random
+  var replicaManager: TestReplicaManager = _
+  var time: MockTime = _
+  var timer: MockTimer = _
+  var executor: ExecutorService = _
+  var scheduler: MockScheduler = _
 
   @BeforeEach
   def setUp(): Unit = {
-
-    replicaManager = mock(classOf[TestReplicaManager], withSettings().defaultAnswer(CALLS_REAL_METHODS))
-    replicaManager.createDelayedProducePurgatory(timer)
-
-    zkClient = mock(classOf[KafkaZkClient])
+    time = new MockTime
+    timer = new MockTimer(time)
+    scheduler = new MockScheduler(time)
+    executor = Executors.newFixedThreadPool(nThreads)
+    val mockLogMger = mock(classOf[LogManager])
+    when(mockLogMger.liveLogDirs).thenReturn(Seq.empty)
+    val producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, 1000, false, true)
+    val watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
+    replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
   }
 
   @AfterEach
   def tearDown(): Unit = {
-    if (executor != null)
-      executor.shutdownNow()
+    CoreUtils.swallow(replicaManager.shutdown(false), this)
+    CoreUtils.swallow(executor.shutdownNow(), this)
+    Utils.closeQuietly(timer, "mock timer")
+    CoreUtils.swallow(scheduler.shutdown(), this)
+    CoreUtils.swallow(time.scheduler.shutdown(), this)
   }
 
   /**
@@ -147,7 +157,6 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
 }
 
 object AbstractCoordinatorConcurrencyTest {
-
   trait Action extends Runnable {
     def await(): Unit
   }
@@ -155,16 +164,47 @@ object AbstractCoordinatorConcurrencyTest {
   trait CoordinatorMember {
   }
 
-  class TestReplicaManager extends ReplicaManager(
-    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null) {
+  class TestReplicaManager(config: KafkaConfig,
+                           mtime: Time,
+                           scheduler: Scheduler,
+                           logManager: LogManager,
+                           quotaManagers: QuotaManagers,
+                           val watchKeys: mutable.Set[TopicPartitionOperationKey],
+                           val producePurgatory: DelayedOperationPurgatory[DelayedProduce],
+                           val delayedFetchPurgatoryParam: DelayedOperationPurgatory[DelayedFetch],
+                           val delayedDeleteRecordsPurgatoryParam: DelayedOperationPurgatory[DelayedDeleteRecords],
+                           val delayedRemoteFetchPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteFetch],
+                           val delayedRemoteListOffsetsPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteListOffsets])
+    extends ReplicaManager(
+      config,
+      metrics = null,
+      mtime,
+      scheduler,
+      logManager,
+      None,
+      quotaManagers,
+      mock(classOf[MetadataCache]),
+      null,
+      null,
+      delayedProducePurgatoryParam = Some(producePurgatory),
+      delayedFetchPurgatoryParam = Some(delayedFetchPurgatoryParam),
+      delayedDeleteRecordsPurgatoryParam = Some(delayedDeleteRecordsPurgatoryParam),
+      delayedRemoteFetchPurgatoryParam = Some(delayedRemoteFetchPurgatoryParam),
+      delayedRemoteListOffsetsPurgatoryParam = Some(delayedRemoteListOffsetsPurgatoryParam)) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
-    var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
-    var watchKeys: mutable.Set[TopicPartitionOperationKey] = _
 
-    def createDelayedProducePurgatory(timer: MockTimer): Unit = {
-      producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
-      watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
+    override def maybeSendPartitionToTransactionCoordinator(
+      topicPartition: TopicPartition,
+      transactionalId: String,
+      producerId: Long,
+      producerEpoch: Short,
+      baseSequence: Int,
+      callback: ((Errors, VerificationGuard)) => Unit,
+      transactionSupportedOperation: TransactionSupportedOperation
+    ): Unit = {
+      // Skip verification
+      callback((Errors.NONE, VerificationGuard.SENTINEL))
     }
 
     override def tryCompleteActions(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
@@ -173,11 +213,11 @@ object AbstractCoordinatorConcurrencyTest {
                                requiredAcks: Short,
                                internalTopicsAllowed: Boolean,
                                origin: AppendOrigin,
-                               entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                               responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                               delayedProduceLock: Option[Lock] = None,
-                               processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
-                               requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                               entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
+                               responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
+                               processingStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
+                               requestLocal: RequestLocal = RequestLocal.noCaching,
+                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return
@@ -185,7 +225,7 @@ object AbstractCoordinatorConcurrencyTest {
         case (tp, _) =>
           (tp, ProducePartitionStatus(0L, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
       })
-      val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback, delayedProduceLock) {
+      val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback) {
         // Complete produce requests after a few attempts to trigger delayed produce from different threads
         val completeAttempts = new AtomicInteger
         override def tryComplete(): Boolean = {
@@ -201,13 +241,13 @@ object AbstractCoordinatorConcurrencyTest {
           })
         }
       }
-      val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
+      val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_))
       watchKeys ++= producerRequestKeys
-      producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
+      producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys.toList.asJava)
     }
 
-    override def getMagic(topicPartition: TopicPartition): Option[Byte] = {
-      Some(RecordBatch.MAGIC_VALUE_V2)
+    override def onlinePartition(topicPartition: TopicPartition): Option[Partition] = {
+      Some(mock(classOf[Partition]))
     }
 
     def getOrCreateLogs(): mutable.Map[TopicPartition, (UnifiedLog, Long)] = {
@@ -229,5 +269,28 @@ object AbstractCoordinatorConcurrencyTest {
 
     override def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
       getOrCreateLogs().get(topicPartition).map(l => l._2)
+  }
+
+  object TestReplicaManager {
+    def apply(config: KafkaConfig,
+              time: Time,
+              scheduler: Scheduler,
+              timer: Timer,
+              logManager: LogManager,
+              quotaManagers: QuotaManagers,
+              producePurgatory: DelayedOperationPurgatory[DelayedProduce],
+              watchKeys: mutable.Set[TopicPartitionOperationKey]): TestReplicaManager = {
+      val mockRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
+        "RemoteFetch", timer, 0, 1000, false, true)
+      val mockRemoteListOffsetsPurgatory = new DelayedOperationPurgatory[DelayedRemoteListOffsets](
+        "RemoteListOffsets", timer, 0, 1000, false, true)
+      val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
+        "Fetch", timer, 0, 1000, false, true)
+      val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
+        "DeleteRecords", timer, 0, 1000, false, true)
+      new TestReplicaManager(config, time, scheduler, logManager, quotaManagers, watchKeys, producePurgatory,
+        mockFetchPurgatory, mockDeleteRecordsPurgatory, mockRemoteFetchPurgatory,
+        mockRemoteListOffsetsPurgatory)
+    }
   }
 }

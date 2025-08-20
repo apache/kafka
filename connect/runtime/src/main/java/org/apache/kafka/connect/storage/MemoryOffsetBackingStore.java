@@ -16,17 +16,15 @@
  */
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.common.utils.ThreadUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -37,8 +35,7 @@ import java.util.concurrent.TimeUnit;
  * behaves similarly to a real backing store, operations are executed asynchronously on a
  * background thread.
  */
-public class MemoryOffsetBackingStore implements OffsetBackingStore {
-    private static final Logger log = LoggerFactory.getLogger(MemoryOffsetBackingStore.class);
+public abstract class MemoryOffsetBackingStore implements OffsetBackingStore {
 
     protected Map<ByteBuffer, ByteBuffer> data = new HashMap<>();
     protected ExecutorService executor;
@@ -60,17 +57,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     @Override
     public void stop() {
         if (executor != null) {
-            executor.shutdown();
-            // Best effort wait for any get() and set() tasks (and caller's callbacks) to complete.
-            try {
-                executor.awaitTermination(30, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            if (!executor.shutdownNow().isEmpty()) {
-                throw new ConnectException("Failed to stop MemoryOffsetBackingStore. Exiting without cleanly " +
-                        "shutting down pending tasks and/or callbacks.");
-            }
+            ThreadUtils.shutdownExecutorServiceQuietly(executor, 30, TimeUnit.SECONDS);
             executor = null;
         }
     }
@@ -102,4 +89,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     protected void save() {
 
     }
+
+    @Override
+    public abstract Set<Map<String, Object>> connectorPartitions(String connectorName);
 }

@@ -38,15 +38,18 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,6 +59,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -70,6 +74,9 @@ import java.util.stream.Collectors;
 public class TopicAdmin implements AutoCloseable {
 
     public static final TopicCreationResponse EMPTY_CREATION = new TopicCreationResponse(Collections.emptySet(), Collections.emptySet());
+    private static final List<Class<? extends Exception>> CAUSES_TO_RETRY_TOPIC_CREATION = Arrays.asList(
+            InvalidReplicationFactorException.class,
+            TimeoutException.class);
 
     public static class TopicCreationResponse {
 
@@ -83,10 +90,6 @@ public class TopicAdmin implements AutoCloseable {
 
         public Set<String> createdTopics() {
             return created;
-        }
-
-        public Set<String> existingTopics() {
-            return existing;
         }
 
         public boolean isCreated(String topicName) {
@@ -128,8 +131,6 @@ public class TopicAdmin implements AutoCloseable {
 
     private static final String CLEANUP_POLICY_CONFIG = TopicConfig.CLEANUP_POLICY_CONFIG;
     private static final String CLEANUP_POLICY_COMPACT = TopicConfig.CLEANUP_POLICY_COMPACT;
-    private static final String MIN_INSYNC_REPLICAS_CONFIG = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
-    private static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 
     /**
      * A builder of {@link NewTopic} instances.
@@ -201,29 +202,6 @@ public class TopicAdmin implements AutoCloseable {
         }
 
         /**
-         * Specify the minimum number of in-sync replicas required for this topic.
-         *
-         * @param minInSyncReplicas the minimum number of in-sync replicas allowed for the topic; must be positive
-         * @return this builder to allow methods to be chained; never null
-         */
-        public NewTopicBuilder minInSyncReplicas(short minInSyncReplicas) {
-            this.configs.put(MIN_INSYNC_REPLICAS_CONFIG, Short.toString(minInSyncReplicas));
-            return this;
-        }
-
-        /**
-         * Specify whether the broker is allowed to elect a leader that was not an in-sync replica when no ISRs
-         * are available.
-         *
-         * @param allow true if unclean leaders can be elected, or false if they are not allowed
-         * @return this builder to allow methods to be chained; never null
-         */
-        public NewTopicBuilder uncleanLeaderElection(boolean allow) {
-            this.configs.put(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, Boolean.toString(allow));
-            return this;
-        }
-
-        /**
          * Specify the configuration properties for the topic, overwriting any previously-set properties.
          *
          * @param configs the desired topic configuration properties, or null if all existing properties should be cleared
@@ -279,19 +257,28 @@ public class TopicAdmin implements AutoCloseable {
      * @param adminConfig the configuration for the {@link Admin}
      */
     public TopicAdmin(Map<String, Object> adminConfig) {
-        this(adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG), Admin.create(adminConfig));
+        this(adminConfig, Admin.create(adminConfig));
+    }
+
+    public TopicAdmin(Map<String, Object> adminConfig, Admin adminClient) {
+        this(bootstrapServers(adminConfig), adminClient, true);
     }
 
     // visible for testing
-    TopicAdmin(Object bootstrapServers, Admin adminClient) {
-        this(bootstrapServers, adminClient, true);
+    TopicAdmin(Admin adminClient) {
+        this(null, adminClient, true);
     }
 
     // visible for testing
-    TopicAdmin(Object bootstrapServers, Admin adminClient, boolean logCreation) {
+    TopicAdmin(String bootstrapServers, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
-        this.bootstrapServers = bootstrapServers != null ? bootstrapServers.toString() : "<unknown>";
+        this.bootstrapServers = bootstrapServers != null ? bootstrapServers : "<unknown>";
         this.logCreation = logCreation;
+    }
+
+    private static String bootstrapServers(Map<String, Object> adminConfig) {
+        Object result = adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
+        return result != null ? result.toString() : null;
     }
 
    /**
@@ -327,6 +314,50 @@ public class TopicAdmin implements AutoCloseable {
      */
     public Set<String> createTopics(NewTopic... topics) {
         return createOrFindTopics(topics).createdTopics();
+    }
+
+    /**
+     * Implements a retry logic around creating topic(s) in case it'd fail due to
+     * specific type of exceptions, see {@link TopicAdmin#retryableTopicCreationException(ConnectException)}
+     *
+     * @param topicDescription the specifications of the topic
+     * @param timeoutMs        Timeout in milliseconds
+     * @param backOffMs        Time for delay after initial failed attempt in milliseconds
+     * @param time             {@link Time} instance
+     * @return the names of the topics that were created by this operation; never null but possibly empty,
+     * the same as {@link TopicAdmin#createTopics(NewTopic...)}
+     */
+    public Set<String> createTopicsWithRetry(NewTopic topicDescription, long timeoutMs, long backOffMs, Time time) {
+        Timer timer = time.timer(timeoutMs);
+        do {
+            try {
+                return createTopics(topicDescription);
+            } catch (ConnectException e) {
+                if (timer.notExpired() && retryableTopicCreationException(e)) {
+                    log.info("'{}' topic creation failed due to '{}', retrying, {}ms remaining",
+                            topicDescription.name(), e.getMessage(), timer.remainingMs());
+                } else {
+                    throw e;
+                }
+            }
+            timer.sleep(backOffMs);
+        } while (timer.notExpired());
+        throw new TimeoutException("Timeout expired while trying to create topic(s)");
+    }
+
+    private boolean retryableTopicCreationException(ConnectException e) {
+        // createTopics wraps the exception into ConnectException
+        // to retry the creation, it should be an ExecutionException from future get which was caused by InvalidReplicationFactorException
+        // or can be a TimeoutException
+        Throwable cause = e.getCause();
+        while (cause != null) {
+            final Throwable finalCause = cause;
+            if (CAUSES_TO_RETRY_TOPIC_CREATION.stream().anyMatch(exceptionClass -> exceptionClass.isInstance(finalCause))) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     /**
@@ -368,7 +399,7 @@ public class TopicAdmin implements AutoCloseable {
             }
         }
         if (topicsByName.isEmpty()) return EMPTY_CREATION;
-        String topicNameList = Utils.join(topicsByName.keySet(), "', '");
+        String topicNameList = String.join("', '", topicsByName.keySet());
 
         // Attempt to create any missing topics
         CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
@@ -670,23 +701,23 @@ public class TopicAdmin implements AutoCloseable {
                 String topic = partition.topic();
                 if (cause instanceof AuthorizationException) {
                     String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new ConnectException(msg, e);
+                    throw new ConnectException(msg, cause);
                 } else if (cause instanceof UnsupportedVersionException) {
                     // Should theoretically never happen, because this method is the same as what the consumer uses and therefore
                     // should exist in the broker since before the admin client was added
                     String msg = String.format("API to get the get the end offsets for topic '%s' is unsupported on brokers at %s", topic, bootstrapServers);
-                    throw new UnsupportedVersionException(msg, e);
+                    throw new UnsupportedVersionException(msg, cause);
                 } else if (cause instanceof TimeoutException) {
                     String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new TimeoutException(msg, e);
+                    throw new TimeoutException(msg, cause);
                 } else if (cause instanceof LeaderNotAvailableException) {
                     String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new LeaderNotAvailableException(msg, e);
+                    throw new LeaderNotAvailableException(msg, cause);
                 } else if (cause instanceof org.apache.kafka.common.errors.RetriableException) {
                     throw (org.apache.kafka.common.errors.RetriableException) cause;
                 } else {
                     String msg = String.format("Error while getting end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new ConnectException(msg, e);
+                    throw new ConnectException(msg, cause);
                 }
             } catch (InterruptedException e) {
                 Thread.interrupted();
@@ -724,7 +755,7 @@ public class TopicAdmin implements AutoCloseable {
             // Older brokers don't support this admin method, so rethrow it without wrapping it
             throw e;
         } catch (Exception e) {
-            throw new ConnectException("Failed to list offsets for topic partitions.", e);
+            throw ConnectUtils.maybeWrap(e, "Failed to list offsets for topic partitions");
         }
     }
 

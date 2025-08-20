@@ -17,25 +17,24 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.kafka.trogdor.common.JsonUtil;
 
-import java.util.Arrays;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.trogdor.common.JsonUtil;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class TopicsSpecTest {
 
-    private final static TopicsSpec FOO;
-    private final static PartitionsSpec PARTSA;
-    private final static PartitionsSpec PARTSB;
+    private static final TopicsSpec FOO;
+    private static final PartitionsSpec PARTSA;
+    private static final PartitionsSpec PARTSB;
 
     static {
         FOO = new TopicsSpec();
@@ -44,8 +43,8 @@ public class TopicsSpecTest {
         FOO.set("topicA[0-2]", PARTSA);
 
         Map<Integer, List<Integer>> assignmentsB = new HashMap<>();
-        assignmentsB.put(0, Arrays.asList(0, 1, 2));
-        assignmentsB.put(1, Arrays.asList(2, 3, 4));
+        assignmentsB.put(0, List.of(0, 1, 2));
+        assignmentsB.put(1, List.of(2, 3, 4));
         PARTSB = new PartitionsSpec(0, (short) 0, assignmentsB, null);
         FOO.set("topicB", PARTSB);
     }
@@ -67,14 +66,14 @@ public class TopicsSpecTest {
     @Test
     public void testPartitionNumbers() {
         List<Integer> partsANumbers = PARTSA.partitionNumbers();
-        assertEquals(Integer.valueOf(0), partsANumbers.get(0));
-        assertEquals(Integer.valueOf(1), partsANumbers.get(1));
-        assertEquals(Integer.valueOf(2), partsANumbers.get(2));
+        assertTrue(partsANumbers.contains(0));
+        assertTrue(partsANumbers.contains(1));
+        assertTrue(partsANumbers.contains(2));
         assertEquals(3, partsANumbers.size());
 
         List<Integer> partsBNumbers = PARTSB.partitionNumbers();
-        assertEquals(Integer.valueOf(0), partsBNumbers.get(0));
-        assertEquals(Integer.valueOf(1), partsBNumbers.get(1));
+        assertTrue(partsBNumbers.contains(0));
+        assertTrue(partsBNumbers.contains(1));
         assertEquals(2, partsBNumbers.size());
     }
 

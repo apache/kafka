@@ -20,9 +20,9 @@ package kafka.utils
 import java.util.Properties
 import java.util.Collections
 import scala.collection._
-import kafka.message.{CompressionCodec, NoCompressionCodec}
 import scala.jdk.CollectionConverters._
 import kafka.utils.Implicits._
+import org.apache.kafka.server.util.Csv
 
 object VerifiableProperties {
   def apply(map: java.util.Map[String, AnyRef]): VerifiableProperties = {
@@ -44,18 +44,13 @@ class VerifiableProperties(val props: Properties) extends Logging {
   def getProperty(name: String): String = {
     val value = props.getProperty(name)
     referenceSet.add(name)
-    if(value == null) value else value.trim()
+    if (value == null) value else value.trim()
   }
 
   /**
    * Read a required integer property value or throw an exception if no such property is found
    */
   def getInt(name: String): Int = getString(name).toInt
-
-  def getIntInRange(name: String, range: (Int, Int)): Int = {
-    require(containsKey(name), "Missing required property '" + name + "'")
-    getIntInRange(name, -1, range)
-  }
 
   /**
    * Read an integer from the properties instance
@@ -78,9 +73,9 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @throws IllegalArgumentException If the value is not in the given range
    * @return the integer value
    */
-  def getIntInRange(name: String, default: Int, range: (Int, Int)): Int = {
+  private def getIntInRange(name: String, default: Int, range: (Int, Int)): Int = {
     val v =
-      if(containsKey(name))
+      if (containsKey(name))
         getProperty(name).toInt
       else
         default
@@ -88,9 +83,9 @@ class VerifiableProperties(val props: Properties) extends Logging {
     v
   }
 
- def getShortInRange(name: String, default: Short, range: (Short, Short)): Short = {
+ private def getShortInRange(name: String, default: Short, range: (Short, Short)): Short = {
     val v =
-      if(containsKey(name))
+      if (containsKey(name))
         getProperty(name).toShort
       else
         default
@@ -121,9 +116,9 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @throws IllegalArgumentException If the value is not in the given range
    * @return the long value
    */
-  def getLongInRange(name: String, default: Long, range: (Long, Long)): Long = {
+  private def getLongInRange(name: String, default: Long, range: (Long, Long)): Long = {
     val v =
-      if(containsKey(name))
+      if (containsKey(name))
         getProperty(name).toLong
       else
         default
@@ -145,7 +140,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @param default The default value for the property if not present
    */
   def getDouble(name: String, default: Double): Double = {
-    if(containsKey(name))
+    if (containsKey(name))
       getDouble(name)
     else
       default
@@ -158,7 +153,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @return the boolean value
    */
   def getBoolean(name: String, default: Boolean): Boolean = {
-    if(!containsKey(name))
+    if (!containsKey(name))
       default
     else {
       val v = getProperty(name)
@@ -167,13 +162,13 @@ class VerifiableProperties(val props: Properties) extends Logging {
     }
   }
 
-  def getBoolean(name: String) = getString(name).toBoolean
+  def getBoolean(name: String): Boolean = getString(name).toBoolean
 
   /**
    * Get a string property, or, if no such property is defined, return the given default value
    */
   def getString(name: String, default: String): String = {
-    if(containsKey(name))
+    if (containsKey(name))
       getProperty(name)
     else
       default
@@ -192,10 +187,10 @@ class VerifiableProperties(val props: Properties) extends Logging {
    */
   def getMap(name: String, valid: String => Boolean = _ => true): Map[String, String] = {
     try {
-      val m = CoreUtils.parseCsvMap(getString(name, ""))
+      val m = Csv.parseCsvMap(getString(name, "")).asScala
       m.foreach {
         case(key, value) => 
-          if(!valid(value))
+          if (!valid(value))
             throw new IllegalArgumentException("Invalid entry '%s' = '%s' for property '%s'".format(key, value, name))
       }
       m
@@ -204,28 +199,10 @@ class VerifiableProperties(val props: Properties) extends Logging {
     }
   }
 
-  /**
-   * Parse compression codec from a property list in either. Codecs may be specified as integers, or as strings.
-   * See [[kafka.message.CompressionCodec]] for more details.
-   * @param name The property name
-   * @param default Default compression codec
-   * @return compression codec
-   */
-  def getCompressionCodec(name: String, default: CompressionCodec) = {
-    val prop = getString(name, NoCompressionCodec.name)
-    try {
-      CompressionCodec.getCompressionCodec(prop.toInt)
-    }
-    catch {
-      case _: NumberFormatException =>
-        CompressionCodec.getCompressionCodec(prop)
-    }
-  }
-
   def verify(): Unit = {
     info("Verifying properties")
     val propNames = Collections.list(props.propertyNames).asScala.map(_.toString).sorted
-    for(key <- propNames) {
+    for (key <- propNames) {
       if (!referenceSet.contains(key) && !key.startsWith("external"))
         warn("Property %s is not valid".format(key))
       else

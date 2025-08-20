@@ -20,6 +20,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -28,7 +29,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTask.TransactionBoundary;
@@ -43,25 +47,29 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 
 /**
- * WorkerTask that uses a SourceTask to ingest data into Kafka, with support for exactly-once delivery guarantees.
+ * WorkerTask that uses a {@link SourceTask} to ingest data into Kafka, with support for exactly-once semantics.
  */
 class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     private static final Logger log = LoggerFactory.getLogger(ExactlyOnceWorkerSourceTask.class);
 
     private boolean transactionOpen;
-    private final LinkedHashMap<SourceRecord, RecordMetadata> commitableRecords;
+    private final LinkedHashMap<SourceRecord, RecordMetadata> committableRecords;
 
     private final TransactionBoundaryManager transactionBoundaryManager;
     private final TransactionMetricsGroup transactionMetrics;
@@ -73,10 +81,10 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        SourceTask task,
                                        TaskStatus.Listener statusListener,
                                        TargetState initialState,
-                                       Converter keyConverter,
-                                       Converter valueConverter,
-                                       HeaderConverter headerConverter,
-                                       TransformationChain<SourceRecord> transformationChain,
+                                       Plugin<Converter> keyConverterPlugin,
+                                       Plugin<Converter> valueConverterPlugin,
+                                       Plugin<HeaderConverter> headerConverterPlugin,
+                                       TransformationChain<SourceRecord, SourceRecord> transformationChain,
                                        Producer<byte[], byte[]> producer,
                                        TopicAdmin admin,
                                        Map<String, TopicCreationGroup> topicGroups,
@@ -89,19 +97,22 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        ErrorHandlingMetrics errorMetrics,
                                        ClassLoader loader,
                                        Time time,
-                                       RetryWithToleranceOperator retryWithToleranceOperator,
+                                       RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                                        StatusBackingStore statusBackingStore,
                                        SourceConnectorConfig sourceConfig,
                                        Executor closeExecutor,
                                        Runnable preProducerCheck,
-                                       Runnable postProducerCheck) {
-        super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
-                new WorkerSourceTaskContext(offsetReader, id, configState, buildTransactionContext(sourceConfig)),
+                                       Runnable postProducerCheck,
+                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+                                       TaskPluginsMetadata pluginsMetadata,
+                                       Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+        super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
+                buildTransactionContext(sourceConfig),
                 producer, admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics,
-                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor);
+                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, pluginsMetadata, pluginLoaderSwapper);
 
         this.transactionOpen = false;
-        this.commitableRecords = new LinkedHashMap<>();
+        this.committableRecords = new LinkedHashMap<>();
 
         this.preProducerCheck = preProducerCheck;
         this.postProducerCheck = postProducerCheck;
@@ -146,8 +157,8 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
     @Override
     protected void recordDropped(SourceRecord record) {
-        synchronized (commitableRecords) {
-            commitableRecords.put(record, null);
+        synchronized (committableRecords) {
+            committableRecords.put(record, null);
         }
         transactionBoundaryManager.maybeCommitTransactionForRecord(record);
     }
@@ -192,13 +203,14 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             ProducerRecord<byte[], byte[]> producerRecord,
             RecordMetadata recordMetadata
     ) {
-        synchronized (commitableRecords) {
-            commitableRecords.put(sourceRecord, recordMetadata);
+        synchronized (committableRecords) {
+            committableRecords.put(sourceRecord, recordMetadata);
         }
     }
 
     @Override
     protected void producerSendFailed(
+            ProcessingContext<SourceRecord> context,
             boolean synchronous,
             ProducerRecord<byte[], byte[]> producerRecord,
             SourceRecord preTransformRecord,
@@ -219,9 +231,6 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         if (failed) {
             log.debug("Skipping final offset commit as task has failed");
             return;
-        } else if (isCancelled()) {
-            log.debug("Skipping final offset commit as task has been cancelled");
-            return;
         }
 
         // It should be safe to commit here even if we were in the middle of retrying on RetriableExceptions in the
@@ -236,6 +245,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     @Override
     public void removeMetrics() {
         Utils.closeQuietly(transactionMetrics, "source task transaction metrics tracker");
+        super.removeMetrics();
     }
 
     @Override
@@ -258,12 +268,31 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
         long started = time.milliseconds();
 
+        AtomicReference<Throwable> flushError = new AtomicReference<>();
+        boolean shouldFlush = false;
+        try {
+            // Begin the flush without waiting, as there should not be any concurrent flushes.
+            // This is because commitTransaction is always called on the same thread, and should always block until
+            // the flush is complete, or cancel the flush if an error occurs.
+            shouldFlush = offsetWriter.beginFlush();
+        } catch (Throwable e) {
+            flushError.compareAndSet(null, e);
+        }
+        if (flushError.get() == null && !transactionOpen && !shouldFlush) {
+            // There is no contents on the framework side to commit, so skip the offset flush and producer commit
+            long durationMillis = time.milliseconds() - started;
+            recordCommitSuccess(durationMillis);
+            log.debug("{} Finished commitOffsets successfully in {} ms", this, durationMillis);
+
+            commitSourceTask();
+            return;
+        }
+
         // We might have just aborted a transaction, in which case we'll have to begin a new one
         // in order to commit offsets
         maybeBeginTransaction();
 
-        AtomicReference<Throwable> flushError = new AtomicReference<>();
-        if (offsetWriter.beginFlush()) {
+        if (shouldFlush) {
             // Now we can actually write the offsets to the internal topic.
             // No need to track the flush future here since it's guaranteed to complete by the time
             // Producer::commitTransaction completes
@@ -280,20 +309,24 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             });
         }
 
-        // Commit the transaction
-        // Blocks until all outstanding records have been sent and ack'd
-        try {
-            producer.commitTransaction();
-        } catch (Throwable t) {
-            log.error("{} Failed to commit producer transaction", ExactlyOnceWorkerSourceTask.this, t);
-            flushError.compareAndSet(null, t);
+        // Only commit the transaction if we were able to serialize the offsets.
+        // Otherwise, we may commit source records without committing their offsets
+        Throwable error = flushError.get();
+        if (error == null) {
+            try {
+                // Commit the transaction
+                // Blocks until all outstanding records have been sent and ack'd
+                producer.commitTransaction();
+            } catch (Throwable t) {
+                log.error("{} Failed to commit producer transaction", ExactlyOnceWorkerSourceTask.this, t);
+                flushError.compareAndSet(null, t);
+            }
+            transactionOpen = false;
         }
 
-        transactionOpen = false;
-
-        Throwable error = flushError.get();
+        error = flushError.get();
         if (error != null) {
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started);
             offsetWriter.cancelFlush();
             throw maybeWrapProducerSendException(
                     "Failed to flush offsets and/or records for task " + id,
@@ -308,9 +341,9 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         log.debug("{} Finished commitOffsets successfully in {} ms", this, durationMillis);
 
         // Synchronize in order to guarantee that writes on other threads are picked up by this one
-        synchronized (commitableRecords) {
-            commitableRecords.forEach(this::commitTaskRecord);
-            commitableRecords.clear();
+        synchronized (committableRecords) {
+            committableRecords.forEach(this::commitTaskRecord);
+            committableRecords.clear();
         }
         commitSourceTask();
     }
@@ -383,7 +416,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         }
 
         private void maybeCommitTransaction(boolean shouldCommit) {
-            if (shouldCommit && (transactionOpen || offsetWriter.willFlush())) {
+            if (shouldCommit) {
                 try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
                     commitTransaction();
                 }
@@ -396,24 +429,22 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             SourceConnectorConfig sourceConfig,
             WorkerTransactionContext transactionContext) {
         TransactionBoundary boundary = sourceConfig.transactionBoundary();
-        switch (boundary) {
-            case POLL:
-                return new TransactionBoundaryManager() {
-                    @Override
-                    protected boolean shouldCommitTransactionForBatch(long currentTimeMs) {
-                        return true;
-                    }
+        return switch (boundary) {
+            case POLL -> new TransactionBoundaryManager() {
+                @Override
+                protected boolean shouldCommitTransactionForBatch(long currentTimeMs) {
+                    return true;
+                }
 
-                    @Override
-                    protected boolean shouldCommitFinalTransaction() {
-                        return true;
-                    }
-                };
-
-            case INTERVAL:
+                @Override
+                protected boolean shouldCommitFinalTransaction() {
+                    return true;
+                }
+            };
+            case INTERVAL -> {
                 long transactionBoundaryInterval = Optional.ofNullable(sourceConfig.transactionBoundaryInterval())
                         .orElse(workerConfig.offsetCommitInterval());
-                return new TransactionBoundaryManager() {
+                yield new TransactionBoundaryManager() {
                     private final long commitInterval = transactionBoundaryInterval;
                     private long lastCommit;
 
@@ -433,14 +464,14 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                     }
 
                     @Override
-                    protected  boolean shouldCommitFinalTransaction() {
+                    protected boolean shouldCommitFinalTransaction() {
                         return true;
                     }
                 };
-
-            case CONNECTOR:
+            }
+            case CONNECTOR -> {
                 Objects.requireNonNull(transactionContext, "Transaction context must be provided when using connector-defined transaction boundaries");
-                return new TransactionBoundaryManager() {
+                yield new TransactionBoundaryManager() {
                     @Override
                     protected boolean shouldCommitFinalTransaction() {
                         return shouldCommitTransactionForBatch(time.milliseconds());
@@ -450,7 +481,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                     protected boolean shouldCommitTransactionForBatch(long currentTimeMs) {
                         if (transactionContext.shouldAbortBatch()) {
                             log.info("Aborting transaction for batch as requested by connector");
-                            abortTransaction();
+                            maybeAbortTransaction();
                             // We abort the transaction, which causes all the records up to this point to be dropped, but we still want to
                             // commit offsets so that the task doesn't see the same records all over again
                             return true;
@@ -463,7 +494,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                         if (transactionContext.shouldAbortOn(record)) {
                             log.info("Aborting transaction for record on topic {} as requested by connector", record.topic());
                             log.trace("Last record in aborted transaction: {}", record);
-                            abortTransaction();
+                            maybeAbortTransaction();
                             // We abort the transaction, which causes all the records up to this point to be dropped, but we still want to
                             // commit offsets so that the task doesn't see the same records all over again
                             return true;
@@ -471,15 +502,18 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                         return transactionContext.shouldCommitOn(record);
                     }
 
-                    private void abortTransaction() {
+                    private void maybeAbortTransaction() {
+                        if (!transactionOpen) {
+                            log.warn("Ignoring request by task to abort transaction as the current transaction is empty");
+                            return;
+                        }
                         producer.abortTransaction();
                         transactionMetrics.abortTransaction();
                         transactionOpen = false;
                     }
                 };
-            default:
-                throw new IllegalArgumentException("Unrecognized transaction boundary: " + boundary);
-        }
+            }
+        };
     }
 
     TransactionMetricsGroup transactionMetricsGroup() {

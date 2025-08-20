@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.TransactionContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +35,7 @@ public class WorkerTransactionContext implements TransactionContext {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerTransactionContext.class);
 
-    private final Set<SourceRecord> commitableRecords = new HashSet<>();
+    private final Set<SourceRecord> committableRecords = new HashSet<>();
     private final Set<SourceRecord> abortableRecords = new HashSet<>();
     private boolean batchCommitRequested = false;
     private boolean batchAbortRequested = false;
@@ -47,7 +48,7 @@ public class WorkerTransactionContext implements TransactionContext {
     @Override
     public synchronized void commitTransaction(SourceRecord record) {
         Objects.requireNonNull(record, "Source record used to define transaction boundaries may not be null");
-        commitableRecords.add(record);
+        committableRecords.add(record);
     }
 
     @Override
@@ -82,7 +83,7 @@ public class WorkerTransactionContext implements TransactionContext {
         // Essentially, instead of telling the task that it screwed up and trusting it to do the right thing, we rat on it to the
         // worker and let it get punished accordingly.
         checkRecordRequestConsistency(record);
-        return commitableRecords.remove(record);
+        return committableRecords.remove(record);
     }
 
     public synchronized boolean shouldAbortOn(SourceRecord record) {
@@ -97,7 +98,7 @@ public class WorkerTransactionContext implements TransactionContext {
     }
 
     private void checkRecordRequestConsistency(SourceRecord record) {
-        if (commitableRecords.contains(record) && abortableRecords.contains(record)) {
+        if (committableRecords.contains(record) && abortableRecords.contains(record)) {
             log.trace("Connector will fail as it has requested both commit and abort of transaction for same record: {}", record);
             throw new IllegalStateException(String.format(
                     "Connector requested both commit and abort of same record against topic/partition %s/%s",

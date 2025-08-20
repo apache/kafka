@@ -22,9 +22,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 /**
  * Generates actions that should be taken by a producer that uses transactions.
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "type")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(value = {
     @JsonSubTypes.Type(value = UniformTransactionsGenerator.class, name = "uniform"),
     @JsonSubTypes.Type(value = TimeIntervalTransactionsGenerator.class, name = "interval"),

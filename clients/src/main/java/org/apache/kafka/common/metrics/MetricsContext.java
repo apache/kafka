@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.metrics;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Map;
 
 /**
@@ -42,7 +40,6 @@ import java.util.Map;
  *   <dd>connect.kafka.cluster.id, connect.group.id</dd>
  * </dl>
  */
-@InterfaceStability.Evolving
 public interface MetricsContext {
     /* predefined fields */
     String NAMESPACE = "_namespace"; // metrics namespace, formerly jmx prefix

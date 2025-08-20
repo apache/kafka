@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.examples.wordcount;
 
-import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -25,6 +24,7 @@ import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.StoreBuilder;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -36,7 +36,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Transformer} in the {@link WordCountTransformerDemo}.
+ * Demonstrate the use of {@link MockProcessorContext} for testing the {@link org.apache.kafka.streams.kstream.Transformer} in the {@link WordCountTransformerDemo}.
  */
 public class WordCountTransformerTest {
     @Test
@@ -54,7 +54,7 @@ public class WordCountTransformerTest {
             context.getStateStoreContext().register(store, null);
         }
         final Processor<String, String, String, String> processor = supplier.get();
-        processor.init(new org.apache.kafka.streams.processor.api.MockProcessorContext<String, String>() {
+        processor.init(new org.apache.kafka.streams.processor.api.MockProcessorContext<>() {
             @Override
             public <S extends StateStore> S getStateStore(final String name) {
                 return context.getStateStore(name);

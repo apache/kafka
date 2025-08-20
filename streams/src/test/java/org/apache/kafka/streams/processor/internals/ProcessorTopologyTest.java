@@ -22,17 +22,18 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -40,44 +41,46 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProcessorTopologyTest {
 
@@ -102,17 +105,17 @@ public class ProcessorTopologyTest {
     private TopologyTestDriver driver;
     private final Properties props = new Properties();
 
-    @Before
+    @BeforeEach
     public void setup() {
         // Create a new directory in which we'll put all of the state for this test, enabling running tests in parallel ...
         final File localState = TestUtils.tempDirectory();
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
         props.setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
     }
 
-    @After
+    @AfterEach
     public void cleanup() {
         props.clear();
         if (driver != null) {
@@ -123,7 +126,7 @@ public class ProcessorTopologyTest {
 
     private List<KeyValue<String, String>> prefixScanResults(final KeyValueStore<String, String> store, final String prefix) {
         final List<KeyValue<String, String>> results = new ArrayList<>();
-        try (final KeyValueIterator<String, String> prefixScan = store.prefixScan(prefix, Serdes.String().serializer())) {
+        try (final KeyValueIterator<String, String> prefixScan = store.prefixScan(prefix, new StringSerializer())) {
             while (prefixScan.hasNext()) {
                 final KeyValue<String, String> next = prefixScan.next();
                 results.add(next);
@@ -169,7 +172,7 @@ public class ProcessorTopologyTest {
 
         final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
 
-        assertThat(processorTopology.terminalNodes(), equalTo(mkSet("processor-2", "sink-1")));
+        assertThat(processorTopology.terminalNodes(), equalTo(Set.of("processor-2", "sink-1")));
     }
 
     @Test
@@ -279,7 +282,7 @@ public class ProcessorTopologyTest {
         driver = new TopologyTestDriver(createSimpleTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
         final TestOutputTopic<String, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1");
@@ -299,12 +302,23 @@ public class ProcessorTopologyTest {
     }
 
     @Test
+    public void testDrivingSimpleTopologyWithDroppingPartitioner() {
+        driver = new TopologyTestDriver(createSimpleTopologyWithDroppingPartitioner(), props);
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
+        final TestOutputTopic<String, String> outputTopic1 =
+                driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
+
+        inputTopic.pipeInput("key1", "value1");
+        assertTrue(outputTopic1.isEmpty());
+    }
+
+    @Test
     public void testDrivingStatefulTopology() {
         final String storeName = "entries";
         driver = new TopologyTestDriver(createStatefulTopology(storeName), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -324,39 +338,7 @@ public class ProcessorTopologyTest {
         driver = new TopologyTestDriver(createConnectedStateStoreTopology("connectedStore"), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore("connectedStore");
-        assertEquals("value4", store.get("key1"));
-        assertEquals("value2", store.get("key2"));
-        assertEquals("value3", store.get("key3"));
-        assertNull(store.get("key4"));
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testDrivingConnectedStateStoreInDifferentProcessorsTopologyWithOldAPI() {
-        final String storeName = "connectedStore";
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addSource("source2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source1")
-            .addProcessor("processor2", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source2")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1", "processor2");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -387,7 +369,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -417,7 +399,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -452,7 +434,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -487,7 +469,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -522,7 +504,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -557,7 +539,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -592,7 +574,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -627,7 +609,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -662,7 +644,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -697,7 +679,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -732,7 +714,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -767,7 +749,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -802,7 +784,7 @@ public class ProcessorTopologyTest {
 
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+            driver.createOutputTopic(OUTPUT_TOPIC_1, new IntegerDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         inputTopic.pipeInput("key2", "value2");
@@ -820,467 +802,6 @@ public class ProcessorTopologyTest {
         assertEquals("key3", results.get(2).key);
         assertEquals("value3", results.get(2).value);
 
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanInMemoryStoreNoCachingNoLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String())
-                .withCachingDisabled()
-                .withLoggingDisabled();
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanInMemoryStoreWithCachingNoLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String())
-                .withCachingEnabled()
-                .withLoggingDisabled();
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanInMemoryStoreWithCachingWithLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String())
-                .withCachingEnabled()
-                .withLoggingEnabled(Collections.emptyMap());
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanPersistentStoreNoCachingNoLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String())
-                .withCachingDisabled()
-                .withLoggingDisabled();
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanPersistentStoreWithCachingNoLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String())
-                .withCachingEnabled()
-                .withLoggingDisabled();
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanPersistentStoreWithCachingWithLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String())
-                .withCachingEnabled()
-                .withLoggingEnabled(Collections.emptyMap());
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanPersistentTimestampedStoreNoCachingNoLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.persistentTimestampedKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String())
-                .withCachingDisabled()
-                .withLoggingDisabled();
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanPersistentTimestampedStoreWithCachingNoLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.persistentTimestampedKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String())
-                .withCachingEnabled()
-                .withLoggingDisabled();
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanPersistentTimestampedStoreWithCachingWithLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.persistentTimestampedKeyValueStore(DEFAULT_STORE_NAME), Serdes.String(), Serdes.String())
-                .withCachingEnabled()
-                .withLoggingEnabled(Collections.emptyMap());
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanLruMapNoCachingNoLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.lruMap(DEFAULT_STORE_NAME, 100), Serdes.String(), Serdes.String())
-                .withCachingDisabled()
-                .withLoggingDisabled();
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanLruMapWithCachingNoLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.lruMap(DEFAULT_STORE_NAME, 100), Serdes.String(), Serdes.String())
-                .withCachingEnabled()
-                .withLoggingDisabled();
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void testPrefixScanLruMapWithCachingWithLoggingOldProcessor() {
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-            Stores.keyValueStoreBuilder(Stores.lruMap(DEFAULT_STORE_NAME, 100), Serdes.String(), Serdes.String())
-                .withCachingEnabled()
-                .withLoggingEnabled(Collections.emptyMap());
-        topology
-            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(DEFAULT_STORE_NAME), Collections.singleton(storeBuilder)), "source1")
-            .addSink("counts", OUTPUT_TOPIC_1, "processor1");
-
-        driver = new TopologyTestDriver(topology, props);
-
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
-        final TestOutputTopic<Integer, String> outputTopic1 =
-            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
-
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        inputTopic.pipeInput("key3", "value3");
-        inputTopic.pipeInput("key1", "value4");
-        assertTrue(outputTopic1.isEmpty());
-
-        final KeyValueStore<String, String> store = driver.getKeyValueStore(DEFAULT_STORE_NAME);
-        final List<KeyValue<String, String>> results = prefixScanResults(store, DEFAULT_PREFIX);
-
-        assertEquals("key1", results.get(0).key);
-        assertEquals("value4", results.get(0).value);
-        assertEquals("key2", results.get(1).key);
-        assertEquals("value2", results.get(1).value);
-        assertEquals("key3", results.get(2).key);
-        assertEquals("value3", results.get(2).value);
-
-    }
-
-    @Deprecated // testing old PAPI
-    @Test
-    public void shouldDriveGlobalStore() {
-        final String storeName = "my-store";
-        final String global = "global";
-        final String topic = "topic";
-
-        topology.addGlobalStore(
-            Stores.keyValueStoreBuilder(
-                Stores.inMemoryKeyValueStore(storeName),
-                Serdes.String(),
-                Serdes.String()
-            ).withLoggingDisabled(),
-            global,
-            STRING_DESERIALIZER,
-            STRING_DESERIALIZER,
-            topic,
-            "processor",
-            define(new OldAPIStatefulProcessor(storeName)));
-
-        driver = new TopologyTestDriver(topology, props);
-        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(topic, STRING_SERIALIZER, STRING_SERIALIZER);
-        final KeyValueStore<String, String> globalStore = driver.getKeyValueStore(storeName);
-        inputTopic.pipeInput("key1", "value1");
-        inputTopic.pipeInput("key2", "value2");
-        assertEquals("value1", globalStore.get("key1"));
-        assertEquals("value2", globalStore.get("key2"));
     }
 
     @Test
@@ -1289,9 +810,9 @@ public class ProcessorTopologyTest {
         driver = new TopologyTestDriver(createSimpleMultiSourceTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER, Instant.ofEpochMilli(0L), Duration.ZERO);
         final TestOutputTopic<String, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
         final TestOutputTopic<String, String> outputTopic2 =
-                driver.createOutputTopic(OUTPUT_TOPIC_2, Serdes.String().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(OUTPUT_TOPIC_2, new StringDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1");
         assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1");
@@ -1311,7 +832,7 @@ public class ProcessorTopologyTest {
         inputTopic.pipeInput("key2", "value2");
         inputTopic.pipeInput("key3", "value3");
         final TestOutputTopic<String, String> outputTopic2 =
-                driver.createOutputTopic(OUTPUT_TOPIC_2, Serdes.String().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(OUTPUT_TOPIC_2, new StringDeserializer(), new StringDeserializer());
         assertNextOutputRecord(outputTopic2.readRecord(), "key1", "value1");
         assertNextOutputRecord(outputTopic2.readRecord(), "key2", "value2");
         assertNextOutputRecord(outputTopic2.readRecord(), "key3", "value3");
@@ -1399,7 +920,7 @@ public class ProcessorTopologyTest {
         inputTopic.pipeInput("key2", "value2", 20L);
         inputTopic.pipeInput("key3", "value3", 30L);
         final TestOutputTopic<String, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
         assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1", 10L);
         assertNextOutputRecord(outputTopic1.readRecord(), "key2", "value2", 20L);
         assertNextOutputRecord(outputTopic1.readRecord(), "key3", "value3", 30L);
@@ -1414,7 +935,7 @@ public class ProcessorTopologyTest {
         inputTopic.pipeInput("key2", "value2", 20L);
         inputTopic.pipeInput("key3", "value3", 30L);
         final TestOutputTopic<String, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
         assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1", 20L);
         assertNextOutputRecord(outputTopic1.readRecord(), "key2", "value2", 30L);
         assertNextOutputRecord(outputTopic1.readRecord(), "key3", "value3", 40L);
@@ -1426,9 +947,9 @@ public class ProcessorTopologyTest {
         driver = new TopologyTestDriver(createMultiProcessorTimestampTopology(partition), props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
         final TestOutputTopic<String, String> outputTopic1 =
-                driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.String().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(OUTPUT_TOPIC_1, new StringDeserializer(), new StringDeserializer());
         final TestOutputTopic<String, String> outputTopic2 =
-                driver.createOutputTopic(OUTPUT_TOPIC_2, Serdes.String().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(OUTPUT_TOPIC_2, new StringDeserializer(), new StringDeserializer());
 
         inputTopic.pipeInput("key1", "value1", 10L);
         assertNextOutputRecord(outputTopic1.readRecord(), "key1", "value1", 10L);
@@ -1498,18 +1019,6 @@ public class ProcessorTopologyTest {
         assertTrue(processorTopology.hasPersistentLocalStore());
     }
 
-    @Test
-    public void inMemoryStoreShouldNotResultInPersistentGlobalStore() {
-        final ProcessorTopology processorTopology = createGlobalStoreTopology(Stores.inMemoryKeyValueStore("my-store"));
-        assertFalse(processorTopology.hasPersistentGlobalStore());
-    }
-
-    @Test
-    public void persistentGlobalStoreShouldBeDetected() {
-        final ProcessorTopology processorTopology = createGlobalStoreTopology(Stores.persistentKeyValueStore("my-store"));
-        assertTrue(processorTopology.hasPersistentGlobalStore());
-    }
-
     private ProcessorTopology createLocalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
         final TopologyWrapper topology = new TopologyWrapper();
         final String processor = "processor";
@@ -1521,15 +1030,7 @@ public class ProcessorTopologyTest {
         return topology.getInternalBuilder("anyAppId").buildTopology();
     }
 
-    @Deprecated // testing old PAPI
-    private ProcessorTopology createGlobalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
-        final TopologyWrapper topology = new TopologyWrapper();
-        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
-                Stores.keyValueStoreBuilder(storeSupplier, Serdes.String(), Serdes.String()).withLoggingDisabled();
-        topology.addGlobalStore(storeBuilder, "global", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic", "processor",
-                define(new OldAPIStatefulProcessor(storeSupplier.name())));
-        return topology.getInternalBuilder("anyAppId").buildTopology();
-    }
+
 
     private void assertNextOutputRecord(final TestRecord<String, String> record,
                                         final String key,
@@ -1555,8 +1056,8 @@ public class ProcessorTopologyTest {
         assertEquals(headers, record.headers());
     }
 
-    private StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
-        return (topic, key, value, numPartitions) -> partition;
+    private StreamPartitioner<String, String> constantPartitioner(final Integer partition) {
+        return (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(partition));
     }
 
     private Topology createSimpleTopology(final int partition) {
@@ -1583,21 +1084,40 @@ public class ProcessorTopologyTest {
             .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
     }
 
-    @Deprecated // testing old PAPI
+    static class DroppingPartitioner implements StreamPartitioner<String, String> {
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final String value, final int numPartitions) {
+            final Set<Integer> partitions = new HashSet<>();
+            for (int i = 1; i < numPartitions; i += 2) {
+                partitions.add(i);
+            }
+            return Optional.of(partitions);
+        }
+    }
+
+    // Adding a test only for dropping partitioner as the output topic is a single partitioned topic
+    // and the default implementation of partitions method already sends a singleton list which is
+    // getting tested in other tests
+    private Topology createSimpleTopologyWithDroppingPartitioner() {
+        return topology
+                .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+                .addProcessor("processor", ForwardingProcessor::new, "source")
+                .addSink("sink", OUTPUT_TOPIC_1, new DroppingPartitioner(), "processor");
+    }
+
     private Topology createStatefulTopology(final String storeName) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new OldAPIStatefulProcessor(storeName)), "source")
+            .addProcessor("processor", () -> new StatefulProcessor(storeName), "source")
             .addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String()), "processor")
             .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
-    @Deprecated // testing old PAPI
     private Topology createConnectedStateStoreTopology(final String storeName) {
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source")
+            .addProcessor("processor", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source")
             .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
@@ -1747,30 +1267,6 @@ public class ProcessorTopologyTest {
     /**
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context.
      */
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    protected static class OldAPIStatefulProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
-        private KeyValueStore<String, String> store;
-        private final String storeName;
-
-        OldAPIStatefulProcessor(final String storeName) {
-            this.storeName = storeName;
-        }
-
-        @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-            super.init(context);
-            store = context.getStateStore(storeName);
-        }
-
-        @Override
-        public void process(final String key, final String value) {
-            store.put(key, value);
-        }
-    }
-
-    /**
-     * A processor that stores each key-value pair in an in-memory key-value store registered with the context.
-     */
     protected static class StatefulProcessor implements Processor<String, String, Void, Void> {
         private KeyValueStore<String, String> store;
         private final String storeName;
@@ -1790,30 +1286,9 @@ public class ProcessorTopologyTest {
         }
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> define(final org.apache.kafka.streams.processor.Processor<K, V> processor) {
-        return () -> processor;
-    }
-
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> defineWithStoresOldAPI(final Supplier<org.apache.kafka.streams.processor.Processor<K, V>> supplier,
-                                                                                                     final Set<StoreBuilder<?>> stores) {
-        return new org.apache.kafka.streams.processor.ProcessorSupplier<K, V>() {
-            @Override
-            public org.apache.kafka.streams.processor.Processor<K, V> get() {
-                return supplier.get();
-            }
-
-            @Override
-            public Set<StoreBuilder<?>> stores() {
-                return stores;
-            }
-        };
-    }
-
     private <KIn, VIn, KOut, VOut> ProcessorSupplier<KIn, VIn, KOut, VOut> defineWithStores(final Supplier<Processor<KIn, VIn, KOut, VOut>> supplier,
                                                                                             final Set<StoreBuilder<?>> stores) {
-        return new ProcessorSupplier<KIn, VIn, KOut, VOut>() {
+        return new ProcessorSupplier<>() {
             @Override
             public Processor<KIn, VIn, KOut, VOut> get() {
                 return supplier.get();

@@ -18,7 +18,6 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
 
@@ -27,11 +26,20 @@ import java.util.Objects;
  * regenerated for every attempt of copying a specific log segment in {@link RemoteStorageManager#copyLogSegmentData(RemoteLogSegmentMetadata, LogSegmentData)}.
  * Once it is stored in remote storage, it is used to access that segment later from remote log metadata storage.
  */
-@InterfaceStability.Evolving
 public class RemoteLogSegmentId {
 
     private final TopicIdPartition topicIdPartition;
     private final Uuid id;
+
+    /**
+     * Creates a new {@link RemoteLogSegmentId} for the provided {@link TopicIdPartition} with a random Uuid.
+     *
+     * @param topicIdPartition TopicIdPartition of this remote log segment.
+     * @return generated RemoteLogSegmentId.
+     */
+    public static RemoteLogSegmentId generateNew(TopicIdPartition topicIdPartition) {
+        return new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
+    }
 
     public RemoteLogSegmentId(TopicIdPartition topicIdPartition, Uuid id) {
         this.topicIdPartition = Objects.requireNonNull(topicIdPartition, "topicIdPartition can not be null");

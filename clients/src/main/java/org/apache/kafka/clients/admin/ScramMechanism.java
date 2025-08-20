@@ -23,6 +23,11 @@ import java.util.Arrays;
  * Representation of a SASL/SCRAM Mechanism.
  *
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-554%3A+Add+Broker-side+SCRAM+Config+API">KIP-554: Add Broker-side SCRAM Config API</a>
+ *
+ * This code is duplicated in org.apache.kafka.common.security.scram.internals.ScramMechanism.
+ * The type field in both files must match and must not change. The type field
+ * is used both for passing ScramCredentialUpsertion and for the internal
+ * UserScramCredentialRecord. Do not change the type field.
  */
 public enum ScramMechanism {
     UNKNOWN((byte) 0),
@@ -80,7 +85,7 @@ public enum ScramMechanism {
     private final byte type;
     private final String mechanismName;
 
-    private ScramMechanism(byte type) {
+    ScramMechanism(byte type) {
         this.type = type;
         this.mechanismName = toString().replace('_', '-');
     }

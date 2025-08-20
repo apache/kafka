@@ -17,14 +17,13 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -33,7 +32,7 @@ import java.util.TreeSet;
  * The specification for a task which connects and disconnects many times a
  * second to stress the broker.
  */
-public class ConnectionStressSpec extends TaskSpec {
+public final class ConnectionStressSpec extends TaskSpec {
     private final List<String> clientNodes;
     private final String bootstrapServers;
     private final Map<String, String> commonClientConf;
@@ -56,8 +55,7 @@ public class ConnectionStressSpec extends TaskSpec {
             @JsonProperty("numThreads") int numThreads,
             @JsonProperty("action") ConnectionStressAction action) {
         super(startMs, durationMs);
-        this.clientNodes = (clientNodes == null) ? Collections.emptyList() :
-            Collections.unmodifiableList(new ArrayList<>(clientNodes));
+        this.clientNodes = clientNodes == null ? List.of() : List.copyOf(clientNodes);
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.targetConnectionsPerSec = targetConnectionsPerSec;

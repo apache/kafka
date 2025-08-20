@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -26,13 +28,16 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Base driver implementation for APIs which target partition leaders.
@@ -42,9 +47,15 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
     };
 
     private final Logger log;
+    private final boolean tolerateUnknownTopics;
 
     public PartitionLeaderStrategy(LogContext logContext) {
+        this(logContext, true);
+    }
+
+    public PartitionLeaderStrategy(LogContext logContext, boolean tolerateUnknownTopics) {
         this.log = logContext.logger(PartitionLeaderStrategy.class);
+        this.tolerateUnknownTopics = tolerateUnknownTopics;
     }
 
     @Override
@@ -64,6 +75,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
         return new MetadataRequest.Builder(request);
     }
 
+    @SuppressWarnings("fallthrough")
     private void handleTopicError(
         String topic,
         Errors topicError,
@@ -72,6 +84,12 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
     ) {
         switch (topicError) {
             case UNKNOWN_TOPIC_OR_PARTITION:
+                if (!tolerateUnknownTopics) {
+                    log.error("Received unknown topic error for topic {}", topic, topicError.exception());
+                    failAllPartitionsForTopic(topic, requestPartitions, failed, tp -> topicError.exception(
+                            "Failed to fetch metadata for partition " + tp + " because metadata for topic `" + topic + "` could not be found"));
+                    break;
+                }
             case LEADER_NOT_AVAILABLE:
             case BROKER_NOT_AVAILABLE:
                 log.debug("Metadata request for topic {} returned topic-level error {}. Will retry",
@@ -108,9 +126,9 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
         Map<TopicPartition, Throwable> failed,
         Function<TopicPartition, Throwable> exceptionGenerator
     ) {
-        partitions.stream().filter(tp -> tp.topic().equals(topic)).forEach(tp -> {
-            failed.put(tp, exceptionGenerator.apply(tp));
-        });
+        partitions.stream().filter(tp -> tp.topic().equals(topic)).forEach(tp ->
+            failed.put(tp, exceptionGenerator.apply(tp))
+        );
     }
 
     private void handlePartitionError(
@@ -124,6 +142,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
             case LEADER_NOT_AVAILABLE:
             case BROKER_NOT_AVAILABLE:
             case KAFKA_STORAGE_ERROR:
+            case UNKNOWN_TOPIC_OR_PARTITION:
                 log.debug("Metadata request for partition {} returned partition-level error {}. Will retry",
                     topicPartition, partitionError);
                 break;
@@ -180,4 +199,92 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
         return new LookupResult<>(failed, mapped);
     }
 
+    /**
+     * This subclass of {@link AdminApiFuture} starts with a pre-fetched map for keys to broker ids which can be
+     * used to optimise the request. The map is kept up to date as metadata is fetching as this request is processed.
+     * This is useful for situations in which {@link PartitionLeaderStrategy} is used
+     * repeatedly, such as a sequence of identical calls to
+     * {@link org.apache.kafka.clients.admin.Admin#listOffsets(Map, org.apache.kafka.clients.admin.ListOffsetsOptions)}.
+     */
+    public static class PartitionLeaderFuture<V> implements AdminApiFuture<TopicPartition, V> {
+        private final Set<TopicPartition> requestKeys;
+        private final Map<TopicPartition, Integer> partitionLeaderCache;
+        private final Map<TopicPartition, KafkaFuture<V>> futures;
+
+        public PartitionLeaderFuture(Set<TopicPartition> requestKeys, Map<TopicPartition, Integer> partitionLeaderCache) {
+            this.requestKeys = requestKeys;
+            this.partitionLeaderCache = partitionLeaderCache;
+            this.futures = requestKeys.stream().collect(Collectors.toUnmodifiableMap(
+                Function.identity(),
+                k -> new KafkaFutureImpl<>()
+            ));
+        }
+
+        @Override
+        public Set<TopicPartition> lookupKeys() {
+            return futures.keySet();
+        }
+
+        @Override
+        public Set<TopicPartition> uncachedLookupKeys() {
+            Set<TopicPartition> keys = new HashSet<>();
+            requestKeys.forEach(tp -> {
+                if (!partitionLeaderCache.containsKey(tp)) {
+                    keys.add(tp);
+                }
+            });
+            return keys;
+        }
+
+        @Override
+        public Map<TopicPartition, Integer> cachedKeyBrokerIdMapping() {
+            Map<TopicPartition, Integer> mapping = new HashMap<>();
+            requestKeys.forEach(tp -> {
+                Integer brokerId = partitionLeaderCache.get(tp);
+                if (brokerId != null) {
+                    mapping.put(tp, brokerId);
+                }
+            });
+            return mapping;
+        }
+
+        public Map<TopicPartition, KafkaFuture<V>> all() {
+            return futures;
+        }
+
+        @Override
+        public void complete(Map<TopicPartition, V> values) {
+            values.forEach(this::complete);
+        }
+
+        private void complete(TopicPartition key, V value) {
+            futureOrThrow(key).complete(value);
+        }
+
+        @Override
+        public void completeLookup(Map<TopicPartition, Integer> brokerIdMapping) {
+            partitionLeaderCache.putAll(brokerIdMapping);
+        }
+
+        @Override
+        public void completeExceptionally(Map<TopicPartition, Throwable> errors) {
+            errors.forEach(this::completeExceptionally);
+        }
+
+        private void completeExceptionally(TopicPartition key, Throwable t) {
+            partitionLeaderCache.remove(key);
+            futureOrThrow(key).completeExceptionally(t);
+        }
+
+        private KafkaFutureImpl<V> futureOrThrow(TopicPartition key) {
+            // The below typecast is safe because we initialise futures using only KafkaFutureImpl.
+            KafkaFutureImpl<V> future = (KafkaFutureImpl<V>) futures.get(key);
+            if (future == null) {
+                throw new IllegalArgumentException("Attempt to complete future for " + key +
+                    ", which was not requested");
+            } else {
+                return future;
+            }
+        }
+    }
 }

@@ -113,6 +113,18 @@ public class BatchMemoryPool implements MemoryPool {
         }
     }
 
+    /**
+     * Release the retained buffers in the free pool.
+     */
+    public void releaseRetained() {
+        lock.lock();
+        try {
+            free.clear();
+        } finally {
+            lock.unlock();
+        }
+    }
+
     @Override
     public long size() {
         lock.lock();

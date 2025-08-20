@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -31,16 +32,16 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class FileStreamSinkTaskTest {
 
     private FileStreamSinkTask task;
     private ByteArrayOutputStream os;
-    private PrintStream printStream;
 
     @TempDir
     public Path topDir;
@@ -49,7 +50,7 @@ public class FileStreamSinkTaskTest {
     @BeforeEach
     public void setup() {
         os = new ByteArrayOutputStream();
-        printStream = new PrintStream(os);
+        PrintStream printStream = new PrintStream(os);
         task = new FileStreamSinkTask(printStream);
         outputFile = topDir.resolve("connect.output").toAbsolutePath().toString();
     }
@@ -57,18 +58,18 @@ public class FileStreamSinkTaskTest {
     @Test
     public void testPutFlush() {
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        final String newLine = System.getProperty("line.separator"); 
+        final String newLine = System.lineSeparator();
 
         // We do not call task.start() since it would override the output stream
 
-        task.put(Arrays.asList(
+        task.put(List.of(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));
         task.flush(offsets);
         assertEquals("line1" + newLine, os.toString());
 
-        task.put(Arrays.asList(
+        task.put(List.of(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line2", 2),
                 new SinkRecord("topic2", 0, null, null, Schema.STRING_SCHEMA, "line3", 1)
         ));
@@ -86,7 +87,7 @@ public class FileStreamSinkTaskTest {
         task.start(props);
 
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        task.put(Arrays.asList(
+        task.put(List.of(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line0", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));
@@ -97,7 +98,7 @@ public class FileStreamSinkTaskTest {
         int i = 0;
         try (BufferedReader reader = Files.newBufferedReader(Paths.get(outputFile))) {
             lines[i++] = reader.readLine();
-            task.put(Arrays.asList(
+            task.put(List.of(
                     new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 2),
                     new SinkRecord("topic2", 0, null, null, Schema.STRING_SCHEMA, "line2", 1)
             ));

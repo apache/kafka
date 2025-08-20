@@ -117,10 +117,26 @@
       "about": "Segment size in bytes."
     },
     {
+      "name": "CustomMetadata",
+      "type": "bytes",
+      "default": "null",
+      "versions": "0+",
+      "nullableVersions": "0+",
+      "about": "Custom metadata."
+    },
+    {
       "name": "RemoteLogSegmentState",
       "type": "int8",
       "versions": "0+",
       "about": "State identifier of the remote log segment, which is RemoteLogSegmentState.id()."
+    },
+    {
+      "name": "TxnIndexEmpty",
+      "type": "bool",
+      "versions": "0+",
+      "about": "Flag to indicate if the transaction index is empty.",
+      "taggedVersions": "0+",
+      "tag": 0
     }
   ]
 }

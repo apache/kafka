@@ -20,10 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -56,8 +55,8 @@ public class DescribeQuorumRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static DescribeQuorumRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeQuorumRequest(new DescribeQuorumRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DescribeQuorumRequest parse(Readable readable, short version) {
+        return new DescribeQuorumRequest(new DescribeQuorumRequestData(readable, version), version);
     }
 
     public static DescribeQuorumRequestData singletonRequest(TopicPartition topicPartition) {
@@ -83,6 +82,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
 
     public static DescribeQuorumResponseData getPartitionLevelErrorResponse(DescribeQuorumRequestData data, Errors error) {
         short errorCode = error.code();
+        String errorMessage = error.message();
 
         List<DescribeQuorumResponseData.TopicData> topicResponses = new ArrayList<>();
         for (DescribeQuorumRequestData.TopicData topic : data.topics()) {
@@ -93,6 +93,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
                         requestPartition -> new DescribeQuorumResponseData.PartitionData()
                                                 .setPartitionIndex(requestPartition.partitionIndex())
                                                 .setErrorCode(errorCode)
+                                                .setErrorMessage(errorMessage)
                     ).collect(Collectors.toList())));
         }
 
@@ -100,6 +101,6 @@ public class DescribeQuorumRequest extends AbstractRequest {
     }
 
     public static DescribeQuorumResponseData getTopLevelErrorResponse(Errors topLevelError) {
-        return new DescribeQuorumResponseData().setErrorCode(topLevelError.code());
+        return new DescribeQuorumResponseData().setErrorCode(topLevelError.code()).setErrorMessage(topLevelError.message());
     }
 }

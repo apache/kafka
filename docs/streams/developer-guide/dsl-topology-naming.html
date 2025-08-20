@@ -66,7 +66,7 @@
 
 		<p>
 		 	By saying there is a readability trade-off, we are referring to viewing a description of the topology.
-		 	When you render the string description of your topology via the <code>Topology#desribe()</code>
+		 	When you render the string description of your topology via the <code>Topology#describe()</code>
 		 	method, you can see what the processor is, but you don't have any context for its business purpose.
 		 	For example, consider the following simple topology:
 
@@ -81,7 +81,7 @@ stream.filter((k,v) -> !v.equals("invalid_txn"))
 		<p>
 		Running <code>Topology#describe()</code> yields this string:
 
-		<pre class="line-numbers"><code class="language-text">Topologies:
+		<pre><code class="language-text">Topologies:
    Sub-topology: 0
 	Source: KSTREAM-SOURCE-0000000000 (topics: [input])
 	  --> KSTREAM-FILTER-0000000001
@@ -300,6 +300,19 @@ stream.filter((k, v) -> v != null && v.length() >= 6)
 		          <td>Stream/Table non-stateful operations</td><td>Named</td>
 		      </tr>
 		  </table>
+
+		  To further enforce best practices, Kafka Streams provides a configuration option,
+		  <code class="docutils literal"><span class="pre">ensure.explicit.internal.resource.naming</span></code>:
+		  <pre class="line-numbers"><code class="language-java">/
+            Properties props = new Properties();
+            props.put(StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+		  </code></pre>
+		  This parameter ensures that all internal topics, state stores, and changelog topics have explicitly defined names. When this configuration
+		  is enabled, a Kafka Streams application will not start if any of these components rely on auto-generated names. This guarantees
+		  stability across topology updates, as manually defined names remain unchanged even when new processors or transformations are added.
+		  Enforcing explicit naming is particularly important in production environments, where consistency and backward compatibility are essential
+		  for maintaining reliable stream processing applications.
+
 	</p>
 </div>
 

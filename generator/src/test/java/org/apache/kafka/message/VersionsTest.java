@@ -21,9 +21,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(120)
 public class VersionsTest {
@@ -40,6 +40,7 @@ public class VersionsTest {
 
     @Test
     public void testVersionsParse() {
+        assertEquals(Versions.NONE, Versions.parse(" none ", null));
         assertEquals(Versions.NONE, Versions.parse(null, Versions.NONE));
         assertEquals(Versions.ALL, Versions.parse(" ", Versions.ALL));
         assertEquals(Versions.ALL, Versions.parse("", Versions.ALL));

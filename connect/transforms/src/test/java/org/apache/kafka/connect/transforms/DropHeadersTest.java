@@ -17,16 +17,17 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -36,7 +37,7 @@ public class DropHeadersTest {
 
     private Map<String, ?> config(String... headers) {
         Map<String, Object> result = new HashMap<>();
-        result.put(DropHeaders.HEADERS_FIELD, asList(headers));
+        result.put(DropHeaders.HEADERS_FIELD, List.of(headers));
         return result;
     }
 
@@ -86,6 +87,11 @@ public class DropHeadersTest {
         assertThrows(ConfigException.class, () -> xform.configure(config()));
     }
 
+    @Test
+    public void testDropHeadersVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
+    }
+
     private void assertNonHeaders(SourceRecord original, SourceRecord xformed) {
         assertEquals(original.sourcePartition(), xformed.sourcePartition());
         assertEquals(original.sourceOffset(), xformed.sourceOffset());
@@ -99,8 +105,8 @@ public class DropHeadersTest {
     }
 
     private SourceRecord sourceRecord(ConnectHeaders headers) {
-        Map<String, ?> sourcePartition = singletonMap("foo", "bar");
-        Map<String, ?> sourceOffset = singletonMap("baz", "quxx");
+        Map<String, ?> sourcePartition = Map.of("foo", "bar");
+        Map<String, ?> sourceOffset = Map.of("baz", "quxx");
         String topic = "topic";
         Integer partition = 0;
         Schema keySchema = null;
@@ -113,4 +119,3 @@ public class DropHeadersTest {
                 keySchema, key, valueSchema, value, timestamp, headers);
     }
 }
-

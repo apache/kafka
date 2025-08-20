@@ -21,14 +21,19 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.junit.Test;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class TimestampedTupleForwarderTest {
 
     @Test
@@ -38,20 +43,19 @@ public class TimestampedTupleForwarderTest {
     }
 
     private void setFlushListener(final boolean sendOldValues) {
+        @SuppressWarnings("unchecked")
         final WrappedStateStore<StateStore, Object, ValueAndTimestamp<Object>> store = mock(WrappedStateStore.class);
+        @SuppressWarnings("unchecked")
         final TimestampedCacheFlushListener<Object, Object> flushListener = mock(TimestampedCacheFlushListener.class);
 
-        expect(store.setFlushListener(flushListener, sendOldValues)).andReturn(false);
-        replay(store);
+        when(store.setFlushListener(flushListener, sendOldValues)).thenReturn(false);
 
         new TimestampedTupleForwarder<>(
             store,
-            (org.apache.kafka.streams.processor.api.ProcessorContext<Object, Change<Object>>) null,
+            null,
             flushListener,
             sendOldValues
         );
-
-        verify(store);
     }
 
     @Test
@@ -61,51 +65,48 @@ public class TimestampedTupleForwarderTest {
     }
 
     private void shouldForwardRecordsIfWrappedStateStoreDoesNotCache(final boolean sendOldValues) {
+        @SuppressWarnings("unchecked")
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
+        @SuppressWarnings("unchecked")
         final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
 
-        expect(store.setFlushListener(null, sendOldValues)).andReturn(false);
+        when(store.setFlushListener(null, sendOldValues)).thenReturn(false);
         if (sendOldValues) {
-            context.forward(new Record<>("key1", new Change<>("newValue1",  "oldValue1"), 0L));
-            context.forward(new Record<>("key2", new Change<>("newValue2",  "oldValue2"), 42L));
+            doNothing().when(context).forward(new Record<>("key1", new Change<>("newValue1",  "oldValue1", true), 0L));
+            doNothing().when(context).forward(new Record<>("key2", new Change<>("newValue2",  "oldValue2", false), 42L));
         } else {
-            context.forward(new Record<>("key1", new Change<>("newValue1", null), 0L));
-            context.forward(new Record<>("key2", new Change<>("newValue2", null), 42L));
+            doNothing().when(context).forward(new Record<>("key1", new Change<>("newValue1", null, true), 0L));
+            doNothing().when(context).forward(new Record<>("key2", new Change<>("newValue2", null, false), 42L));
         }
-        expectLastCall();
-        replay(store, context);
 
         final TimestampedTupleForwarder<String, String> forwarder =
             new TimestampedTupleForwarder<>(
                 store,
-                (org.apache.kafka.streams.processor.api.ProcessorContext<String, Change<String>>) context,
+                context,
                 null,
                 sendOldValues
             );
-        forwarder.maybeForward(new Record<>("key1", new Change<>("newValue1", "oldValue1"), 0L));
-        forwarder.maybeForward(new Record<>("key2", new Change<>("newValue2", "oldValue2"), 42L));
-
-        verify(store, context);
+        forwarder.maybeForward(new Record<>("key1", new Change<>("newValue1", "oldValue1", true), 0L));
+        forwarder.maybeForward(new Record<>("key2", new Change<>("newValue2", "oldValue2", false), 42L));
     }
 
     @Test
     public void shouldNotForwardRecordsIfWrappedStateStoreDoesCache() {
+        @SuppressWarnings("unchecked")
         final WrappedStateStore<StateStore, String, String> store = mock(WrappedStateStore.class);
+        @SuppressWarnings("unchecked")
         final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
 
-        expect(store.setFlushListener(null, false)).andReturn(true);
-        replay(store, context);
+        when(store.setFlushListener(null, false)).thenReturn(true);
 
         final TimestampedTupleForwarder<String, String> forwarder =
             new TimestampedTupleForwarder<>(
                 store,
-                (org.apache.kafka.streams.processor.api.ProcessorContext<String, Change<String>>) context,
+                context,
                 null,
                 false
             );
-        forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue"), 0L));
-        forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue"), 42L));
-
-        verify(store, context);
+        forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue", true), 0L));
+        forwarder.maybeForward(new Record<>("key", new Change<>("newValue", "oldValue", true), 42L));
     }
 }

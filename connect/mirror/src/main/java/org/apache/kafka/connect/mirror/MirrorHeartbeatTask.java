@@ -17,16 +17,15 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.source.SourceTask;
 
-import java.util.Map;
+import java.time.Duration;
 import java.util.List;
-import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.time.Duration;
 
 /** Emits heartbeats. */
 public class MirrorHeartbeatTask extends SourceTask {
@@ -39,7 +38,7 @@ public class MirrorHeartbeatTask extends SourceTask {
     @Override
     public void start(Map<String, String> props) {
         stopped = new CountDownLatch(1);
-        MirrorTaskConfig config = new MirrorTaskConfig(props);
+        MirrorHeartbeatConfig config = new MirrorHeartbeatConfig(props);
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
         heartbeatsTopic = config.heartbeatsTopic();
@@ -76,7 +75,7 @@ public class MirrorHeartbeatTask extends SourceTask {
             Schema.BYTES_SCHEMA, heartbeat.recordKey(),
             Schema.BYTES_SCHEMA, heartbeat.recordValue(),
             timestamp);
-        return Collections.singletonList(record);
+        return List.of(record);
     }
 
     @Override

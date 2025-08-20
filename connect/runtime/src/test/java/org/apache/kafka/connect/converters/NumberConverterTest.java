@@ -17,16 +17,18 @@
 package org.apache.kafka.connect.converters;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
-import org.junit.Before;
-import org.junit.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public abstract class NumberConverterTest<T extends Number> {
     private static final String TOPIC = "topic";
@@ -45,7 +47,7 @@ public abstract class NumberConverterTest<T extends Number> {
 
     protected abstract Schema schema();
 
-    @Before
+    @BeforeEach
     public void setup() {
         converter = createConverter();
         serializer = createSerializer();
@@ -103,5 +105,10 @@ public abstract class NumberConverterTest<T extends Number> {
         SchemaAndValue data = converter.toConnectData(TOPIC, null);
         assertEquals(schema(), data.schema());
         assertNull(data.value());
+    }
+
+    @Test
+    public void testInheritedVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 }

@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 /**
  * Indicates that there was a problem when trying to access a {@link org.apache.kafka.streams.processor.StateStore StateStore}.
- * {@code InvalidStateStoreException} is not thrown directly but only its following sub-classes.
+ * {@code InvalidStateStoreException} is not thrown directly but only its following subclasses.
  */
 public class InvalidStateStoreException extends StreamsException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     public InvalidStateStoreException(final String message) {
         super(message);

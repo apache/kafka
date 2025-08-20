@@ -20,39 +20,17 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 public class RequestHeaderTest {
-
-    @Test
-    public void testSerdeControlledShutdownV0() {
-        // Verify that version 0 of controlled shutdown does not include the clientId field
-        short apiVersion = 0;
-        int correlationId = 2342;
-        ByteBuffer rawBuffer = ByteBuffer.allocate(32);
-        rawBuffer.putShort(ApiKeys.CONTROLLED_SHUTDOWN.id);
-        rawBuffer.putShort(apiVersion);
-        rawBuffer.putInt(correlationId);
-        rawBuffer.flip();
-
-        RequestHeader deserialized = RequestHeader.parse(rawBuffer);
-        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN, deserialized.apiKey());
-        assertEquals(0, deserialized.apiVersion());
-        assertEquals(correlationId, deserialized.correlationId());
-        assertEquals("", deserialized.clientId());
-        assertEquals(0, deserialized.headerVersion());
-
-        ByteBuffer serializedBuffer = RequestTestUtils.serializeRequestHeader(deserialized);
-
-        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN.id, serializedBuffer.getShort(0));
-        assertEquals(0, serializedBuffer.getShort(2));
-        assertEquals(correlationId, serializedBuffer.getInt(4));
-        assertEquals(8, serializedBuffer.limit());
-    }
 
     @Test
     public void testRequestHeaderV1() {
@@ -112,5 +90,33 @@ public class RequestHeaderTest {
         assertEquals(123, parsed.correlationId());
         assertEquals(ApiKeys.FIND_COORDINATOR, parsed.apiKey());
         assertEquals((short) 10, parsed.apiVersion());
+    }
+
+    @Test
+    public void verifySizeMethodsReturnSameValue() {
+        // Create a dummy RequestHeaderData
+        RequestHeaderData headerData = new RequestHeaderData().
+            setClientId("hakuna-matata").
+            setCorrelationId(123).
+            setRequestApiKey(ApiKeys.FIND_COORDINATOR.id).
+            setRequestApiVersion((short) 10);
+
+        // Serialize RequestHeaderData to a buffer
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(headerData.size(serializationCache, (short) 2));
+        headerData.write(new ByteBufferAccessor(buffer), serializationCache, (short) 2);
+        buffer.flip();
+
+        // actual call to generate the RequestHeader from buffer containing RequestHeaderData
+        RequestHeader parsed = spy(RequestHeader.parse(buffer));
+
+        // verify that the result of cached value of size is same as actual calculation of size
+        int sizeCalculatedFromData = parsed.size(new ObjectSerializationCache());
+        int sizeFromCache = parsed.size();
+        assertEquals(sizeCalculatedFromData, sizeFromCache);
+
+        // verify that size(ObjectSerializationCache) is only called once, i.e. during assertEquals call. This validates
+        // that size() method does not calculate the size instead it uses the cached value
+        verify(parsed).size(any(ObjectSerializationCache.class));
     }
 }

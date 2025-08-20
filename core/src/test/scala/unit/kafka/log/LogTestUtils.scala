@@ -19,21 +19,28 @@ package kafka.log
 
 import java.io.File
 import java.util.Properties
-
-import kafka.server.checkpoints.LeaderEpochCheckpointFile
-import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, LogDirFailureChannel}
-import kafka.utils.{Scheduler, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
+
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager
+import org.apache.kafka.server.storage.log.FetchIsolation
+import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.storage.internals.log.LogConfig.{DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG, DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex, VerificationGuard, UnifiedLog}
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
-import kafka.log
-
-import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 object LogTestUtils {
   /**
@@ -43,36 +50,46 @@ object LogTestUtils {
                     logDir: File,
                     indexIntervalBytes: Int = 10,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val ms = FileRecords.open(UnifiedLog.logFile(logDir, offset))
-    val idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
-    val timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
-    val txnIndex = new TransactionIndex(offset, UnifiedLog.transactionIndexFile(logDir, offset))
+    val ms = FileRecords.open(LogFileUtils.logFile(logDir, offset))
+    val idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(logDir, offset), offset, 1000)
+    val timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(logDir, offset), offset, 1500)
+    val txnIndex = new TransactionIndex(offset, LogFileUtils.transactionIndexFile(logDir, offset, ""))
 
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
   }
 
-  def createLogConfig(segmentMs: Long = Defaults.SegmentMs,
-                      segmentBytes: Int = Defaults.SegmentSize,
-                      retentionMs: Long = Defaults.RetentionMs,
-                      retentionBytes: Long = Defaults.RetentionSize,
-                      segmentJitterMs: Long = Defaults.SegmentJitterMs,
-                      cleanupPolicy: String = Defaults.CleanupPolicy,
-                      maxMessageBytes: Int = Defaults.MaxMessageSize,
-                      indexIntervalBytes: Int = Defaults.IndexInterval,
-                      segmentIndexBytes: Int = Defaults.MaxIndexSize,
-                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs): LogConfig = {
+  def createLogConfig(segmentMs: Long = LogConfig.DEFAULT_SEGMENT_MS,
+                      segmentBytes: Int = LogConfig.DEFAULT_SEGMENT_BYTES,
+                      retentionMs: Long = LogConfig.DEFAULT_RETENTION_MS,
+                      localRetentionMs: Long = LogConfig.DEFAULT_LOCAL_RETENTION_MS,
+                      retentionBytes: Long = ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT,
+                      localRetentionBytes: Long = LogConfig.DEFAULT_LOCAL_RETENTION_BYTES,
+                      segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
+                      cleanupPolicy: String = ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT,
+                      maxMessageBytes: Int = ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT,
+                      indexIntervalBytes: Int = ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT,
+                      segmentIndexBytes: Int = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT,
+                      fileDeleteDelayMs: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
+                      remoteLogStorageEnable: Boolean = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE,
+                      remoteLogCopyDisable: Boolean = DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG,
+                      remoteLogDeleteOnDisable: Boolean = DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG): LogConfig = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
-    logProps.put(LogConfig.SegmentBytesProp, segmentBytes: Integer)
-    logProps.put(LogConfig.RetentionMsProp, retentionMs: java.lang.Long)
-    logProps.put(LogConfig.RetentionBytesProp, retentionBytes: java.lang.Long)
-    logProps.put(LogConfig.SegmentJitterMsProp, segmentJitterMs: java.lang.Long)
-    logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
-    logProps.put(LogConfig.MaxMessageBytesProp, maxMessageBytes: Integer)
-    logProps.put(LogConfig.IndexIntervalBytesProp, indexIntervalBytes: Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
-    logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
-    LogConfig(logProps)
+    logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes: Integer)
+    logProps.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs: java.lang.Long)
+    logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs: java.lang.Long)
+    logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes: java.lang.Long)
+    logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes: java.lang.Long)
+    logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, segmentJitterMs: java.lang.Long)
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy)
+    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes: Integer)
+    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, indexIntervalBytes: Integer)
+    logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, segmentIndexBytes: Integer)
+    logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, fileDeleteDelayMs: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, remoteLogStorageEnable: java.lang.Boolean)
+    logProps.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, remoteLogCopyDisable: java.lang.Boolean)
+    logProps.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, remoteLogDeleteOnDisable: java.lang.Boolean)
+    new LogConfig(logProps)
   }
 
   def createLog(dir: File,
@@ -83,28 +100,31 @@ object LogTestUtils {
                 logStartOffset: Long = 0L,
                 recoveryPoint: Long = 0L,
                 maxTransactionTimeoutMs: Int = 5 * 60 * 1000,
-                producerStateManagerConfig: ProducerStateManagerConfig = new log.ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
-                producerIdExpirationCheckIntervalMs: Int = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+                producerStateManagerConfig: ProducerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+                producerIdExpirationCheckIntervalMs: Int = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
-                keepPartitionMetadataFile: Boolean = true,
-                numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]): UnifiedLog = {
-    UnifiedLog(
-      dir = dir,
-      config = config,
-      logStartOffset = logStartOffset,
-      recoveryPoint = recoveryPoint,
-      scheduler = scheduler,
-      brokerTopicStats = brokerTopicStats,
-      time = time,
-      maxTransactionTimeoutMs = maxTransactionTimeoutMs,
-      producerStateManagerConfig = producerStateManagerConfig,
-      producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10),
-      lastShutdownClean = lastShutdownClean,
-      topicId = topicId,
-      keepPartitionMetadataFile = keepPartitionMetadataFile,
-      numRemainingSegments = numRemainingSegments
+                numRemainingSegments: ConcurrentMap[String, Integer] = new ConcurrentHashMap[String, Integer],
+                remoteStorageSystemEnable: Boolean = false,
+                remoteLogManager: Option[RemoteLogManager] = None,
+                logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
+    UnifiedLog.create(
+      dir,
+      config,
+      logStartOffset,
+      recoveryPoint,
+      scheduler,
+      brokerTopicStats,
+      time,
+      maxTransactionTimeoutMs,
+      producerStateManagerConfig,
+      producerIdExpirationCheckIntervalMs,
+      new LogDirFailureChannel(10),
+      lastShutdownClean,
+      topicId.toJava,
+      numRemainingSegments,
+      remoteStorageSystemEnable,
+      logOffsetsListener
     )
   }
 
@@ -119,7 +139,7 @@ object LogTestUtils {
     def hasOverflow(baseOffset: Long, batch: RecordBatch): Boolean =
       batch.lastOffset > baseOffset + Int.MaxValue || batch.baseOffset < baseOffset
 
-    for (segment <- log.logSegments) {
+    for (segment <- log.logSegments.asScala) {
       val overflowBatch = segment.log.batches.asScala.find(batch => hasOverflow(segment.baseOffset, batch))
       if (overflowBatch.isDefined)
         return Some(segment)
@@ -128,7 +148,7 @@ object LogTestUtils {
   }
 
   def rawSegment(logDir: File, baseOffset: Long): FileRecords =
-    FileRecords.open(UnifiedLog.logFile(logDir, baseOffset))
+    FileRecords.open(LogFileUtils.logFile(logDir, baseOffset))
 
   /**
    * Initialize the given log directory with a set of segments, one of which will have an
@@ -141,16 +161,16 @@ object LogTestUtils {
         new SimpleRecord(data, data)
       }
 
-      segment.append(MemoryRecords.withRecords(baseOffset, CompressionType.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset, Compression.NONE, 0,
         record(baseOffset)))
-      segment.append(MemoryRecords.withRecords(baseOffset + 1, CompressionType.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset + 1, Compression.NONE, 0,
         record(baseOffset + 1),
         record(baseOffset + 2)))
-      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, Compression.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
       // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-      Files.createFile(UnifiedLog.offsetIndexFile(logDir, baseOffset).toPath)
-      Files.createFile(UnifiedLog.timeIndexFile(logDir, baseOffset).toPath)
+      Files.createFile(LogFileUtils.offsetIndexFile(logDir, baseOffset).toPath)
+      Files.createFile(LogFileUtils.timeIndexFile(logDir, baseOffset).toPath)
       baseOffset + Int.MaxValue
     }
 
@@ -177,7 +197,7 @@ object LogTestUtils {
 
   /* extract all the keys from a log */
   def keysInLog(log: UnifiedLog): Iterable[Long] = {
-    for (logSegment <- log.logSegments;
+    for (logSegment <- log.logSegments.asScala;
          batch <- logSegment.log.batches.asScala if !batch.isControlBatch;
          record <- batch.asScala if record.hasValue && record.hasKey)
       yield TestUtils.readString(record.key).toLong
@@ -189,9 +209,9 @@ object LogTestUtils {
     val recoveredLog = createLog(logDir, config, brokerTopicStats, scheduler, time, lastShutdownClean = false)
     time.sleep(config.fileDeleteDelayMs + 1)
     for (file <- logDir.listFiles) {
-      assertFalse(file.getName.endsWith(UnifiedLog.DeletedFileSuffix), "Unexpected .deleted file after recovery")
-      assertFalse(file.getName.endsWith(UnifiedLog.CleanedFileSuffix), "Unexpected .cleaned file after recovery")
-      assertFalse(file.getName.endsWith(UnifiedLog.SwapFileSuffix), "Unexpected .swap file after recovery")
+      assertFalse(file.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX), "Unexpected .deleted file after recovery")
+      assertFalse(file.getName.endsWith(UnifiedLog.CLEANED_FILE_SUFFIX), "Unexpected .cleaned file after recovery")
+      assertFalse(file.getName.endsWith(UnifiedLog.SWAP_FILE_SUFFIX), "Unexpected .swap file after recovery")
     }
     assertEquals(expectedKeys, keysInLog(recoveredLog))
     assertFalse(hasOffsetOverflow(recoveredLog))
@@ -207,7 +227,7 @@ object LogTestUtils {
                                  leaderEpoch: Int = 0): LogAppendInfo = {
     val records = endTxnRecords(controlType, producerId, producerEpoch,
       coordinatorEpoch = coordinatorEpoch, timestamp = timestamp)
-    log.appendAsLeader(records, origin = AppendOrigin.Coordinator, leaderEpoch = leaderEpoch)
+    log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL)
   }
 
   private def endTxnRecords(controlRecordType: ControlRecordType,
@@ -224,33 +244,28 @@ object LogTestUtils {
   def readLog(log: UnifiedLog,
               startOffset: Long,
               maxLength: Int,
-              isolation: FetchIsolation = FetchLogEnd,
+              isolation: FetchIsolation = FetchIsolation.LOG_END,
               minOneMessage: Boolean = true): FetchDataInfo = {
     log.read(startOffset, maxLength, isolation, minOneMessage)
   }
 
-  def allAbortedTransactions(log: UnifiedLog): Iterable[AbortedTxn] = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
+  def allAbortedTransactions(log: UnifiedLog): Iterable[AbortedTxn] =
+    log.logSegments.asScala.flatMap(_.txnIndex.allAbortedTxns.asScala)
 
   def deleteProducerSnapshotFiles(logDir: File): Unit = {
-    val files = logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(UnifiedLog.ProducerSnapshotFileSuffix))
+    val files = logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX))
     files.foreach(Utils.delete)
   }
 
   def listProducerSnapshotOffsets(logDir: File): Seq[Long] =
-    ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted
-
-  def assertLeaderEpochCacheEmpty(log: UnifiedLog): Unit = {
-    assertEquals(None, log.leaderEpochCache)
-    assertEquals(None, log.latestEpoch)
-    assertFalse(LeaderEpochCheckpointFile.newFile(log.dir).exists())
-  }
+    ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted.toSeq
 
   def appendNonTransactionalAsLeader(log: UnifiedLog, numRecords: Int): Unit = {
     val simpleRecords = (0 until numRecords).map { seq =>
       new SimpleRecord(s"$seq".getBytes)
     }
-    val records = MemoryRecords.withRecords(CompressionType.NONE, simpleRecords: _*)
-    log.appendAsLeader(records, leaderEpoch = 0)
+    val records = MemoryRecords.withRecords(Compression.NONE, simpleRecords: _*)
+    log.appendAsLeader(records, 0)
   }
 
   def appendTransactionalAsLeader(log: UnifiedLog,
@@ -272,14 +287,14 @@ object LogTestUtils {
       }
 
       val records = if (isTransactional) {
-        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
+        MemoryRecords.withTransactionalRecords(Compression.NONE, producerId,
           producerEpoch, sequence, simpleRecords: _*)
       } else {
-        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
+        MemoryRecords.withIdempotentRecords(Compression.NONE, producerId,
           producerEpoch, sequence, simpleRecords: _*)
       }
 
-      log.appendAsLeader(records, leaderEpoch = 0)
+      log.appendAsLeader(records, 0)
       sequence += numRecords
     }
   }

@@ -20,15 +20,16 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 
 public class FindCoordinatorResponse extends AbstractResponse {
@@ -48,6 +49,22 @@ public class FindCoordinatorResponse extends AbstractResponse {
     public FindCoordinatorResponse(FindCoordinatorResponseData data) {
         super(ApiKeys.FIND_COORDINATOR);
         this.data = data;
+    }
+
+    public Optional<Coordinator> coordinatorByKey(String key) {
+        Objects.requireNonNull(key);
+        if (this.data.coordinators().isEmpty()) {
+            // version <= 3
+            return Optional.of(new Coordinator()
+                    .setErrorCode(data.errorCode())
+                    .setErrorMessage(data.errorMessage())
+                    .setHost(data.host())
+                    .setPort(data.port())
+                    .setNodeId(data.nodeId())
+                    .setKey(key));
+        }
+        // version >= 4
+        return data.coordinators().stream().filter(c -> c.key().equals(key)).findFirst();
     }
 
     @Override
@@ -80,7 +97,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         if (!data.coordinators().isEmpty()) {
-            Map<Errors, Integer> errorCounts = new HashMap<>();
+            Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
             for (Coordinator coordinator : data.coordinators()) {
                 updateErrorCounts(errorCounts, Errors.forCode(coordinator.errorCode()));
             }
@@ -90,8 +107,8 @@ public class FindCoordinatorResponse extends AbstractResponse {
         }
     }
 
-    public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorResponse(new FindCoordinatorResponseData(new ByteBufferAccessor(buffer), version));
+    public static FindCoordinatorResponse parse(Readable readable, short version) {
+        return new FindCoordinatorResponse(new FindCoordinatorResponseData(readable, version));
     }
 
     @Override
@@ -132,14 +149,23 @@ public class FindCoordinatorResponse extends AbstractResponse {
     public static FindCoordinatorResponse prepareResponse(Errors error, String key, Node node) {
         FindCoordinatorResponseData data = new FindCoordinatorResponseData();
         data.setCoordinators(Collections.singletonList(
-                new FindCoordinatorResponseData.Coordinator()
-                .setErrorCode(error.code())
-                .setErrorMessage(error.message())
-                .setKey(key)
-                .setHost(node.host())
-                .setPort(node.port())
-                .setNodeId(node.id())));
+            prepareCoordinatorResponse(error, key, node)
+        ));
         return new FindCoordinatorResponse(data);
+    }
+
+    public static FindCoordinatorResponseData.Coordinator prepareCoordinatorResponse(
+        Errors error,
+        String key,
+        Node node
+    ) {
+        return new FindCoordinatorResponseData.Coordinator()
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message())
+            .setKey(key)
+            .setHost(node.host())
+            .setPort(node.port())
+            .setNodeId(node.id());
     }
 
     public static FindCoordinatorResponse prepareErrorResponse(Errors error, List<String> keys) {

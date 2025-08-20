@@ -35,7 +35,7 @@ class WorkerMetricsGroup {
     private final Sensor taskStartupFailures;
     private final Sensor taskStartupResults;
 
-    public WorkerMetricsGroup(final Map<String, WorkerConnector> connectors, Map<ConnectorTaskId, WorkerTask> tasks, ConnectMetrics connectMetrics) {
+    public WorkerMetricsGroup(final Map<String, WorkerConnector> connectors, Map<ConnectorTaskId, WorkerTask<?, ?>> tasks, ConnectMetrics connectMetrics) {
         ConnectMetricsRegistry registry = connectMetrics.registry();
         metricGroup = connectMetrics.group(registry.workerGroupName());
 
@@ -126,6 +126,11 @@ class WorkerMetricsGroup {
             startupSucceeded = true;
             recordConnectorStartupSuccess();
             delegateListener.onStartup(connector);
+        }
+
+        @Override
+        public void onStop(final String connector) {
+            delegateListener.onStop(connector);
         }
 
         @Override

@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Properties;
 
+@Deprecated
 public class NamedTopologyBuilder extends StreamsBuilder {
 
     NamedTopologyBuilder(final String topologyName, final StreamsConfig applicationConfigs, final Properties topologyOverrides) {
@@ -37,7 +38,7 @@ public class NamedTopologyBuilder extends StreamsBuilder {
     }
 
     @Override
-    protected NamedTopology getNewTopology(final TopologyConfig topologyConfigs) {
+    protected NamedTopology newTopology(final TopologyConfig topologyConfigs) {
         return new NamedTopology(new InternalTopologyBuilder(topologyConfigs));
     }
 }

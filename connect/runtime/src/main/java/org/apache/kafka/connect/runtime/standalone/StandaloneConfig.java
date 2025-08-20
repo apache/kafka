@@ -21,6 +21,9 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 
 import java.util.Map;
 
+/**
+ * Provides configuration for Kafka Connect workers running in standalone mode.
+ */
 public class StandaloneConfig extends WorkerConfig {
     private static final ConfigDef CONFIG;
 

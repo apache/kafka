@@ -19,12 +19,13 @@ package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogSegmentMetadataSnapshot;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataSnapshotRecord;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
 public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetadataTransform<RemoteLogSegmentMetadataSnapshot> {
 
@@ -38,7 +39,9 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                 .setMaxTimestampMs(segmentMetadata.maxTimestampMs())
                 .setSegmentSizeInBytes(segmentMetadata.segmentSizeInBytes())
                 .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(segmentMetadata.segmentLeaderEpochs()))
-                .setRemoteLogSegmentState(segmentMetadata.state().id());
+                .setRemoteLogSegmentState(segmentMetadata.state().id())
+                .setTxnIndexEmpty(segmentMetadata.isTxnIdxEmpty());
+        segmentMetadata.customMetadata().ifPresent(md -> record.setCustomMetadata(md.value()));
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
     }
@@ -48,7 +51,7 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                            .map(entry -> new RemoteLogSegmentMetadataSnapshotRecord.SegmentLeaderEpochEntry()
                            .setLeaderEpoch(entry.getKey())
                            .setOffset(entry.getValue()))
-                           .collect(Collectors.toList());
+                           .toList();
     }
 
     @Override
@@ -59,6 +62,7 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
             segmentLeaderEpochs.put(segmentLeaderEpoch.leaderEpoch(), segmentLeaderEpoch.offset());
         }
 
+        Optional<CustomMetadata> customMetadata = Optional.ofNullable(record.customMetadata()).map(CustomMetadata::new);
         return new RemoteLogSegmentMetadataSnapshot(record.segmentId(),
                                                     record.startOffset(),
                                                     record.endOffset(),
@@ -66,8 +70,10 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                                                     record.brokerId(),
                                                     record.eventTimestampMs(),
                                                     record.segmentSizeInBytes(),
+                                                    customMetadata,
                                                     RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
-                                                    segmentLeaderEpochs);
+                                                    segmentLeaderEpochs,
+                                                    record.txnIndexEmpty());
     }
 
 }

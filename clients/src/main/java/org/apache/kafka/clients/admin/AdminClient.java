@@ -25,7 +25,7 @@ import java.util.Properties;
  *
  * Client code should use the newer {@link Admin} interface in preference to this class.
  *
- * This class may be removed in a later release, but has not be marked as deprecated to avoid unnecessary noise.
+ * This class may be removed in a later release, but has not been marked as deprecated to avoid unnecessary noise.
  */
 public abstract class AdminClient implements Admin {
 
@@ -49,4 +49,3 @@ public abstract class AdminClient implements Admin {
         return (AdminClient) Admin.create(conf);
     }
 }
-

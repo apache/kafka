@@ -17,14 +17,16 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
-import java.util.Collections;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * This is the spec to pass in to be able to run the `ConfigurableProducerWorker` workload.  This allows for customized
@@ -106,7 +108,7 @@ import java.util.Optional;
  *   * The average throughput was 500 messages/second, with a window of 100ms and a deviation of 50 messages/second.
  */
 
-public class ConfigurableProducerSpec extends TaskSpec {
+public final class ConfigurableProducerSpec extends TaskSpec {
     private final String producerNode;
     private final String bootstrapServers;
     private final Optional<FlushGenerator> flushGenerator;
@@ -204,7 +206,7 @@ public class ConfigurableProducerSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(producerNode);
+        return topology -> Set.of(producerNode);
     }
 
     @Override

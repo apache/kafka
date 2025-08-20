@@ -18,13 +18,14 @@
 package kafka.log
 
 import java.io.PrintWriter
-
 import com.yammer.metrics.core.{Gauge, MetricName}
-import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, RecordBatch}
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.{LogCleanerManager, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -34,9 +35,9 @@ import scala.jdk.CollectionConverters._
 /**
   * This is an integration test that tests the fully integrated log cleaner
   */
-class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with KafkaMetricsGroup {
+class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
 
-  val codec: CompressionType = CompressionType.LZ4
+  val codec: Compression = Compression.lz4().build()
 
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
@@ -51,13 +52,13 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val largeMessageKey = 20
     val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backOffMs = 100)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backoffMs = 100)
 
     def breakPartitionLog(tp: TopicPartition): Unit = {
       val log = cleaner.logs.get(tp)
       writeDups(numKeys = 20, numDups = 3, log = log, codec = codec)
 
-      val partitionFile = log.logSegments.last.log.file()
+      val partitionFile = log.logSegments.asScala.last.log.file()
       val writer = new PrintWriter(partitionFile)
       writer.write("jogeajgoea")
       writer.close()
@@ -77,8 +78,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val uncleanableBytesGauge = getGauge[Long]("uncleanable-bytes", uncleanableDirectory)
 
     TestUtils.waitUntilTrue(() => uncleanablePartitionsCountGauge.value() == 2, "There should be 2 uncleanable partitions", 2000L)
-    val expectedTotalUncleanableBytes = LogCleanerManager.calculateCleanableBytes(log, 0, log.logSegments.last.baseOffset)._2 +
-      LogCleanerManager.calculateCleanableBytes(log2, 0, log2.logSegments.last.baseOffset)._2
+    val expectedTotalUncleanableBytes = LogCleanerManager.calculateCleanableBytes(log, 0, log.logSegments.asScala.last.baseOffset).getValue +
+      LogCleanerManager.calculateCleanableBytes(log2, 0, log2.logSegments.asScala.last.baseOffset).getValue
     TestUtils.waitUntilTrue(() => uncleanableBytesGauge.value() == expectedTotalUncleanableBytes,
       s"There should be $expectedTotalUncleanableBytes uncleanable bytes", 1000L)
 
@@ -134,7 +135,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val minCleanableDirtyRatio = 1.0F
 
     cleaner = makeCleaner(partitions = topicPartitions,
-      backOffMs = cleanerBackOffMs,
+      backoffMs = cleanerBackOffMs,
       minCompactionLagMs = minCompactionLagMs,
       segmentSize = segmentSize,
       maxCompactionLagMs= maxCompactionLagMs,
@@ -142,7 +143,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val log = cleaner.logs.get(topicPartitions(0))
 
     val T0 = time.milliseconds
-    writeKeyDups(numKeys = 100, numDups = 3, log, CompressionType.NONE, timestamp = T0, startValue = 0, step = 1)
+    writeKeyDups(numKeys = 100, numDups = 3, log, Compression.NONE, timestamp = T0, startValue = 0, step = 1)
 
     val startSizeBlock0 = log.size
 
@@ -160,7 +161,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val T1 = time.milliseconds
 
     // write the second block of data: all zero keys
-    val appends1 = writeKeyDups(numKeys = 100, numDups = 1, log, CompressionType.NONE, timestamp = T1, startValue = 0, step = 0)
+    val appends1 = writeKeyDups(numKeys = 100, numDups = 1, log, Compression.NONE, timestamp = T1, startValue = 0, step = 0)
 
     // roll the active segment
     log.roll()
@@ -168,10 +169,10 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     val firstBlockCleanableSegmentOffset = activeSegAtT0.baseOffset
 
     // the first block should get cleaned
-    cleaner.awaitCleaned(new TopicPartition("log", 0), firstBlockCleanableSegmentOffset)
+    cleaner.awaitCleaned(new TopicPartition("log", 0), firstBlockCleanableSegmentOffset, 60000L)
 
     val read1 = readFromLog(log)
-    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(new TopicPartition("log", 0))
     assertTrue(lastCleaned >= firstBlockCleanableSegmentOffset,
       s"log cleaner should have processed at least to offset $firstBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned")
 
@@ -180,33 +181,33 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     time.sleep(maxCompactionLagMs + 1)
     // the second block should get cleaned. only zero keys left
-    cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT1.baseOffset)
+    cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT1.baseOffset, 60000L)
 
     val read2 = readFromLog(log)
 
     assertEquals(appends1, read2, s"log should only contains zero keys now")
 
-    val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
+    val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints.get(new TopicPartition("log", 0))
     val secondBlockCleanableSegmentOffset = activeSegAtT1.baseOffset
     assertTrue(lastCleaned2 >= secondBlockCleanableSegmentOffset,
       s"log cleaner should have processed at least to offset $secondBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned2")
   }
 
   private def readFromLog(log: UnifiedLog): Iterable[(Int, Int)] = {
-    for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
+    for (segment <- log.logSegments.asScala; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt
       key -> value
     }
   }
 
-  private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType, timestamp: Long,
+  private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: Compression, timestamp: Long,
                            startValue: Int, step: Int): Seq[(Int, Int)] = {
     var valCounter = startValue
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val curValue = valCounter
       log.appendAsLeader(TestUtils.singletonRecords(value = curValue.toString.getBytes, codec = codec,
-        key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
+        key = key.toString.getBytes, timestamp = timestamp), 0)
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
       valCounter += step
@@ -217,14 +218,14 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   @Test
   def testIsThreadFailed(): Unit = {
     val metricName = "DeadThreadCount"
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backoffMs = 100)
     cleaner.startup()
     assertEquals(0, cleaner.deadThreadCount)
     // we simulate the unexpected error with an interrupt
-    cleaner.cleaners.foreach(_.interrupt())
+    cleaner.cleaners.forEach(_.interrupt())
     // wait until interruption is propagated to all the threads
     TestUtils.waitUntilTrue(
-      () => cleaner.cleaners.foldLeft(true)((result, thread) => {
+      () => cleaner.cleaners.asScala.foldLeft(true)((result, thread) => {
         thread.isThreadFailed && result
       }), "Threads didn't terminate unexpectedly"
     )

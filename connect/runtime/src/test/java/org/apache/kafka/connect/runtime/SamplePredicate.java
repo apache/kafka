@@ -17,12 +17,14 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
 import java.util.Map;
 
-public class SamplePredicate implements Predicate<SourceRecord> {
+public class SamplePredicate implements Predicate<SourceRecord>, Versioned {
 
     private boolean testResult;
     boolean closed = false;
@@ -31,6 +33,11 @@ public class SamplePredicate implements Predicate<SourceRecord> {
 
     public SamplePredicate(boolean testResult) {
         this.testResult = testResult;
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 
     @Override

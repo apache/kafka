@@ -16,24 +16,24 @@
  */
 package org.apache.kafka.clients.producer;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
-
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
-
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class RecordSendTest {
 
@@ -66,7 +66,7 @@ public class RecordSendTest {
      * Test that an asynchronous request will eventually throw the right exception
      */
     @Test
-    public void testError() throws Exception {
+    public void testError() {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, new CorruptRecordException(), 50L),
                 relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
         assertThrows(ExecutionException.class, future::get);
@@ -85,20 +85,18 @@ public class RecordSendTest {
     /* create a new request result that will be completed after the given timeout */
     public ProduceRequestResult asyncRequest(final long baseOffset, final RuntimeException error, final long timeout) {
         final ProduceRequestResult request = new ProduceRequestResult(topicPartition);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    sleep(timeout);
-                    if (error == null) {
-                        request.set(baseOffset, RecordBatch.NO_TIMESTAMP, null);
-                    } else {
-                        request.set(-1L, RecordBatch.NO_TIMESTAMP, index -> error);
-                    }
+        Thread thread = new Thread(() -> {
+            try {
+                Thread.sleep(timeout);
+                if (error == null) {
+                    request.set(baseOffset, RecordBatch.NO_TIMESTAMP, null);
+                } else {
+                    request.set(-1L, RecordBatch.NO_TIMESTAMP, index -> error);
+                }
 
-                    request.done();
-                } catch (InterruptedException e) { }
-            }
-        };
+                request.done();
+            } catch (InterruptedException e) { }
+        });
         thread.start();
         return request;
     }
