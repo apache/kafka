@@ -1024,7 +1024,7 @@ public class ConfigDef {
         }
 
         public static ValidList in(boolean isEmptyAllowed, String... validStrings) {
-            if (validStrings.length == 0) {
+            if (!isEmptyAllowed && validStrings.length == 0) {
                 throw new IllegalArgumentException("Valid strings list cannot be empty for inNonEmpty validator");
             }
             return new ValidList(List.of(validStrings), isEmptyAllowed, false);
@@ -1032,10 +1032,11 @@ public class ConfigDef {
 
         @Override
         public void ensureValid(final String name, final Object value) {
-            if (value == null && isNullAllowed) {
-                return;
-            } else if (value == null) {
-                throw new ConfigException("Configuration '" + name + "' values must not be null.");
+            if (value == null) {
+                if (isNullAllowed)
+                    return;
+                else
+                    throw new ConfigException("Configuration '" + name + "' values must not be null.");
             }
 
             @SuppressWarnings("unchecked")
