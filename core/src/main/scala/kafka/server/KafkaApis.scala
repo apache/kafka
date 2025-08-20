@@ -60,7 +60,7 @@ import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.{Group, GroupConfig, GroupConfigManager, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
-import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, DelegationTokenManager, ProcessRole}
+import org.apache.kafka.server.{ApiVersionManager, AutoTopicCreationManager, ClientMetricsManager, DelegationTokenManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
@@ -906,23 +906,26 @@ class KafkaApis(val requestChannel: RequestChannel,
     request: RequestChannel.Request,
     fetchAllTopics: Boolean,
     allowAutoTopicCreation: Boolean,
-    topics: Set[String],
+    topics: util.Set[String],
     listenerName: ListenerName,
     errorUnavailableEndpoints: Boolean,
     errorUnavailableListeners: Boolean
   ): Seq[MetadataResponseTopic] = {
-    val topicResponses = metadataCache.getTopicMetadata(topics.asJava, listenerName,
+    val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
 
     if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
       topicResponses.asScala
     } else {
-      val nonExistingTopics = topics.diff(topicResponses.asScala.map(_.name).toSet)
+      val existingTopics = topicResponses.stream().map(topic => topic.name).collect(Collectors.toSet())
+      val nonExistingTopics = topics.stream().
+        filter(topic => !existingTopics.contains(topic)).
+        collect(Collectors.toSet())
+
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
-        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request.session, request.header.clientId())
-        autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request.context))
+        autoTopicCreationManager.createTopics(nonExistingTopics, Optional.of(request.context))
       } else {
-        nonExistingTopics.map { topic =>
+        nonExistingTopics.stream().map(topic => {
           val error = try {
             Topic.validate(topic)
             Errors.UNKNOWN_TOPIC_OR_PARTITION
@@ -938,10 +941,12 @@ class KafkaApis(val requestChannel: RequestChannel,
             Topic.isInternal(topic),
             util.Collections.emptyList()
           )
-        }
+        }).toList
       }
 
-      topicResponses.asScala ++ nonExistingTopicResponses
+      val responses = new util.ArrayList[MetadataResponseTopic](topicResponses)
+      responses.addAll(nonExistingTopicResponses)
+      responses.asScala.toSeq
     }
   }
 
@@ -1022,7 +1027,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val errorUnavailableListeners = requestVersion >= 6
 
     val allowAutoCreation = config.autoCreateTopicsEnable && metadataRequest.allowAutoTopicCreation && !metadataRequest.isAllTopics
-    val topicMetadata = getTopicMetadata(request, metadataRequest.isAllTopics, allowAutoCreation, authorizedTopics,
+    val topicMetadata = getTopicMetadata(request, metadataRequest.isAllTopics, allowAutoCreation, authorizedTopics.asJava,
       request.context.listenerName, errorUnavailableEndpoints, errorUnavailableListeners)
 
     var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
@@ -1341,11 +1346,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           (shareCoordinator.partitionFor(SharePartitionKey.getInstance(key)), SHARE_GROUP_STATE_TOPIC_NAME)
       }
 
-      val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName).asJava, request.context.listenerName, false, false).asScala
+      val internalTopics = util.Set.of(internalTopicName)
+      val topicMetadata = metadataCache.getTopicMetadata(internalTopics, request.context.listenerName, false, false).asScala
 
       if (topicMetadata.headOption.isEmpty) {
-        val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request.session, request.header.clientId)
-        autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota, None)
+        autoTopicCreationManager.createTopics(internalTopics, Optional.empty)
         (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
       } else {
         if (topicMetadata.head.errorCode != Errors.NONE.code) {
@@ -2862,12 +2867,12 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(exception))
         } else {
           val responseData = response.data()
-          val topicsToCreate = response.creatableTopics().asScala
-          if (topicsToCreate.nonEmpty) {
+          val topicsToCreate = response.creatableTopics()
+          if (!topicsToCreate.isEmpty) {
 
             val createTopicUnauthorized =
               if(!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false))
-                authHelper.partitionSeqByAuthorized(request.context, CREATE, TOPIC, topicsToCreate.keys.toSeq)(identity[String])._2
+                authHelper.partitionSeqByAuthorized(request.context, CREATE, TOPIC, topicsToCreate.keySet.asScala.toSeq)(identity[String])._2
               else Set.empty
 
             if (createTopicUnauthorized.nonEmpty) {

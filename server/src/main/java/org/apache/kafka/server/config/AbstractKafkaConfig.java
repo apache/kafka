@@ -152,6 +152,14 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         }
     }
 
+    public int numPartitions() {
+        return getInt(ServerLogConfigs.NUM_PARTITIONS_CONFIG);
+    }
+
+    public int defaultReplicationFactor() {
+        return getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG).shortValue();
+    }
+
     public static Map<String, String> getMap(String propName, String propValue) {
         try {
             return Csv.parseCsvMap(propValue);

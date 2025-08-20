@@ -87,7 +87,7 @@ import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.{ClientMetricsManager, SimpleApiVersionManager}
+import org.apache.kafka.server.{AutoTopicCreationManager, ClientMetricsManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -948,7 +948,7 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedMetadataResponse, response.topicMetadata())
 
     if (enableAutoTopicCreation) {
-      assertTrue(capturedRequest.getValue.isDefined)
+      assertTrue(capturedRequest.getValue.isPresent)
       assertEquals(request.context, capturedRequest.getValue.get)
     }
   }
@@ -956,8 +956,8 @@ class KafkaApisTest extends Logging {
   private def verifyTopicCreation(topicName: String,
                                   enableAutoTopicCreation: Boolean,
                                   isInternal: Boolean,
-                                  request: RequestChannel.Request): ArgumentCaptor[Option[RequestContext]] = {
-    val capturedRequest: ArgumentCaptor[Option[RequestContext]] = ArgumentCaptor.forClass(classOf[Option[RequestContext]])
+                                  request: RequestChannel.Request): ArgumentCaptor[Optional[RequestContext]] = {
+    val capturedRequest: ArgumentCaptor[Optional[RequestContext]] = ArgumentCaptor.forClass(classOf[Optional[RequestContext]])
     if (enableAutoTopicCreation) {
 
       when(clientControllerQuotaManager.newPermissiveQuotaFor(
@@ -966,13 +966,13 @@ class KafkaApisTest extends Logging {
       )).thenReturn(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA)
 
       when(autoTopicCreationManager.createTopics(
-        ArgumentMatchers.eq(Set(topicName)),
-        ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA),
-        capturedRequest.capture())).thenReturn(
-        Seq(new MetadataResponseTopic()
-        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-        .setIsInternal(isInternal)
-        .setName(topicName))
+        ArgumentMatchers.eq(util.Set.of(topicName)),
+        capturedRequest.capture()
+      )).thenReturn(
+        util.List.of(new MetadataResponseTopic()
+          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+          .setIsInternal(isInternal)
+          .setName(topicName))
       )
     }
     capturedRequest
@@ -4196,7 +4196,7 @@ class KafkaApisTest extends Logging {
     val responseTopics = response.topicMetadata().asScala.map { metadata => metadata.topic() }
 
     // verify we don't create topic when getAllTopicMetadata
-    verify(autoTopicCreationManager, never).createTopics(any(), any(), any())
+    verify(autoTopicCreationManager, never).createTopics(any(), any())
     assertEquals(List("remaining-topic"), responseTopics)
     assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
   }
@@ -10882,11 +10882,11 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
-    val missingTopics = Map("test" -> new CreatableTopic())
+    val missingTopics = util.Map.of("test", new CreatableTopic())
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics.asJava))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(streamsGroupHeartbeatResponse, response.data)
     verify(autoTopicCreationManager).createStreamsInternalTopics(missingTopics, requestChannelRequest.context)
