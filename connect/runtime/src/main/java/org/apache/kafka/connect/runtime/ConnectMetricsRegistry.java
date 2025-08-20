@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.MetricNameTemplate;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -395,7 +394,7 @@ public class ConnectMetricsRegistry {
         connectorStatusMetrics.put(connectorUnassignedTaskCount, TaskStatus.State.UNASSIGNED);
         connectorStatusMetrics.put(connectorDestroyedTaskCount, TaskStatus.State.DESTROYED);
         connectorStatusMetrics.put(connectorRestartingTaskCount, TaskStatus.State.RESTARTING);
-        connectorStatusMetrics = Collections.unmodifiableMap(connectorStatusMetrics);
+        connectorStatusMetrics = Map.copyOf(connectorStatusMetrics);
 
         /* Worker rebalance level */
         Set<String> rebalanceTags = new LinkedHashSet<>(tags);
@@ -444,7 +443,7 @@ public class ConnectMetricsRegistry {
     }
 
     public List<MetricNameTemplate> getAllTemplates() {
-        return Collections.unmodifiableList(allTemplates);
+        return List.copyOf(allTemplates);
     }
 
     public String connectorTagName() {
