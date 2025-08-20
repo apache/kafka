@@ -148,7 +148,7 @@ public class CommandLineUtils {
 
         int presentCount = 0;
         for (OptionSpec<?> spec : optionSpecs) {
-            if (spec != null && options.has(spec)) {
+            if (options.has(spec)) {
                 presentCount++;
             }
         }
