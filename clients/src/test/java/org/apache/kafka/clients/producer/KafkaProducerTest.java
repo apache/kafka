@@ -128,7 +128,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Exchanger;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -1045,36 +1044,21 @@ public class KafkaProducerTest {
         try (KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
 
-            Exchanger<Void> exchanger = new Exchanger<>();
+            MetadataResponse updateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(warmupTopic, 1));
+            client.updateMetadata(updateResponse);
 
-            Thread t = new Thread(() -> {
-                try {
-                    MetadataResponse updateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(warmupTopic, 1));
-                    client.updateMetadata(updateResponse);
-                    exchanger.exchange(null);  // 1
-                    client.awaitMetadataUpdateRequest(Long.parseLong(maxBlockMs));
-                    updateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
-                    client.updateMetadata(updateResponse);
-                    exchanger.exchange(null);  // 2
-                    time.sleep(120 * 1000L);
-
-                    // Update the metadata again, but it should be expired at this point.
-                    updateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(warmupTopic, 1));
-                    client.updateMetadata(updateResponse);
-                    exchanger.exchange(null);  // 3
-                    assertTrue(client.awaitMetadataUpdateRequest(Long.parseLong(maxBlockMs)));
-                    time.sleep(Long.parseLong(maxBlockMs));
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            t.start();
-            exchanger.exchange(null);  // 1
+            updateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
+            client.prepareMetadataUpdate(updateResponse);
             assertNotNull(producer.partitionsFor(topic));
-            exchanger.exchange(null);  // 2
-            exchanger.exchange(null);  // 3
+
+            // Update the metadata again, but it should be expired at this point.
+            time.sleep(120 * 1000L);
+            updateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(warmupTopic, 1));
+            client.updateMetadata(updateResponse);
+
+            assertFalse(client.awaitMetadataUpdateRequest(0));
             assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
-            t.join();
+            assertTrue(client.awaitMetadataUpdateRequest(0));
         }
     }
 
