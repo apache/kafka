@@ -3001,6 +3001,29 @@ class UnifiedLogTest {
   }
 
   @Test
+  def shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithSizeRetention(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = 10L)
+    val recordSize = createRecords.sizeInBytes
+    val logConfig = LogTestUtils.createLogConfig(
+      segmentBytes = recordSize * 2,
+      retentionBytes = recordSize * 5,
+      localRetentionBytes = recordSize * 5,
+      cleanupPolicy = ""
+    )
+    val log = createLog(logDir, logConfig)
+
+    for (_ <- 0 until 10)
+      log.appendAsLeader(createRecords, 0)
+
+    val segmentsBefore = log.numberOfSegments
+    log.updateHighWatermark(log.logEndOffset)
+    val deleteOldSegments = log.deleteOldSegments()
+
+    assertTrue(log.numberOfSegments < segmentsBefore, "Some segments should be deleted due to size retention")
+    assertTrue(deleteOldSegments > 0, "At least one segment should be deleted")
+  }
+
+  @Test
   def shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes, timestamp = 10L)
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000, cleanupPolicy = "compact,delete")

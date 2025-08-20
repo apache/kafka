@@ -1887,8 +1887,10 @@ public class UnifiedLog implements AutoCloseable {
             return deleteLogStartOffsetBreachedSegments() +
                     deleteRetentionSizeBreachedSegments() +
                     deleteRetentionMsBreachedSegments();
-        } else {
+        } else if (config().compact) {
             return deleteLogStartOffsetBreachedSegments();
+        } else {
+            return deleteLogStartOffsetBreachedSegments() + deleteRetentionSizeBreachedSegments();
         }
     }
 
