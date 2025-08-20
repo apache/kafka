@@ -541,6 +541,10 @@ public class MockClient implements KafkaClient {
         metadataUpdates.add(new MetadataUpdate(updateResponse, expectMatchMetadataTopics));
     }
 
+    public int preparedMetadataUpdatesCount() {
+        return metadataUpdates.size();
+    }
+
     public void updateMetadata(MetadataResponse updateResponse) {
         metadataUpdater.update(time, new MetadataUpdate(updateResponse, false));
     }
