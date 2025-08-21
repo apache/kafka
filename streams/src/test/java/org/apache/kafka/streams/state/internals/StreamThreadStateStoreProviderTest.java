@@ -48,7 +48,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
-import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
@@ -63,8 +62,6 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockStandbyUpdateListener;
-import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -437,17 +434,8 @@ public class StreamThreadStateStoreProviderTest {
             StreamsConfigUtils.eosEnabled(streamsConfig),
             logContext,
             stateDirectory,
-            new StoreChangelogReader(
-                new MockTime(),
-                streamsConfig,
-                logContext,
-                adminClient,
-                restoreConsumer,
-                new MockStateRestoreListener(),
-                new MockStandbyUpdateListener()),
             topology.storeToChangelogTopic(),
-            partitions,
-            false);
+            partitions);
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             taskId,
