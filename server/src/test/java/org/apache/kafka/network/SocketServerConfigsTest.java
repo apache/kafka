@@ -17,6 +17,7 @@
 package org.apache.kafka.network;
 
 import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SocketServerConfigsTest {
     @Test
@@ -48,9 +50,9 @@ public class SocketServerConfigsTest {
 
     @Test
     public void testListenerListToEndPointsWithBlankString() {
-        assertEquals(List.of(),
-            SocketServerConfigs.listenerListToEndPoints(List.of(" "),
-                SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
+        KafkaException exception = assertThrows(KafkaException.class, () ->
+                SocketServerConfigs.listenerListToEndPoints(List.of(" "), SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
+        assertEquals("Unable to parse   to a broker endpoint", exception.getMessage());
     }
 
     @Test

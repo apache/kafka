@@ -204,9 +204,6 @@ public class SocketServerConfigs {
     ) {
         List<Endpoint> results = new ArrayList<>();
         for (String entry : input) {
-            if (entry.isEmpty()) {
-                continue;
-            }
             Matcher matcher = URI_PARSE_REGEXP.matcher(entry);
             if (!matcher.matches()) {
                 throw new KafkaException("Unable to parse " + entry + " to a broker endpoint");
