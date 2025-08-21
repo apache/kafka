@@ -157,7 +157,7 @@ public class VerifiableProducer implements AutoCloseable {
                 .metavar("ACKS")
                 .help("Acks required on each produced message. See Kafka docs on acks for details.");
 
-        parser.addArgument("--producer.config")
+        parser.addArgument("--command-config")
                 .action(store())
                 .required(false)
                 .type(String.class)
@@ -216,7 +216,7 @@ public class VerifiableProducer implements AutoCloseable {
         int maxMessages = res.getInt("maxMessages");
         String topic = res.getString("topic");
         int throughput = res.getInt("throughput");
-        String configFile = res.getString("producer.config");
+        String configFile = res.getString("command-config");
         Integer valuePrefix = res.getInt("valuePrefix");
         Long createTime = res.getLong("createTime");
         Integer repeatingKeys = res.getInt("repeatingKeys");

@@ -607,7 +607,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .dest("assignmentStrategy")
                 .help(String.format("Set assignment strategy (e.g. %s); only used if the group protocol is %s", RoundRobinAssignor.class.getName(), GroupProtocol.CLASSIC.name()));
 
-        parser.addArgument("--consumer.config")
+        parser.addArgument("--command-config")
                 .action(store())
                 .required(false)
                 .type(String.class)
@@ -621,7 +621,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         Namespace res = parser.parseArgs(args);
 
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
-        String configFile = res.getString("consumer.config");
+        String configFile = res.getString("command-config");
         String brokerHostAndPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
