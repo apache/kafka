@@ -39,12 +39,11 @@ plugins {
 
   id "com.github.spotbugs" version '6.2.3' apply false
   id 'org.scoverage' version '8.0.3' apply false
-  id 'com.gradleup.shadow' version '8.3.6' apply false
+  id 'com.gradleup.shadow' version '9.0.2' apply false
   id 'com.diffplug.spotless' version "6.25.0"
 }
 
 ext {
-  gradleVersion = versions.gradle
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
   modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams:examples", ":streams-scala", ":test-common:test-common-util"]
@@ -275,6 +274,7 @@ if (repo != null) {
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
         '**/.git/**',
+        '**/.gitkeep',
         '**/build/**',
         '.github/pull_request_template.md',
         'CONTRIBUTING.md',
@@ -299,7 +299,7 @@ if (repo != null) {
 } else {
   rat.enabled = false
 }
-println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
+println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $versions.gradle, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
@@ -329,6 +329,19 @@ subprojects {
     tasks.register('install').configure { dependsOn(publishToMavenLocal) }
     tasks.register('uploadArchives').configure { dependsOn(publish) }
   }
+
+    def  submodulesToIncludeInDistribution = ['core', 'tools', 'trogdor', 'shell', 'api', 'runtime', 'transforms',
+                                              'json', 'file', 'basic-auth-extension', 'mirror', 'mirror-client',
+                                              'streams', 'streams-scala', 'test-utils', 'examples', 'tools-api']
+
+    def shouldModuleResolveRuntimeClasspath = (submodulesToIncludeInDistribution.contains(project.name))
+
+    if (shouldModuleResolveRuntimeClasspath) {
+        configurations.create('resolvedRuntimeClasspath') {
+            extendsFrom(configurations.runtimeClasspath)
+            canBeResolved = true
+        }
+    }
 
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
   if (!project.name.equals('connect')) {
@@ -1168,71 +1181,6 @@ project(':core') {
     mainClass = 'org.apache.kafka.clients.producer.internals.ProducerMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "producer_metrics.html").newOutputStream()
-  }
-
-  task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolTypesDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
-                               'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
-                               'genKafkaConfigDocs', 'genTopicConfigDocs', 'genGroupConfigDocs',
-                               ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
-                               ':connect:runtime:genConnectPredicateDocs',
-                               ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
-                               ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
-                               ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
-                               ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
-                               ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs',
-                               ':storage:genRemoteLogManagerConfigDoc', ':storage:genRemoteLogMetadataManagerConfigDoc'], type: Tar) {
-    archiveClassifier = 'site-docs'
-    compression = Compression.GZIP
-    from project.file("$rootDir/docs")
-    into 'site-docs'
-    duplicatesStrategy 'exclude'
-  }
-
-  tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
-    into "kafka_${versions.baseScala}-${archiveVersion.get()}"
-    compression = Compression.GZIP
-    from(project.file("$rootDir/bin")) { into "bin/" }
-    from(project.file("$rootDir/config")) { into "config/" }
-    from(project.file("$rootDir/licenses")) { into "licenses/" }
-    from "$rootDir/LICENSE-binary" rename {String filename -> filename.replace("-binary", "")}
-    from "$rootDir/NOTICE-binary" rename {String filename -> filename.replace("-binary", "")}
-    from(configurations.runtimeClasspath) { into("libs/") }
-    from(configurations.archives.artifacts.files) { into("libs/") }
-    from(configurations.releaseOnly) { into("libs/") }
-    from(project.siteDocsTar) { into("site-docs/") }
-    from(project(':tools').jar) { into("libs/") }
-    from(project(':tools').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':trogdor').jar) { into("libs/") }
-    from(project(':trogdor').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':shell').jar) { into("libs/") }
-    from(project(':shell').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':connect:api').jar) { into("libs/") }
-    from(project(':connect:api').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':connect:runtime').jar) { into("libs/") }
-    from(project(':connect:runtime').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':connect:transforms').jar) { into("libs/") }
-    from(project(':connect:transforms').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':connect:json').jar) { into("libs/") }
-    from(project(':connect:json').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':connect:file').jar) { into("libs/") }
-    from(project(':connect:file').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':connect:basic-auth-extension').jar) { into("libs/") }
-    from(project(':connect:basic-auth-extension').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':connect:mirror').jar) { into("libs/") }
-    from(project(':connect:mirror').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':connect:mirror-client').jar) { into("libs/") }
-    from(project(':connect:mirror-client').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':streams').jar) { into("libs/") }
-    from(project(':streams').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':streams:streams-scala').jar) { into("libs/") }
-    from(project(':streams:streams-scala').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':streams:test-utils').jar) { into("libs/") }
-    from(project(':streams:test-utils').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':streams:examples').jar) { into("libs/") }
-    from(project(':streams:examples').configurations.runtimeClasspath) { into("libs/") }
-    from(project(':tools:tools-api').jar) { into("libs/") }
-    from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
-    duplicatesStrategy 'exclude'
   }
 
   jar {
@@ -3901,6 +3849,109 @@ project(':connect:test-plugins') {
     implementation libs.jacksonDatabind
 
     testImplementation testLog4j2Libs
+  }
+}
+
+project(':distribution') {
+  base {
+    archivesName = "kafka_${versions.baseScala}"
+  }
+
+  configurations {
+    includeIntoDistribution
+  }
+
+  dependencies {
+    includeIntoDistribution project(path: ':core', configuration: 'releaseOnly')
+    includeIntoDistribution project(path: ':core', configuration: 'archives')
+    includeIntoDistribution project(path: ':core', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':tools', configuration: 'archives')
+    includeIntoDistribution project(path: ':tools', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':trogdor', configuration: 'archives')
+    includeIntoDistribution project(path: ':trogdor', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':shell', configuration: 'archives')
+    includeIntoDistribution project(path: ':shell', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':connect:api', configuration: 'archives')
+    includeIntoDistribution project(path: ':connect:api', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':connect:runtime', configuration: 'archives')
+    includeIntoDistribution project(path: ':connect:runtime', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':connect:transforms', configuration: 'archives')
+    includeIntoDistribution project(path: ':connect:transforms', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':connect:json', configuration: 'archives')
+    includeIntoDistribution project(path: ':connect:json', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':connect:file', configuration: 'archives')
+    includeIntoDistribution project(path: ':connect:file', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':connect:basic-auth-extension', configuration: 'archives')
+    includeIntoDistribution project(path: ':connect:basic-auth-extension', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':connect:mirror', configuration: 'archives')
+    includeIntoDistribution project(path: ':connect:mirror', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':connect:mirror-client', configuration: 'archives')
+    includeIntoDistribution project(path: ':connect:mirror-client', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':streams', configuration: 'archives')
+    includeIntoDistribution project(path: ':streams', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':streams:streams-scala', configuration: 'archives')
+    includeIntoDistribution project(path: ':streams:streams-scala', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':streams:test-utils', configuration: 'archives')
+    includeIntoDistribution project(path: ':streams:test-utils', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':streams:examples', configuration: 'archives')
+    includeIntoDistribution project(path: ':streams:examples', configuration: 'resolvedRuntimeClasspath')
+    includeIntoDistribution project(path: ':tools:tools-api', configuration: 'archives')
+    includeIntoDistribution project(path: ':tools:tools-api', configuration: 'resolvedRuntimeClasspath')     
+  }
+
+  task siteDocsTar(dependsOn: [':core:genProtocolErrorDocs', ':core:genProtocolTypesDocs', ':core:genProtocolApiKeyDocs', ':core:genProtocolMessageDocs',
+                               ':core:genAdminClientConfigDocs', ':core:genProducerConfigDocs', ':core:genConsumerConfigDocs',
+                               ':core:genKafkaConfigDocs', ':core:genTopicConfigDocs', ':core:genGroupConfigDocs',
+                               ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
+                               ':connect:runtime:genConnectPredicateDocs',
+                               ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
+                               ':streams:genStreamsConfigDocs', ':core:genConsumerMetricsDocs', ':core:genProducerMetricsDocs',
+                               ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs',
+                               ':connect:mirror:genMirrorSourceConfigDocs', ':connect:mirror:genMirrorCheckpointConfigDocs',
+                               ':connect:mirror:genMirrorHeartbeatConfigDocs', ':connect:mirror:genMirrorConnectorConfigDocs',
+                               ':storage:genRemoteLogManagerConfigDoc', ':storage:genRemoteLogMetadataManagerConfigDoc'], type: Tar) {
+    archiveClassifier = 'site-docs'
+    compression = Compression.GZIP
+    from project.file("$rootDir/docs")
+    into 'site-docs'
+    destinationDirectory = project(':core').layout.buildDirectory.dir('distributions')
+    duplicatesStrategy 'exclude'
+    preserveFileTimestamps = true
+  }
+
+  tasks.create(name: "releaseTarGz", dependsOn: project(':core').configurations.archives.artifacts, type: Tar) {
+    into "kafka_${versions.baseScala}-${archiveVersion.get()}"
+    compression = Compression.GZIP
+    from(project.file("$rootDir/bin")) { into "bin/" }
+    from(project.file("$rootDir/config")) { into "config/" }
+    from(project.file("$rootDir/licenses")) { into "licenses/" }
+    from "$rootDir/LICENSE-binary" rename {String filename -> filename.replace("-binary", "")}
+    from "$rootDir/NOTICE-binary" rename {String filename -> filename.replace("-binary", "")}
+    from(project.siteDocsTar) { into("site-docs/") }
+    from(configurations.includeIntoDistribution) { into("libs/") }
+    destinationDirectory = project(':core').layout.buildDirectory.dir('distributions')
+    duplicatesStrategy 'exclude'
+    preserveFileTimestamps = true
+    filePermissions {
+        user {
+            read = true
+            write = true
+        }
+        group.read = true
+        other.read = true
+    }
+    dirPermissions {
+        unix('rwxr-xr-x')
+    }
+    eachFile {
+        if (name.endsWith( ".sh")) {
+            permissions {
+                user.execute = true
+                group.execute = true
+                other.execute = true
+            }
+        }
+    }
   }
 }
 
