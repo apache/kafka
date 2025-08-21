@@ -494,7 +494,7 @@ public class RestoreIntegrationTest {
         kafkaStreams = new KafkaStreams(builder.build(), props);
         try {
             startApplicationAndWaitUntilRunning(kafkaStreams);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             fail("Failed to start KafkaStreams", e);
         }
     }
