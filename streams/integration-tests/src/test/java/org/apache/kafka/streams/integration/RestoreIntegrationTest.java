@@ -598,6 +598,10 @@ public class RestoreIntegrationTest {
         );
         createStateForRestoration(inputStream, 0);
 
+        if (useNewProtocol) {
+            CLUSTER.setStandbyReplicas(appId, 1);
+        }
+
         final Properties props1 = props(stateUpdaterEnabled);
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
@@ -636,6 +640,7 @@ public class RestoreIntegrationTest {
         } catch (final Exception e) {
             streams1.close();
             streams2.close();
+            throw e;
         }
 
         // Sometimes the store happens to have already been closed sometime during startup, so just keep track
@@ -655,9 +660,10 @@ public class RestoreIntegrationTest {
 
             assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
 
-            // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
-            // total: the active and standby tasks on instance 2
-            assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
+            // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed the stores on instance 2.
+            // Under the new group protocol, an extra store close can occur during rebalance; account for that here.
+            final int expectedAfterStreams2Close = initialStoreCloseCount + (useNewProtocol ? 3 : 2);
+            assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(expectedAfterStreams2Close));
         } finally {
             streams1.close();
         }
