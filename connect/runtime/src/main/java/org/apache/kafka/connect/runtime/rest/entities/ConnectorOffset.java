@@ -20,7 +20,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Represents a single {partition, offset} pair for either a sink connector or a source connector. For source connectors,
@@ -38,49 +37,19 @@ import java.util.Objects;
  *     }
  * </pre>
  */
-public class ConnectorOffset {
-
-    private final Map<String, ?> partition;
-    private final Map<String, ?> offset;
-
+public record ConnectorOffset(
+    @JsonProperty("partition") Map<String, ?> partition,
+    @JsonProperty("offset") Map<String, ?> offset
+) {
     @JsonCreator
-    public ConnectorOffset(@JsonProperty("partition") Map<String, ?> partition, @JsonProperty("offset") Map<String, ?> offset) {
-        this.partition = partition;
-        this.offset = offset;
-    }
-
-    @JsonProperty
-    public Map<String, ?> partition() {
-        return partition;
-    }
-
-    @JsonProperty
-    public Map<String, ?> offset() {
-        return offset;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (!(obj instanceof ConnectorOffset that)) {
-            return false;
-        }
-        return Objects.equals(this.partition, that.partition) &&
-                Objects.equals(this.offset, that.offset);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(partition, offset);
+    public ConnectorOffset {
     }
 
     @Override
     public String toString() {
         return "{" +
-                "partition=" + partition +
-                ", offset=" + offset +
-                '}';
+            "partition=" + partition +
+            ", offset=" + offset +
+            '}';
     }
 }

@@ -51,17 +51,12 @@ import java.util.Objects;
  * @see ConnectorsResource#getOffsets
  * @see ConnectorsResource#alterConnectorOffsets
  */
-public class ConnectorOffsets {
-    private final List<ConnectorOffset> offsets;
+public record ConnectorOffsets(
+    @JsonProperty("offsets") List<ConnectorOffset> offsets
+) {
 
     @JsonCreator
-    public ConnectorOffsets(@JsonProperty("offsets") List<ConnectorOffset> offsets) {
-        this.offsets = offsets;
-    }
-
-    @JsonProperty
-    public List<ConnectorOffset> offsets() {
-        return offsets;
+    public ConnectorOffsets {
     }
 
     public Map<Map<String, ?>, Map<String, ?>> toMap() {
@@ -70,22 +65,6 @@ public class ConnectorOffsets {
             partitionOffsetMap.put(offset.partition(), offset.offset());
         }
         return partitionOffsetMap;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (!(obj instanceof ConnectorOffsets that)) {
-            return false;
-        }
-        return Objects.equals(this.offsets, that.offsets);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hashCode(offsets);
     }
 
     @Override
