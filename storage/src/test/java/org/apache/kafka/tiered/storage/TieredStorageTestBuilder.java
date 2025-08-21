@@ -206,7 +206,7 @@ public final class TieredStorageTestBuilder {
                                                                  RemoteFetchCount remoteFetchRequestCount) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         assertTrue(partition >= 0, "Partition must be >= 0");
-        assertTrue(remoteFetchRequestCount.getSegmentFetchCountAndOp().getCount() >= 0, "Expected fetch count from tiered storage must be >= 0");
+        assertTrue(remoteFetchRequestCount.getSegmentFetchCountAndOp().count() >= 0, "Expected fetch count from tiered storage must be >= 0");
         assertFalse(fetchables.containsKey(topicPartition), "Consume already in progress for " + topicPartition);
         fetchables.put(topicPartition, new FetchableSpec(fromBroker, remoteFetchRequestCount));
         return this;

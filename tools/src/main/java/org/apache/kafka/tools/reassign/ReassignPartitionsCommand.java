@@ -279,12 +279,12 @@ public class ReassignPartitionsCommand {
         bld.add("Status of partition reassignment:");
         states.keySet().stream().sorted(ReassignPartitionsCommand::compareTopicPartitions).forEach(topicPartition -> {
             PartitionReassignmentState state = states.get(topicPartition);
-            if (state.done) {
-                if (state.currentReplicas.equals(state.targetReplicas)) {
+            if (state.done()) {
+                if (state.currentReplicas().equals(state.targetReplicas())) {
                     bld.add(String.format("Reassignment of partition %s is completed.", topicPartition));
                 } else {
-                    String currentReplicaStr = state.currentReplicas.stream().map(String::valueOf).collect(Collectors.joining(","));
-                    String targetReplicaStr = state.targetReplicas.stream().map(String::valueOf).collect(Collectors.joining(","));
+                    String currentReplicaStr = state.currentReplicas().stream().map(String::valueOf).collect(Collectors.joining(","));
+                    String targetReplicaStr = state.targetReplicas().stream().map(String::valueOf).collect(Collectors.joining(","));
 
                     bld.add("There is no active reassignment of partition " + topicPartition + ", " +
                         "but replica set is " + currentReplicaStr + " rather than " +
@@ -467,8 +467,8 @@ public class ReassignPartitionsCommand {
                 bld.add("Partition " + replica.topic() + "-" + replica.partition() + " cannot be found " +
                     "in any live log directory on broker " + replica.brokerId() + ".");
             } else if (state instanceof ActiveMoveState) {
-                String targetLogDir = ((ActiveMoveState) state).targetLogDir;
-                String futureLogDir = ((ActiveMoveState) state).futureLogDir;
+                String targetLogDir = ((ActiveMoveState) state).targetLogDir();
+                String futureLogDir = ((ActiveMoveState) state).futureLogDir();
                 if (targetLogDir.equals(futureLogDir)) {
                     bld.add("Reassignment of replica " + replica + " is still in progress.");
                 } else {
@@ -477,8 +477,8 @@ public class ReassignPartitionsCommand {
                         "instead of " + targetLogDir + ".");
                 }
             } else if (state instanceof CancelledMoveState) {
-                String targetLogDir = ((CancelledMoveState) state).targetLogDir;
-                String currentLogDir = ((CancelledMoveState) state).currentLogDir;
+                String targetLogDir = ((CancelledMoveState) state).targetLogDir();
+                String currentLogDir = ((CancelledMoveState) state).currentLogDir();
                 bld.add("Partition " + replica.topic() + "-" + replica.partition() + " on broker " +
                     replica.brokerId() + " is not being moved from log dir " + currentLogDir + " to " +
                     targetLogDir + ".");
@@ -1292,7 +1292,7 @@ public class ReassignPartitionsCommand {
         Map<TopicPartitionReplica, String> curMovingParts = new HashMap<>();
         findLogDirMoveStates(adminClient, targetReplicas).forEach((part, moveState) -> {
             if (moveState instanceof ActiveMoveState)
-                curMovingParts.put(part, ((ActiveMoveState) moveState).currentLogDir);
+                curMovingParts.put(part, ((ActiveMoveState) moveState).currentLogDir());
         });
         if (curMovingParts.isEmpty()) {
             System.out.print("None of the specified partition moves are active.");
