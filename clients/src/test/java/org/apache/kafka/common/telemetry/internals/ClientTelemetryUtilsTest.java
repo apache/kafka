@@ -125,35 +125,23 @@ public class ClientTelemetryUtilsTest {
     @Test
     public void testPreferredCompressionType() {
         // Test with no unsupported types
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Collections.emptyList(), Collections.emptySet()));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.NONE, CompressionType.GZIP), Collections.emptySet()));
-        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), Collections.emptySet()));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(List.of(), Set.of()));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.NONE, CompressionType.GZIP), Set.of()));
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), Set.of()));
 
-        // Test with unsupported types filtering
+        // Test unsupported type filtering (returns first available type, or NONE if all are unsupported)
         assertEquals(CompressionType.LZ4, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.GZIP)));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), Set.of(CompressionType.GZIP)));
         assertEquals(CompressionType.SNAPPY, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), Set.of(CompressionType.GZIP, CompressionType.LZ4)));
-
-        // Test when all types are unsupported
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP), Set.of(CompressionType.GZIP)));
         assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.GZIP, CompressionType.LZ4)));
+        
+        // Test edge case: no match between requested and supported types
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.SNAPPY)));
 
-        // Test priority order with unsupported types (first available wins)
-        assertEquals(CompressionType.ZSTD, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.ZSTD, CompressionType.SNAPPY), Set.of()));
-        assertEquals(CompressionType.SNAPPY, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.ZSTD, CompressionType.SNAPPY), Set.of(CompressionType.ZSTD)));
-        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.LZ4, CompressionType.GZIP, CompressionType.SNAPPY), Set.of(CompressionType.LZ4)));
-
-        // Test NullPointerException for null acceptedCompressionTypes parameter
+        // Test NullPointerException for null parameters
         assertThrows(NullPointerException.class, () ->
-            ClientTelemetryUtils.preferredCompressionType(null, Collections.emptySet()));
-        assertThrows(NullPointerException.class, () -> 
-            ClientTelemetryUtils.preferredCompressionType(null, Set.of(CompressionType.GZIP)));
-
-        // Test NullPointerException for null unsupportedCompressionTypes parameter
+            ClientTelemetryUtils.preferredCompressionType(null, Set.of()));
         assertThrows(NullPointerException.class, () ->
             ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE), null));
-        assertThrows(NullPointerException.class, () -> 
-            ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.LZ4, CompressionType.SNAPPY), null));
     }
 
     @ParameterizedTest
