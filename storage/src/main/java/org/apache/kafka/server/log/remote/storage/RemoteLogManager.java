@@ -2054,6 +2054,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
                 Utils.closeQuietly(remoteLogMetadataManagerPlugin, "remoteLogMetadataManagerPlugin");
                 Utils.closeQuietly(remoteStorageManagerPlugin, "remoteStorageManagerPlugin");
+                Utils.closeQuietly(fetchQuotaMetrics, "fetchQuotaMetrics");
+                Utils.closeQuietly(copyQuotaMetrics, "copyQuotaMetrics");
                 closed = true;
             }
         }
