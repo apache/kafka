@@ -4503,7 +4503,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 31), 10);
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 41), 10);
 
-        // After the acknowledgements, the share partition state will be:
+        // After the acknowledgements, the state of share partition will be:
         // 1. 11 -> 20: AVAILABLE
         // 2. 21 -> 30: ACQUIRED
         // 3. 31 -> 40: AVAILABLE
