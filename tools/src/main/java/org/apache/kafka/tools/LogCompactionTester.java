@@ -410,9 +410,10 @@ public class LogCompactionTester {
 
             try (BufferedWriter producedWriter = Files.newBufferedWriter(
                     producedFilePath, StandardCharsets.UTF_8)) {
-                String[] topicsArray = topics.toArray(new String[0]);
-                for (long i = 0; i < messages * topics.size(); i++) {
-                    String topic = topicsArray[(int) (i % topics.size())];
+                List<String> topicsList = List.copyOf(topics);
+                int size = topicsList.size();
+                for (long i = 0; i < messages * size; i++) {
+                    String topic = topicsList.get((int) (i % size));
                     int key = RANDOM.nextInt(keyCount);
                     boolean delete = (i % 100) < percentDeletes;
                     ProducerRecord<byte[], byte[]> record;
@@ -440,7 +441,7 @@ public class LogCompactionTester {
 
         try (Consumer<String, String> consumer = createConsumer(brokerUrl);
              BufferedWriter consumedWriter = Files.newBufferedWriter(consumedFilePath, StandardCharsets.UTF_8)) {
-            consumer.subscribe(new ArrayList<>(topics));
+            consumer.subscribe(topics);
             while (true) {
                 ConsumerRecords<String, String> consumerRecords = consumer.poll(Duration.ofSeconds(20));
                 if (consumerRecords.isEmpty()) return consumedFilePath;
