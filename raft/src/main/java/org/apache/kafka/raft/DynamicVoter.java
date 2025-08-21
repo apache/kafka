@@ -29,6 +29,11 @@ import java.util.Map;
  * <p>
  * Since this is used in command-line tools, format changes to the parsing logic require a KIP,
  * and should be backwards compatible.
+ *
+ * @param directoryId The directory ID.
+ * @param nodeId      The voter ID.
+ * @param host        The voter hostname or IP address.
+ * @param port        The voter port.
  */
 public record DynamicVoter(Uuid directoryId, int nodeId, String host, int port) {
     /**
@@ -105,17 +110,6 @@ public record DynamicVoter(Uuid directoryId, int nodeId, String host, int port) 
             throw new IllegalArgumentException("Failed to parse directory ID in dynamic voter string.", e);
         }
         return new DynamicVoter(directoryId, nodeId, host, port);
-    }
-
-    /**
-     * Create a new KIP-853 voter.
-     *
-     * @param directoryId The directory ID.
-     * @param nodeId      The voter ID.
-     * @param host        The voter hostname or IP address.
-     * @param port        The voter port.
-     */
-    public DynamicVoter {
     }
 
     public VoterSet.VoterNode toVoterNode(String controllerListenerName) {

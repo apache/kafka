@@ -22,9 +22,8 @@ import java.util.OptionalInt;
 public record LeaderAndEpoch(OptionalInt leaderId, int epoch) {
     public static final LeaderAndEpoch UNKNOWN = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
-    public LeaderAndEpoch(OptionalInt leaderId, int epoch) {
-        this.leaderId = Objects.requireNonNull(leaderId);
-        this.epoch = epoch;
+    public LeaderAndEpoch {
+        Objects.requireNonNull(leaderId);
     }
 
     public boolean isLeader(int nodeId) {
