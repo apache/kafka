@@ -112,7 +112,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public List<String> controllerListenerNames() {
-        return Csv.parseCsvList(getString(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG));
+        return getList(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG);
     }
 
     public ListenerName interBrokerListenerName() {
