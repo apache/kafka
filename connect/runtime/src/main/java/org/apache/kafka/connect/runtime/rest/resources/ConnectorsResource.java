@@ -41,7 +41,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -191,7 +190,7 @@ public class ConnectorsResource {
                     "Topic tracking is disabled.");
         }
         ActiveTopicsInfo info = herder.connectorActiveTopics(connector);
-        return Response.ok(Collections.singletonMap(info.connector(), info)).build();
+        return Response.ok(Map.of(info.connector(), info)).build();
     }
 
     @PUT
