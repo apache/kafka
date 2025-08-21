@@ -28,6 +28,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     final OptionSpec<?> executeOpt;
     final OptionSpec<?> cancelOpt;
     final OptionSpec<?> listOpt;
+    final OptionSpec<?> rebalanceOpt;
 
     // Arguments
     final OptionSpec<String> bootstrapServerOpt;
@@ -43,6 +44,8 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     final OptionSpec<?> additionalOpt;
     final OptionSpec<?> preserveThrottlesOpt;
     final OptionSpec<?> disallowReplicationFactorChangeOpt;
+    final OptionSpec<String> topicOpt;
+
 
     public ReassignPartitionsCommandOptions(String[] args) {
         super(args);
@@ -54,6 +57,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option.");
         cancelOpt = parser.accepts("cancel", "Cancel an active reassignment.");
         listOpt = parser.accepts("list", "List all active partition reassignments.");
+        rebalanceOpt = parser.accepts("rebalance", "Rebalance partitions across brokers for an existing topic based on the given broker list.");
 
         // Arguments
         bootstrapServerOpt = parser.accepts("bootstrap-server", "the server(s) to use for bootstrapping.")
@@ -81,7 +85,8 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
             .describedAs("topics to reassign json file path")
             .ofType(String.class);
         brokerListOpt = parser.accepts("broker-list", "The list of brokers to which the partitions need to be reassigned" +
-                " in the form \"0,1,2\". This is required if --topics-to-move-json-file is used to generate reassignment configuration")
+                " in the form \"0,1,2\". This is required if --topics-to-move-json-file is used to generate reassignment configuration." +
+                " Alternatively, you can use --rebalance to automatically generate a balanced partition reassignment plan.")
             .withRequiredArg()
             .describedAs("brokerlist")
             .ofType(String.class);
@@ -117,6 +122,10 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
             "other ongoing ones. This option can also be used to change the throttle of an ongoing reassignment.");
         preserveThrottlesOpt = parser.accepts("preserve-throttles", "Do not modify broker or topic throttles.");
         disallowReplicationFactorChangeOpt = parser.accepts("disallow-replication-factor-change", "Denies the ability to change a partition's replication factor as part of this reassignment through adding validation against it.");
+        topicOpt = parser.accepts("topic", "The topic to rebalance partitions for.")
+            .withOptionalArg()
+            .describedAs("topic name")
+            .ofType(String.class);
 
         options = parser.parse(args);
     }

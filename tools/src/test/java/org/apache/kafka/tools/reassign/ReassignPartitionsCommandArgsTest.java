@@ -319,4 +319,15 @@ public class ReassignPartitionsCommandArgsTest {
             "--topics-to-move-json-file", "myfile.json"};
         shouldFailWith("Please don't specify both --bootstrap-server and --bootstrap-controller", args);
     }
+
+    @Test
+    public void rebalanceOptTest() {
+        String[] args = new String[] {
+            "--bootstrap-server", "localhost:1234",
+            "--rebalance",
+            "--topic", "topic-test",
+            "--broker-list", "101,102",
+            "--disable-rack-aware"};
+        ReassignPartitionsCommand.validateAndParseArgs(args);
+    }
 }

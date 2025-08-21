@@ -37,6 +37,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.MinimalMovementReplicaBalancer;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
@@ -171,6 +172,11 @@ public class ReassignPartitionsCommand {
         } else if (opts.options.has(opts.generateOpt)) {
             generateAssignment(adminClient,
                 Utils.readFileAsString(opts.options.valueOf(opts.topicsToMoveJsonFileOpt)),
+                opts.options.valueOf(opts.brokerListOpt),
+                !opts.options.has(opts.disableRackAware));
+        } else if (opts.options.has(opts.rebalanceOpt)) {
+            rebalanceAssignment(adminClient,
+                opts.options.valueOf(opts.topicOpt),
                 opts.options.valueOf(opts.brokerListOpt),
                 !opts.options.has(opts.disableRackAware));
         } else if (opts.options.has(opts.executeOpt)) {
@@ -575,6 +581,40 @@ public class ReassignPartitionsCommand {
         return Map.entry(proposedAssignments, currentAssignments);
     }
 
+    public static Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> rebalanceAssignment(Admin adminClient,
+                                                                                                                   String topic,
+                                                                                                                   String targetBrokerIdsStr,
+                                                                                                                   Boolean enableRackAwareness
+    ) throws ExecutionException, InterruptedException, JsonProcessingException {
+        Map<TopicPartition, List<Integer>> currentAssignments = getReplicaAssignmentForTopics(adminClient, Collections.singletonList(topic));
+        List<UsableBroker> usableBrokers = getBrokerMetadata(adminClient);
+        Map<TopicPartition, List<Integer>> proposedAssignments = calculateRebalanceAssignment(currentAssignments, usableBrokers, targetBrokerIdsStr, enableRackAwareness, topic);
+        System.out.printf("Current partition replica assignment%n%s%n%n",
+            formatAsReassignmentJson(currentAssignments, Collections.emptyMap()));
+        System.out.printf("Proposed partition reassignment configuration%n%s%n",
+            formatAsReassignmentJson(proposedAssignments, Collections.emptyMap()));
+        return new SimpleImmutableEntry<>(proposedAssignments, currentAssignments);
+    }
+
+    private static Map<TopicPartition, List<Integer>> calculateRebalanceAssignment(Map<TopicPartition, List<Integer>> currentAssignments, List<UsableBroker> usableBrokers, String targetBrokerIdsStr, Boolean enableRackAwareness, String topic) {
+        Map<Integer, List<Integer>> assignment = currentAssignments.entrySet()
+            .stream()
+            .collect(Collectors.toMap(
+                entry -> entry.getKey().partition(),
+                Entry::getValue
+            ));
+        List<Integer> targetBrokerIds = Arrays.stream(targetBrokerIdsStr.split(","))
+            .map(Integer::parseInt)
+            .sorted()
+            .collect(Collectors.toList());
+        MinimalMovementReplicaBalancer minimalMovementReplicaBalancer = new MinimalMovementReplicaBalancer(assignment, targetBrokerIds, usableBrokers, enableRackAwareness);
+        Map<Integer, List<Integer>> newAssignment = minimalMovementReplicaBalancer.assignReplicasToBrokers();
+        return newAssignment.entrySet().stream().collect(Collectors.toMap(
+            entry -> new TopicPartition(topic, entry.getKey()),
+            Entry::getValue
+        ));
+    }
+
     /**
      * Calculate the new partition assignments to suggest in --generate.
      *
@@ -710,6 +750,23 @@ public class ReassignPartitionsCommand {
                 "information.");
         }
         return results;
+    }
+
+    /**
+     * Find the rack information for some brokers.
+     * Brokers without rack configuration are excluded from anti-affinity checks.
+     *
+     * @param adminClient         The AdminClient object.
+     * @return
+     * @throws ExecutionException
+     * @throws InterruptedException
+     */
+    static List<UsableBroker> getBrokerMetadata(Admin adminClient) throws ExecutionException, InterruptedException {
+        return adminClient.describeCluster().nodes().get().stream()
+            .map(node -> (node.rack() != null)
+                ? new UsableBroker(node.id(), Optional.of(node.rack()), false)
+                : new UsableBroker(node.id(), Optional.empty(), false)
+            ).collect(Collectors.toList());
     }
 
     /**
@@ -1419,7 +1476,7 @@ public class ReassignPartitionsCommand {
 
         // Determine which action we should perform.
         List<OptionSpec<?>> validActions = List.of(opts.generateOpt, opts.executeOpt, opts.verifyOpt,
-            opts.cancelOpt, opts.listOpt);
+            opts.cancelOpt, opts.listOpt, opts.rebalanceOpt);
 
         List<OptionSpec<?>> allActions = validActions.stream()
             .filter(a -> opts.options.has(a)).toList();
@@ -1443,6 +1500,7 @@ public class ReassignPartitionsCommand {
 
         requiredArgs.put(opts.verifyOpt, List.of(opts.reassignmentJsonFileOpt));
         requiredArgs.put(opts.generateOpt, List.of(opts.topicsToMoveJsonFileOpt, opts.brokerListOpt));
+        requiredArgs.put(opts.rebalanceOpt, List.of(opts.topicOpt, opts.brokerListOpt));
         requiredArgs.put(opts.executeOpt, List.of(opts.reassignmentJsonFileOpt));
         requiredArgs.put(opts.cancelOpt, List.of(opts.reassignmentJsonFileOpt));
         requiredArgs.put(opts.listOpt, List.of());
@@ -1460,6 +1518,11 @@ public class ReassignPartitionsCommand {
             opts.bootstrapServerOpt,
             opts.brokerListOpt,
             opts.commandConfigOpt,
+            opts.disableRackAware
+        ));
+        permittedArgs.put(opts.rebalanceOpt, Arrays.asList(
+            opts.bootstrapServerOpt,
+            opts.brokerListOpt,
             opts.disableRackAware
         ));
         permittedArgs.put(opts.executeOpt, List.of(
