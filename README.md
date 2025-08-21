@@ -91,7 +91,7 @@ Generate coverage for a single module, i.e.:
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
 
-The release file can be found inside `./core/build/distributions/`.
+The release file can be found inside `./distribution/build/distributions/`.
 
 ### Building auto generated messages ###
 Sometimes it is only necessary to rebuild the RPC auto-generated message data when switching between branches, as they could

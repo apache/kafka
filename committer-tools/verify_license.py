@@ -40,7 +40,7 @@ def run_gradlew(project_dir):
     subprocess.run(["./gradlew", "clean", "releaseTarGz"], check=True, cwd=project_dir)
 
 def get_tarball_path(project_dir):
-    distributions_dir = os.path.join(project_dir, "core", "build", "distributions")
+    distributions_dir = os.path.join(project_dir, "distribution", "build", "distributions")
     if not os.path.isdir(distributions_dir):
         print("Error: Distributions directory not found:", distributions_dir)
         sys.exit(1)

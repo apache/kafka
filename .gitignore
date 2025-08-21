@@ -2,6 +2,7 @@ dist
 *classes
 *.class
 target/
+bin/
 build/
 build_eclipse/
 out/
