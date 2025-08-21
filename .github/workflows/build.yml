@@ -164,7 +164,7 @@ jobs:
         # Check if there are any empty files under ./site-docs/generated, If any empty files are found, print an error 
         # message and list the empty files
         run: |
-          tar zxvf core/build/distributions/kafka_2.13-$(./gradlew properties | grep version: | awk '{print $NF}' | head -n 1)-site-docs.tgz
+          tar zxvf distribution/build/distributions/kafka_2.13-$(./gradlew properties | grep version: | awk '{print $NF}' | head -n 1)-site-docs.tgz
           if find ./site-docs/generated -type f -exec grep -L "." {} \; | grep -q "."; then
             echo "One or more documentation files are empty!" >&2
             find ./site-docs/generated -type f -exec grep -L "." {} \; >&2
