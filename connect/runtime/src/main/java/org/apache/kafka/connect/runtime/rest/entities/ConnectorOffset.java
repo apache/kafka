@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Map;
@@ -41,10 +40,6 @@ public record ConnectorOffset(
     @JsonProperty("partition") Map<String, ?> partition,
     @JsonProperty("offset") Map<String, ?> offset
 ) {
-    @JsonCreator
-    public ConnectorOffset {
-    }
-
     @Override
     public String toString() {
         return "{" +

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
@@ -28,6 +27,4 @@ public record ErrorMessage(
     @JsonProperty("error_code") int errorCode,
     @JsonProperty String message
 ) {
-    @JsonCreator
-    public ErrorMessage {}
 }

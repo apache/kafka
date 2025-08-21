@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime.rest.entities;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
@@ -30,7 +29,4 @@ public record ConnectorInfo(
     @JsonProperty("tasks") List<ConnectorTaskId> tasks,
     @JsonProperty("type") ConnectorType type
 ) {
-    @JsonCreator
-    public ConnectorInfo {
-    }
 }

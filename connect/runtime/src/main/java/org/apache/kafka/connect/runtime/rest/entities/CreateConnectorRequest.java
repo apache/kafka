@@ -29,9 +29,6 @@ public record CreateConnectorRequest(
     @JsonProperty("config") Map<String, String> config,
     @JsonProperty("initial_state") InitialState initialState
 ) {
-    @JsonCreator
-    public CreateConnectorRequest {}
-
     public TargetState initialTargetState() {
         return initialState != null ? initialState.toTargetState() : null;
     }

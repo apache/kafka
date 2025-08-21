@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
@@ -28,10 +27,6 @@ public record ConfigValueInfo(
     @JsonProperty("errors") List<String> errors,
     @JsonProperty("visible") boolean visible
 ) {
-    @JsonCreator
-    public ConfigValueInfo {
-    }
-
     @Override
     public String toString() {
         return "[" +

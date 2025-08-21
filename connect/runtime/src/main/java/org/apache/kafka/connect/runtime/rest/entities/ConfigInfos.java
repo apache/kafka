@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
@@ -27,10 +26,6 @@ public record ConfigInfos(
     @JsonProperty("groups") List<String> groups,
     @JsonProperty("configs") List<ConfigInfo> configs
 ) {
-    @JsonCreator
-    public ConfigInfos {
-    }
-
     @Override
     public String toString() {
         return "[" +

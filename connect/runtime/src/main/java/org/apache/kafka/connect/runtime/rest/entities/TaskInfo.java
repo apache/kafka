@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime.rest.entities;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Map;
@@ -27,7 +26,4 @@ public record TaskInfo(
     @JsonProperty("id") ConnectorTaskId id,
     @JsonProperty("config") Map<String, String> config
 ) {
-    @JsonCreator
-    public TaskInfo {
-    }
 }
