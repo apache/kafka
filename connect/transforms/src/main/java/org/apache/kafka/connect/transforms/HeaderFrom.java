@@ -67,7 +67,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
                     "Field names in the record whose values are to be copied or moved to headers.")
             .define(HEADERS_FIELD, ConfigDef.Type.LIST,
                     NO_DEFAULT_VALUE,
-                    new NonEmptyListValidator(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     ConfigDef.Importance.HIGH,
                     "Header names, in the same order as the field names listed in the fields configuration property.")
             .define(OPERATION_FIELD, ConfigDef.Type.STRING, NO_DEFAULT_VALUE,
