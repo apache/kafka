@@ -4507,11 +4507,10 @@ public class SharePartitionTest {
         // 1. 11 -> 20: AVAILABLE
         // 2. 21 -> 30: ACQUIRED
         // 3. 31 -> 40: AVAILABLE
-        // 4. 41 -> 50: ACKNOWLEDGED
+        // 4. 41 -> 50: ACQUIRED
         sharePartition.acknowledge(MEMBER_ID, List.of(
             new ShareAcknowledgementBatch(11, 20, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(31, 40, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(41, 50, List.of((byte) 1))
+            new ShareAcknowledgementBatch(31, 40, List.of((byte) 2))
         ));
 
         // Move the LSO to 41. When the LSO moves ahead, all batches that are AVAILABLE before the new LSO will be ARCHIVED.
@@ -4519,7 +4518,7 @@ public class SharePartitionTest {
         // 1. 11 -> 20: ARCHIVED
         // 2. 21 -> 30: ACQUIRED
         // 3. 31 -> 40: ARCHIVED
-        // 4. 41 -> 50: ACKNOWLEDGED
+        // 4. 41 -> 50: ACQUIRED
         // Note, the records that are in ACQUIRED state will remain in ACQUIRED state and will be transitioned to a Terminal
         // state when the corresponding acquisition lock timer task expires.
         sharePartition.updateCacheAndOffsets(41);
@@ -4532,7 +4531,19 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(21L).batchState());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(31L).batchState());
-        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(41L).batchState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(41L).batchState());
+
+        // The client acknowledges the batch 21 -> 30. Since this batch is before the LSO, nothing will be done and these
+        // records will remain in the ACQUIRED state.
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(21L, 30L, List.of((byte) 2))));
+
+        // The batch is still in ACQUIRED state.
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(21L).batchState());
+
+        // Once the acquisition lock timer task for the batch 21 -> 30 is expired, these records will directly be
+        // ARCHIVED.
+        sharePartition.cachedState().get(21L).batchAcquisitionLockTimeoutTask().run();
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(21L).batchState());
     }
 
     @Test
@@ -4549,11 +4560,10 @@ public class SharePartitionTest {
         // 1. 11 -> 20: AVAILABLE
         // 2. 21 -> 30: ACQUIRED
         // 3. 31 -> 40: AVAILABLE
-        // 4. 41 -> 50: ACKNOWLEDGED
+        // 4. 41 -> 50: ACQUIRED
         sharePartition.acknowledge(MEMBER_ID, List.of(
             new ShareAcknowledgementBatch(11, 20, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(31, 40, List.of((byte) 2)),
-            new ShareAcknowledgementBatch(41, 50, List.of((byte) 1))
+            new ShareAcknowledgementBatch(31, 40, List.of((byte) 2))
         ));
 
         // Move the LSO to 36. When the LSO moves ahead, all records that are AVAILABLE before the new LSO will be ARCHIVED.
@@ -4562,7 +4572,7 @@ public class SharePartitionTest {
         // 2. 21 -> 30: ACQUIRED
         // 3. 31 -> 35: ARCHIVED
         // 3. 36 -> 40: AVAILABLE
-        // 4. 41 -> 50: ACKNOWLEDGED
+        // 4. 41 -> 50: ACQUIRED
         // Note, the records that are in ACQUIRED state will remain in ACQUIRED state and will be transitioned to a Terminal
         // state when the corresponding acquisition lock timer task expires.
         sharePartition.updateCacheAndOffsets(36);
@@ -4584,7 +4594,19 @@ public class SharePartitionTest {
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(31L).offsetState().get(38L).state());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(31L).offsetState().get(39L).state());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(31L).offsetState().get(40L).state());
-        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(41L).batchState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(41L).batchState());
+
+        // The client acknowledges the batch 21 -> 30. Since this batch is before the LSO, nothing will be done and these
+        // records will remain in the ACQUIRED state.
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(21L, 30L, List.of((byte) 2))));
+
+        // The batch is still in ACQUIRED state.
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(21L).batchState());
+
+        // Once the acquisition lock timer task for the batch 21 -> 30 is expired, these records will directly be
+        // ARCHIVED.
+        sharePartition.cachedState().get(21L).batchAcquisitionLockTimeoutTask().run();
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(21L).batchState());
     }
 
     @Test
