@@ -112,7 +112,7 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
         try (Admin admin = cluster.admin()) {
             NewTopic newTopic = new NewTopic(topic, assignment);
             admin.createTopics(List.of(newTopic));
-            cluster.waitForTopic(topic, assignment.size());
+            cluster.waitTopicCreation(topic, assignment.size());
         }
     }
 

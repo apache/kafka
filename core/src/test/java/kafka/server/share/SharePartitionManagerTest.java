@@ -2622,7 +2622,8 @@ public class SharePartitionManagerTest {
         assertEquals(Errors.FENCED_STATE_EPOCH.code(), partitionDataMap.get(tp2).errorCode());
         assertEquals("Fenced state epoch", partitionDataMap.get(tp2).errorMessage());
 
-        Mockito.verify(replicaManager, times(0)).completeDelayedShareFetchRequest(any());
+        Mockito.verify(replicaManager, times(1)).completeDelayedShareFetchRequest(
+            new DelayedShareFetchGroupKey(groupId, tp2));
         Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         // Should have 1 fetch recorded and 1 failure as single topic has multiple partition fetch

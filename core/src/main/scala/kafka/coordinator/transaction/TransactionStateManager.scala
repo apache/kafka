@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition}
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
@@ -47,6 +47,8 @@ import com.google.re2j.{Pattern, PatternSyntaxException}
 import org.apache.kafka.common.errors.InvalidRegularExpression
 
 import java.util
+import java.util.Optional
+
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
@@ -177,7 +179,7 @@ class TransactionStateManager(brokerId: Int,
             val transactionalId = txnMetadata.transactionalId
             var fullBatch = false
 
-            txnMetadata.inLock {
+            txnMetadata.inLock(() => {
               if (txnMetadata.pendingState.isEmpty && shouldExpire(txnMetadata, currentTimeMs)) {
                 if (recordsBuilder == null) {
                   recordsBuilder = MemoryRecords.builder(
@@ -200,7 +202,7 @@ class TransactionStateManager(brokerId: Int,
                   fullBatch = true
                 }
               }
-            }
+            })
 
             if (fullBatch) {
               flushRecordsBuilder()
@@ -264,9 +266,9 @@ class TransactionStateManager(brokerId: Int,
             expiredForPartition.foreach { idCoordinatorEpochAndMetadata =>
               val transactionalId = idCoordinatorEpochAndMetadata.transactionalId
               val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
-              txnMetadata.inLock {
+              txnMetadata.inLock(() => {
                 if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
-                  && txnMetadata.pendingState.contains(TransactionState.DEAD)
+                  && txnMetadata.pendingState.filter(s => s == TransactionState.DEAD).isPresent
                   && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
                   && response.error == Errors.NONE) {
                   txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
@@ -277,9 +279,9 @@ class TransactionStateManager(brokerId: Int,
                     s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
                     s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
                     s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
-                  txnMetadata.pendingState = None
+                  txnMetadata.pendingState(Optional.empty())
                 }
-              }
+              })
             }
           }
         }
@@ -367,7 +369,7 @@ class TransactionStateManager(brokerId: Int,
         } else null
         transactionMetadataCache.foreachEntry { (_, cache) =>
           cache.metadataPerTransactionalId.forEach { (_, txnMetadata) =>
-            txnMetadata.inLock {
+            txnMetadata.inLock(() => {
               if (shouldInclude(txnMetadata, pattern)) {
                 states.add(new ListTransactionsResponseData.TransactionState()
                   .setTransactionalId(txnMetadata.transactionalId)
@@ -375,7 +377,7 @@ class TransactionStateManager(brokerId: Int,
                   .setTransactionState(txnMetadata.state.stateName)
                 )
               }
-            }
+            })
           }
         }
         response.setErrorCode(Errors.NONE.code)
@@ -566,7 +568,7 @@ class TransactionStateManager(brokerId: Int,
 
           val transactionsPendingForCompletion = new mutable.ListBuffer[TransactionalIdCoordinatorEpochAndTransitMetadata]
           loadedTransactions.forEach((transactionalId, txnMetadata) => {
-            txnMetadata.inLock {
+            txnMetadata.inLock(() => {
               // if state is PrepareCommit or PrepareAbort we need to complete the transaction
               txnMetadata.state match {
                 case TransactionState.PREPARE_ABORT =>
@@ -578,7 +580,7 @@ class TransactionStateManager(brokerId: Int,
                 case _ =>
                 // nothing needs to be done
               }
-            }
+            })
           })
 
           // we first remove the partition from loading partition then send out the markers for those pending to be
@@ -714,7 +716,7 @@ class TransactionStateManager(brokerId: Int,
           case Right(Some(epochAndMetadata)) =>
             val metadata = epochAndMetadata.transactionMetadata
 
-            metadata.inLock {
+            metadata.inLock(() => {
               if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
                 // the cache may have been changed due to txn topic partition emigration and immigration,
                 // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
@@ -726,7 +728,7 @@ class TransactionStateManager(brokerId: Int,
                 metadata.completeTransitionTo(newMetadata)
                 debug(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
               }
-            }
+            })
 
           case Right(None) =>
             // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
@@ -741,7 +743,7 @@ class TransactionStateManager(brokerId: Int,
         getTransactionState(transactionalId) match {
           case Right(Some(epochAndTxnMetadata)) =>
             val metadata = epochAndTxnMetadata.transactionMetadata
-            metadata.inLock {
+            metadata.inLock(() => {
               if (epochAndTxnMetadata.coordinatorEpoch == coordinatorEpoch) {
                 if (retryOnError(responseError)) {
                   info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
@@ -750,13 +752,13 @@ class TransactionStateManager(brokerId: Int,
                   info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
                     s"resetting pending state from ${metadata.pendingState}, aborting state transition and returning $responseError in the callback")
 
-                  metadata.pendingState = None
+                  metadata.pendingState(Optional.empty())
                 }
               } else {
                 info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
                   s"aborting state transition and returning the error in the callback since the coordinator epoch has changed from ${epochAndTxnMetadata.coordinatorEpoch} to $coordinatorEpoch")
               }
-            }
+            })
 
           case Right(None) =>
             // Do nothing here, since we want to return the original append error to the user.
@@ -791,7 +793,7 @@ class TransactionStateManager(brokerId: Int,
         case Right(Some(epochAndMetadata)) =>
           val metadata = epochAndMetadata.transactionMetadata
 
-          val append: Boolean = metadata.inLock {
+          val append: Boolean = metadata.inLock(() => {
             if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
               // the coordinator epoch has changed, reply to client immediately with NOT_COORDINATOR
               responseCallback(Errors.NOT_COORDINATOR)
@@ -801,7 +803,7 @@ class TransactionStateManager(brokerId: Int,
               // under the same coordinator epoch, so directly append to txn log now
               true
             }
-          }
+          })
           if (append) {
             replicaManager.appendRecords(
               timeout = newMetadata.txnTimeoutMs.toLong,

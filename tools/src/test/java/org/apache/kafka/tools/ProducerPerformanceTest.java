@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.SplittableRandom;
@@ -94,7 +93,7 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testReadProps() throws Exception {
-        List<String> producerProps = Collections.singletonList("bootstrap.servers=localhost:9000");
+        List<String> producerProps = List.of("bootstrap.servers=localhost:9000");
         File producerConfig = createTempFile("acks=1");
 
         Properties prop = ProducerPerformance.readProps(producerProps, producerConfig.getAbsolutePath());
@@ -360,7 +359,7 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testClientIdOverride()  throws Exception {
-        List<String> producerProps = Collections.singletonList("client.id=producer-1");
+        List<String> producerProps = List.of("client.id=producer-1");
 
         Properties prop = ProducerPerformance.readProps(producerProps, null);
 
@@ -370,7 +369,7 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testDefaultClientId() throws Exception {
-        List<String> producerProps = Collections.singletonList("acks=1");
+        List<String> producerProps = List.of("acks=1");
 
         Properties prop = ProducerPerformance.readProps(producerProps, null);
 
@@ -381,19 +380,17 @@ public class ProducerPerformanceTest {
     @Test
     public void testStatsInitializationWithLargeNumRecords() {
         long numRecords = Long.MAX_VALUE;
-        assertDoesNotThrow(() -> new ProducerPerformance.Stats(numRecords, 5000));
+        assertDoesNotThrow(() -> new ProducerPerformance.Stats(numRecords, false));
     }
 
     @Test
     public void testStatsCorrectness() throws Exception {
         ExecutorService singleThreaded = Executors.newSingleThreadExecutor();
         final long numRecords = 1000000;
-        ProducerPerformance.Stats stats = new ProducerPerformance.Stats(numRecords, 5000);
+        ProducerPerformance.Stats stats = new ProducerPerformance.Stats(numRecords, false);
         for (long i = 0; i < numRecords; i++) {
-            final Callback callback = new ProducerPerformance.PerfCallback(0, 100, stats);
-            CompletableFuture.runAsync(() -> {
-                callback.onCompletion(null, null);
-            }, singleThreaded);
+            final Callback callback = new ProducerPerformance.PerfCallback(0, 100, stats, null);
+            CompletableFuture.runAsync(() -> callback.onCompletion(null, null), singleThreaded);
         }
 
         singleThreaded.shutdown();
@@ -566,5 +563,78 @@ public class ProducerPerformanceTest {
         assertEquals(5000, configs.transactionDurationMs);
         assertTrue(configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG).toString()
                 .startsWith(ProducerPerformance.DEFAULT_TRANSACTION_ID_PREFIX));
+    }
+
+    @Test
+    public void testWarmupRecordsFractionalValue() throws Exception {
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--warmup-records", "1.5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        ArgumentParser parser = ProducerPerformance.argParser();
+        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser.parseArgs(args));
+        thrown.printStackTrace();
+    }
+
+    @Test
+    public void testWarmupRecordsString() throws Exception {
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--warmup-records", "foo",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        ArgumentParser parser = ProducerPerformance.argParser();
+        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser.parseArgs(args));
+        thrown.printStackTrace();
+    }
+
+    @Test
+    public void testWarmupNumberOfSuccessfulSendAndClose() throws IOException {
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+        doAnswer(invocation -> {
+            producerPerformanceSpy.cb.onCompletion(null, null);
+            return null;
+        }).when(producerMock).send(any(), any());
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--warmup-records", "2",
+            "--throughput", "1",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        verify(producerMock, times(10)).send(any(), any());
+        assertEquals(10, producerPerformanceSpy.stats.totalCount());
+        assertEquals(10 - 2, producerPerformanceSpy.steadyStateStats.totalCount());
+        verify(producerMock, times(1)).close();
+    }
+
+    @Test
+    public void testWarmupNegativeRecordsNormalTest() throws IOException {
+        doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
+        doAnswer(invocation -> {
+            producerPerformanceSpy.cb.onCompletion(null, null);
+            return null;
+        }).when(producerMock).send(any(), any());
+
+        String[] args = new String[] {
+            "--topic", "Hello-Kafka",
+            "--num-records", "10",
+            "--warmup-records", "-1",
+            "--throughput", "1",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9000"};
+        producerPerformanceSpy.start(args);
+
+        verify(producerMock, times(10)).send(any(), any());
+        assertEquals(10, producerPerformanceSpy.stats.totalCount());
+        verify(producerMock, times(1)).close();
     }
 }
