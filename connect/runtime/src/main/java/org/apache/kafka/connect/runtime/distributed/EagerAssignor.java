@@ -134,11 +134,11 @@ public class EagerAssignor implements ConnectAssignor {
         for (String member : members) {
             Collection<String> connectors = connectorAssignments.get(member);
             if (connectors == null) {
-                connectors = Collections.emptyList();
+                connectors = List.of();
             }
             Collection<ConnectorTaskId> tasks = taskAssignments.get(member);
             if (tasks == null) {
-                tasks = Collections.emptyList();
+                tasks = List.of();
             }
             Assignment assignment = new Assignment(error, leaderId, leaderUrl, maxOffset, connectors, tasks);
             log.debug("Assignment: {} -> {}", member, assignment);
