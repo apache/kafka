@@ -16,6 +16,26 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.io.File;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import static java.util.Arrays.asList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -37,6 +57,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -45,10 +68,16 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
+import static org.apache.kafka.streams.Topology.AutoOffsetReset.EARLIEST;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingStandbyUpdateListener;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingStateRestoreListener;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForActiveRestoringTask;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForStandbyCompletion;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -65,12 +94,17 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import org.hamcrest.CoreMatchers;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -81,41 +115,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.io.IOException;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
-import static org.apache.kafka.streams.Topology.AutoOffsetReset.EARLIEST;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForActiveRestoringTask;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForStandbyCompletion;
-import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -293,7 +292,6 @@ public class RestoreIntegrationTest {
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 1)), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition(inputStream, 1), (long) offsetCheckpointed - 1));
 
-        final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
         topology.addReadOnlyStateStore(
@@ -311,36 +309,21 @@ public class RestoreIntegrationTest {
         );
 
         kafkaStreams = new KafkaStreams(topology, props);
-        kafkaStreams.setStateListener((newState, oldState) -> {
-            if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                startupLatch.countDown();
-            }
-        });
 
         final AtomicLong restored = new AtomicLong(0);
         kafkaStreams.setGlobalStateRestoreListener(new TrackingStateRestoreListener(restored));
-        kafkaStreams.start();
-
-        assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
+        startApplicationAndWaitUntilRunning(kafkaStreams);
 
         if (useNewProtocol) {
             // For new protocol, we need to stop the streams instance before altering offsets
-            kafkaStreams.close();
+            kafkaStreams.close(Duration.ofSeconds(60));
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
             
             // Restart the streams instance with a new startup latch
-            final CountDownLatch restartLatch = new CountDownLatch(1);
-            kafkaStreams = new KafkaStreams(topology, props);
-            kafkaStreams.setStateListener((newState, oldState) -> {
-                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    restartLatch.countDown();
-                }
-            });
-            kafkaStreams.setGlobalStateRestoreListener(new TrackingStateRestoreListener(restored));
-            kafkaStreams.start();
             
-            // Wait for the restarted instance to be running
-            assertTrue(restartLatch.await(30, TimeUnit.SECONDS));
+            kafkaStreams = new KafkaStreams(topology, props);
+            kafkaStreams.setGlobalStateRestoreListener(new TrackingStateRestoreListener(restored));
+            startApplicationAndWaitUntilRunning(kafkaStreams);
         }
 
         assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
@@ -411,19 +394,11 @@ public class RestoreIntegrationTest {
             setCommittedOffset(inputStream, offsetLimitDelta, useNewProtocol);
 
             // Restart the streams instance with a new startup latch
-            final CountDownLatch restartLatch = new CountDownLatch(1);
             kafkaStreams = new KafkaStreams(builder.build(props), props);
-            kafkaStreams.setStateListener((newState, oldState) -> {
-                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    restartLatch.countDown();
-                }
-            });
 
             kafkaStreams.setGlobalStateRestoreListener(new TrackingStateRestoreListener(restored));
-            kafkaStreams.start();
+            startApplicationAndWaitUntilRunning(kafkaStreams);
 
-            // Wait for the restarted instance to be running
-            assertTrue(restartLatch.await(30, TimeUnit.SECONDS));
         }
 
         assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));
@@ -510,22 +485,16 @@ public class RestoreIntegrationTest {
                 Integer::sum,
                 Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled()
             );
-
-        final CountDownLatch startupLatch = new CountDownLatch(1);
         final Properties props = props(stateUpdaterEnabled);
         if (useNewProtocol) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         }
         kafkaStreams = new KafkaStreams(builder.build(), props);
-        kafkaStreams.setStateListener((newState, oldState) -> {
-            if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                startupLatch.countDown();
-            }
-        });
-
-        kafkaStreams.start();
-
-        assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
+        try {
+            startApplicationAndWaitUntilRunning(kafkaStreams);
+        } catch (Exception e) {
+            fail("Failed to start KafkaStreams", e);
+        }
     }
 
     @ParameterizedTest
@@ -638,8 +607,8 @@ public class RestoreIntegrationTest {
             waitForStandbyCompletion(streams1, 1, 30 * 1000L);
             waitForStandbyCompletion(streams2, 1, 30 * 1000L);
         } catch (final Exception e) {
-            streams1.close();
-            streams2.close();
+            streams1.close(Duration.ofSeconds(60));
+            streams2.close(Duration.ofSeconds(60));
             throw e;
         }
 
@@ -650,7 +619,7 @@ public class RestoreIntegrationTest {
         transitionedStates1.clear();
         transitionedStates2.clear();
         try {
-            streams2.close();
+            streams2.close(Duration.ofSeconds(60));
             waitForTransitionTo(transitionedStates2, State.NOT_RUNNING, Duration.ofSeconds(60));
             waitForTransitionTo(transitionedStates1, State.REBALANCING, Duration.ofSeconds(60));
             waitForTransitionTo(transitionedStates1, State.RUNNING, Duration.ofSeconds(60));
@@ -665,7 +634,7 @@ public class RestoreIntegrationTest {
             final int expectedAfterStreams2Close = initialStoreCloseCount + (useNewProtocol ? 3 : 2);
             assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(expectedAfterStreams2Close));
         } finally {
-            streams1.close();
+            streams1.close(Duration.ofSeconds(60));
         }
         waitForTransitionTo(transitionedStates1, State.NOT_RUNNING, Duration.ofSeconds(60));
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
@@ -991,7 +960,7 @@ public class RestoreIntegrationTest {
 
                 admin.alterStreamsGroupOffsets(appId, offsetsToCommit).all().get();
             } catch (final Exception e) {
-                throw new RuntimeException("Failed to set committed offsets", e);
+                fail("Failed to set committed offsets", e);
             }
         }
     }
