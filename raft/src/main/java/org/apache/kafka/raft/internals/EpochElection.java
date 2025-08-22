@@ -28,21 +28,10 @@ import java.util.stream.Stream;
  *  Tracks the votes cast by voters in an election held by a Nominee.
  */
 public record EpochElection(Map<Integer, VoterState> voterStates) {
-    
-    public EpochElection {
-        if (voterStates == null) {
-            throw new IllegalArgumentException("voterStates cannot be null");
-        }
-    }
-    
     public EpochElection(Set<ReplicaKey> voters) {
         this(voters.stream()
-            .collect(
-                Collectors.toMap(
-                    ReplicaKey::id,
-                    VoterState::new
-                )
-            ));
+            .collect(Collectors.toMap(ReplicaKey::id, VoterState::new))
+        );
     }
 
     /**
