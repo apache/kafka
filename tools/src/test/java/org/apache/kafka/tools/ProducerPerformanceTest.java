@@ -661,6 +661,31 @@ public class ProducerPerformanceTest {
     }
 
     @Test
+    public void testEnsureDeprecatedAndModernArgumentsNotBothSpecified() throws IOException {
+        File producerConfigFile = createTempFile("bootstrap.servers=localhost:9000");
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--producer.config", producerConfigFile.getAbsolutePath(),
+            "--command-config", producerConfigFile.getAbsolutePath()};
+        ArgumentParser parser = ProducerPerformance.argParser();
+        assertThrows(ArgumentParserException.class, () -> new ProducerPerformance.ConfigPostProcessor(parser, args));
+
+        String[] args2 = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--producer-props", "bootstrap.servers=localhost:9090",
+            "--command-property", "bootstrap.servers=localhost:9090"};
+        assertThrows(ArgumentParserException.class, () -> new ProducerPerformance.ConfigPostProcessor(parser, args2));
+
+        Utils.delete(producerConfigFile);
+    }
+
+    @Test
     public void testEnableTransactionByTransactionDurationMs() throws IOException, ArgumentParserException {
         ArgumentParser parser = ProducerPerformance.argParser();
         String[] args = new String[]{
@@ -678,7 +703,7 @@ public class ProducerPerformanceTest {
     }
 
     @Test
-    public void testWarmupRecordsFractionalValue() throws Exception {
+    public void testWarmupRecordsFractionalValue() {
         String[] args = new String[] {
             "--topic", "Hello-Kafka",
             "--num-records", "10",
@@ -692,7 +717,7 @@ public class ProducerPerformanceTest {
     }
 
     @Test
-    public void testWarmupRecordsString() throws Exception {
+    public void testWarmupRecordsString() {
         String[] args = new String[] {
             "--topic", "Hello-Kafka",
             "--num-records", "10",
