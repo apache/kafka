@@ -270,6 +270,9 @@ public class LogCompactionTester {
             case "zstd":
                 validateLevelRange(compressionLevel, CompressionType.ZSTD, "zstd");
                 break;
+            default:
+                // This should never happen since compression type is validated first
+                throw new IllegalStateException("Unknown compression type: " + compressionType);
         }
     }
 
@@ -471,6 +474,8 @@ public class LogCompactionTester {
                     break;
                 case "zstd":
                     producerProps.put(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, compressionLevel);
+                    break;
+                default:
                     break;
             }
         }
