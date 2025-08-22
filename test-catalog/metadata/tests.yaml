@@ -448,6 +448,9 @@ org.apache.kafka.image.MetadataImageTest:
 - testImage1RoundTrip
 - testImage2RoundTrip
 org.apache.kafka.image.MetadataVersionChangeTest:
+- testConstructorThrowsExceptionWhenBothVersionsAreNull
+- testConstructorThrowsExceptionWhenNewVersionIsNull
+- testConstructorThrowsExceptionWhenOldVersionIsNull
 - testIsDowngrade
 - testIsUpgrade
 - testMetadataVersionChangeExceptionToString

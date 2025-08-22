@@ -388,14 +388,17 @@ org.apache.kafka.tools.MetadataQuorumCommandUnitTest:
 - testGetNegativeControllerId
 - testRemoveControllerDryRun
 org.apache.kafka.tools.ProducerPerformanceTest:
+- testBootstrapServer
 - testClientIdOverride
 - testCompareStringSplitWithScannerDelimiter
 - testConfigPostProcessor
 - testDefaultClientId
 - testEnableTransaction
-- testEnableTransactionByProducerProps
+- testEnableTransactionByProducerProperty
 - testEnableTransactionByTransactionDurationMs
 - testEnableTransactionByTransactionId
+- testEnableTransactionByTransactionIdDeprecated
+- testEnsureDeprecatedAndModernArgumentsNotBothSpecified
 - testFractionalThroughput
 - testGenerateMonotonicPayload
 - testGenerateRandomPayloadByPayloadFile
@@ -841,6 +844,7 @@ org.apache.kafka.tools.reassign.ReassignPartitionsUnitTest:
 - testGenerateAssignmentWithInvalidPartitionsFails
 - testGetBrokerRackInformation
 - testGetReplicaAssignments
+- testGetReplicaToLogDir
 - testModifyBrokerInterBrokerThrottle
 - testModifyLogDirThrottle
 - testModifyTopicThrottles
