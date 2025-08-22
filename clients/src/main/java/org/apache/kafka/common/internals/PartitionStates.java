@@ -24,7 +24,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
@@ -151,46 +150,6 @@ public class PartitionStates<S> {
         }
     }
 
-    public static class PartitionState<S> {
-        private final TopicPartition topicPartition;
-        private final S value;
 
-        public PartitionState(TopicPartition topicPartition, S state) {
-            this.topicPartition = Objects.requireNonNull(topicPartition);
-            this.value = Objects.requireNonNull(state);
-        }
-
-        public S value() {
-            return value;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o)
-                return true;
-            if (o == null || getClass() != o.getClass())
-                return false;
-
-            PartitionState<?> that = (PartitionState<?>) o;
-
-            return topicPartition.equals(that.topicPartition) && value.equals(that.value);
-        }
-
-        @Override
-        public int hashCode() {
-            int result = topicPartition.hashCode();
-            result = 31 * result + value.hashCode();
-            return result;
-        }
-
-        public TopicPartition topicPartition() {
-            return topicPartition;
-        }
-
-        @Override
-        public String toString() {
-            return "PartitionState(" + topicPartition + "=" + value + ')';
-        }
-    }
 
 }
