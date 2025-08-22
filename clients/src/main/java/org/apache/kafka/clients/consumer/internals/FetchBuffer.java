@@ -154,7 +154,7 @@ public class FetchBuffer implements AutoCloseable {
     }
 
     /**
-     * Allows the caller to await presence of data in the buffer. The method will block, returning only
+     * Allows the caller to await a response from the broker for requested data. The method will block, returning only
      * under one of the following conditions:
      *
      * <ol>
