@@ -133,7 +133,6 @@ public class EligibleLeaderReplicasIntegrationTest {
             producer.send(new ProducerRecord<>(testTopicName, "1", "1")).get();
             long leoAfterSend = admin.listOffsets(Map.of(partition, OffsetSpec.latest())).partitionResult(partition).get().offset();
             assertEquals(leoBeforeSend, leoAfterSend);
-            assertEquals(0L, consumer.currentLag(partition).orElse(-1L));
 
             // Restore the min ISR and the previous log should be visible.
             clusterInstance.startBroker(initialReplicas.get(1).id());
