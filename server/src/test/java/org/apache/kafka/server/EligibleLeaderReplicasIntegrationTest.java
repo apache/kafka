@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -54,7 +55,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
@@ -127,12 +127,13 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             waitForIsrAndElr((isrSize, elrSize) -> isrSize == 2 && elrSize == 1, admin, testTopicName);
 
+            TopicPartition partition = new TopicPartition(testTopicName, 0);
+            long leoBeforeSend = admin.listOffsets(Map.of(partition, OffsetSpec.latest())).partitionResult(partition).get().offset();
             // Now the partition is under min ISR. HWM should not advance.
             producer.send(new ProducerRecord<>(testTopicName, "1", "1")).get();
-            // We use a short sleep here to give the broker time to process the ISR change.
-            // To ensure the consumer sees the correct HWM state to avoid flakiness.
-            TimeUnit.MILLISECONDS.sleep(100);
-            assertEquals(0L, consumer.currentLag(new TopicPartition(testTopicName, 0)).orElse(-1L));
+            long leoAfterSend = admin.listOffsets(Map.of(partition, OffsetSpec.latest())).partitionResult(partition).get().offset();
+            assertEquals(leoBeforeSend, leoAfterSend);
+            assertEquals(0L, consumer.currentLag(partition).orElse(-1L));
 
             // Restore the min ISR and the previous log should be visible.
             clusterInstance.startBroker(initialReplicas.get(1).id());
