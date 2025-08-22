@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.LogValidator;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
@@ -39,21 +38,35 @@ import org.openjdk.jmh.infra.Blackhole;
 @Fork(value = 1)
 @Warmup(iterations = 5)
 @Measurement(iterations = 15)
-public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBenchmark {
+public class LZ4CompressedRecordBatchValidationBenchmark extends RecordBatchIterationBenchmark {
+    @Param(value = {
+        "1",
+        "5",
+        "9",
+        "13",
+        "17"})
+    private int level = CompressionType.LZ4.defaultLevel();
 
-    @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD"})
-    private CompressionType compressionType = CompressionType.LZ4;
+    @Param(value = {
+        "4",
+        "5",
+        "6",
+        "7"})
+    private int blockSize = CompressionType.LZ4.defaultBlockSize();
 
     @Override
     Compression compression() {
-        return Compression.of(compressionType).build();
+        return Compression.lz4()
+            .level(level)
+            .blockSize(blockSize)
+            .build();
     }
 
     @Benchmark
-    public void measureValidateMessagesAndAssignOffsetsCompressed(Blackhole bh) {
+    public void measureValidateMessagesAndAssignOffsetsGzipCompressed(Blackhole bh) {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         new LogValidator(records, new TopicPartition("a", 0),
-            Time.SYSTEM, compressionType, compression(), false,  messageVersion,
+            Time.SYSTEM, CompressionType.GZIP, compression(), false,  messageVersion,
             TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsetsCompressed(PrimitiveRef.ofLong(startingOffset),
             validatorMetricsRecorder, requestLocal.bufferSupplier());

@@ -76,9 +76,20 @@ public final class ServerTopicConfigSynonyms {
         sameName(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG),
         sameName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG),
         sameName(TopicConfig.COMPRESSION_TYPE_CONFIG),
+
         sameName(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG),
+        sameName(TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG),
+        sameName(TopicConfig.COMPRESSION_GZIP_STRATEGY_CONFIG),
+
         sameName(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG),
+        sameName(TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG),
+
         sameName(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG),
+        sameName(TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG),
+        sameName(TopicConfig.COMPRESSION_ZSTD_WORKERS_CONFIG),
+
+        sameName(TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG),
+
         sameNameWithLogPrefix(TopicConfig.PREALLOCATE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG),
         sameNameWithLogPrefix(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG),

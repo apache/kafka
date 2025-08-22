@@ -82,10 +82,28 @@ public class ServerConfigs {
 
     public static final String COMPRESSION_GZIP_LEVEL_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG);
     public static final String COMPRESSION_GZIP_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to 'gzip'.";
+    public static final String COMPRESSION_GZIP_BUFFER_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG);
+    public static final String COMPRESSION_GZIP_BUFFER_DOC = "The internal buffer size to use for 'gzip' compression.";
+    public static final String COMPRESSION_GZIP_STRATEGY_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_GZIP_STRATEGY_CONFIG);
+    public static final String COMPRESSION_GZIP_STRATEGY_DOC = "The compression strategy to use for 'gzip'. " +
+        "0=DEFAULT (balance speed/ratio), 1=FILTERED (optimize for small data), " +
+        "2=HUFFMAN_ONLY (fastest, no string matching).";
+
     public static final String COMPRESSION_LZ4_LEVEL_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG);
     public static final String COMPRESSION_LZ4_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to 'lz4'.";
+    public static final String COMPRESSION_LZ4_BLOCK_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG);
+    public static final String COMPRESSION_LZ4_BLOCK_DOC = "The block size to use for 'lz4' compression.";
+
     public static final String COMPRESSION_ZSTD_LEVEL_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG);
     public static final String COMPRESSION_ZSTD_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to 'zstd'.";
+    public static final String COMPRESSION_ZSTD_WINDOW_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG);
+    public static final String COMPRESSION_ZSTD_WINDOW_DOC = "The window size to use for 'zstd' compression.";
+    public static final String COMPRESSION_ZSTD_WORKERS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_ZSTD_WORKERS_CONFIG);
+    public static final String COMPRESSION_ZSTD_WORKERS_DOC = "Number of worker threads for 'zstd' multi-threaded compression. " +
+        "0 means single-threaded. Higher values can improve throughput at the cost of CPU.";
+
+    public static final String COMPRESSION_SNAPPY_BLOCK_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG);
+    public static final String COMPRESSION_SNAPPY_BLOCK_DOC = "The block size to use for 'snappy' compression.";
 
     /***************** rack configuration *************/
     public static final String BROKER_RACK_CONFIG = "broker.rack";
@@ -143,9 +161,19 @@ public class ServerConfigs {
             .define(CONTROLLED_SHUTDOWN_ENABLE_CONFIG, BOOLEAN, CONTROLLED_SHUTDOWN_ENABLE_DEFAULT, MEDIUM, CONTROLLED_SHUTDOWN_ENABLE_DOC)
             .define(DELETE_TOPIC_ENABLE_CONFIG, BOOLEAN, DELETE_TOPIC_ENABLE_DEFAULT, HIGH, DELETE_TOPIC_ENABLE_DOC)
             .define(COMPRESSION_TYPE_CONFIG, STRING, ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, ConfigDef.ValidString.in(BrokerCompressionType.names().toArray(new String[0])), HIGH, COMPRESSION_TYPE_DOC)
+
             .define(COMPRESSION_GZIP_LEVEL_CONFIG, INT, CompressionType.GZIP.defaultLevel(), CompressionType.GZIP.levelValidator(), MEDIUM, COMPRESSION_GZIP_LEVEL_DOC)
+            .define(COMPRESSION_GZIP_BUFFER_CONFIG, INT, CompressionType.GZIP.defaultBuffer(), CompressionType.GZIP.bufferValidator(), MEDIUM, COMPRESSION_GZIP_BUFFER_DOC)
+            .define(COMPRESSION_GZIP_STRATEGY_CONFIG, INT, CompressionType.GZIP.defaultStrategy(), CompressionType.GZIP.strategyValidator(), MEDIUM, COMPRESSION_GZIP_STRATEGY_DOC)
+
             .define(COMPRESSION_LZ4_LEVEL_CONFIG, INT, CompressionType.LZ4.defaultLevel(), CompressionType.LZ4.levelValidator(), MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
+            .define(COMPRESSION_LZ4_BLOCK_CONFIG, INT, CompressionType.LZ4.defaultBlockSize(), CompressionType.LZ4.blockSizeValidator(), MEDIUM, COMPRESSION_LZ4_BLOCK_DOC)
+
             .define(COMPRESSION_ZSTD_LEVEL_CONFIG, INT, CompressionType.ZSTD.defaultLevel(), CompressionType.ZSTD.levelValidator(), MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
+            .define(COMPRESSION_ZSTD_WINDOW_CONFIG, INT, CompressionType.ZSTD.defaultWindowSize(), CompressionType.ZSTD.windowSizeValidator(), MEDIUM, COMPRESSION_ZSTD_WINDOW_DOC)
+            .define(COMPRESSION_ZSTD_WORKERS_CONFIG, INT, CompressionType.ZSTD.defaultWorkers(), CompressionType.ZSTD.workersValidator(), MEDIUM, COMPRESSION_ZSTD_WORKERS_DOC)
+
+            .define(COMPRESSION_SNAPPY_BLOCK_CONFIG, INT, CompressionType.SNAPPY.defaultBlockSize(), CompressionType.SNAPPY.blockSizeValidator(), MEDIUM, COMPRESSION_SNAPPY_BLOCK_DOC)
             /** ********* Fetch Configuration **************/
             .define(MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG, INT, MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DEFAULT, atLeast(0), MEDIUM, MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DOC)
             .define(FETCH_MAX_BYTES_CONFIG, INT, FETCH_MAX_BYTES_DEFAULT, atLeast(1024), MEDIUM, FETCH_MAX_BYTES_DOC)

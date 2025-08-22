@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
+import java.util.zip.Deflater;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -33,22 +34,61 @@ public class BrokerCompressionTypeTest {
 
     @Test
     public void testTargetCompressionType() {
-        GzipCompression gzipWithLevel = Compression.gzip().level(CompressionType.GZIP.maxLevel()).build();
-        assertEquals(gzipWithLevel, BrokerCompressionType.targetCompression(Optional.of(gzipWithLevel), CompressionType.ZSTD));
-        SnappyCompression snappy = Compression.snappy().build();
-        assertEquals(snappy, BrokerCompressionType.targetCompression(Optional.of(snappy), CompressionType.LZ4));
-        Lz4Compression lz4WithLevel = Compression.lz4().level(CompressionType.LZ4.maxLevel()).build();
-        assertEquals(lz4WithLevel, BrokerCompressionType.targetCompression(Optional.of(lz4WithLevel), CompressionType.ZSTD));
-        ZstdCompression zstdWithLevel = Compression.zstd().level(CompressionType.ZSTD.maxLevel()).build();
-        assertEquals(zstdWithLevel, BrokerCompressionType.targetCompression(Optional.of(zstdWithLevel), CompressionType.GZIP));
+        GzipCompression gzipWithOpts = Compression.gzip()
+            .level(CompressionType.GZIP.maxLevel())
+            .bufferSize(8192)
+            .strategy(Deflater.HUFFMAN_ONLY)
+            .build();
 
-        GzipCompression gzip = Compression.gzip().build();
-        assertEquals(gzip, BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.GZIP));
-        assertEquals(snappy, BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.SNAPPY));
-        Lz4Compression lz4 = Compression.lz4().build();
-        assertEquals(lz4, BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.LZ4));
-        ZstdCompression zstd = Compression.zstd().build();
-        assertEquals(zstd, BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.ZSTD));
+        assertEquals(gzipWithOpts,
+            BrokerCompressionType.targetCompression(Optional.of(gzipWithOpts), CompressionType.ZSTD),
+            "Producer gzip with options should be preserved");
+
+        SnappyCompression snappyWithOpts = Compression.snappy()
+            .blockSize(CompressionType.SNAPPY.maxBlockSize())
+            .build();
+        assertEquals(snappyWithOpts,
+            BrokerCompressionType.targetCompression(Optional.of(snappyWithOpts), CompressionType.LZ4),
+            "Producer snappy with options should be preserved");
+
+        Lz4Compression lz4WithOpts = Compression.lz4()
+            .level(CompressionType.LZ4.maxLevel())
+            .blockSize(CompressionType.LZ4.maxBlockSize())
+            .build();
+        assertEquals(lz4WithOpts,
+            BrokerCompressionType.targetCompression(Optional.of(lz4WithOpts), CompressionType.ZSTD),
+            "Producer lz4 with options should be preserved");
+
+        ZstdCompression zstdWithOpts = Compression.zstd()
+            .level(CompressionType.ZSTD.maxLevel())
+            .windowSize(CompressionType.ZSTD.maxWindowSize())
+            .workers(2)
+            .build();
+
+        assertEquals(zstdWithOpts,
+            BrokerCompressionType.targetCompression(Optional.of(zstdWithOpts), CompressionType.GZIP),
+            "Producer zstd with options should be preserved");
+
+        // --- When producer doesn't specify, fall back to broker-selected type with codec defaults ---
+        GzipCompression gzipDefault = Compression.gzip().build();
+        assertEquals(gzipDefault,
+            BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.GZIP),
+            "Fallback to gzip defaults");
+
+        SnappyCompression snappyDefault = Compression.snappy().build();
+        assertEquals(snappyDefault,
+            BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.SNAPPY),
+            "Fallback to snappy defaults");
+
+        Lz4Compression lz4Default = Compression.lz4().build();
+        assertEquals(lz4Default,
+            BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.LZ4),
+            "Fallback to lz4 defaults");
+
+        ZstdCompression zstdDefault = Compression.zstd().build();
+        assertEquals(zstdDefault,
+            BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.ZSTD),
+            "Fallback to zstd defaults");
     }
 
 }

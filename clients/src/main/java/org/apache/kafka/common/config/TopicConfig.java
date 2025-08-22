@@ -190,13 +190,32 @@ public class TopicConfig {
         "accepts 'uncompressed' which is equivalent to no compression; and 'producer' which means retain the " +
         "original compression codec set by the producer.";
 
-
     public static final String COMPRESSION_GZIP_LEVEL_CONFIG = "compression.gzip.level";
     public static final String COMPRESSION_GZIP_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
+    public static final String COMPRESSION_GZIP_BUFFER_CONFIG = "compression.gzip.buffer";
+    public static final String COMPRESSION_GZIP_BUFFER_DOC = "The internal buffer size to use for <code>gzip</code> compression.";
+    public static final String COMPRESSION_GZIP_STRATEGY_CONFIG = "compression.gzip.strategy";
+    public static final String COMPRESSION_GZIP_STRATEGY_DOC =
+        "The compression strategy to use for <code>gzip</code>. " +
+            "0=DEFAULT (balance speed/ratio), 1=FILTERED (optimize for small data), " +
+            "2=HUFFMAN_ONLY (fastest, no string matching).";
+
     public static final String COMPRESSION_LZ4_LEVEL_CONFIG = "compression.lz4.level";
     public static final String COMPRESSION_LZ4_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>lz4</code>.";
+    public static final String COMPRESSION_LZ4_BLOCK_CONFIG = "compression.lz4.block";
+    public static final String COMPRESSION_LZ4_BLOCK_DOC = "The block size to use for <code>lz4</code> compression.";
+
     public static final String COMPRESSION_ZSTD_LEVEL_CONFIG = "compression.zstd.level";
     public static final String COMPRESSION_ZSTD_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>zstd</code>.";
+    public static final String COMPRESSION_ZSTD_WINDOW_CONFIG = "compression.zstd.window";
+    public static final String COMPRESSION_ZSTD_WINDOW_DOC = "The window size to use for <code>zstd</code> compression.";
+    public static final String COMPRESSION_ZSTD_WORKERS_CONFIG = "compression.zstd.workers";
+    public static final String COMPRESSION_ZSTD_WORKERS_DOC =
+        "Number of worker threads for <code>zstd</code> multi-threaded compression. " +
+            "0 means single-threaded. Higher values can improve throughput at the cost of CPU.";
+
+    public static final String COMPRESSION_SNAPPY_BLOCK_CONFIG = "compression.snappy.block";
+    public static final String COMPRESSION_SNAPPY_BLOCK_DOC = "The block size to use for <code>snappy</code> compression.";
 
     public static final String PREALLOCATE_CONFIG = "preallocate";
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +

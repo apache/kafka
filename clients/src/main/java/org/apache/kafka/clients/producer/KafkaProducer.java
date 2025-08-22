@@ -548,16 +548,26 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             case GZIP: {
                 return Compression.gzip()
                         .level(config.getInt(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                        .bufferSize(config.getInt(ProducerConfig.COMPRESSION_GZIP_BUFFER_CONFIG))
+                        .strategy(config.getInt(ProducerConfig.COMPRESSION_GZIP_STRATEGY_CONFIG))
                         .build();
             }
             case LZ4: {
                 return Compression.lz4()
                         .level(config.getInt(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
+                        .blockSize(config.getInt(ProducerConfig.COMPRESSION_LZ4_BLOCK_CONFIG))
                         .build();
             }
             case ZSTD: {
                 return Compression.zstd()
                         .level(config.getInt(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                        .workers(config.getInt(ProducerConfig.COMPRESSION_ZSTD_WORKERS_CONFIG))
+                        .windowSize(config.getInt(ProducerConfig.COMPRESSION_ZSTD_WINDOW_CONFIG))
+                        .build();
+            }
+            case SNAPPY: {
+                return Compression.snappy()
+                        .blockSize(config.getInt(ProducerConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG))
                         .build();
             }
             default:

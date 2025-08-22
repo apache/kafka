@@ -41,9 +41,13 @@ import static org.apache.kafka.common.record.CompressionType.ZSTD;
 public class ZstdCompression implements Compression {
 
     private final int level;
+    private final int windowSize;
+    private final int workers;
 
-    private ZstdCompression(int level) {
+    private ZstdCompression(int level, int windowSize, int workers) {
         this.level = level;
+        this.windowSize = windowSize;
+        this.workers = workers;
     }
 
     @Override
@@ -56,7 +60,13 @@ public class ZstdCompression implements Compression {
         try {
             // Set input buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
             // in cases where the caller passes a small number of bytes to write (potentially a single byte).
-            return new BufferedOutputStream(new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE, level), 16 * 1024);
+            ZstdOutputStreamNoFinalizer zstdOutputStreamNoFinalizer = new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE);
+
+            zstdOutputStreamNoFinalizer.setLevel(level);
+            zstdOutputStreamNoFinalizer.setLong(windowSize);
+            zstdOutputStreamNoFinalizer.setWorkers(workers);
+
+            return new BufferedOutputStream(zstdOutputStreamNoFinalizer, 16 * 1024);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -113,16 +123,18 @@ public class ZstdCompression implements Compression {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ZstdCompression that = (ZstdCompression) o;
-        return level == that.level;
+        return level == that.level && windowSize == that.windowSize && workers == that.workers;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(level);
+        return Objects.hash(level, windowSize, workers);
     }
 
     public static class Builder implements Compression.Builder<ZstdCompression> {
         private int level = ZSTD.defaultLevel();
+        private int windowSize = ZSTD.defaultWindowSize();
+        private int workers = ZSTD.defaultWorkers();
 
         public Builder level(int level) {
             if (level < ZSTD.minLevel() || ZSTD.maxLevel() < level) {
@@ -133,9 +145,28 @@ public class ZstdCompression implements Compression {
             return this;
         }
 
+        public Builder windowSize(int windowSize) {
+            if ((windowSize < CompressionType.ZSTD.minWindowSize() || CompressionType.ZSTD.maxWindowSize() < windowSize) && windowSize != ZSTD.defaultWindowSize()) {
+                throw new IllegalArgumentException("zstd doesn't support given window size: " + windowSize);
+            }
+
+            this.windowSize = windowSize;
+            return this;
+        }
+
+        public Builder workers(int workers) {
+            if (workers != CompressionType.ZSTD.defaultWorkers() && (workers < CompressionType.ZSTD.minWorkers() || workers > CompressionType.ZSTD.maxWorkers())) {
+                throw new IllegalArgumentException(
+                    "zstd workers must be 0 (codec default) or in [" + CompressionType.ZSTD.minWorkers() + "," + CompressionType.ZSTD.maxWorkers() + "]: " + workers
+                );
+            }
+            this.workers = workers;
+            return this;
+        }
+
         @Override
         public ZstdCompression build() {
-            return new ZstdCompression(level);
+            return new ZstdCompression(level, windowSize, workers);
         }
     }
 }

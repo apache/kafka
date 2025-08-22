@@ -222,12 +222,29 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
                 .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, in(BrokerCompressionType.names().toArray(new String[0])),
                         MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
+
                 .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, CompressionType.GZIP.defaultLevel(),
                         CompressionType.GZIP.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)
+                .define(TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG, INT, CompressionType.GZIP.defaultBuffer(),
+                        CompressionType.GZIP.bufferValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_BUFFER_DOC)
+                .define(TopicConfig.COMPRESSION_GZIP_STRATEGY_CONFIG, INT, CompressionType.GZIP.defaultStrategy(),
+                        CompressionType.GZIP.strategyValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_STRATEGY_DOC)
+
                 .define(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, INT, CompressionType.LZ4.defaultLevel(),
                         CompressionType.LZ4.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_LZ4_LEVEL_DOC)
+                .define(TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG, INT, CompressionType.LZ4.defaultBlockSize(),
+                        CompressionType.LZ4.blockSizeValidator(), MEDIUM, TopicConfig.COMPRESSION_LZ4_BLOCK_DOC)
+
                 .define(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, CompressionType.ZSTD.defaultLevel(),
                         CompressionType.ZSTD.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_ZSTD_LEVEL_DOC)
+                .define(TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG, INT, CompressionType.ZSTD.defaultWindowSize(),
+                        CompressionType.ZSTD.windowSizeValidator(), MEDIUM, TopicConfig.COMPRESSION_ZSTD_WINDOW_DOC)
+                .define(TopicConfig.COMPRESSION_ZSTD_WORKERS_CONFIG, INT, CompressionType.ZSTD.defaultWorkers(),
+                        CompressionType.ZSTD.workersValidator(), MEDIUM, TopicConfig.COMPRESSION_ZSTD_WORKERS_DOC)
+
+                .define(TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG, INT, CompressionType.SNAPPY.defaultBlockSize(),
+                        CompressionType.SNAPPY.blockSizeValidator(), MEDIUM, TopicConfig.COMPRESSION_SNAPPY_BLOCK_DOC)
+
                 .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, DEFAULT_PREALLOCATE, MEDIUM, TopicConfig.PREALLOCATE_DOC)
                 .define(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_DEFAULT,
                         in("CreateTime", "LogAppendTime"), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC)
@@ -341,15 +358,22 @@ public class LogConfig extends AbstractConfig {
     private Optional<Compression> getCompression() {
         return switch (compressionType) {
             case GZIP -> Optional.of(Compression.gzip()
-                    .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
-                    .build());
+                        .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                        .bufferSize(getInt(TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG))
+                        .strategy(getInt(TopicConfig.COMPRESSION_GZIP_STRATEGY_CONFIG))
+                        .build());
             case LZ4 -> Optional.of(Compression.lz4()
-                    .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
-                    .build());
+                        .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
+                        .blockSize(getInt(TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG))
+                        .build());
             case ZSTD -> Optional.of(Compression.zstd()
-                    .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
-                    .build());
-            case SNAPPY -> Optional.of(Compression.snappy().build());
+                        .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                        .windowSize(getInt(TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG))
+                        .workers(getInt(TopicConfig.COMPRESSION_ZSTD_WORKERS_CONFIG))
+                        .build());
+            case SNAPPY -> Optional.of(Compression.snappy()
+                        .blockSize(getInt(TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG))
+                        .build());
             case UNCOMPRESSED -> Optional.of(Compression.NONE);
             case PRODUCER -> Optional.empty();
         };

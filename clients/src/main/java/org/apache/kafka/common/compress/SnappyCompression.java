@@ -33,7 +33,11 @@ import java.nio.ByteBuffer;
 
 public class SnappyCompression implements Compression {
 
-    private SnappyCompression() {}
+    private final int blockSize;
+
+    private SnappyCompression(int blockSize) {
+        this.blockSize = blockSize;
+    }
 
     @Override
     public CompressionType type() {
@@ -43,7 +47,7 @@ public class SnappyCompression implements Compression {
     @Override
     public OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion) {
         try {
-            return new SnappyOutputStream(bufferStream);
+            return new SnappyOutputStream(bufferStream, blockSize);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -82,10 +86,20 @@ public class SnappyCompression implements Compression {
     }
 
     public static class Builder implements Compression.Builder<SnappyCompression> {
+        private int blockSize = CompressionType.SNAPPY.defaultBlockSize();
+
+        public SnappyCompression.Builder blockSize(int blockSize) {
+            if (blockSize < CompressionType.SNAPPY.minBlockSize() || CompressionType.SNAPPY.maxBlockSize() < blockSize) {
+                throw new IllegalArgumentException("snappy doesn't support given block size: " + blockSize);
+            }
+
+            this.blockSize = blockSize;
+            return this;
+        }
 
         @Override
         public SnappyCompression build() {
-            return new SnappyCompression();
+            return new SnappyCompression(blockSize);
         }
     }
 

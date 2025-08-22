@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.log;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
+import org.apache.kafka.common.compress.SnappyCompression;
 import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.CompressionType;
@@ -122,6 +123,40 @@ public class TestLinearWriteSpeed {
             .describedAs("level")
             .ofType(Integer.class);
 
+        // --- GZIP options ---
+        OptionSpec<Integer> gzipStrategyOpt = parser.accepts("gzip-strategy", "GZIP strategy (0=DEFAULT, 1=FILTERED, 2=HUFFMAN_ONLY)")
+            .withRequiredArg()
+            .ofType(Integer.class)
+            .defaultsTo(0);
+
+        OptionSpec<Integer> gzipBufferOpt = parser.accepts("gzip-buffer", "GZIP compressed read buffer size (bytes)")
+            .withRequiredArg()
+            .ofType(Integer.class)
+            .defaultsTo(8 * 1024);
+
+        // --- LZ4 options ---
+        OptionSpec<Integer> lz4BlockOpt = parser.accepts("lz4-block", "LZ4 block size (KB). Kafka defaults to 4")
+            .withRequiredArg()
+            .ofType(Integer.class)
+            .defaultsTo(4);
+
+        // --- Snappy options ---
+        OptionSpec<Integer> snappyBlockOpt = parser.accepts("snappy-block", "Snappy block size (bytes)")
+            .withRequiredArg()
+            .ofType(Integer.class)
+            .defaultsTo(32 * 1024);
+
+        // --- Zstd options ---
+        OptionSpec<Integer> zstdWindowOpt = parser.accepts("zstd-window", "Zstd windowLog (10..27) or 0 for library default")
+            .withRequiredArg()
+            .ofType(Integer.class)
+            .defaultsTo(0);
+
+        OptionSpec<Integer> zstdWorkersOpt = parser.accepts("zstd-workers", "Zstd workers (0=single-threaded)")
+            .withRequiredArg()
+            .ofType(Integer.class)
+            .defaultsTo(0);
+
         OptionSpec<Void> mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.");
         OptionSpec<Void> channelOpt = parser.accepts("channel", "Do writes to file channels.");
         OptionSpec<Void> logOpt = parser.accepts("log", "Do writes to kafka logs.");
@@ -139,10 +174,16 @@ public class TestLinearWriteSpeed {
         long flushInterval = options.valueOf(flushIntervalOpt);
         CompressionType compressionType = CompressionType.forName(options.valueOf(compressionCodecOpt));
         Compression.Builder<? extends Compression> compressionBuilder = Compression.of(compressionType);
-        Integer compressionLevel = options.valueOf(compressionLevelOpt);
+        int compressionLevel = options.valueOf(compressionLevelOpt);
+        int gzipStrategy = options.valueOf(gzipStrategyOpt);
+        int gzipBuffer = options.valueOf(gzipBufferOpt);
+        int lz4Block = options.valueOf(lz4BlockOpt);
+        int snappyBlock = options.valueOf(snappyBlockOpt);
+        int zstdWindow = options.valueOf(zstdWindowOpt);
+        int zstdWorker = options.valueOf(zstdWorkersOpt);
 
-        if (compressionLevel != null) setupCompression(compressionType, compressionBuilder, compressionLevel);
-        Compression compression = compressionBuilder.build();
+        Compression compression = setupCompression(compressionType, compressionBuilder, compressionLevel,
+            gzipStrategy, gzipBuffer, lz4Block, snappyBlock, zstdWindow, zstdWorker);
 
         ThreadLocalRandom.current().nextBytes(buffer.array());
         int numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD);
@@ -220,21 +261,41 @@ public class TestLinearWriteSpeed {
         }
     }
 
-    private static void setupCompression(CompressionType compressionType,
+    private static Compression setupCompression(CompressionType compressionType,
                                          Compression.Builder<? extends Compression> compressionBuilder,
-                                         Integer compressionLevel) {
+                                         int compressionLevel,
+                                         int gzipStrategy,
+                                         int gzipBuffer,
+                                         int lz4Block,
+                                         int snappyBlock,
+                                         int zstdWindow,
+                                         int zstdWorkers) {
         switch (compressionType) {
-            case GZIP:
-                ((GzipCompression.Builder) compressionBuilder).level(compressionLevel);
-                break;
+            case GZIP: {
+                GzipCompression.Builder gzipBuilder = (GzipCompression.Builder) compressionBuilder;
+                if (compressionLevel != 0) gzipBuilder.level(compressionLevel);
+                if (gzipStrategy != 0)     gzipBuilder.strategy(gzipStrategy);
+                if (gzipBuffer > 0)        gzipBuilder.bufferSize(gzipBuffer);
+                return gzipBuilder.build();
+            }
             case LZ4:
-                ((Lz4Compression.Builder) compressionBuilder).level(compressionLevel);
-                break;
+                Lz4Compression.Builder lz4Builder = (Lz4Compression.Builder) compressionBuilder;
+                if (compressionLevel != 0) lz4Builder.level(compressionLevel);
+                if (lz4Block > 0)          lz4Builder.blockSize(lz4Block);
+                return lz4Builder.build();
+            case SNAPPY:
+                SnappyCompression.Builder snappyBuilder = (SnappyCompression.Builder) compressionBuilder;
+                if (snappyBlock > 0)       snappyBuilder.blockSize(snappyBlock);
+                return snappyBuilder.build();
             case ZSTD:
-                ((ZstdCompression.Builder) compressionBuilder).level(compressionLevel);
-                break;
+                ZstdCompression.Builder zstdBuilder = (ZstdCompression.Builder) compressionBuilder;
+                if (compressionLevel != 0) zstdBuilder.level(compressionLevel);
+                if (zstdWindow != 0)       zstdBuilder.windowSize(zstdWindow);
+                if (zstdWorkers >= 0)      zstdBuilder.workers(zstdWorkers);
+                return zstdBuilder.build();
+            case NONE:
             default:
-                break;
+                return Compression.NONE;
         }
     }
 

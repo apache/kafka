@@ -25,16 +25,19 @@ import java.util.zip.GZIPOutputStream;
  */
 public class GzipOutputStream extends GZIPOutputStream {
     /**
-     * Creates a new {@link OutputStream} with the specified buffer size and compression level.
+     * Creates a new {@link OutputStream} with the specified buffer size, compression level and
+     * compression strategy.
      *
      * @param out   the output stream
      * @param size  the output buffer size
      * @param level the compression level
+     * @param strategy the compression strategy
      * @throws IOException If an I/O error has occurred.
      */
-    public GzipOutputStream(OutputStream out, int size, int level) throws IOException {
+    public GzipOutputStream(OutputStream out, int size, int level, int strategy) throws IOException {
         super(out, size);
         setLevel(level);
+        setStrategy(strategy);
     }
 
     /**
@@ -44,5 +47,9 @@ public class GzipOutputStream extends GZIPOutputStream {
      */
     private void setLevel(int level) {
         def.setLevel(level);
+    }
+
+    private void setStrategy(int strategy) {
+        def.setStrategy(strategy);
     }
 }

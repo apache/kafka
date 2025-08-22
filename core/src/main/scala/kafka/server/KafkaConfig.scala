@@ -411,8 +411,17 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def compressionType = getString(ServerConfigs.COMPRESSION_TYPE_CONFIG)
 
   def gzipCompressionLevel = getInt(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG)
+  def gzipBufferSize         = getInt(ServerConfigs.COMPRESSION_GZIP_BUFFER_CONFIG)
+  def gzipStrategy           = getInt(ServerConfigs.COMPRESSION_GZIP_STRATEGY_CONFIG)
+
   def lz4CompressionLevel = getInt(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG)
+  def lz4BlockSize           = getInt(ServerConfigs.COMPRESSION_LZ4_BLOCK_CONFIG)
+
   def zstdCompressionLevel = getInt(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG)
+  def zstdWindowSize         = getInt(ServerConfigs.COMPRESSION_ZSTD_WINDOW_CONFIG)
+  def zstdWorkers            = getInt(ServerConfigs.COMPRESSION_ZSTD_WORKERS_CONFIG)
+
+  def snappyBlockSize        = getInt(ServerConfigs.COMPRESSION_SNAPPY_BLOCK_CONFIG)
 
   /** Internal Configurations **/
   val unstableApiVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
@@ -690,8 +699,14 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas)
     logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, gzipCompressionLevel)
+    logProps.put(TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG, gzipBufferSize)
+    logProps.put(TopicConfig.COMPRESSION_GZIP_STRATEGY_CONFIG, gzipStrategy)
     logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, lz4CompressionLevel)
+    logProps.put(TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG, lz4BlockSize)
     logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel)
+    logProps.put(TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG, zstdWindowSize)
+    logProps.put(TopicConfig.COMPRESSION_ZSTD_WORKERS_CONFIG, zstdWorkers)
+    logProps.put(TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG, snappyBlockSize)
     logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable)
     logProps.put(TopicConfig.PREALLOCATE_CONFIG, logPreAllocateEnable)
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, logMessageTimestampType.name)

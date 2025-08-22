@@ -239,14 +239,38 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>compression.gzip.level</code> */
     public static final String COMPRESSION_GZIP_LEVEL_CONFIG = "compression.gzip.level";
     private static final String COMPRESSION_GZIP_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
+    /** <code>compression.gzip.buffer</code> */
+    public static final String COMPRESSION_GZIP_BUFFER_CONFIG = "compression.gzip.buffer";
+    private static final String COMPRESSION_GZIP_BUFFER_DOC = "The internal buffer size to use for <code>gzip</code> compression.";
+    /** <code>compression.gzip.strategy</code> */
+    public static final String COMPRESSION_GZIP_STRATEGY_CONFIG = "compression.gzip.strategy";
+    private static final String COMPRESSION_GZIP_STRATEGY_DOC =
+        "The compression strategy to use for <code>gzip</code>. " +
+            "0=DEFAULT (balance speed/ratio), 1=FILTERED (optimize for small data), " +
+            "2=HUFFMAN_ONLY (fastest, no string matching).";
 
     /** <code>compression.lz4.level</code> */
     public static final String COMPRESSION_LZ4_LEVEL_CONFIG = "compression.lz4.level";
     private static final String COMPRESSION_LZ4_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>lz4</code>.";
+    /** <code>compression.lz4.block</code> */
+    public static final String COMPRESSION_LZ4_BLOCK_CONFIG = "compression.lz4.block";
+    private static final String COMPRESSION_LZ4_BLOCK_DOC = "The block size to use for <code>lz4</code> compression.";
 
     /** <code>compression.zstd.level</code> */
     public static final String COMPRESSION_ZSTD_LEVEL_CONFIG = "compression.zstd.level";
     private static final String COMPRESSION_ZSTD_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>zstd</code>.";
+    /** <code>compression.zstd.window</code> */
+    public static final String COMPRESSION_ZSTD_WINDOW_CONFIG = "compression.zstd.window";
+    private static final String COMPRESSION_ZSTD_WINDOW_DOC = "The window size to use for <code>zstd</code> compression.";
+    /** <code>compression.zstd.workers</code> */
+    public static final String COMPRESSION_ZSTD_WORKERS_CONFIG = "compression.zstd.workers";
+    private static final String COMPRESSION_ZSTD_WORKERS_DOC =
+        "Number of worker threads for <code>zstd</code> multi-threaded compression. " +
+            "0 means single-threaded. Higher values can improve throughput at the cost of CPU.";
+
+    /** <code>compression.snappy.block</code> */
+    public static final String COMPRESSION_SNAPPY_BLOCK_CONFIG = "compression.snappy.block";
+    private static final String COMPRESSION_SNAPPY_BLOCK_DOC = "The block size to use for <code>snappy</code> compression.";
 
     /** <code>metrics.sample.window.ms</code> */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
@@ -390,9 +414,64 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.LOW,
                                         ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, CompressionType.NONE.name, in(Utils.enumOptions(CompressionType.class)), Importance.HIGH, COMPRESSION_TYPE_DOC)
-                                .define(COMPRESSION_GZIP_LEVEL_CONFIG, Type.INT, CompressionType.GZIP.defaultLevel(), CompressionType.GZIP.levelValidator(), Importance.MEDIUM, COMPRESSION_GZIP_LEVEL_DOC)
-                                .define(COMPRESSION_LZ4_LEVEL_CONFIG, Type.INT, CompressionType.LZ4.defaultLevel(), CompressionType.LZ4.levelValidator(), Importance.MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
-                                .define(COMPRESSION_ZSTD_LEVEL_CONFIG, Type.INT, CompressionType.ZSTD.defaultLevel(), CompressionType.ZSTD.levelValidator(), Importance.MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
+                                // gzip config
+                                .define(COMPRESSION_GZIP_LEVEL_CONFIG,
+                                    Type.INT,
+                                    CompressionType.GZIP.defaultLevel(),
+                                    CompressionType.GZIP.levelValidator(),
+                                    Importance.MEDIUM,
+                                    COMPRESSION_GZIP_LEVEL_DOC)
+                                .define(COMPRESSION_GZIP_BUFFER_CONFIG,
+                                    Type.INT,
+                                    CompressionType.GZIP.defaultBuffer(),
+                                    CompressionType.GZIP.bufferValidator(),
+                                    Importance.MEDIUM,
+                                    COMPRESSION_GZIP_BUFFER_DOC)
+                                .define(COMPRESSION_GZIP_STRATEGY_CONFIG,
+                                    Type.INT,
+                                    CompressionType.GZIP.defaultStrategy(),
+                                    CompressionType.GZIP.strategyValidator(),
+                                    Importance.MEDIUM,
+                                    COMPRESSION_GZIP_STRATEGY_DOC)
+                                // lz4 config
+                                .define(COMPRESSION_LZ4_LEVEL_CONFIG,
+                                    Type.INT,
+                                    CompressionType.LZ4.defaultLevel(),
+                                    CompressionType.LZ4.levelValidator(),
+                                    Importance.MEDIUM,
+                                    COMPRESSION_LZ4_LEVEL_DOC)
+                                .define(COMPRESSION_LZ4_BLOCK_CONFIG,
+                                    Type.INT,
+                                    CompressionType.LZ4.defaultBlockSize(),
+                                    CompressionType.LZ4.blockSizeValidator(),
+                                    Importance.MEDIUM,
+                                    COMPRESSION_LZ4_BLOCK_DOC)
+                                // zstd config
+                                .define(COMPRESSION_ZSTD_LEVEL_CONFIG,
+                                    Type.INT,
+                                    CompressionType.ZSTD.defaultLevel(),
+                                    CompressionType.ZSTD.levelValidator(),
+                                    Importance.MEDIUM,
+                                    COMPRESSION_ZSTD_LEVEL_DOC)
+                                .define(COMPRESSION_ZSTD_WINDOW_CONFIG,
+                                    Type.INT,
+                                    CompressionType.ZSTD.defaultWindowSize(),
+                                    CompressionType.ZSTD.windowSizeValidator(),
+                                    Importance.MEDIUM,
+                                    COMPRESSION_ZSTD_WINDOW_DOC)
+                                .define(COMPRESSION_ZSTD_WORKERS_CONFIG,
+                                    Type.INT,
+                                    CompressionType.ZSTD.defaultWorkers(),
+                                    CompressionType.ZSTD.workersValidator(),
+                                    Importance.MEDIUM,
+                                    COMPRESSION_ZSTD_WORKERS_DOC)
+                                // snappy config
+                                .define(COMPRESSION_SNAPPY_BLOCK_CONFIG,
+                                    Type.INT,
+                                    CompressionType.SNAPPY.defaultBlockSize(),
+                                    CompressionType.SNAPPY.blockSizeValidator(),
+                                    Importance.MEDIUM,
+                                    COMPRESSION_SNAPPY_BLOCK_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
                                 .define(PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG, Type.BOOLEAN, true, Importance.LOW, PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_DOC)
                                 .define(PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.LOW, PARTITIONER_AVAILABILITY_TIMEOUT_MS_DOC)

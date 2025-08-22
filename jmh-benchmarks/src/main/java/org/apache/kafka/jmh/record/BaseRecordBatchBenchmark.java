@@ -24,6 +24,8 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.storage.internals.log.LogValidator;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
@@ -52,22 +54,41 @@ public abstract class BaseRecordBatchBenchmark {
     final int batchCount = 100;
 
     public enum Bytes {
-        RANDOM, ONES
+        RANDOM, ONES, DEBEZIUM_CONNECT_JSON
     }
 
-    @Param(value = {"1", "2", "10", "50", "200", "500"})
+    @Param(value = {
+        "1",
+        "2",
+        "10",
+        "50",
+        "200",
+        "500"
+    })
     private int maxBatchSize = 200;
 
     @Param(value = {"1", "2"})
     byte messageVersion = CURRENT_MAGIC_VALUE;
 
-    @Param(value = {"100", "1000", "10000", "100000"})
+    @Param(value = {
+        "100",
+        "1000",
+        "10000",
+        "100000",
+    })
     private int messageSize = 1000;
 
-    @Param(value = {"RANDOM", "ONES"})
+    @Param(value = {
+        "RANDOM",
+        "ONES",
+        "DEBEZIUM_CONNECT_JSON"
+    })
     private Bytes bytes = Bytes.RANDOM;
 
-    @Param(value = {"NO_CACHING", "CREATE"})
+    @Param(value = {
+        "NO_CACHING",
+        "CREATE"
+    })
     private String bufferSupplierStr = "NO_CACHING";
 
     // zero starting offset is much faster for v1 batches, but that will almost never happen
@@ -81,6 +102,31 @@ public abstract class BaseRecordBatchBenchmark {
     RequestLocal requestLocal;
     LogValidator.MetricsRecorder validatorMetricsRecorder = UnifiedLog.newValidatorMetricsRecorder(
         new BrokerTopicStats(false).allTopicsStats());
+
+    // ------------------------------------------------
+    // =============== DEBEZIUM STUFF =================
+    // ------------------------------------------------
+
+    // ------------- Debezium Connect JSON ------------
+    @Param({"10"})              // cap for random fields per record
+    private int dbzMaxFields;
+
+    public enum DbzEvent {
+        RANDOM,
+        INSERT,
+        UPDATE,
+        DELETE
+    }
+    @Param({
+        "RANDOM",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+    })
+    private DbzEvent dbzEvent;
+
+    private SourceRecordFactory dbzFactory;
+    private JsonConverter dbzJsonConverter;
 
     @Setup
     public void init() {
@@ -96,6 +142,15 @@ public abstract class BaseRecordBatchBenchmark {
         } else {
             throw new IllegalArgumentException("Unsupported buffer supplier " + bufferSupplierStr);
         }
+
+        if (bytes == Bytes.DEBEZIUM_CONNECT_JSON) {
+            dbzFactory = new SourceRecordFactory(dbzMaxFields);
+            dbzJsonConverter = new org.apache.kafka.connect.json.JsonConverter();
+            java.util.Map<String, Object> cfg = new java.util.HashMap<>();
+            cfg.put("schemas.enable", "false");
+            dbzJsonConverter.configure(cfg,false);
+        }
+
         singleBatchBuffer = createBatch(1);
 
         batchBuffers = new ByteBuffer[batchCount];
@@ -151,6 +206,19 @@ public abstract class BaseRecordBatchBenchmark {
                 case RANDOM:
                     random.nextBytes(value);
                     break;
+                case DEBEZIUM_CONNECT_JSON: {
+                    // 1) Create a synthetic Debezium SourceRecord
+                    SourceRecord sr = dbzFactory.createSourceRecord(dbzEvent);
+
+                    // 2) Serialize the *value* with Connect JsonConverter
+                    byte[] valBytes = dbzJsonConverter.fromConnectData(
+                        sr.topic(), sr.valueSchema(), sr.value()
+                    );
+
+                    // 3) Append (no key for now; you can also serialize key similarly with a key-converter)
+                    builder.append(0, null, ByteBuffer.wrap(valBytes), headers);
+                    break;
+                }
             }
 
             builder.append(0, null, value, headers);

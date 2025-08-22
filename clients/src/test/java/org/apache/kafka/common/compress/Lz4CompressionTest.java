@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.compress;
 
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -42,6 +45,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.compress.Lz4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
@@ -90,21 +94,27 @@ public class Lz4CompressionTest {
         Lz4Compression.Builder builder = Compression.lz4();
         byte[] data = String.join("", Collections.nCopies(256, "data")).getBytes(StandardCharsets.UTF_8);
 
-        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
-            for (int level : Arrays.asList(LZ4.minLevel(), LZ4.defaultLevel(), LZ4.maxLevel())) {
-                Lz4Compression compression = builder.level(level).build();
-                ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
-                try (OutputStream out = compression.wrapForOutput(bufferStream, magic)) {
-                    out.write(data);
-                    out.flush();
-                }
-                bufferStream.buffer().flip();
+        List<Byte> magics = Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2);
+        List<Integer> levels = Arrays.asList(LZ4.minLevel(), LZ4.defaultLevel(), LZ4.maxLevel());
+        List<Integer> blocks = Arrays.asList(CompressionType.LZ4.minBlockSize(), CompressionType.LZ4.defaultBlockSize(), CompressionType.LZ4.maxBlockSize());
 
-                try (InputStream inputStream = compression.wrapForInput(bufferStream.buffer(), magic, BufferSupplier.create())) {
-                    byte[] result = new byte[data.length];
-                    int read = inputStream.read(result);
-                    assertEquals(data.length, read);
-                    assertArrayEquals(data, result);
+        for (byte magic : magics) {
+            for (int level : levels) {
+                for (int block : blocks) {
+                    Lz4Compression compression = builder.level(level).blockSize(block).build();
+                    ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
+                    try (OutputStream out = compression.wrapForOutput(bufferStream, magic)) {
+                        out.write(data);
+                        out.flush();
+                    }
+                    bufferStream.buffer().flip();
+
+                    try (InputStream inputStream = compression.wrapForInput(bufferStream.buffer(), magic, BufferSupplier.create())) {
+                        byte[] result = new byte[data.length];
+                        int read = inputStream.read(result);
+                        assertEquals(data.length, read);
+                        assertArrayEquals(data, result);
+                    }
                 }
             }
         }
@@ -119,6 +129,41 @@ public class Lz4CompressionTest {
 
         builder.level(LZ4.minLevel());
         builder.level(LZ4.maxLevel());
+    }
+
+    @Test
+    public void testLz4OptionBounds() {
+        Lz4Compression.Builder builder = Compression.lz4();
+
+        // level bounds
+        assertThrows(IllegalArgumentException.class, () -> builder.level(LZ4.minLevel() - 1));
+        assertThrows(IllegalArgumentException.class, () -> builder.level(LZ4.maxLevel() + 1));
+        builder.level(LZ4.minLevel());
+        builder.level(LZ4.maxLevel());
+
+        // blockSize bounds
+        int min = CompressionType.LZ4.minBlockSize();
+        int def = CompressionType.LZ4.defaultBlockSize();
+        int max = CompressionType.LZ4.maxBlockSize();
+
+        assertThrows(IllegalArgumentException.class, () -> builder.blockSize(min - 1));
+        assertThrows(IllegalArgumentException.class, () -> builder.blockSize(max + 1));
+        builder.blockSize(min);
+        builder.blockSize(def);
+        builder.blockSize(max);
+    }
+
+    @Test
+    public void testLz4BlockSizeValidator() {
+        ConfigDef.Validator v = CompressionType.LZ4.blockSizeValidator();
+        int min = CompressionType.LZ4.minBlockSize();
+        int max = CompressionType.LZ4.maxBlockSize();
+
+        for (int b = min; b <= max; b++) {
+            v.ensureValid("lz4.block", b);
+        }
+        assertThrows(ConfigException.class, () -> v.ensureValid("lz4.block", min - 1));
+        assertThrows(ConfigException.class, () -> v.ensureValid("lz4.block", max + 1));
     }
 
     private static class Payload {
@@ -143,15 +188,17 @@ public class Lz4CompressionTest {
         final boolean useBrokenFlagDescriptorChecksum;
         final boolean ignoreFlagDescriptorChecksum;
         final int level;
+        final int blockSize;
         final byte[] payload;
         final boolean close;
         final boolean blockChecksum;
 
         Args(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum,
-             int level, boolean blockChecksum, boolean close, Payload payload) {
+             int level, int blockSize, boolean blockChecksum, boolean close, Payload payload) {
             this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
             this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
             this.level = level;
+            this.blockSize = blockSize;
             this.blockChecksum = blockChecksum;
             this.close = close;
             this.payload = payload.payload;
@@ -162,6 +209,7 @@ public class Lz4CompressionTest {
             return "useBrokenFlagDescriptorChecksum=" + useBrokenFlagDescriptorChecksum +
                 ", ignoreFlagDescriptorChecksum=" + ignoreFlagDescriptorChecksum +
                 ", level=" + level +
+                ", blockSize=" + blockSize +
                 ", blockChecksum=" + blockChecksum +
                 ", close=" + close +
                 ", payload=" + Arrays.toString(payload);
@@ -194,8 +242,8 @@ public class Lz4CompressionTest {
                         for (boolean blockChecksum : Arrays.asList(false, true))
                             for (boolean close : Arrays.asList(false, true))
                                 for (int level : Arrays.asList(LZ4.minLevel(), LZ4.defaultLevel(), LZ4.maxLevel()))
-                                    arguments.add(Arguments.of(new Args(broken, ignore, level, blockChecksum, close, payload)));
-
+                                    for (int blockSize : IntStream.rangeClosed(CompressionType.LZ4.minBlockSize(), CompressionType.LZ4.maxBlockSize()).toArray())
+                                        arguments.add(Arguments.of(new Args(broken, ignore, level, blockSize, blockChecksum, close, payload)));
             return arguments.stream();
         }
     }
@@ -315,7 +363,6 @@ public class Lz4CompressionTest {
         byte hc = compressed[offset++];
         assertEquals((byte) ((hash >> 8) & 0xFF), hc);
 
-        // Check EndMark, data block with size `0` expressed as a 32-bits value
         if (args.close) {
             offset = compressed.length - 4;
             assertEquals(0, compressed[offset++]);
@@ -437,7 +484,7 @@ public class Lz4CompressionTest {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         Lz4BlockOutputStream lz4 = new Lz4BlockOutputStream(
             output,
-            Lz4BlockOutputStream.BLOCKSIZE_64KB,
+            args.blockSize,
             args.level,
             args.blockChecksum,
             args.useBrokenFlagDescriptorChecksum

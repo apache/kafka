@@ -69,9 +69,20 @@ class LogConfigTest {
       case TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG => assertPropertyInvalid(name, "not_a_boolean")
       case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number", "-3")
       case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number", "-3")
+
       case TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-2")
+      case TopicConfig.COMPRESSION_GZIP_BUFFER_CONFIG   => assertPropertyInvalid(name, "not_a_number", "-1")
+      case TopicConfig.COMPRESSION_GZIP_STRATEGY_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1", "3") // valid: 0..2
+
       case TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
+      case TopicConfig.COMPRESSION_LZ4_BLOCK_CONFIG     => assertPropertyInvalid(name, "not_a_number", "-1")
+
       case TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-0.1")
+      case TopicConfig.COMPRESSION_ZSTD_WINDOW_CONFIG   => assertPropertyInvalid(name, "not_a_number", "-1")
+      case TopicConfig.COMPRESSION_ZSTD_WORKERS_CONFIG  => assertPropertyInvalid(name, "not_a_number", "-1")
+
+      case TopicConfig.COMPRESSION_SNAPPY_BLOCK_CONFIG  => assertPropertyInvalid(name, "not_a_number", "-1")
+
       case TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG => assertPropertyInvalid(name, "not_a_number", "remove", "0")
       case TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG => assertPropertyInvalid(name, "not_a_number", "remove", "0")
       case LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG => // no op

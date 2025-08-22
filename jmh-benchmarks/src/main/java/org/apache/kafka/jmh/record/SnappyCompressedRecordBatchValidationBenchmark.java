@@ -25,10 +25,10 @@ import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.LogValidator;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
@@ -38,19 +38,29 @@ import org.openjdk.jmh.infra.Blackhole;
 @Fork(value = 1)
 @Warmup(iterations = 5)
 @Measurement(iterations = 15)
-public class UncompressedRecordBatchValidationBenchmark extends RecordBatchIterationBenchmark {
+public class SnappyCompressedRecordBatchValidationBenchmark extends RecordBatchIterationBenchmark {
+    @Param(value = {
+        "1024",
+        "8192",
+        "32768",
+        "131072"
+    })
+    private int blockSize = 32768;
 
     @Override
     Compression compression() {
-        return Compression.NONE;
+        return Compression.snappy()
+            .blockSize(blockSize)
+            .build();
     }
 
     @Benchmark
-    public void measureAssignOffsetsNonCompressed(Blackhole bh) {
+    public void measureValidateMessagesAndAssignOffsetsGzipCompressed(Blackhole bh) {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         new LogValidator(records, new TopicPartition("a", 0),
-            Time.SYSTEM, CompressionType.NONE, Compression.NONE, false,
-            messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT
-        ).assignOffsetsNonCompressed(PrimitiveRef.ofLong(startingOffset), validatorMetricsRecorder);
+            Time.SYSTEM, CompressionType.GZIP, compression(), false,  messageVersion,
+            TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT
+        ).validateMessagesAndAssignOffsetsCompressed(PrimitiveRef.ofLong(startingOffset),
+            validatorMetricsRecorder, requestLocal.bufferSupplier());
     }
 }
