@@ -22,12 +22,14 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
+import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -36,6 +38,7 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochResponse;
@@ -44,6 +47,7 @@ import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
+import org.apache.kafka.common.requests.RemoveRaftVoterResponse;
 import org.apache.kafka.common.requests.UpdateRaftVoterResponse;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.requests.VoteResponse;
@@ -88,7 +92,9 @@ public class KafkaNetworkChannelTest {
         ApiKeys.END_QUORUM_EPOCH,
         ApiKeys.FETCH,
         ApiKeys.FETCH_SNAPSHOT,
-        ApiKeys.UPDATE_RAFT_VOTER
+        ApiKeys.UPDATE_RAFT_VOTER,
+        ApiKeys.ADD_RAFT_VOTER,
+        ApiKeys.REMOVE_RAFT_VOTER
     );
 
     private final int requestTimeoutMs = 30000;
@@ -316,6 +322,21 @@ public class KafkaNetworkChannelTest {
                     Endpoints.empty()
                 );
 
+            case ADD_RAFT_VOTER:
+                return RaftUtil.addVoterRequest(
+                    clusterId,
+                    requestTimeoutMs,
+                    ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID),
+                    Endpoints.empty(),
+                    true
+                );
+
+            case REMOVE_RAFT_VOTER:
+                return RaftUtil.removeVoterRequest(
+                    clusterId,
+                    ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)
+                );
+
             default:
                 throw new AssertionError("Unexpected api " + key);
         }
@@ -345,6 +366,8 @@ public class KafkaNetworkChannelTest {
             case FETCH -> new FetchResponseData().setErrorCode(error.code());
             case FETCH_SNAPSHOT -> new FetchSnapshotResponseData().setErrorCode(error.code());
             case UPDATE_RAFT_VOTER -> new UpdateRaftVoterResponseData().setErrorCode(error.code());
+            case ADD_RAFT_VOTER -> new AddRaftVoterResponseData().setErrorCode(error.code());
+            case REMOVE_RAFT_VOTER -> new RemoveRaftVoterResponseData().setErrorCode(error.code());
             default -> throw new AssertionError("Unexpected api " + key);
         };
     }
@@ -363,6 +386,10 @@ public class KafkaNetworkChannelTest {
             code = ((FetchSnapshotResponseData) response).errorCode();
         } else if (response instanceof UpdateRaftVoterResponseData) {
             code = ((UpdateRaftVoterResponseData) response).errorCode();
+        } else if (response instanceof AddRaftVoterResponseData) {
+            code = ((AddRaftVoterResponseData) response).errorCode();
+        } else if (response instanceof RemoveRaftVoterResponseData) {
+            code = ((RemoveRaftVoterResponseData) response).errorCode();
         } else {
             throw new IllegalArgumentException("Unexpected type for responseData: " + response);
         }
@@ -383,6 +410,10 @@ public class KafkaNetworkChannelTest {
             return new FetchSnapshotResponse((FetchSnapshotResponseData) responseData);
         } else if (responseData instanceof UpdateRaftVoterResponseData) {
             return new UpdateRaftVoterResponse((UpdateRaftVoterResponseData) responseData);
+        } else if (responseData instanceof AddRaftVoterResponseData) {
+            return new AddRaftVoterResponse((AddRaftVoterResponseData) responseData);
+        } else if (responseData instanceof RemoveRaftVoterResponseData) {
+            return new RemoveRaftVoterResponse((RemoveRaftVoterResponseData) responseData);
         } else {
             throw new IllegalArgumentException("Unexpected type for responseData: " + responseData);
         }
