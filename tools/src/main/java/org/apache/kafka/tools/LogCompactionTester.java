@@ -27,6 +27,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -47,6 +48,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -232,6 +234,53 @@ public class LogCompactionTester {
 
     private static final Random RANDOM = new Random();
 
+    private static void validateCompressionConfig(String compressionType, Integer compressionLevel) {
+        validateCompressionType(compressionType);
+        validateCompressionLevel(compressionType, compressionLevel);
+    }
+
+    private static void validateCompressionType(String compressionType) {
+        Set<String> validTypes = Set.of("none", "gzip", "snappy", "lz4", "zstd");
+        if (!validTypes.contains(compressionType.toLowerCase(Locale.ROOT))) {
+            System.err.println("Invalid compression type: " + compressionType);
+            System.err.println("Valid types: " + validTypes);
+            Exit.exit(1);
+        }
+    }
+
+    private static void validateCompressionLevel(String compressionType, Integer compressionLevel) {
+        if (compressionLevel == null) {
+            return;
+        }
+
+        String normalizedType = compressionType.toLowerCase(Locale.ROOT);
+        switch (normalizedType) {
+            case "none":
+            case "snappy":
+                System.err.println("Compression level not supported for " + compressionType);
+                System.err.println("Remove --compression-level option");
+                Exit.exit(1);
+                break;
+            case "gzip":
+                validateLevelRange(compressionLevel, CompressionType.GZIP, "gzip");
+                break;
+            case "lz4":
+                validateLevelRange(compressionLevel, CompressionType.LZ4, "lz4");
+                break;
+            case "zstd":
+                validateLevelRange(compressionLevel, CompressionType.ZSTD, "zstd");
+                break;
+        }
+    }
+
+    private static void validateLevelRange(int level, CompressionType type, String typeName) {
+        if (level < type.minLevel() || level > type.maxLevel()) {
+            System.err.println("Invalid " + typeName + " compression level: " + level);
+            System.err.println("Valid " + typeName + " levels: " + type.minLevel() + "-" + type.maxLevel());
+            Exit.exit(1);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
 
         OptionParser parser = new OptionParser(false);
@@ -253,6 +302,8 @@ public class LogCompactionTester {
         String brokerUrl = optionSet.valueOf(options.brokerOpt);
         int topicCount = optionSet.valueOf(options.topicsOpt);
         int sleepSecs = optionSet.valueOf(options.sleepSecsOpt);
+
+        validateCompressionConfig(compressionType, compressionLevel);
 
         long testId = RANDOM.nextLong();
         String[] topics = IntStream.range(0, topicCount)
@@ -411,7 +462,7 @@ public class LogCompactionTester {
         producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType);
         
         if (compressionLevel != null) {
-            switch (compressionType.toLowerCase()) {
+            switch (compressionType.toLowerCase(Locale.ROOT)) {
                 case "gzip":
                     producerProps.put(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG, compressionLevel);
                     break;
