@@ -3006,21 +3006,47 @@ class UnifiedLogTest {
     val recordSize = createRecords.sizeInBytes
     val logConfig = LogTestUtils.createLogConfig(
       segmentBytes = recordSize * 2,
-      retentionBytes = recordSize * 5,
-      localRetentionBytes = recordSize * 5,
-      cleanupPolicy = ""
+      localRetentionBytes = recordSize / 2,
+      cleanupPolicy = "",
+      remoteLogStorageEnable = true
     )
-    val log = createLog(logDir, logConfig)
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
 
     for (_ <- 0 until 10)
       log.appendAsLeader(createRecords, 0)
 
     val segmentsBefore = log.numberOfSegments
     log.updateHighWatermark(log.logEndOffset)
+    log.updateHighestOffsetInRemoteStorage(log.logEndOffset - 1)
     val deleteOldSegments = log.deleteOldSegments()
 
     assertTrue(log.numberOfSegments < segmentsBefore, "Some segments should be deleted due to size retention")
     assertTrue(deleteOldSegments > 0, "At least one segment should be deleted")
+  }
+
+  @Test
+  def shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithMsRetention(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = 10L)
+    val recordSize = createRecords.sizeInBytes
+    val logConfig = LogTestUtils.createLogConfig(
+      segmentBytes = recordSize * 2,
+      localRetentionMs = 10000,
+      cleanupPolicy = "",
+      remoteLogStorageEnable = true
+    )
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    for (_ <- 0 until 10)
+      log.appendAsLeader(createRecords, 0)
+
+    // mark the oldest segment as older the retention.ms
+    log.logSegments.asScala.head.setLastModified(mockTime.milliseconds - 20000)
+
+    val segments = log.numberOfSegments
+    log.updateHighWatermark(log.logEndOffset)
+    log.updateHighestOffsetInRemoteStorage(log.logEndOffset - 1)
+    log.deleteOldSegments()
+    assertTrue(log.numberOfSegments < segments, "Old segments should be deleted")
   }
 
   @Test
