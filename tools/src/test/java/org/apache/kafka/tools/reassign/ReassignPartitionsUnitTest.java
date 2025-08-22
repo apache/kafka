@@ -801,19 +801,13 @@ public class ReassignPartitionsUnitTest {
         ) {
             addTopics(adminClient);
 
-            List<TopicPartitionReplica> replicas = List.of(
-                new TopicPartitionReplica("foo", 0, 0),
-                new TopicPartitionReplica("foo", 0, 1),
-                new TopicPartitionReplica("foo", 0, 2),
-                new TopicPartitionReplica("foo", 1, 1),
-                new TopicPartitionReplica("foo", 1, 2),
-                new TopicPartitionReplica("foo", 1, 3),
-                new TopicPartitionReplica("bar", 0, 0),
-                new TopicPartitionReplica("bar", 0, 2),
-                new TopicPartitionReplica("bar", 0, 3)
+            Map<TopicPartition, List<Integer>> topicPartitionToReplicas = Map.of(
+                new TopicPartition("foo", 0), List.of(0, 1, 2),
+                new TopicPartition("foo", 1), List.of(1, 2, 3),
+                new TopicPartition("bar", 0), List.of(2, 3, 0)
             );
 
-            Map<TopicPartitionReplica, String> result = getReplicaToLogDir(adminClient, replicas);
+            Map<TopicPartitionReplica, String> result = getReplicaToLogDir(adminClient, topicPartitionToReplicas);
 
             assertFalse(result.isEmpty());
             assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 0)));

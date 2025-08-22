@@ -566,8 +566,7 @@ public class ReassignPartitionsCommand {
         List<String> topicsToReassign = t0.getValue();
 
         Map<TopicPartition, List<Integer>> currentAssignments = getReplicaAssignmentForTopics(adminClient, topicsToReassign);
-        List<TopicPartitionReplica> currentReplicas = getTopicPartitionReplicas(currentAssignments);
-        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentReplicas);
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentAssignments);
         List<UsableBroker> usableBrokers = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
         Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentAssignments, usableBrokers);
         System.out.printf("Current partition replica assignment%n%s%n%n",
@@ -931,8 +930,7 @@ public class ReassignPartitionsCommand {
         Map<TopicPartition, List<Integer>> partitionsToBeReassigned = currentParts.entrySet().stream()
             .filter(e -> proposedParts.containsKey(e.getKey()))
             .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-        List<TopicPartitionReplica> currentReplicas = getTopicPartitionReplicas(partitionsToBeReassigned);
-        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentReplicas);
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, partitionsToBeReassigned);
 
         return String.format("Current partition replica assignment%n%n%s%n%nSave this to use as the %s",
             formatAsReassignmentJson(partitionsToBeReassigned, currentReplicaLogDirs),
@@ -1521,25 +1519,25 @@ public class ReassignPartitionsCommand {
         return results;
     }
 
-    static Map<TopicPartitionReplica, String> getReplicaToLogDir(Admin adminClient, List<TopicPartitionReplica> replicas) throws InterruptedException, ExecutionException {
-        return adminClient.describeReplicaLogDirs(replicas).all().get()
+    static Map<TopicPartitionReplica, String> getReplicaToLogDir(
+        Admin adminClient,
+        Map<TopicPartition, List<Integer>> topicPartitionToReplicas
+    ) throws InterruptedException, ExecutionException {
+        var replicaLogDirs = topicPartitionToReplicas
                 .entrySet()
                 .stream()
-                .filter(entry -> entry.getValue() != null && entry.getValue().getCurrentReplicaLogDir() != null)
+                .flatMap(entry -> entry.getValue()
+                    .stream()
+                    .map(id -> new TopicPartitionReplica(entry.getKey().topic(), entry.getKey().partition(), id)))
+                .collect(Collectors.toUnmodifiableSet());
+
+        return adminClient.describeReplicaLogDirs(replicaLogDirs).all().get()
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getValue().getCurrentReplicaLogDir() != null)
                 .collect(Collectors.toMap(
                     Entry::getKey,
                     entry -> entry.getValue().getCurrentReplicaLogDir()
                 ));
-    }
-
-    private static List<TopicPartitionReplica> getTopicPartitionReplicas(Map<TopicPartition, List<Integer>> topicPartitionToReplicas) {
-        return topicPartitionToReplicas.entrySet().stream()
-                .flatMap(entry -> {
-                    TopicPartition tp = entry.getKey();
-                    List<Integer> brokerIds = entry.getValue();
-                    return brokerIds.stream()
-                            .map(brokerId -> new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId));
-                })
-                .toList();
     }
 }
