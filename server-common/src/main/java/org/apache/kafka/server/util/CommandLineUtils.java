@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -156,7 +155,6 @@ public class CommandLineUtils {
         if (presentCount != 1) {
             printUsageAndExit(parser, "Exactly one of the following arguments is required: " +
                     Arrays.stream(optionSpecs)
-                            .filter(Objects::nonNull)
                             .map(Object::toString)
                             .collect(Collectors.joining(", ")));
         }
