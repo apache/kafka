@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -369,10 +370,10 @@ public class FetchCollector<K, V> {
             log.warn("Unknown server error while fetching offset {} for topic-partition {}",
                     fetchOffset, tp);
         } else if (error == Errors.CORRUPT_MESSAGE) {
-            throw new KafkaException("Encountered corrupt message when fetching offset "
+            throw new CorruptRecordException("Encountered corrupt message when fetching offset "
                     + fetchOffset
                     + " for topic-partition "
-                    + tp, error.exception());
+                    + tp, error.exception(), tp, fetchOffset);
         } else {
             throw new IllegalStateException("Unexpected error code "
                     + error.code()

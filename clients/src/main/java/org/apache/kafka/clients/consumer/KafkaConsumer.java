@@ -889,6 +889,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             {@link #subscribe(SubscriptionPattern, ConsumerRebalanceListener)} and the broker doesn't
      *             support this feature.
      * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     * @throws org.apache.kafka.common.errors.CorruptRecordException if any record in batch are corrupted
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
