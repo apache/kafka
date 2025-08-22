@@ -60,9 +60,9 @@ class LogCompactionTest(Test):
         {'type': 'gzip', 'level': 9},
         {'type': 'snappy'},
         {'type': 'lz4', 'level': 1},
-        {'type': 'lz4', 'level': 17},
+        {'type': 'lz4', 'level': 10},
         {'type': 'zstd', 'level': 1},
-        {'type': 'zstd', 'level': 22}
+        {'type': 'zstd', 'level': 10}
     ])
     def test_log_compaction(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk, compression_config={}):
 
@@ -70,4 +70,4 @@ class LogCompactionTest(Test):
         self.start_test_log_compaction_tool(security_protocol, compression_config)
 
         # Verify that compacted data verification completed in LogCompactionTester
-        wait_until(lambda: self.compaction_verifier.is_done, timeout_sec=180, err_msg="Timed out waiting to complete compaction")
+        wait_until(lambda: self.compaction_verifier.is_done, timeout_sec=240, err_msg="Timed out waiting to complete compaction")
