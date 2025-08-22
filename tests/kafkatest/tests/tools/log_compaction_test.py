@@ -55,7 +55,7 @@ class LogCompactionTest(Test):
 
     @cluster(num_nodes=4)
     @matrix(metadata_quorum=quorum.all_non_upgrade, compression_config=[
-        {},  # No compression specified - uses Kafka default (none)
+        {},
         {'type': 'gzip', 'level': 1},
         {'type': 'gzip', 'level': 9},
         {'type': 'snappy'},

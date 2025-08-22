@@ -66,11 +66,8 @@ class LogCompactionTester(KafkaPathResolverMixin, BackgroundThreadService):
         cmd += " %s" % self.java_class_name()
         cmd += " --bootstrap-server %s --messages 1000000 --sleep 20 --duplicates 10 --percent-deletes 10" % self.kafka.bootstrap_servers(self.security_protocol)
         
-        # Add compression type if specified
         if 'type' in self.compression_config:
             cmd += " --compression-type %s" % self.compression_config['type']
-        
-        # Add compression level if specified
         if 'level' in self.compression_config:
             cmd += " --compression-level %s" % self.compression_config['level']
 
