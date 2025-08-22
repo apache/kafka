@@ -1470,32 +1470,7 @@ public class UnifiedLog implements AutoCloseable {
                 && !verificationGuard(batch.producerId()).verify(requestVerificationGuard);
     }
 
-    /**
-     * Validate the following:
-     * <ol>
-     * <li> each message matches its CRC
-     * <li> each message size is valid (if ignoreRecordSize is false)
-     * <li> that the sequence numbers of the incoming record batches are consistent with the existing state and with each other
-     * <li> that the offsets are monotonically increasing (if requireOffsetsMonotonic is true)
-     * </ol>
-     *
-     * Also compute the following quantities:
-     * <ol>
-     * <li> First offset in the message set
-     * <li> Last offset in the message set
-     * <li> Number of messages
-     * <li> Number of valid bytes
-     * <li> Whether the offsets are monotonically increasing
-     * <li> Whether any compression codec is used (if many are used, then the last one is given)
-     * </ol>
-     */
-    private LogAppendInfo analyzeAndValidateRecords(MemoryRecords records,
-                                                    AppendOrigin origin,
-                                                    boolean ignoreRecordSize,
-                                                    boolean requireOffsetsMonotonic,
-                                                    int leaderEpoch) {
-        return analyzeAndValidateRecords(records, origin, ignoreRecordSize, requireOffsetsMonotonic, leaderEpoch, null);
-    }
+    
 
     /**
      * Validate the following:

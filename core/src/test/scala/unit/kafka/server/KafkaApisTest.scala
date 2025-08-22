@@ -4487,6 +4487,192 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testPartitionLevelMetricsGatedByMetricsVerbosity_Fetch_KafkaApis(): Unit = {
+    val t = "t"
+    val u = "u"
+    val tId = Uuid.randomUuid()
+    val uId = Uuid.randomUuid()
+    val tpT = new TopicPartition(t, 0)
+    val tpU = new TopicPartition(u, 0)
+    val tidpT = new TopicIdPartition(tId, tpT)
+    val tidpU = new TopicIdPartition(uId, tpU)
+
+    addTopicToMetadataCache(t, 1, topicId = tId)
+    addTopicToMetadataCache(u, 1, topicId = uId)
+
+    // Ensure log configs exist (not strictly required for gating, but used by code paths)
+    when(replicaManager.getLogConfig(ArgumentMatchers.eq(tpT))).thenReturn(None)
+    when(replicaManager.getLogConfig(ArgumentMatchers.eq(tpU))).thenReturn(None)
+
+    // Mock replicaManager.fetchMessages to return bytes for both topics
+    when(replicaManager.fetchMessages(
+      any[FetchParams],
+      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
+      any[ReplicaQuota],
+      any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
+    )).thenAnswer(invocation => {
+      val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
+      val recT = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("a".getBytes(StandardCharsets.UTF_8)))
+      val recU = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("b".getBytes(StandardCharsets.UTF_8)))
+      callback(Seq(
+        tidpT -> new FetchPartitionData(Errors.NONE, 0, 0, recT,
+          Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
+        tidpU -> new FetchPartitionData(Errors.NONE, 0, 0, recU,
+          Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)
+      ))
+    })
+
+    // Build fetch contexts and request for both topics
+    val fetchData = util.Map.of(
+      tidpT, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty()),
+      tidpU, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty())
+    )
+    val fetchDataBuilder = util.Map.of(
+      tpT, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty()),
+      tpU, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty())
+    )
+    val fetchMetadata = new JFetchMetadata(0, 0)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
+      fetchMetadata, fetchData, false, false)
+    when(fetchManager.newContext(
+      any[Short],
+      any[JFetchMetadata],
+      any[Boolean],
+      any[util.Map[TopicIdPartition, FetchRequest.PartitionData]],
+      any[util.List[TopicIdPartition]],
+      any[util.Map[Uuid, String]])).thenReturn(fetchContext)
+
+    // Configure metrics.verbosity to allow only t for BytesOut/TotalFetch
+    val overrideProps = Map(
+      "metrics.verbosity" -> "[{\"level\":\"high\",\"names\":\"BytesOutPerSec|TotalFetchRequestsPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]"
+    )
+    kafkaApis = createKafkaApis(overrideProperties = overrideProps)
+
+    // Baseline counts
+    val tPartMetrics = brokerTopicStats.partitionStats(t, 0)
+    val uPartMetrics = brokerTopicStats.partitionStats(u, 0)
+    val tBytesOutBefore = tPartMetrics.bytesOutRate().count()
+    val tTotalFetchBefore = tPartMetrics.totalFetchRequestRate().count()
+    val uBytesOutBefore = uPartMetrics.bytesOutRate().count()
+    val uTotalFetchBefore = uPartMetrics.totalFetchRequestRate().count()
+
+    val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
+      -1, -1, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
+    val request = buildRequest(fetchRequest)
+    kafkaApis.handleFetchRequest(request)
+
+    verifyNoThrottling[FetchResponse](request)
+
+    // After fetch: topic t should advance; topic u should remain unchanged
+    assertTrue(tPartMetrics.bytesOutRate().count() > tBytesOutBefore)
+    assertTrue(tPartMetrics.totalFetchRequestRate().count() > tTotalFetchBefore)
+    assertEquals(uBytesOutBefore, uPartMetrics.bytesOutRate().count())
+    assertEquals(uTotalFetchBefore, uPartMetrics.totalFetchRequestRate().count())
+  }
+
+  @Test
+  def testMetricsVerbosityDynamicUpdateKafkaApis(): Unit = {
+    val t = "t"
+    val u = "u"
+    val tId = Uuid.randomUuid()
+    val uId = Uuid.randomUuid()
+    val tpT = new TopicPartition(t, 0)
+    val tpU = new TopicPartition(u, 0)
+    val tidpT = new TopicIdPartition(tId, tpT)
+    val tidpU = new TopicIdPartition(uId, tpU)
+
+    addTopicToMetadataCache(t, 1, topicId = tId)
+    addTopicToMetadataCache(u, 1, topicId = uId)
+
+    when(replicaManager.getLogConfig(ArgumentMatchers.eq(tpT))).thenReturn(None)
+    when(replicaManager.getLogConfig(ArgumentMatchers.eq(tpU))).thenReturn(None)
+
+    // Mock fetch to return records for both topics
+    when(replicaManager.fetchMessages(
+      any[FetchParams],
+      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
+      any[ReplicaQuota],
+      any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
+    )).thenAnswer(invocation => {
+      val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
+      val recT = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("a".getBytes(StandardCharsets.UTF_8)))
+      val recU = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("b".getBytes(StandardCharsets.UTF_8)))
+      callback(Seq(
+        tidpT -> new FetchPartitionData(Errors.NONE, 0, 0, recT,
+          Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false),
+        tidpU -> new FetchPartitionData(Errors.NONE, 0, 0, recU,
+          Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)
+      ))
+    })
+
+    val fetchData = util.Map.of(
+      tidpT, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty()),
+      tidpU, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty())
+    )
+    val fetchDataBuilder = util.Map.of(
+      tpT, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty()),
+      tpU, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty())
+    )
+    val fetchMetadata = new JFetchMetadata(0, 0)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
+      fetchMetadata, fetchData, false, false)
+    when(fetchManager.newContext(
+      any[Short], any[JFetchMetadata], any[Boolean],
+      any[util.Map[TopicIdPartition, FetchRequest.PartitionData]],
+      any[util.List[TopicIdPartition]], any[util.Map[Uuid, String]])).thenReturn(fetchContext)
+
+    // Start with metrics.verbosity allowing only topic t
+    val overrideProps = Map(
+      "metrics.verbosity" -> "[{\"level\":\"high\",\"names\":\"BytesOutPerSec|TotalFetchRequestsPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]"
+    )
+    kafkaApis = createKafkaApis(overrideProperties = overrideProps)
+
+    val tPartMetrics = brokerTopicStats.partitionStats(t, 0)
+    val uPartMetrics = brokerTopicStats.partitionStats(u, 0)
+    val tBytesOutBefore = tPartMetrics.bytesOutRate().count()
+    val tTotalFetchBefore = tPartMetrics.totalFetchRequestRate().count()
+    val uBytesOutBefore = uPartMetrics.bytesOutRate().count()
+    val uTotalFetchBefore = uPartMetrics.totalFetchRequestRate().count()
+
+    val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
+      -1, -1, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
+    val request1 = buildRequest(fetchRequest)
+    kafkaApis.handleFetchRequest(request1)
+    verifyNoThrottling[FetchResponse](request1)
+
+    val tBytesOutAfter1 = tPartMetrics.bytesOutRate().count()
+    val tTotalFetchAfter1 = tPartMetrics.totalFetchRequestRate().count()
+    val uBytesOutAfter1 = uPartMetrics.bytesOutRate().count()
+    val uTotalFetchAfter1 = uPartMetrics.totalFetchRequestRate().count()
+
+    assertTrue(tBytesOutAfter1 > tBytesOutBefore)
+    assertTrue(tTotalFetchAfter1 > tTotalFetchBefore)
+    assertEquals(uBytesOutBefore, uBytesOutAfter1)
+    assertEquals(uTotalFetchBefore, uTotalFetchAfter1)
+
+    // Dynamically flip metrics.verbosity to allow only topic u
+    val properties = TestUtils.createBrokerConfig(brokerId)
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
+    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    val voterId = brokerId + 1
+    properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
+    properties.put("metrics.verbosity", "[{\"level\":\"high\",\"names\":\"BytesOutPerSec|TotalFetchRequestsPerSec\",\"filters\":[{\"topics\":[\"u\"]}]}]")
+    val newConfig = new KafkaConfig(properties)
+
+    kafkaApis.config.updateCurrentConfig(newConfig)
+
+    val request2 = buildRequest(fetchRequest)
+    kafkaApis.handleFetchRequest(request2)
+    verifyNoThrottling[FetchResponse](request2)
+
+    // Now u should advance, t should stay where it was after first fetch
+    assertEquals(tBytesOutAfter1, tPartMetrics.bytesOutRate().count())
+    assertEquals(tTotalFetchAfter1, tPartMetrics.totalFetchRequestRate().count())
+    assertTrue(uPartMetrics.bytesOutRate().count() > uBytesOutAfter1)
+    assertTrue(uPartMetrics.totalFetchRequestRate().count() > uTotalFetchAfter1)
+  }
+
+  @Test
   def testHandleShareFetchRequestSuccessWithoutAcknowledgements(): Unit = {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()

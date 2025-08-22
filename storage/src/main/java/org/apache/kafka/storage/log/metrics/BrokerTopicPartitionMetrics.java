@@ -70,16 +70,45 @@ public final class BrokerTopicPartitionMetrics {
         this.produceMessageConversionsRate = new MeterWrapper(PRODUCE_MESSAGE_CONVERSIONS_PER_SEC, "requests");
     }
 
-    public Meter messagesInRate() { return messagesInRate.meter(); }
-    public Meter bytesInRate() { return bytesInRate.meter(); }
-    public Meter bytesOutRate() { return bytesOutRate.meter(); }
-    public Meter bytesRejectedRate() { return bytesRejectedRate.meter(); }
-    public Meter totalProduceRequestRate() { return totalProduceRequestRate.meter(); }
-    public Meter totalFetchRequestRate() { return totalFetchRequestRate.meter(); }
-    public Meter failedProduceRequestRate() { return failedProduceRequestRate.meter(); }
-    public Meter failedFetchRequestRate() { return failedFetchRequestRate.meter(); }
-    public Meter fetchMessageConversionsRate() { return fetchMessageConversionsRate.meter(); }
-    public Meter produceMessageConversionsRate() { return produceMessageConversionsRate.meter(); }
+    public Meter messagesInRate() {
+        return messagesInRate.meter();
+    }
+
+    public Meter bytesInRate() {
+        return bytesInRate.meter();
+    }
+
+    public Meter bytesOutRate() {
+        return bytesOutRate.meter();
+    }
+
+    public Meter bytesRejectedRate() {
+        return bytesRejectedRate.meter();
+    }
+
+    public Meter totalProduceRequestRate() {
+        return totalProduceRequestRate.meter();
+    }
+
+    public Meter totalFetchRequestRate() {
+        return totalFetchRequestRate.meter();
+    }
+
+    public Meter failedProduceRequestRate() {
+        return failedProduceRequestRate.meter();
+    }
+
+    public Meter failedFetchRequestRate() {
+        return failedFetchRequestRate.meter();
+    }
+
+    public Meter fetchMessageConversionsRate() {
+        return fetchMessageConversionsRate.meter();
+    }
+
+    public Meter produceMessageConversionsRate() {
+        return produceMessageConversionsRate.meter();
+    }
 
     public void close() {
         messagesInRate.close();

@@ -245,6 +245,244 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testPartitionLevelMetricsGatedByMetricsVerbosity_Produce(): Unit = {
+    val dir = TestUtils.tempDir()
+    val props = TestUtils.createBrokerConfig(0)
+    // Enable KIP-977 partition-level Bytes* metrics only for topic "t1"
+    props.put("metrics.verbosity", "[{\"level\":\"high\",\"names\":\"Bytes.*\",\"filters\":[{\"topics\":[\"t1\"]}]}]")
+    val config = KafkaConfig.fromProps(props)
+    val logManager = TestUtils.createLogManager(Seq(dir).asJava)
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+    try {
+      val t1 = "t1"
+      val t2 = "t2"
+      val t1Id = Uuid.randomUuid()
+      val t2Id = Uuid.randomUuid()
+      setupMetadataCacheWithTopicIds(Map(t1 -> t1Id, t2 -> t2Id), metadataCache)
+      val tp1 = new TopicPartition(t1, 0)
+      val tp2 = new TopicPartition(t2, 0)
+
+      val leaderDelta = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = t1, topicId = t1Id)
+      rm.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
+      val leaderDelta2 = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = t2, topicId = t2Id)
+      rm.applyDelta(leaderDelta2, imageFromTopics(leaderDelta2.apply()))
+
+      val t1PartMetrics = rm.brokerTopicStats.partitionStats(t1, 0)
+      val t2PartMetrics = rm.brokerTopicStats.partitionStats(t2, 0)
+
+      val t1BytesBefore = t1PartMetrics.bytesInRate().count()
+      val t1MsgsBefore = t1PartMetrics.messagesInRate().count()
+      val t2BytesBefore = t2PartMetrics.bytesInRate().count()
+      val t2MsgsBefore = t2PartMetrics.messagesInRate().count()
+
+      // Append to t1 should mark partition-level Bytes* and Messages* meters
+      appendRecords(rm, tp1, TestUtils.singletonRecords("a".getBytes)).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+      assertTrue(t1PartMetrics.bytesInRate().count() > t1BytesBefore)
+      assertTrue(t1PartMetrics.messagesInRate().count() > t1MsgsBefore)
+
+      // Append to t2 should NOT mark partition-level Bytes* or Messages* meters
+      appendRecords(rm, tp2, TestUtils.singletonRecords("b".getBytes)).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+      assertEquals(t2BytesBefore, t2PartMetrics.bytesInRate().count())
+      assertEquals(t2MsgsBefore, t2PartMetrics.messagesInRate().count())
+    } finally {
+      rm.shutdown(checkpointHW = false)
+      clearYammerMetricsExcept(metricsToBeDeletedInTheEnd)
+    }
+  }
+
+  @Test
+  def testPartitionLevelMetricsGatedByMetricsVerbosity_FailedProduceAndReject(): Unit = {
+    val dir = TestUtils.tempDir()
+    val props = TestUtils.createBrokerConfig(0)
+    props.put("metrics.verbosity", "[{\"level\":\"high\",\"names\":\"Bytes.*|FailedProduceRequestsPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]")
+    val config = KafkaConfig.fromProps(props)
+    val logManager = TestUtils.createLogManager(Seq(dir).asJava)
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+    try {
+      val t = "t"
+      val tId = Uuid.randomUuid()
+      setupMetadataCacheWithTopicIds(Map(t -> tId), metadataCache)
+      val tp = new TopicPartition(t, 0)
+      val leaderDelta = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = t, topicId = tId)
+      rm.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
+
+      val partMetrics = rm.brokerTopicStats.partitionStats(t, 0)
+      val bytesRejectedBefore = partMetrics.bytesRejectedRate().count()
+      val failedProduceBefore = partMetrics.failedProduceRequestRate().count()
+
+      // Trigger a RecordTooLargeException to drive BytesRejected and FailedProduce gating path
+      val largeRecord = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(new Array[Byte](config.messageMaxBytes + 1)))
+      appendRecords(rm, tp, largeRecord).onFire { response =>
+        assertEquals(Errors.RECORD_TOO_LARGE, response.error)
+      }
+      assertTrue(partMetrics.bytesRejectedRate().count() > bytesRejectedBefore)
+      assertTrue(partMetrics.failedProduceRequestRate().count() > failedProduceBefore)
+    } finally {
+      rm.shutdown(checkpointHW = false)
+      clearYammerMetricsExcept(metricsToBeDeletedInTheEnd)
+    }
+  }
+
+  @Test
+  def testMetricsVerbosityDynamicUpdate_Produce(): Unit = {
+    val dir = TestUtils.tempDir()
+    val props = TestUtils.createBrokerConfig(0)
+    // Initially allow Bytes*/Messages* for topic t only
+    props.put("metrics.verbosity", "[{\\\"level\\\":\\\"high\\\",\\\"names\\\":\\\"Bytes.*|Messages.*\\\",\\\"filters\\\":[{\\\"topics\\\":[\\\"t\\\"]}]}]")
+    val config = KafkaConfig.fromProps(props)
+    val logManager = TestUtils.createLogManager(Seq(dir).asJava)
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+    try {
+      val t = "t"
+      val u = "u"
+      val tId = Uuid.randomUuid()
+      val uId = Uuid.randomUuid()
+      setupMetadataCacheWithTopicIds(Map(t -> tId, u -> uId), metadataCache)
+      val tpT = new TopicPartition(t, 0)
+      val tpU = new TopicPartition(u, 0)
+
+      val deltaT = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = t, topicId = tId)
+      rm.applyDelta(deltaT, imageFromTopics(deltaT.apply()))
+      val deltaU = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = u, topicId = uId)
+      rm.applyDelta(deltaU, imageFromTopics(deltaU.apply()))
+
+      val tPart = rm.brokerTopicStats.partitionStats(t, 0)
+      val uPart = rm.brokerTopicStats.partitionStats(u, 0)
+      val tBytesBefore = tPart.bytesInRate().count()
+      val tMsgsBefore = tPart.messagesInRate().count()
+      val uBytesBefore = uPart.bytesInRate().count()
+      val uMsgsBefore = uPart.messagesInRate().count()
+
+      // Append once to both topics; only t should advance
+      appendRecords(rm, tpT, TestUtils.singletonRecords("a".getBytes)).onFire { r => assertEquals(Errors.NONE, r.error) }
+      appendRecords(rm, tpU, TestUtils.singletonRecords("b".getBytes)).onFire { r => assertEquals(Errors.NONE, r.error) }
+      val tBytesAfter1 = tPart.bytesInRate().count()
+      val tMsgsAfter1 = tPart.messagesInRate().count()
+      val uBytesAfter1 = uPart.bytesInRate().count()
+      val uMsgsAfter1 = uPart.messagesInRate().count()
+      assertTrue(tBytesAfter1 > tBytesBefore)
+      assertTrue(tMsgsAfter1 > tMsgsBefore)
+      assertEquals(uBytesBefore, uBytesAfter1)
+      assertEquals(uMsgsBefore, uMsgsAfter1)
+
+      // Flip to allow only topic u
+      val newProps = TestUtils.createBrokerConfig(0)
+      newProps.put("metrics.verbosity", "[{\\\"level\\\":\\\"high\\\",\\\"names\\\":\\\"Bytes.*|Messages.*\\\",\\\"filters\\\":[{\\\"topics\\\":[\\\"u\\\"]}]}]")
+      val newConfig = KafkaConfig.fromProps(newProps)
+      rm.config.updateCurrentConfig(newConfig)
+
+      // Append again; now only u should advance
+      appendRecords(rm, tpT, TestUtils.singletonRecords("c".getBytes)).onFire { r => assertEquals(Errors.NONE, r.error) }
+      appendRecords(rm, tpU, TestUtils.singletonRecords("d".getBytes)).onFire { r => assertEquals(Errors.NONE, r.error) }
+      assertEquals(tBytesAfter1, tPart.bytesInRate().count())
+      assertEquals(tMsgsAfter1, tPart.messagesInRate().count())
+      assertTrue(uPart.bytesInRate().count() > uBytesAfter1)
+      assertTrue(uPart.messagesInRate().count() > uMsgsAfter1)
+    } finally {
+      rm.shutdown(checkpointHW = false)
+      clearYammerMetricsExcept(metricsToBeDeletedInTheEnd)
+    }
+  }
+
+  @Test
+  def testPartitionLevelMetricsGatedByMetricsVerbosity_Fetch(): Unit = {
+    val dir = TestUtils.tempDir()
+    val props = TestUtils.createBrokerConfig(0)
+    // Gate BYTES_OUT and TOTAL_FETCH for topic t only
+    props.put("metrics.verbosity", "[{\"level\":\"high\",\"names\":\"BytesOutPerSec|TotalFetchRequestsPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]")
+    val config = KafkaConfig.fromProps(props)
+    val logManager = TestUtils.createLogManager(Seq(dir).asJava)
+    val rm = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = metadataCache,
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+    try {
+      val t = "t"
+      val t2 = "u"
+      val tId = Uuid.randomUuid()
+      val t2Id = Uuid.randomUuid()
+      setupMetadataCacheWithTopicIds(Map(t -> tId, t2 -> t2Id), metadataCache)
+      val tp = new TopicPartition(t, 0)
+      val tp2 = new TopicPartition(t2, 0)
+      val leaderDelta = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = t, topicId = tId)
+      rm.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
+      val leaderDelta2 = topicsCreateDelta(0, isStartIdLeader = true, partitions = List(0), topicName = t2, topicId = t2Id)
+      rm.applyDelta(leaderDelta2, imageFromTopics(leaderDelta2.apply()))
+
+      // Append some data to both topics so fetch has bytes to return
+      appendRecords(rm, tp, TestUtils.singletonRecords("a".getBytes)).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+      appendRecords(rm, tp2, TestUtils.singletonRecords("b".getBytes)).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+
+      // Build a fetch request hitting both topics
+      val fetchMinBytes = 1
+      val maxBytes = 1024 * 1024
+      val fetchInfo = Map(
+        new TopicIdPartition(tId, tp) -> new FetchPartitionData(0, 0, maxBytes, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()),
+        new TopicIdPartition(t2Id, tp2) -> new FetchPartitionData(0, 0, maxBytes, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())
+      )
+      val params = FetchParams(ReplicaId = RequestHandlerHelper.BrokerFetchReplicaId, MaxBytes = maxBytes, MinBytes = fetchMinBytes, MaxWaitMs = 0,
+        Isolation = FetchIsolation.HIGH_WATERMARK)
+      val fetchPartitionData = fetchInfo.asJava
+      val fetchData = new util.LinkedHashMap[TopicIdPartition, FetchPartitionData]()
+      fetchInfo.foreach { case (k, v) => fetchData.put(k, v) }
+
+      rm.fetchMessages(params, fetchData, new ResultWithPartitions[FetchPartitionData](), RequestLocal.NoCaching, QuotaFactory.QuotaManagers.None)
+
+      val partMetricsT = rm.brokerTopicStats.partitionStats(t, 0)
+      partMetricsT.bytesOutRate().mark(0)
+      partMetricsT.totalFetchRequestRate().mark(0)
+
+      val partMetricsU = rm.brokerTopicStats.partitionStats(t2, 0)
+      partMetricsU.bytesOutRate().mark(0)
+      partMetricsU.totalFetchRequestRate().mark(0)
+    } finally {
+      rm.shutdown(checkpointHW = false)
+      clearYammerMetricsExcept(metricsToBeDeletedInTheEnd)
+    }
+  }
+
+  @Test
   def testIllegalRequiredAcks(): Unit = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)))
     val rm = new ReplicaManager(

@@ -19,9 +19,6 @@ package org.apache.kafka.server.metrics;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.server.util.Json;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -60,36 +57,41 @@ public final class MetricsVerbosityController {
     private static List<CompiledRule> parseRules(String raw) {
         try {
             Rule[] rules = Json.parseStringAs(raw, Rule[].class);
-            if (rules == null || rules.length == 0) return Collections.emptyList();
+            if (rules == null || rules.length == 0) {
+                return Collections.emptyList();
+            }
             List<CompiledRule> compiled = new ArrayList<>();
             for (Rule r : rules) {
-                if (r == null) continue;
-                boolean levelHigh = "high".equalsIgnoreCase(r.level);
-                if (!levelHigh) {
-                    // Only high unlocks partition fan-out per KIP-977. Low entries contribute nothing.
-                    continue;
-                }
-                Pattern namePattern = Pattern.compile(r.names == null || r.names.isBlank() ? ".*" : r.names);
-                List<Pattern> topicPatterns = new ArrayList<>();
-                if (r.filters != null) {
-                    for (Filter f : r.filters) {
-                        if (f == null) continue;
-                        if (f.topicPattern != null && !f.topicPattern.isBlank()) {
-                            topicPatterns.add(Pattern.compile(f.topicPattern));
-                        }
-                        if (f.topics != null && !f.topics.isEmpty()) {
-                            // Convert literal topics list to exact-match patterns
-                            topicPatterns.addAll(f.topics.stream().map(Pattern::quote).map(Pattern::compile).collect(Collectors.toList()));
-                        }
-                    }
-                }
-                compiled.add(new CompiledRule(levelHigh, namePattern, topicPatterns));
+                compileRule(r).ifPresent(compiled::add);
             }
             return compiled;
         } catch (Exception e) {
-            // On malformed JSON, default to low (no fan-out)
             return Collections.emptyList();
         }
+    }
+
+    private static Optional<CompiledRule> compileRule(Rule r) {
+        if (r == null) {
+            return Optional.empty();
+        }
+        boolean levelHigh = r.getLevel() != null && "high".equalsIgnoreCase(r.getLevel());
+        if (!levelHigh) {
+            return Optional.empty();
+        }
+        Pattern namePattern = Pattern.compile(r.getNames() == null || r.getNames().isEmpty() ? ".*" : r.getNames());
+        List<Pattern> topicPatterns = new ArrayList<>();
+        if (r.getFilters() != null) {
+            for (Filter f : r.getFilters()) {
+                if (f == null) continue;
+                if (f.getTopicPattern() != null && !f.getTopicPattern().isEmpty()) {
+                    topicPatterns.add(Pattern.compile(f.getTopicPattern()));
+                }
+                if (f.getTopics() != null && !f.getTopics().isEmpty()) {
+                    topicPatterns.addAll(f.getTopics().stream().map(Pattern::quote).map(Pattern::compile).collect(Collectors.toList()));
+                }
+            }
+        }
+        return Optional.of(new CompiledRule(true, namePattern, topicPatterns));
     }
 
     private static final class CompiledRule {
@@ -112,22 +114,56 @@ public final class MetricsVerbosityController {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     private static final class Rule {
-        @JsonProperty("level")
-        public String level;
-        @JsonProperty("names")
-        public String names;
-        @JsonProperty("filters")
-        public List<Filter> filters;
+        private String level;
+        private String names;
+        private List<Filter> filters;
+
+        Rule() {
+        }
+
+        String getLevel() {
+            return level;
+        }
+        void setLevel(String level) {
+            this.level = level;
+        }
+
+        String getNames() {
+            return names;
+        }
+        void setNames(String names) {
+            this.names = names;
+        }
+
+        List<Filter> getFilters() {
+            return filters;
+        }
+        void setFilters(List<Filter> filters) {
+            this.filters = filters;
+        }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     private static final class Filter {
-        @JsonProperty("topics")
-        public List<String> topics;
-        @JsonProperty("topicPattern")
-        public String topicPattern;
+        private List<String> topics;
+        private String topicPattern;
+
+        Filter() {
+        }
+
+        List<String> getTopics() {
+            return topics;
+        }
+        void setTopics(List<String> topics) {
+            this.topics = topics;
+        }
+
+        String getTopicPattern() {
+            return topicPattern;
+        }
+        void setTopicPattern(String topicPattern) {
+            this.topicPattern = topicPattern;
+        }
     }
 }
 

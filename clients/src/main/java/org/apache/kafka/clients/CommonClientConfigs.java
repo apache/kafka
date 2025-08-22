@@ -134,21 +134,21 @@ public class CommonClientConfigs {
 
     public static final String METRICS_VERBOSITY_CONFIG = "metrics.verbosity";
     public static final String METRICS_VERBOSITY_DOC = "Controls the verbosity of metrics reporting. This configuration accepts a JSON array string that specifies " +
-    "verbosity levels for specific metrics and scopes. Each array element should contain:\n" +
-    "- <code>level</code>: Verbosity level (\"high\", \"medium\", or \"low\")\n" +
-    "- <code>name</code>: Metric name pattern (supports regex)\n" +
-    "- <code>filters</code>: Scope filters to apply the verbosity level\n\n" +
-    "Example:\n" +
-    "<pre>\n" +
-    "[\n" +
-    "  {\n" +
-    "    \"level\": \"high\",\n" +
-    "    \"name\": \"Bytes*\",\n" +
-    "    \"filters\": [{\"topics\": [\"car\", \"bus\", \"plane\"]}]\n" +
-    "  }\n" +
-    "]\n" +
-    "</pre>\n" +
-    "This example applies 'high' verbosity to all metrics starting with 'Bytes' for the specified topics (car, bus, plane).";
+        "verbosity levels for specific metrics and scopes. Each array element should contain:\n" +
+        "- <code>level</code>: Verbosity level (\"high\", \"medium\", or \"low\")\n" +
+        "- <code>name</code>: Metric name pattern (supports regex)\n" +
+        "- <code>filters</code>: Scope filters to apply the verbosity level\n\n" +
+        "Example:\n" +
+        "<pre>\n" +
+        "[\n" +
+        "  {\n" +
+        "    \"level\": \"high\",\n" +
+        "    \"name\": \"Bytes*\",\n" +
+        "    \"filters\": [{\"topics\": [\"car\", \"bus\", \"plane\"]}]\n" +
+        "  }\n" +
+        "]\n" +
+        "</pre>\n" +
+        "This example applies 'high' verbosity to all metrics starting with 'Bytes' for the specified topics (car, bus, plane).";
 
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers.";
