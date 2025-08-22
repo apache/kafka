@@ -3062,6 +3062,8 @@ kafka.server.share.SharePartitionTest:
 - testFindLastOffsetAcknowledgedWhenGapAtBeginning
 - testLsoMovementAheadOfEndOffset
 - testLsoMovementAheadOfEndOffsetPostAcknowledgement
+- testLsoMovementForArchivingAllAvailableBatches
+- testLsoMovementForArchivingAllAvailableOffsets
 - testLsoMovementForArchivingBatches
 - testLsoMovementForArchivingOffsets
 - testLsoMovementForArchivingOffsetsWithStartAndEndBatchesNotFullMatches
