@@ -213,7 +213,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
         private ValueAndTimestamp<KeyValue<? extends K1, ? extends V1>> mapValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
             return ValueAndTimestamp.make(
                 mapper.apply(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? context.recordContext().timestamp() : valueAndTimestamp.timestamp()
+                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp()
             );
         }
     }

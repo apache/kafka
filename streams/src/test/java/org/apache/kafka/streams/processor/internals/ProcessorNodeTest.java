@@ -362,7 +362,7 @@ public class ProcessorNodeTest {
             assertEquals(internalProcessorContext.offset(), context.offset());
             assertEquals(internalProcessorContext.currentNode().name(), context.processorNodeId());
             assertEquals(internalProcessorContext.taskId(), context.taskId());
-            assertEquals(internalProcessorContext.recordContext().timestamp(), context.timestamp());
+            assertEquals(internalProcessorContext.timestamp(), context.timestamp());
             assertEquals(internalProcessorContext.recordContext().sourceRawKey(), context.sourceRawKey());
             assertEquals(internalProcessorContext.recordContext().sourceRawValue(), context.sourceRawValue());
 

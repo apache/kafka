@@ -593,8 +593,6 @@ public class ProcessorContextImplTest {
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnForward() {
         context = getStandbyContext();
-        context.recordContext = mock(ProcessorRecordContext.class);
-
         assertThrows(
             UnsupportedOperationException.class,
             () -> context.forward("key", "value")
@@ -604,8 +602,6 @@ public class ProcessorContextImplTest {
     @Test
     public void shouldThrowUnsupportedOperationExceptionOnForwardWithTo() {
         context = getStandbyContext();
-        context.recordContext = mock(ProcessorRecordContext.class);
-
         assertThrows(
             UnsupportedOperationException.class,
             () -> context.forward("key", "value", To.child("child-name"))

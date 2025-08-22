@@ -153,12 +153,12 @@ class CachingWindowStore
         final LRUCacheEntry entry =
             new LRUCacheEntry(
                 value,
-                internalContext.recordContext().headers(),
+                internalContext.headers(),
                 true,
-                internalContext.recordContext().offset(),
-                internalContext.recordContext().timestamp(),
-                internalContext.recordContext().partition(),
-                internalContext.recordContext().topic(),
+                internalContext.offset(),
+                internalContext.timestamp(),
+                internalContext.partition(),
+                internalContext.topic(),
                 internalContext.recordContext().sourceRawKey(),
                 internalContext.recordContext().sourceRawValue()
             );

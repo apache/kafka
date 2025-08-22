@@ -17,11 +17,9 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
@@ -78,9 +76,8 @@ public class ChangeLoggingWindowBytesStoreTest {
     public void shouldLogPuts() {
         final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
-        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
-        store.put(bytesKey, value, context.recordContext().timestamp());
+        store.put(bytesKey, value, context.timestamp());
 
         verify(inner).put(bytesKey, value, 0);
         verify(context).logChange(store.name(), key, value, 0L, Position.emptyPosition());
@@ -90,9 +87,8 @@ public class ChangeLoggingWindowBytesStoreTest {
     public void shouldLogPutsWithPosition() {
         final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
         when(inner.getPosition()).thenReturn(POSITION);
-        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
-        store.put(bytesKey, value, context.recordContext().timestamp());
+        store.put(bytesKey, value, context.timestamp());
 
         verify(inner).put(bytesKey, value, 0);
         verify(context).logChange(store.name(), key, value, 0L, POSITION);
@@ -135,13 +131,12 @@ public class ChangeLoggingWindowBytesStoreTest {
         store = new ChangeLoggingWindowBytesStore(inner, true, WindowKeySchema::toStoreKeyBinary);
         store.init(context, store);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
-        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
         final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);
         final Bytes key2 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2);
 
-        store.put(bytesKey, value, context.recordContext().timestamp());
-        store.put(bytesKey, value, context.recordContext().timestamp());
+        store.put(bytesKey, value, context.timestamp());
+        store.put(bytesKey, value, context.timestamp());
 
         verify(inner, times(2)).put(bytesKey, value, 0);
         verify(context).logChange(store.name(), key1, value, 0L, Position.emptyPosition());

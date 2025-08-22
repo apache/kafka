@@ -120,8 +120,8 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
             final Record<Object, Object> toProcess = new Record<>(
                 deserialized.key(),
                 deserialized.value(),
-                processorContext.recordContext().timestamp(),
-                processorContext.recordContext().headers()
+                processorContext.timestamp(),
+                processorContext.headers()
             );
             ((SourceNode<Object, Object>) sourceNodeAndDeserializer.sourceNode()).process(toProcess);
         }
