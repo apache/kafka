@@ -261,6 +261,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
                     .withExecutorService(Executors.newSingleThreadExecutor())
+                    .withMaxBufferSizeSupplier(config::appendMaxBufferSize)
                     .build();
 
             return new GroupCoordinatorService(

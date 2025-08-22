@@ -65,6 +65,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.lang.Math.min;
@@ -119,6 +120,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private Compression compression;
         private int appendLingerMs;
         private ExecutorService executorService;
+        private Supplier<Integer> appendMaxBufferSizeSupplier;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -195,6 +197,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        public Builder<S, U> withMaxBufferSizeSupplier(Supplier<Integer> maxBufferSizeSupplier) {
+            this.appendMaxBufferSizeSupplier = maxBufferSizeSupplier;
+            return this;
+        }
+
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -224,6 +231,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("AppendLinger must be >= 0");
             if (executorService == null)
                 throw new IllegalArgumentException("ExecutorService must be set.");
+            if (appendMaxBufferSizeSupplier == null)
+                throw new IllegalArgumentException("Append max buffer size supplier must be set.");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -240,7 +249,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 serializer,
                 compression,
                 appendLingerMs,
-                executorService
+                executorService,
+                appendMaxBufferSizeSupplier
             );
         }
     }
@@ -757,12 +767,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             // Cancel the linger timeout.
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
-            // Release the buffer only if it is not larger than the maxBatchSize.
-            int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
+            // Release the buffer only if it is not larger than the max buffer size.
+            int maxBufferSize = appendMaxBufferSizeSupplied.get();
 
-            if (currentBatch.builder.buffer().capacity() <= maxBatchSize) {
+            if (currentBatch.builder.buffer().capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.builder.buffer());
-            } else if (currentBatch.buffer.capacity() <= maxBatchSize) {
+            } else if (currentBatch.buffer.capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.buffer);
             }
 
@@ -1924,11 +1934,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final String logPrefix;
 
     /**
-     * The log context.
-     */
-    private final LogContext logContext;
-
-    /**
      * The logger.
      */
     private final Logger log;
@@ -2007,6 +2012,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final ExecutorService executorService;
 
     /**
+     * The maximum buffer size that the coordinator can cache.
+     */
+    private final Supplier<Integer> appendMaxBufferSizeSupplied;
+
+    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -2034,6 +2044,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param compression                       The compression codec.
      * @param appendLingerMs                    The append linger time in ms.
      * @param executorService                   The executor service.
+     * @param appendMaxBufferSizeSupplier       The append max buffer size supplier.
      */
     @SuppressWarnings("checkstyle:ParameterNumber")
     private CoordinatorRuntime(
@@ -2051,10 +2062,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         Serializer<U> serializer,
         Compression compression,
         int appendLingerMs,
-        ExecutorService executorService
+        ExecutorService executorService,
+        Supplier<Integer> appendMaxBufferSizeSupplier
     ) {
         this.logPrefix = logPrefix;
-        this.logContext = logContext;
         this.log = logContext.logger(CoordinatorRuntime.class);
         this.time = time;
         this.timer = timer;
@@ -2070,6 +2081,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.compression = compression;
         this.appendLingerMs = appendLingerMs;
         this.executorService = executorService;
+        this.appendMaxBufferSizeSupplied = appendMaxBufferSizeSupplier;
     }
 
     /**
