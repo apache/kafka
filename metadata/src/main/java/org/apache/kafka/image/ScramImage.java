@@ -45,21 +45,21 @@ import java.util.Map.Entry;
 public record ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms) {
     public static final ScramImage EMPTY = new ScramImage(Map.of());
 
-    public ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms) {
-        this.mechanisms = Collections.unmodifiableMap(mechanisms);
+    public ScramImage {
+        mechanisms = Collections.unmodifiableMap(mechanisms);
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
         if (options.metadataVersion().isScramSupported()) {
-            for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
-                for (Entry<String, ScramCredentialData> userEntry : mechanismEntry.getValue().entrySet()) {
+            for (var mechanismEntry : mechanisms.entrySet()) {
+                for (var userEntry : mechanismEntry.getValue().entrySet()) {
                     writer.write(0, userEntry.getValue().toRecord(userEntry.getKey(), mechanismEntry.getKey()));
                 }
             }
         } else {
             boolean isEmpty = true;
             StringBuilder scramImageString = new StringBuilder("ScramImage({");
-            for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
+            for (var mechanismEntry : mechanisms.entrySet()) {
                 if (!mechanismEntry.getValue().isEmpty()) {
                     scramImageString.append(mechanismEntry.getKey()).append(":");
                     List<String> users = new ArrayList<>(mechanismEntry.getValue().keySet());
@@ -85,7 +85,7 @@ public record ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> m
 
         if ((users == null) || (users.isEmpty())) {
             // If there are no users listed then get all the users
-            for (Map<String, ScramCredentialData> scramCredentialDataSet : mechanisms.values()) {
+            for (var scramCredentialDataSet : mechanisms.values()) {
                 for (String user : scramCredentialDataSet.keySet()) {
                     uniqueUsers.put(user, false);
                 }
@@ -109,7 +109,7 @@ public record ScramImage(Map<ScramMechanism, Map<String, ScramCredentialData>> m
             if (!user.getValue()) {
                 boolean dataFound = false;
                 List<CredentialInfo> credentialInfos = new ArrayList<>();
-                for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismsEntry : mechanisms.entrySet()) {
+                for (var mechanismsEntry : mechanisms.entrySet()) {
                     Map<String, ScramCredentialData> credentialDataSet = mechanismsEntry.getValue();
                     if (credentialDataSet.containsKey(user.getKey())) {
                         credentialInfos.add(new CredentialInfo().setMechanism(mechanismsEntry.getKey().type())

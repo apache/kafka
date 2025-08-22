@@ -25,12 +25,9 @@ import java.util.Objects;
  * A change in the MetadataVersion.
  */
 public record MetadataVersionChange(MetadataVersion oldVersion, MetadataVersion newVersion) {
-    public MetadataVersionChange(
-        MetadataVersion oldVersion,
-        MetadataVersion newVersion
-    ) {
-        this.oldVersion = Objects.requireNonNull(oldVersion);
-        this.newVersion = Objects.requireNonNull(newVersion);
+    public MetadataVersionChange {
+        Objects.requireNonNull(oldVersion);
+        Objects.requireNonNull(newVersion);
     }
 
     public boolean isUpgrade() {

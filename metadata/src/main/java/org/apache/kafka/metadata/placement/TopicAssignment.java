@@ -25,14 +25,7 @@ import java.util.List;
  * This class is immutable. It's internal state does not change.
  */
 public record TopicAssignment(List<PartitionAssignment> assignments) {
-    public TopicAssignment(List<PartitionAssignment> assignments) {
-        this.assignments = List.copyOf(assignments);
-    }
-
-    /**
-     * @return The replica assignment for each partition, where the index in the list corresponds to different partition.
-     */
-    public List<PartitionAssignment> assignments() {
-        return assignments;
+    public TopicAssignment {
+        assignments = List.copyOf(assignments);
     }
 }

@@ -22,7 +22,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-
 /**
  * A map of feature names to their supported versions.
  */
@@ -42,13 +41,5 @@ public record FinalizedControllerFeatures(Map<String, Short> featureMap, long ep
 
     public Set<String> featureNames() {
         return featureMap.keySet();
-    }
-
-    @Override
-    public String toString() {
-        return "FinalizedControllerFeatures(" +
-            "featureMap=" + featureMap.toString() +
-            ", epoch=" + epoch +
-            ")";
     }
 }
