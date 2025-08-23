@@ -11668,4 +11668,23 @@ public class KafkaAdminClientTest {
             .setAssignmentEpoch(1));
         return data;
     }
+
+    @Test
+    public void testDescribeClusterTimeoutWhenNoBrokerResponds() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(
+            mockCluster(1, 0),
+            AdminClientConfig.RETRIES_CONFIG, "0",
+            AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "30000")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Not using prepareResponse is equivalent to "no brokers respond".
+            long start = System.currentTimeMillis();
+            ExecutionException exception = assertThrows(ExecutionException.class, () -> env.adminClient().describeCluster(new DescribeClusterOptions().timeoutMs(200)).clusterId().get());
+            // Duration should be greater than or equal to 200 ms but less than 30000 ms.
+            long duration = System.currentTimeMillis() - start;
+
+            assertTrue(exception.getCause() instanceof TimeoutException);
+            assertTrue(duration >= 200L && duration <= 2000L);
+        }
+    }
 }
