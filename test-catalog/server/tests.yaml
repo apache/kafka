@@ -114,6 +114,11 @@ org.apache.kafka.server.ClientMetricsManagerTest:
 - testUpdateSubscriptionWithInvalidMetricsProperties
 - testUpdateSubscriptionWithNullProperties
 - testUpdateSubscriptionWithPropertiesDeletion
+org.apache.kafka.server.EligibleLeaderReplicasIntegrationTest:
+- testElrMemberCanBeElected
+- testElrMemberShouldBeKickOutWhenUncleanShutdown
+- testHighWatermarkShouldNotAdvanceIfUnderMinIsr
+- testLastKnownLeaderShouldBeElectedIfEmptyElr
 org.apache.kafka.server.LogManagerIntegrationTest:
 - testIOExceptionOnLogSegmentCloseResultsInRecovery
 - testRestartBrokerNoErrorIfMissingPartitionMetadata
