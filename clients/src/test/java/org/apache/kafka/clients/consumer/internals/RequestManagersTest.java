@@ -79,7 +79,7 @@ public class RequestManagersTest {
         assertTrue(requestManagers.streamsMembershipManager.isEmpty());
         assertTrue(requestManagers.streamsGroupHeartbeatRequestManager.isEmpty());
 
-        assertEquals(3, requestManagers.consumerMembershipManager.get().stateListeners().size());
+        assertEquals(2, requestManagers.consumerMembershipManager.get().stateListeners().size());
         assertTrue(requestManagers.consumerMembershipManager.get().stateListeners().stream()
             .anyMatch(m -> m instanceof CommitRequestManager));
         assertTrue(requestManagers.consumerMembershipManager.get().stateListeners().contains(listener));

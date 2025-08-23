@@ -19,14 +19,11 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.events.CheckAndUpdatePositionsEvent;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
 import java.time.Duration;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -41,12 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * sparingly in both the application and background threads. Both of those classes are heavily synchronized given
  * their use by the {@link ClassicKafkaConsumer}, so their use in a multithreaded fashion is already established.
  */
-public class CommitOffsetsSharedState implements MemberStateListener {
-
-    /**
-     * To keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates.
-     */
-    private final AtomicBoolean cachedSubscriptionHasAllFetchPositions = new AtomicBoolean();
+public class CommitOffsetsSharedState {
 
     /**
      * Exception that occurred while updating positions after the triggering event had already
@@ -82,11 +74,7 @@ public class CommitOffsetsSharedState implements MemberStateListener {
     }
 
     boolean subscriptionHasAllFetchPositions() {
-        return cachedSubscriptionHasAllFetchPositions.get();
-    }
-
-    void setSubscriptionHasAllFetchPositions(boolean value) {
-        cachedSubscriptionHasAllFetchPositions.set(value);
+        return subscriptions.hasAllFetchPositions();
     }
 
     /**
@@ -106,13 +94,6 @@ public class CommitOffsetsSharedState implements MemberStateListener {
      *         ({@code OffsetsRequestManager#cacheExceptionIfEventExpired()})
      *     </li>
      *     <li>
-     *         Checks that the previously cached version of {@link #cachedSubscriptionHasAllFetchPositions} is still
-     *         {@code true}. This covers a couple additional cases (like before first assignment), so although it's
-     *         not completely optimal, the fallback is we force the check which will block the application thread
-     *         while the background thread performs its checks which may result in the value being set back to
-     *         {@code true} before the application thread resumes.
-     *     </li>
-     *     <li>
      *         Checks that there are no positions in the {@link SubscriptionState.FetchStates#AWAIT_VALIDATION}
      *         state ({@link OffsetFetcherUtils#getPartitionsToValidate()})
      *     </li>
@@ -129,34 +110,23 @@ public class CommitOffsetsSharedState implements MemberStateListener {
      * @return true if all checks pass, false if either of the latter two checks fail
      */
     boolean canSkipUpdateFetchPositions() {
-        Throwable exception = getAndClearCachedUpdatePositionsException();
+        Throwable exception = cachedUpdatePositionsException.get();
 
-        if (exception != null)
+        if (exception != null) {
+            // Unwrap the ExecutionException to model what ConsumerUtils.getResult() does when handling exceptions
+            // from the call to Future.get().
+            if (exception instanceof CompletionException)
+                exception = exception.getCause();
+
             throw ConsumerUtils.maybeWrapAsKafkaException(exception);
+        }
 
         // If the cached value is set and there are no partitions in the AWAIT_RESET, AWAIT_VALIDATION, or
         // INITIALIZING states, it's ok to skip.
-        if (cachedSubscriptionHasAllFetchPositions.get() && offsetFetcherUtils.getPartitionsToValidate().isEmpty() && subscriptions.hasAllFetchPositions())
-            return true;
-
-        // However, if even one partition is not set to FETCHING, set the cached value to false and signal the
-        // application thread that it should call the background thread to perform the necessary logic to resolve the
-        // state of the partitions.
-        setSubscriptionHasAllFetchPositions(false);
-        return false;
+        return offsetFetcherUtils.getPartitionsToValidate().isEmpty() && subscriptions.hasAllFetchPositions();
     }
 
     OffsetFetcherUtils offsetFetcherUtils() {
         return offsetFetcherUtils;
-    }
-
-    @Override
-    public void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId) {
-        // Ignore...
-    }
-
-    @Override
-    public void onGroupAssignmentUpdated(Set<TopicPartition> partitions) {
-        setSubscriptionHasAllFetchPositions(false);
     }
 }

@@ -269,7 +269,6 @@ public class RequestManagers implements Closeable {
                                 .updateMetricsLabels(Map.of(ClientTelemetryProvider.GROUP_MEMBER_ID, membershipManager.memberId()));
                         }
 
-                        membershipManager.registerStateListener(commitOffsetsSharedState);
                         membershipManager.registerStateListener(commitRequestManager);
                         membershipManager.registerStateListener(applicationThreadMemberStateListener);
                         heartbeatRequestManager = new ConsumerHeartbeatRequestManager(

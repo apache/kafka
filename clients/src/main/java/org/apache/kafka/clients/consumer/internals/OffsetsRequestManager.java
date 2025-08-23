@@ -237,11 +237,8 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             if (subscriptionState.hasAllFetchPositions()) {
                 // All positions are already available
-                commitOffsetsSharedState.setSubscriptionHasAllFetchPositions(true);
                 result.complete(true);
                 return result;
-            } else {
-                commitOffsetsSharedState.setSubscriptionHasAllFetchPositions(false);
             }
 
             // Some positions are missing, so trigger requests to fetch offsets and update them.
