@@ -260,8 +260,8 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
     val securityProtocolMaps = extraControllerSecurityProtocols().map(sc => sc + ":" + sc).mkString(",")
-    val listeners = extraControllerSecurityProtocols().map(sc => sc + "://localhost:0").mkString(",").trim
-    val listenerNames = extraControllerSecurityProtocols().mkString(",").trim
+    val listeners = extraControllerSecurityProtocols().map(sc => sc + "://localhost:0").mkString(",")
+    val listenerNames = extraControllerSecurityProtocols().mkString(",")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"CONTROLLER:$proto,$securityProtocolMaps")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG,
       if (listeners.isEmpty) "CONTROLLER://localhost:0" else s"CONTROLLER://localhost:0,$listeners")

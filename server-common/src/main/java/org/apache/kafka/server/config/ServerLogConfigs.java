@@ -71,7 +71,11 @@ public class ServerLogConfigs {
 
     public static final String LOG_CLEANUP_POLICY_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.CLEANUP_POLICY_CONFIG);
     public static final String LOG_CLEANUP_POLICY_DEFAULT = TopicConfig.CLEANUP_POLICY_DELETE;
-    public static final String LOG_CLEANUP_POLICY_DOC = "The default cleanup policy for segments beyond the retention window. A comma separated list of valid policies.";
+    public static final String LOG_CLEANUP_POLICY_DOC = "The default cleanup policy for segments beyond the retention window. " +
+            "A comma separated list of valid policies. The \"delete\" policy will discard old segments when their " +
+            "retention time or size limit has been reached. The \"compact\" policy will enable log compaction. " +
+            "An empty list means infinite retention - no cleanup policies will be applied by default. " +
+            "When remote storage is enabled, local retention policies are still enforced to manage local storage usage.";
 
     public static final String LOG_INDEX_SIZE_MAX_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
     public static final int LOG_INDEX_SIZE_MAX_BYTES_DEFAULT = 10 * 1024 * 1024;

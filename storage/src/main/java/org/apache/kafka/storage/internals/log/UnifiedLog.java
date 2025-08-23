@@ -1879,9 +1879,9 @@ public class UnifiedLog implements AutoCloseable {
 
     /**
      * If topic deletion is enabled, delete any local log segments that have either expired due to time based
-     * retention or because the log size is > retentionSize. Empty cleanup.policy with remote storage enabled 
-     * behaves the same as deletion policy. Whether or not deletion is enabled, delete any local
-     * log segments that are before the log start offset
+     * retention or because the log size is > retentionSize. Empty cleanup.policy is the same as delete with 
+     * infinite retention, so we only need to delete local segments if remote storage is enabled. Whether or 
+     * not deletion is enabled, delete any local log segments that are before the log start offset
      */
     public int deleteOldSegments() throws IOException {
         if (config().delete) {
