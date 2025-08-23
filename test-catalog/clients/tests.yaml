@@ -5007,6 +5007,8 @@ org.apache.kafka.common.telemetry.internals.ClientTelemetryReporterTest:
 - testCreateRequestInvalidState
 - testCreateRequestPushCompression
 - testCreateRequestPushCompressionException
+- testCreateRequestPushCompressionFallbackAndTermination
+- testCreateRequestPushCompressionFallbackToNextType
 - testCreateRequestPushNeeded
 - testCreateRequestPushNeededWithoutSubscription
 - testCreateRequestPushNoCollector
