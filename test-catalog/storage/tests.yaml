@@ -101,6 +101,7 @@ org.apache.kafka.server.log.remote.quota.RLMQuotaManagerTest:
 - testQuotaExceeded
 - testQuotaUpdate
 org.apache.kafka.server.log.remote.quota.RLMQuotaMetricsTest:
+- testClose
 - testNewSensorWhenExpired
 org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManagerTest:
 - testWithClassLoader
