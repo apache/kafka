@@ -50,7 +50,6 @@ EXPOSE 9092
 USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
-ARG kafka_url
 ARG build_date
 
 
@@ -60,17 +59,14 @@ LABEL org.label-schema.name="kafka" \
       org.label-schema.vcs-url="https://github.com/apache/kafka" \
       maintainer="Apache Kafka"
 
+COPY --from=build-jsa kafka.tgz kafka.tgz
+
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache wget gcompat gpg gpg-agent procps bash; \
+    apk add --no-cache bash; \
     mkdir opt/kafka; \
-    wget -nv -O kafka.tgz "$kafka_url"; \
-    wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
-    wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-    gpg --import KEYS; \
-    gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \    
     mkdir -p /var/lib/kafka/data /etc/kafka/secrets; \
     mkdir -p /etc/kafka/docker /usr/logs /mnt/shared/config; \
     adduser -h /home/appuser -D --shell /bin/bash appuser; \
@@ -79,9 +75,11 @@ RUN set -eux ; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /etc/kafka/secrets; \
     cp /opt/kafka/config/log4j2.yaml /etc/kafka/docker/log4j2.yaml; \
     cp /opt/kafka/config/tools-log4j2.yaml /etc/kafka/docker/tools-log4j2.yaml; \
-    rm kafka.tgz kafka.tgz.asc KEYS; \
-    apk del wget gpg gpg-agent; \
-    apk cache clean;
+    rm kafka.tgz; \
+    apk cache clean; \
+    rm -rf /var/cache/apk/*; \
+    rm -rf /root/.cache; \
+    rm -rf /tmp/*
 
 COPY server.properties /etc/kafka/docker/server.properties
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
