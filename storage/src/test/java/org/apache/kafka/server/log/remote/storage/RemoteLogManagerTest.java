@@ -1769,9 +1769,9 @@ public class RemoteLogManagerTest {
     void testIdempotentClose() throws IOException {
         remoteLogManager.close();
         remoteLogManager.close();
-        InOrder inorder = inOrder(remoteStorageManager, remoteLogMetadataManager);
-        inorder.verify(remoteStorageManager, times(1)).close();
+        InOrder inorder = inOrder(remoteLogMetadataManager, remoteStorageManager);
         inorder.verify(remoteLogMetadataManager, times(1)).close();
+        inorder.verify(remoteStorageManager, times(1)).close();
     }
 
     @Test

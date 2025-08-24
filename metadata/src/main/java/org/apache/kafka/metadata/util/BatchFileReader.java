@@ -69,22 +69,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
         }
     }
 
-    public static class BatchAndType {
-        private final Batch<ApiMessageAndVersion> batch;
-        private final boolean isControl;
-
-        public BatchAndType(Batch<ApiMessageAndVersion> batch, boolean isControl) {
-            this.batch = batch;
-            this.isControl = isControl;
-        }
-
-        public Batch<ApiMessageAndVersion> batch() {
-            return batch;
-        }
-
-        public boolean isControl() {
-            return isControl;
-        }
+    public record BatchAndType(Batch<ApiMessageAndVersion> batch, boolean isControl) {
     }
 
     private final FileRecords fileRecords;
