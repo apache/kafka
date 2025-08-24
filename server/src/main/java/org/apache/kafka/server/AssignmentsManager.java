@@ -194,13 +194,13 @@ public final class AssignmentsManager {
         this.metricsRegistry.newGauge(DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
                 @Override
                 public Integer value() {
-                    return numPending();
-                }
-            });
+            return numPending();
+            }
+        });
         this.metricsRegistry.newGauge(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
             @Override
             public Integer value() {
-                return numPending();
+            return numPending();
             }
         });
         this.previousGlobalFailures = 0;
