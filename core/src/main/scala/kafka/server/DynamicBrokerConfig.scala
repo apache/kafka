@@ -219,7 +219,6 @@ object DynamicBrokerConfig {
             logContext
           )
         ) { reader =>
-          val dynamicPerBrokerConfigs = new Properties()
           val dynamicDefaultConfigs = new Properties()
           while (reader.hasNext) {
             val batch = reader.next()
@@ -231,15 +230,15 @@ object DynamicBrokerConfig {
                     if (configRecord.resourceName().isEmpty) {
                       putOrRemoveIfNull(dynamicDefaultConfigs, configRecord.name(), configRecord.value())
                     } else if (configRecord.resourceName() == config.brokerId.toString) {
-                      putOrRemoveIfNull(dynamicPerBrokerConfigs, configRecord.name(), configRecord.value())
+                      putOrRemoveIfNull(dynamicDefaultConfigs, configRecord.name(), configRecord.value())
                     }
                   }
               }
             }
           }
           val configHandler = new BrokerConfigHandler(config, quotaManagers)
-          configHandler.processConfigChanges("", dynamicPerBrokerConfigs)
-          configHandler.processConfigChanges(config.brokerId.toString, dynamicPerBrokerConfigs)
+          configHandler.processConfigChanges("", dynamicDefaultConfigs)
+          configHandler.processConfigChanges(config.brokerId.toString, dynamicDefaultConfigs)
         }
       }
     }
