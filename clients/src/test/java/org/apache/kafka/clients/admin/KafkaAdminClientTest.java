@@ -11669,7 +11669,7 @@ public class KafkaAdminClientTest {
         return data;
     }
 
-    @Test
+    @Test @Timeout(30)
     public void testDescribeTopicsTimeoutWhenNoBrokerResponds() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(
             mockCluster(1, 0),
@@ -11682,7 +11682,7 @@ public class KafkaAdminClientTest {
             DescribeTopicsResult result = env.adminClient().describeTopics(Collections.singletonList("test-topic"), new DescribeTopicsOptions().timeoutMs(200));
             Map<String, KafkaFuture<TopicDescription>> topicDescriptionMap = result.topicNameValues();
             KafkaFuture<TopicDescription> topicDescription = topicDescriptionMap.get("test-topic");
-            ExecutionException exception = assertThrows(ExecutionException.class, () -> topicDescription.get());
+            ExecutionException exception = assertThrows(ExecutionException.class, topicDescription::get);
             // Duration should be greater than or equal to 200 ms but less than 30000 ms.
             long duration = System.currentTimeMillis() - start;
 
