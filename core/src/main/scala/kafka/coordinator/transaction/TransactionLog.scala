@@ -21,11 +21,12 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.coordinator.transaction.{TransactionState, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState, TxnTransitMetadata}
 import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordType, TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
-import scala.collection.mutable
+import java.util
+
 import scala.jdk.CollectionConverters._
 
 /**
@@ -115,26 +116,26 @@ object TransactionLog {
       if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
         val value = new TransactionLogValue(new ByteBufferAccessor(buffer), version)
         val transactionMetadata = new TransactionMetadata(
-          transactionalId = transactionalId,
-          producerId = value.producerId,
-          prevProducerId = value.previousProducerId,
-          nextProducerId = value.nextProducerId,
-          producerEpoch = value.producerEpoch,
-          lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-          txnTimeoutMs = value.transactionTimeoutMs,
-          state = TransactionState.fromId(value.transactionStatus),
-          topicPartitions = mutable.Set.empty[TopicPartition],
-          txnStartTimestamp = value.transactionStartTimestampMs,
-          txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs,
-          clientTransactionVersion = TransactionVersion.fromFeatureLevel(value.clientTransactionVersion))
+          transactionalId,
+          value.producerId,
+          value.previousProducerId,
+          value.nextProducerId,
+          value.producerEpoch,
+          RecordBatch.NO_PRODUCER_EPOCH,
+          value.transactionTimeoutMs,
+          TransactionState.fromId(value.transactionStatus),
+          util.Set.of(),
+          value.transactionStartTimestampMs,
+          value.transactionLastUpdateTimestampMs,
+          TransactionVersion.fromFeatureLevel(value.clientTransactionVersion))
 
         if (!transactionMetadata.state.equals(TransactionState.EMPTY))
-          value.transactionPartitions.forEach(partitionsSchema =>
+          value.transactionPartitions.forEach(partitionsSchema => {
             transactionMetadata.addPartitions(partitionsSchema.partitionIds
-              .asScala
-              .map(partitionId => new TopicPartition(partitionsSchema.topic, partitionId))
-              .toSet)
-          )
+              .stream
+              .map(partitionId => new TopicPartition(partitionsSchema.topic, partitionId.intValue()))
+              .toList)
+          })
         Some(transactionMetadata)
       } else throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
     }
