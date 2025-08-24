@@ -34,14 +34,21 @@ import java.util.Map;
 public class SslManager {
 
     private static final Logger log = LoggerFactory.getLogger(SslManager.class);
-    private File keyStoreFile;
-    private File trustStoreFile;
+    private final File keyStoreFile;
+    private final File trustStoreFile;
     public static final String CLUSTER_TRUSTSTORE_PASSWORD = "cluster-truststore-password";
 
-    public Map<String, Object> createSslConfig() {
+    public SslManager() {
         try {
             keyStoreFile = TestUtils.tempFile("kafka.cluster.keystore", ".jks");
             trustStoreFile = TestUtils.tempFile("kafka.server.truststore", ".jks");
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to create keystore or truststore file", e);
+        }
+    }
+
+    public Map<String, Object> createSslConfig() {
+        try {
             KeyPair clusterKeyPair = TestSslUtils.generateKeyPair("RSA");
             String[] hostNames = {"localhost", "127.0.0.1"};
             X509Certificate clusterCert = TestSslUtils.generateSignedCertificate(
@@ -95,7 +102,7 @@ public class SslManager {
                 Map.entry(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "")
             );
         } catch (IOException | GeneralSecurityException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to create SSL config", e);
         }
     }
     
