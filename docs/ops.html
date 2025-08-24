@@ -4318,7 +4318,7 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
 <p>Try to send messages to the `tieredTopic` topic to roll the log segment:</p>
 
-<pre><code class="language-bash">$ bin/kafka-producer-perf-test.sh --topic tieredTopic --num-records 1200 --record-size 1024 --throughput -1 --producer-props bootstrap.servers=localhost:9092</code></pre>
+<pre><code class="language-bash">$ bin/kafka-producer-perf-test.sh --bootstrap-server localhost:9092 --topic tieredTopic --num-records 1200 --record-size 1024 --throughput -1</code></pre>
 
 <p>Then, after the active segment is rolled, the old segment should be moved to the remote storage and get deleted.
   This can be verified by checking the remote log directory configured above. For example:
