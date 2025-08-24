@@ -18,7 +18,6 @@ package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 
 import org.slf4j.Logger;
@@ -96,9 +95,9 @@ public class AppInfoParser {
 
     private static void registerMetrics(Metrics metrics, AppInfo appInfo) {
         if (metrics != null) {
-            metrics.addMetric(metricName(metrics, "version"), new ImmutableValue<>(appInfo.getVersion()));
-            metrics.addMetric(metricName(metrics, "commit-id"), new ImmutableValue<>(appInfo.getCommitId()));
-            metrics.addMetric(metricName(metrics, "start-time-ms"), new ImmutableValue<>(appInfo.getStartTimeMs()));
+            metrics.addMetric(metricName(metrics, "version"), (Gauge<String>) (config, now) -> appInfo.getVersion());
+            metrics.addMetric(metricName(metrics, "commit-id"), (Gauge<String>) (config, now) -> appInfo.getCommitId());
+            metrics.addMetric(metricName(metrics, "start-time-ms"), (Gauge<Long>) (config, now) -> appInfo.getStartTimeMs());
         }
     }
 
@@ -142,18 +141,5 @@ public class AppInfoParser {
             return startTimeMs;
         }
 
-    }
-
-    static class ImmutableValue<T> implements Gauge<T> {
-        private final T value;
-
-        public ImmutableValue(T value) {
-            this.value = value;
-        }
-
-        @Override
-        public T value(MetricConfig config, long now) {
-            return value;
-        }
     }
 }

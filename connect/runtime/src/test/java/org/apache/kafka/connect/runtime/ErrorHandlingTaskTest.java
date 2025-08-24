@@ -76,14 +76,11 @@ import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -226,7 +223,7 @@ public class ErrorHandlingTaskTest {
         LogReporter<ConsumerRecord<byte[], byte[]>> reporter = new LogReporter.Sink(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = operator();
-        createSinkTask(initialState, retryWithToleranceOperator, singletonList(reporter));
+        createSinkTask(initialState, retryWithToleranceOperator, List.of(reporter));
 
         // valid json
         ConsumerRecord<byte[], byte[]> record1 = new ConsumerRecord<>(
@@ -278,14 +275,14 @@ public class ErrorHandlingTaskTest {
         LogReporter<SourceRecord> reporter = new LogReporter.Source(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
-        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter));
+        createSourceTask(initialState, retryWithToleranceOperator, List.of(reporter));
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
         Struct struct1 = new Struct(valSchema).put("val", 1234);
-        SourceRecord record1 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct1);
+        SourceRecord record1 = new SourceRecord(Map.of(), Map.of(), TOPIC, PARTITION1, valSchema, struct1);
         Struct struct2 = new Struct(valSchema).put("val", 6789);
-        SourceRecord record2 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct2);
+        SourceRecord record2 = new SourceRecord(Map.of(), Map.of(), TOPIC, PARTITION1, valSchema, struct2);
 
         when(workerSourceTask.isStopping())
                 .thenReturn(false)
@@ -295,8 +292,8 @@ public class ErrorHandlingTaskTest {
         doReturn(true).when(workerSourceTask).commitOffsets();
 
         when(sourceTask.poll())
-                .thenReturn(singletonList(record1))
-                .thenReturn(singletonList(record2));
+                .thenReturn(List.of(record1))
+                .thenReturn(List.of(record2));
 
         expectTopicCreation(TOPIC);
 
@@ -340,14 +337,14 @@ public class ErrorHandlingTaskTest {
         LogReporter<SourceRecord> reporter = new LogReporter.Source(taskId, connConfig(reportProps), errorHandlingMetrics);
 
         RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
-        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter), badConverter());
+        createSourceTask(initialState, retryWithToleranceOperator, List.of(reporter), badConverter());
 
         // valid json
         Schema valSchema = SchemaBuilder.struct().field("val", Schema.INT32_SCHEMA).build();
         Struct struct1 = new Struct(valSchema).put("val", 1234);
-        SourceRecord record1 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct1);
+        SourceRecord record1 = new SourceRecord(Map.of(), Map.of(), TOPIC, PARTITION1, valSchema, struct1);
         Struct struct2 = new Struct(valSchema).put("val", 6789);
-        SourceRecord record2 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct2);
+        SourceRecord record2 = new SourceRecord(Map.of(), Map.of(), TOPIC, PARTITION1, valSchema, struct2);
 
         when(workerSourceTask.isStopping())
                 .thenReturn(false)
@@ -357,8 +354,8 @@ public class ErrorHandlingTaskTest {
         doReturn(true).when(workerSourceTask).commitOffsets();
 
         when(sourceTask.poll())
-                .thenReturn(singletonList(record1))
-                .thenReturn(singletonList(record2));
+                .thenReturn(List.of(record1))
+                .thenReturn(List.of(record2));
         expectTopicCreation(TOPIC);
         workerSourceTask.initialize(TASK_CONFIG);
         workerSourceTask.initializeAndStart();
@@ -392,7 +389,7 @@ public class ErrorHandlingTaskTest {
     private void verifyInitializeSink() {
         verify(sinkTask).start(TASK_PROPS);
         verify(sinkTask).initialize(any(WorkerSinkTaskContext.class));
-        verify(consumer).subscribe(eq(singletonList(TOPIC)),
+        verify(consumer).subscribe(eq(List.of(TOPIC)),
                 any(ConsumerRebalanceListener.class));
     }
 
@@ -410,9 +407,9 @@ public class ErrorHandlingTaskTest {
 
     private void expectTopicCreation(String topic) {
         if (enableTopicCreation) {
-            when(admin.describeTopics(topic)).thenReturn(Collections.emptyMap());
-            Set<String> created = Collections.singleton(topic);
-            Set<String> existing = Collections.emptySet();
+            when(admin.describeTopics(topic)).thenReturn(Map.of());
+            Set<String> created = Set.of(topic);
+            Set<String> existing = Set.of();
             TopicAdmin.TopicCreationResponse response = new TopicAdmin.TopicCreationResponse(created, existing);
             when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(response);
         }
@@ -428,7 +425,7 @@ public class ErrorHandlingTaskTest {
 
         Plugin<Transformation<SinkRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SinkRecord>(), taskId, "test");
         TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> sinkTransforms =
-                new TransformationChain<>(singletonList(new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
+                new TransformationChain<>(List.of(new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
 
         Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
         Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
@@ -463,7 +460,7 @@ public class ErrorHandlingTaskTest {
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                                   List<ErrorReporter<SourceRecord>> errorReporters, Converter converter) {
         Plugin<Transformation<SourceRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SourceRecord>(), taskId, "test");
-        TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(
+        TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(List.of(
                 new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
 
         Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
