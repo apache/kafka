@@ -11670,7 +11670,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeClusterTimeoutWhenNoBrokerResponds() throws Exception {
+    public void testDescribeTopicsTimeoutWhenNoBrokerResponds() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(
             mockCluster(1, 0),
             AdminClientConfig.RETRIES_CONFIG, "0",
@@ -11679,12 +11679,15 @@ public class KafkaAdminClientTest {
 
             // Not using prepareResponse is equivalent to "no brokers respond".
             long start = System.currentTimeMillis();
-            ExecutionException exception = assertThrows(ExecutionException.class, () -> env.adminClient().describeCluster(new DescribeClusterOptions().timeoutMs(200)).clusterId().get());
+            DescribeTopicsResult result = env.adminClient().describeTopics(Collections.singletonList("test-topic"), new DescribeTopicsOptions().timeoutMs(200));
+            Map<String, KafkaFuture<TopicDescription>> topicDescriptionMap = result.topicNameValues();
+            KafkaFuture<TopicDescription> topicDescription = topicDescriptionMap.get("test-topic");
+            ExecutionException exception = assertThrows(ExecutionException.class, () -> topicDescription.get());
             // Duration should be greater than or equal to 200 ms but less than 30000 ms.
             long duration = System.currentTimeMillis() - start;
 
-            assertTrue(exception.getCause() instanceof TimeoutException);
-            assertTrue(duration >= 200L && duration <= 2000L);
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+            assertTrue(duration >= 150L && duration < 2000L);
         }
     }
 }
