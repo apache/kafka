@@ -82,7 +82,7 @@ class LogCompactionTester(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.ssh("rm -rf %s" % LogCompactionTester.OUTPUT_DIR, allow_fail=False)
 
     def java_class_name(self):
-        return "kafka.tools.LogCompactionTester"
+        return "org.apache.kafka.tools.LogCompactionTester"
 
     @property
     def is_done(self):
