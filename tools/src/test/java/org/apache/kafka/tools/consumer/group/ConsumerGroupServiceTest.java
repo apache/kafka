@@ -183,13 +183,13 @@ public class ConsumerGroupServiceTest {
 
         Map<TopicPartition, Optional<Long>> returnedOffsets = assignments.map(results ->
             results.stream().collect(Collectors.toMap(
-                assignment -> new TopicPartition(assignment.topic.get(), assignment.partition.get()),
-                assignment -> assignment.offset))
+                assignment -> new TopicPartition(assignment.topic().get(), assignment.partition().get()),
+                assignment -> assignment.offset()))
         ).orElse(Map.of());
         Map<TopicPartition, Optional<Integer>> returnedLeaderEpoch = assignments.map(results ->
             results.stream().collect(Collectors.toMap(
-                assignment -> new TopicPartition(assignment.topic.get(), assignment.partition.get()),
-                assignment -> assignment.leaderEpoch))
+                assignment -> new TopicPartition(assignment.topic().get(), assignment.partition().get()),
+                assignment -> assignment.leaderEpoch()))
         ).orElse(Map.of());
 
         Map<TopicPartition, Optional<Long>> expectedOffsets = Map.of(
