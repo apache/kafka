@@ -101,22 +101,10 @@ public class EndToEndLatency {
         // optional
         Optional<String> propertiesFile = opts.options.has(opts.commandConfigOpt) ?
                 Optional.of(opts.options.valueOf(opts.commandConfigOpt)) : Optional.empty();
-        int recordKeySize = 0;
-        if (opts.options.has(opts.recordKeyOpt)) {
-            recordKeySize = opts.options.valueOf(opts.recordKeyOpt);
-        }
-        int numHeaders = 0;
-        if (opts.options.has(opts.numHeadersOpt)) {
-            numHeaders = opts.options.valueOf(opts.numHeadersOpt);
-        }
-        int headerKeySize = 0;
-        int headerValueSize = 0;
-        if (opts.options.has(opts.recordHeaderKeySizeOpt)) {
-            headerKeySize = opts.options.valueOf(opts.recordHeaderKeySizeOpt);
-        }
-        if (opts.options.has(opts.recordHeaderValueSizeOpt)) {
-            headerValueSize = opts.options.valueOf(opts.recordHeaderValueSizeOpt);
-        }
+        int recordKeySize = opts.options.valueOf(opts.recordKeyOpt);
+        int numHeaders = opts.options.valueOf(opts.numHeadersOpt);
+        int headerKeySize = opts.options.valueOf(opts.recordHeaderKeySizeOpt);
+        int headerValueSize = opts.options.valueOf(opts.recordHeaderValueSizeOpt);
 
         try (KafkaConsumer<byte[], byte[]> consumer = createKafkaConsumer(propertiesFile, brokers);
              KafkaProducer<byte[], byte[]> producer = createKafkaProducer(propertiesFile, brokers, acks)) {
@@ -157,8 +145,7 @@ public class EndToEndLatency {
     // Visible for testing
     static void validate(KafkaConsumer<byte[], byte[]> consumer, byte[] sentRecordValue, ConsumerRecords<byte[], byte[]> records, byte[] sentRecordKey, Iterable<Header> sentHeaders) {
         if (records.isEmpty()) {
-            consumer.commitSync();
-            throw new RuntimeException("poll() timed out before finding a result (timeout:[" + POLL_TIMEOUT_MS + "ms])");
+            commitAndThrow(consumer, "poll() timed out before finding a result (timeout:[" + POLL_TIMEOUT_MS + "ms])");
         }
 
         ConsumerRecord<byte[], byte[]> record = records.iterator().next();
@@ -166,23 +153,20 @@ public class EndToEndLatency {
         String read = new String(record.value(), StandardCharsets.UTF_8);
 
         if (!read.equals(sent)) {
-            consumer.commitSync();
-            throw new RuntimeException("The message value read [" + read + "] did not match the message value sent [" + sent + "]");
+            commitAndThrow(consumer, "The message value read [" + read + "] did not match the message value sent [" + sent + "]");
         }
 
         if (sentRecordKey != null) {
             if (record.key() == null) {
-                throw new RuntimeException("Expected message key but received null");
+                commitAndThrow(consumer, "Expected message key but received null");
             }
             String sentKey = new String(sentRecordKey, StandardCharsets.UTF_8);
             String readKey = new String(record.key(), StandardCharsets.UTF_8);
             if (!readKey.equals(sentKey)) {
-                consumer.commitSync();
-                throw new RuntimeException("The message key read [" + readKey + "] did not match the message key sent [" + sentKey + "]");
+                commitAndThrow(consumer, "The message key read [" + readKey + "] did not match the message key sent [" + sentKey + "]");
             }
         } else if (record.key() != null) {
-            consumer.commitSync();
-            throw new RuntimeException("Expected null message key but received [" + new String(record.key(), StandardCharsets.UTF_8) + "]");
+            commitAndThrow(consumer, "Expected null message key but received [" + new String(record.key(), StandardCharsets.UTF_8) + "]");
         }
 
         validateHeaders(consumer, sentHeaders, record);
@@ -190,16 +174,19 @@ public class EndToEndLatency {
         //Check we only got the one message
         if (records.count() != 1) {
             int count = records.count();
-            consumer.commitSync();
-            throw new RuntimeException("Only one result was expected during this test. We found [" + count + "]");
+            commitAndThrow(consumer, "Only one result was expected during this test. We found [" + count + "]");
         }
+    }
+
+    private static void commitAndThrow(KafkaConsumer<byte[], byte[]> consumer, String message) {
+        consumer.commitSync();
+        throw new RuntimeException(message);
     }
 
     private static void validateHeaders(KafkaConsumer<byte[], byte[]> consumer, Iterable<Header> sentHeaders, ConsumerRecord<byte[], byte[]> record) {
         if (sentHeaders != null && sentHeaders.iterator().hasNext()) {
             if (!record.headers().iterator().hasNext()) {
-                consumer.commitSync();
-                throw new RuntimeException("Expected message headers but received none");
+                commitAndThrow(consumer, "Expected message headers but received none");
             }
             
             Iterator<Header> sentIterator = sentHeaders.iterator();
@@ -209,15 +196,15 @@ public class EndToEndLatency {
                 Header sentHeader = sentIterator.next();
                 Header receivedHeader = receivedIterator.next();
                 if (!receivedHeader.key().equals(sentHeader.key()) || !Arrays.equals(receivedHeader.value(), sentHeader.value())) {
-                    consumer.commitSync();
-                    throw new RuntimeException("The message header read [" + receivedHeader.key() + ":" + Arrays.toString(receivedHeader.value()) +
-                            "] did not match the message header sent [" + sentHeader.key() + ":" + Arrays.toString(sentHeader.value()) + "]");
+                    String receivedValueStr = receivedHeader.value() == null ? "null" : Arrays.toString(receivedHeader.value());
+                    String sentValueStr = sentHeader.value() == null ? "null" : Arrays.toString(sentHeader.value());
+                    commitAndThrow(consumer, "The message header read [" + receivedHeader.key() + ":" + receivedValueStr +
+                            "] did not match the message header sent [" + sentHeader.key() + ":" + sentValueStr + "]");
                 }
             }
             
             if (sentIterator.hasNext() || receivedIterator.hasNext()) {
-                consumer.commitSync();
-                throw new RuntimeException("Header count mismatch between sent and received messages");
+                commitAndThrow(consumer, "Header count mismatch between sent and received messages");
             }
         }
     }
@@ -227,7 +214,7 @@ public class EndToEndLatency {
 
         for (int i = 0; i < numHeaders; i++) {
             String headerKey = new String(randomBytesOfLen(random, keySize), StandardCharsets.UTF_8);
-            byte[] headerValue = randomBytesOfLen(random, valueSize);
+            byte[] headerValue = valueSize == -1 ? null : randomBytesOfLen(random, valueSize);
             headers.add(new RecordHeader(headerKey, headerValue));
         }
         return headers;
@@ -319,8 +306,13 @@ public class EndToEndLatency {
             return args;
         }
 
-        boolean hasNamedArgs = Arrays.stream(args).anyMatch(arg -> arg.startsWith("--"));
-        if (hasNamedArgs) {
+        boolean hasRequiredNamedArgs = Arrays.stream(args).anyMatch(arg -> 
+            arg.equals("--bootstrap-server") || 
+            arg.equals("--topic") || 
+            arg.equals("--num-records") || 
+            arg.equals("--producer-acks") || 
+            arg.equals("--record-size"));
+        if (hasRequiredNamedArgs) {
             return args;
         }
 
@@ -403,15 +395,18 @@ public class EndToEndLatency {
             recordKeyOpt = parser.accepts("record-key-size", "Optional: The size of the message key in bytes. If not set, messages are sent without a key.")
                     .withOptionalArg()
                     .describedAs("bytes")
-                    .ofType(Integer.class);
+                    .ofType(Integer.class)
+                    .defaultsTo(0);
             recordHeaderKeySizeOpt = parser.accepts("record-header-key-size", "Optional: The size of the message header key in bytes. Used together with record-header-size.")
                     .withOptionalArg()
                     .describedAs("bytes")
-                    .ofType(Integer.class);
-            recordHeaderValueSizeOpt = parser.accepts("record-header-size", "Optional: The size of message header value in bytes.")
+                    .ofType(Integer.class)
+                    .defaultsTo(0);
+            recordHeaderValueSizeOpt = parser.accepts("record-header-size", "Optional: The size of message header value in bytes. Use -1 for null header value.")
                     .withOptionalArg()
                     .describedAs("bytes")
-                    .ofType(Integer.class);
+                    .ofType(Integer.class)
+                    .defaultsTo(0);
             numHeadersOpt = parser.accepts("num-headers", "Optional: The number of headers to include in each message.")
                     .withOptionalArg()
                     .describedAs("count")
@@ -456,8 +451,8 @@ public class EndToEndLatency {
             if (options.has(recordHeaderKeySizeOpt) && options.valueOf(recordHeaderKeySizeOpt) < 0) {
                 CommandLineUtils.printUsageAndExit(parser, "Value for --record-header-key-size must be a non-negative integer.");
             }
-            if (options.has(recordHeaderValueSizeOpt) && options.valueOf(recordHeaderValueSizeOpt) < 0) {
-                CommandLineUtils.printUsageAndExit(parser, "Value for --record-header-size must be a non-negative integer.");
+            if (options.has(recordHeaderValueSizeOpt) && options.valueOf(recordHeaderValueSizeOpt) < -1) {
+                CommandLineUtils.printUsageAndExit(parser, "Value for --record-header-size must be a non-negative integer or -1 for null header value.");
             }
             if (options.valueOf(numHeadersOpt) < 0) {
                 CommandLineUtils.printUsageAndExit(parser, "Value for --num-headers must be a non-negative integer.");
