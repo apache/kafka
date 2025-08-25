@@ -296,21 +296,30 @@ public class StreamsGroupCommandTest {
     @Test
     public void testAdminRequestsForResetOffsets() {
         Admin adminClient = mock(KafkaAdminClient.class);
+        String topic = "topic1";
         String groupId = "foo-group";
         List<String> args = List.of("--bootstrap-server", "localhost:9092", "--group", groupId, "--reset-offsets", "--input-topic", "topic1", "--to-latest");
-        List<String> topics = List.of("topic1");
+        List<String> topics = List.of(topic);
 
+        DescribeTopicsResult describeTopicsResult = mock(DescribeTopicsResult.class);
         when(adminClient.describeStreamsGroups(List.of(groupId)))
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
+        Map<String, TopicDescription> descriptions = Map.of(
+            topic, new TopicDescription(topic, false, List.of(
+                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of()))
+        ));
+        when(adminClient.describeTopics(anyCollection()))
+            .thenReturn(describeTopicsResult);
         when(adminClient.describeTopics(eq(topics), any(DescribeTopicsOptions.class)))
-            .thenReturn(describeTopicsResult(topics, 1));
+            .thenReturn(describeTopicsResult);
+        when(describeTopicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
         when(adminClient.listOffsets(any(), any()))
             .thenReturn(listOffsetsResult());
         ListGroupsResult listGroupsResult = listGroupResult(groupId);
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
         ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
         Map<TopicPartition, OffsetAndMetadata> committedOffsetsMap = new HashMap<>();
-        committedOffsetsMap.put(new TopicPartition("topic1", 0), mock(OffsetAndMetadata.class));
+        committedOffsetsMap.put(new TopicPartition(topic, 0), mock(OffsetAndMetadata.class));
         when(adminClient.listStreamsGroupOffsets(ArgumentMatchers.anyMap())).thenReturn(result);
         when(result.partitionsToOffsetAndMetadata(ArgumentMatchers.anyString())).thenReturn(KafkaFuture.completedFuture(committedOffsetsMap));
 
