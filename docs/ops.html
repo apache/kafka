@@ -4114,6 +4114,10 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
   controllers using the <code>--feature kraft.version=1</code>. (Note that you should not supply
   this flag when formatting brokers -- only when formatting controllers.)<p>
 
+<pre><code class="language-bash">
+  $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller.properties
+</code></pre><p>
+
   Note: To migrate from static voter set to dynamic voter set, please refer to the <a href="#kraft_upgrade">Upgrade</a> section.
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_add" class="anchor-link"></a><a href="#kraft_reconfig_add">Add New Controller</a></h5>
