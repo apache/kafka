@@ -39,8 +39,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -69,6 +67,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static java.lang.Math.min;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorWriteEvent.NOT_QUEUED;
 
 /**
@@ -758,8 +757,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             // Cancel the linger timeout.
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
-            // Release the buffer.
-            bufferSupplier.release(currentBatch.buffer);
+            // Release the buffer only if it is not larger than the maxBatchSize.
+            int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
+
+            if (currentBatch.builder.buffer().capacity() <= maxBatchSize) {
+                bufferSupplier.release(currentBatch.builder.buffer());
+            } else if (currentBatch.buffer.capacity() <= maxBatchSize) {
+                bufferSupplier.release(currentBatch.buffer);
+            }
 
             currentBatch = null;
         }
@@ -859,7 +864,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 LogConfig logConfig = partitionWriter.config(tp);
                 int maxBatchSize = logConfig.maxMessageSize();
                 long prevLastWrittenOffset = coordinator.lastWrittenOffset();
-                ByteBuffer buffer = bufferSupplier.get(maxBatchSize);
+                ByteBuffer buffer = bufferSupplier.get(min(INITIAL_BUFFER_SIZE, maxBatchSize));
 
                 MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                     buffer,
@@ -1909,9 +1914,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * 16KB. Used for initial buffer size for write operations.
+     * 512KB. Used for initial buffer size for write operations.
      */
-    static final int MIN_BUFFER_SIZE = 16384;
+    static final int INITIAL_BUFFER_SIZE = 512 * 1024;
 
     /**
      * The log prefix.
@@ -2009,7 +2014,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * The latest known metadata image.
      */
-    private volatile MetadataImage metadataImage = MetadataImage.EMPTY;
+    private volatile CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
      * Constructor.
@@ -2474,18 +2479,18 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param delta     The metadata delta.
      */
     public void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+        CoordinatorMetadataImage newImage,
+        CoordinatorMetadataDelta delta
     ) {
         throwIfNotRunning();
-        log.debug("Scheduling applying of a new metadata image with offset {}.", newImage.offset());
+        log.debug("Scheduling applying of a new metadata image with version {}.", newImage.version());
 
         // Update global image.
         metadataImage = newImage;
 
         // Push an event for each coordinator.
         coordinators.keySet().forEach(tp -> {
-            scheduleInternalOperation("UpdateImage(tp=" + tp + ", offset=" + newImage.offset() + ")", tp, () -> {
+            scheduleInternalOperation("UpdateImage(tp=" + tp + ", version=" + newImage.version() + ")", tp, () -> {
                 CoordinatorContext context = coordinators.get(tp);
                 if (context != null) {
                     context.lock.lock();
@@ -2493,18 +2498,18 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         if (context.state == CoordinatorState.ACTIVE) {
                             // The new image can be applied to the coordinator only if the coordinator
                             // exists and is in the active state.
-                            log.debug("Applying new metadata image with offset {} to {}.", newImage.offset(), tp);
+                            log.debug("Applying new metadata image with version {} to {}.", newImage.version(), tp);
                             context.coordinator.onNewMetadataImage(newImage, delta);
                         } else {
-                            log.debug("Ignored new metadata image with offset {} for {} because the coordinator is not active.",
-                                newImage.offset(), tp);
+                            log.debug("Ignored new metadata image with version {} for {} because the coordinator is not active.",
+                                newImage.version(), tp);
                         }
                     } finally {
                         context.lock.unlock();
                     }
                 } else {
-                    log.debug("Ignored new metadata image with offset {} for {} because the coordinator does not exist.",
-                        newImage.offset(), tp);
+                    log.debug("Ignored new metadata image with version {} for {} because the coordinator does not exist.",
+                        newImage.version(), tp);
                 }
             });
         });

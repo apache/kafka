@@ -45,10 +45,7 @@ public class JsonUtilTest {
         assertFalse(JsonUtil.openBraceComesFirst(" blah{}"));
     }
 
-    static final class Foo {
-        @JsonProperty
-        final int bar;
-
+    record Foo(@JsonProperty int bar) {
         @JsonCreator
         Foo(@JsonProperty("bar") int bar) {
             this.bar = bar;

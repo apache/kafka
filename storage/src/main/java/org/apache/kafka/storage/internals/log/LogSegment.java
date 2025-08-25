@@ -93,6 +93,9 @@ public class LogSegment implements Closeable {
     // NOTED: the offset is the last offset of batch having the max timestamp.
     private volatile TimestampOffset maxTimestampAndOffsetSoFar = TimestampOffset.UNKNOWN;
 
+    // Lock for maxTimestampAndOffsetSoFar to ensure that it will be initialized only once
+    private final Object maxTimestampAndOffsetLock = new Object();
+
     private long created;
 
     /* the number of bytes since we last added an entry in the offset index */
@@ -162,11 +165,11 @@ public class LogSegment implements Closeable {
     }
 
     public boolean shouldRoll(RollParams rollParams) throws IOException {
-        boolean reachedRollMs = timeWaitedForRoll(rollParams.now, rollParams.maxTimestampInMessages) > rollParams.maxSegmentMs - rollJitterMs;
+        boolean reachedRollMs = timeWaitedForRoll(rollParams.now(), rollParams.maxTimestampInMessages()) > rollParams.maxSegmentMs() - rollJitterMs;
         int size = size();
-        return size > rollParams.maxSegmentBytes - rollParams.messagesSize ||
+        return size > rollParams.maxSegmentBytes() - rollParams.messagesSize() ||
             (size > 0 && reachedRollMs) ||
-            offsetIndex().isFull() || timeIndex().isFull() || !canConvertToRelativeOffset(rollParams.maxOffsetInMessages);
+            offsetIndex().isFull() || timeIndex().isFull() || !canConvertToRelativeOffset(rollParams.maxOffsetInMessages());
     }
 
     public void resizeIndexes(int size) throws IOException {
@@ -177,7 +180,7 @@ public class LogSegment implements Closeable {
     public void sanityCheck(boolean timeIndexFileNewlyCreated) throws IOException {
         if (offsetIndexFile().exists()) {
             // Resize the time index file to 0 if it is newly created.
-            if (timeIndexFileNewlyCreated) 
+            if (timeIndexFileNewlyCreated)
                 timeIndex().resize(0);
             // Sanity checks for time index and offset index are skipped because
             // we will recover the segments above the recovery point in recoverLog()
@@ -192,8 +195,17 @@ public class LogSegment implements Closeable {
      * the time index).
      */
     public TimestampOffset readMaxTimestampAndOffsetSoFar() throws IOException {
-        if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN)
-            maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
+        if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
+            // As stated in LogSegment class javadoc, this class is not thread-safe so basically we assume that
+            // methods are called within UnifiedLog#lock.
+            // However, there's exceptional paths where this method can be called outside of the lock,
+            // so we need lock here to prevent multiple threads trying to modify maxTimestampAndOffsetSoFar
+            synchronized (maxTimestampAndOffsetLock) {
+                if (maxTimestampAndOffsetSoFar == TimestampOffset.UNKNOWN) {
+                    maxTimestampAndOffsetSoFar = timeIndex().lastEntry();
+                }
+            }
+        }
         return maxTimestampAndOffsetSoFar;
     }
 
@@ -203,14 +215,14 @@ public class LogSegment implements Closeable {
      * Note that this may result in time index materialization.
      */
     public long maxTimestampSoFar() throws IOException {
-        return readMaxTimestampAndOffsetSoFar().timestamp;
+        return readMaxTimestampAndOffsetSoFar().timestamp();
     }
 
     /**
      * Note that this may result in time index materialization.
      */
     private long shallowOffsetOfMaxTimestampSoFar() throws IOException {
-        return readMaxTimestampAndOffsetSoFar().offset;
+        return readMaxTimestampAndOffsetSoFar().offset();
     }
 
     /* Return the size in bytes of this log segment */
@@ -334,7 +346,7 @@ public class LogSegment implements Closeable {
 
     /* not thread safe */
     public void updateTxnIndex(CompletedTxn completedTxn, long lastStableOffset) throws IOException {
-        if (completedTxn.isAborted) {
+        if (completedTxn.isAborted()) {
             LOGGER.trace("Writing aborted transaction {} to transaction index, last stable offset is {}", completedTxn, lastStableOffset);
             txnIndex.append(new AbortedTxn(completedTxn, lastStableOffset));
         }
@@ -381,7 +393,7 @@ public class LogSegment implements Closeable {
      */
     LogOffsetPosition translateOffset(long offset, int startingFilePosition) throws IOException {
         OffsetPosition mapping = offsetIndex().lookup(offset);
-        return log.searchForOffsetFromPosition(offset, Math.max(mapping.position, startingFilePosition));
+        return log.searchForOffsetFromPosition(offset, Math.max(mapping.position(), startingFilePosition));
     }
 
     /**
@@ -448,7 +460,7 @@ public class LogSegment implements Closeable {
 
     public OptionalLong fetchUpperBoundOffset(OffsetPosition startOffsetPosition, int fetchSize) throws IOException {
         return offsetIndex().fetchUpperBoundOffset(startOffsetPosition, fetchSize)
-                .map(offsetPosition -> OptionalLong.of(offsetPosition.offset)).orElseGet(OptionalLong::empty);
+                .map(offsetPosition -> OptionalLong.of(offsetPosition.offset())).orElseGet(OptionalLong::empty);
     }
 
     /**
@@ -529,7 +541,7 @@ public class LogSegment implements Closeable {
         return "LogSegment(baseOffset=" + baseOffset +
             ", size=" + size() +
             ", lastModifiedTime=" + lastModified() +
-            ", largestRecordTimestamp=" + maxTimestampAndOffsetSoFar.timestamp +
+            ", largestRecordTimestamp=" + maxTimestampAndOffsetSoFar.timestamp() +
             ")";
     }
 
@@ -578,11 +590,11 @@ public class LogSegment implements Closeable {
     private TimestampOffset readLargestTimestamp() throws IOException {
         // Get the last time index entry. If the time index is empty, it will return (-1, baseOffset)
         TimestampOffset lastTimeIndexEntry = timeIndex().lastEntry();
-        OffsetPosition offsetPosition = offsetIndex().lookup(lastTimeIndexEntry.offset);
+        OffsetPosition offsetPosition = offsetIndex().lookup(lastTimeIndexEntry.offset());
 
         // Scan the rest of the messages to see if there is a larger timestamp after the last time index entry.
-        FileRecords.TimestampAndOffset maxTimestampOffsetAfterLastEntry = log.largestTimestampAfter(offsetPosition.position);
-        if (maxTimestampOffsetAfterLastEntry.timestamp > lastTimeIndexEntry.timestamp)
+        FileRecords.TimestampAndOffset maxTimestampOffsetAfterLastEntry = log.largestTimestampAfter(offsetPosition.position());
+        if (maxTimestampOffsetAfterLastEntry.timestamp > lastTimeIndexEntry.timestamp())
             return new TimestampOffset(maxTimestampOffsetAfterLastEntry.timestamp, maxTimestampOffsetAfterLastEntry.offset);
 
         return lastTimeIndexEntry;
@@ -600,7 +612,7 @@ public class LogSegment implements Closeable {
             return baseOffset;
         else
             return fetchData.records.lastBatch()
-                .map(batch -> batch.nextOffset())
+                .map(RecordBatch::nextOffset)
                 .orElse(baseOffset);
     }
 
@@ -738,7 +750,7 @@ public class LogSegment implements Closeable {
     public Optional<FileRecords.TimestampAndOffset> findOffsetByTimestamp(long timestampMs, long startingOffset) throws IOException {
         // Get the index entry with a timestamp less than or equal to the target timestamp
         TimestampOffset timestampOffset = timeIndex().lookup(timestampMs);
-        int position = offsetIndex().lookup(Math.max(timestampOffset.offset, startingOffset)).position;
+        int position = offsetIndex().lookup(Math.max(timestampOffset.offset(), startingOffset)).position();
 
         // Search the timestamp
         return Optional.ofNullable(log.searchForTimestamp(timestampMs, position, startingOffset));
@@ -758,9 +770,9 @@ public class LogSegment implements Closeable {
      * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
      */
     void closeHandlers() {
-        Utils.swallow(LOGGER, Level.WARN, "offsetIndex", () -> lazyOffsetIndex.closeHandler());
-        Utils.swallow(LOGGER, Level.WARN, "timeIndex", () -> lazyTimeIndex.closeHandler());
-        Utils.swallow(LOGGER, Level.WARN, "log", () -> log.closeHandlers());
+        Utils.swallow(LOGGER, Level.WARN, "offsetIndex", lazyOffsetIndex::closeHandler);
+        Utils.swallow(LOGGER, Level.WARN, "timeIndex", lazyTimeIndex::closeHandler);
+        Utils.swallow(LOGGER, Level.WARN, "log", log::closeHandlers);
         Utils.closeQuietly(txnIndex, "txnIndex", LOGGER);
     }
 
@@ -770,10 +782,10 @@ public class LogSegment implements Closeable {
     public void deleteIfExists() throws IOException {
         try {
             Utils.tryAll(List.of(
-                () -> deleteTypeIfExists(() -> log.deleteIfExists(), "log", log.file(), true),
-                () -> deleteTypeIfExists(() -> lazyOffsetIndex.deleteIfExists(), "offset index", offsetIndexFile(), true),
-                () -> deleteTypeIfExists(() -> lazyTimeIndex.deleteIfExists(), "time index", timeIndexFile(), true),
-                () -> deleteTypeIfExists(() -> txnIndex.deleteIfExists(), "transaction index", txnIndex.file(), false)));
+                () -> deleteTypeIfExists(log::deleteIfExists, "log", log.file(), true),
+                () -> deleteTypeIfExists(lazyOffsetIndex::deleteIfExists, "offset index", offsetIndexFile(), true),
+                () -> deleteTypeIfExists(lazyTimeIndex::deleteIfExists, "time index", timeIndexFile(), true),
+                () -> deleteTypeIfExists(txnIndex::deleteIfExists, "transaction index", txnIndex.file(), false)));
         } catch (Throwable t) {
             if (t instanceof IOException)
                 throw (IOException) t;

@@ -382,10 +382,10 @@ public class ProducerStateManagerTest {
         CompletedTxn completedTxn = appendInfo.appendEndTxnMarker(endTxnMarker, epoch, 40L, time.milliseconds())
                 .orElseThrow(() -> new RuntimeException("The transaction should be completed"));
 
-        assertEquals(producerId, completedTxn.producerId);
-        assertEquals(16L, completedTxn.firstOffset);
-        assertEquals(40L, completedTxn.lastOffset);
-        assertFalse(completedTxn.isAborted);
+        assertEquals(producerId, completedTxn.producerId());
+        assertEquals(16L, completedTxn.firstOffset());
+        assertEquals(40L, completedTxn.lastOffset());
+        assertFalse(completedTxn.isAborted());
 
         ProducerStateEntry lastEntry = appendInfo.toEntry();
         // verify that appending the transaction marker doesn't affect the metadata of the cached record batches.

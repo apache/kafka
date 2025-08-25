@@ -13,9 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The base image of openjdk:17 is typically oraclelinux:8-slim, which doesn't include apt-get. 
-# Therefore, use openjdk:17-buster instead.
-ARG jdk_version=openjdk:17-buster
+ARG jdk_version
 FROM $jdk_version AS build-native-image
 
 WORKDIR /build

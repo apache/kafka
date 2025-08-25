@@ -54,14 +54,14 @@ public final class DeleteRecordsAction implements TieredStorageTestAction {
             throws InterruptedException, ExecutionException, TimeoutException {
         List<LocalTieredStorage> tieredStorages = context.remoteStorageManagers();
         List<LocalTieredStorageCondition> tieredStorageConditions = deleteSegmentSpecs.stream()
-                .filter(spec -> spec.getEventType() == DELETE_SEGMENT)
+                .filter(spec -> spec.eventType() == DELETE_SEGMENT)
                 .map(spec -> expectEvent(
                         tieredStorages,
-                        spec.getEventType(),
-                        spec.getSourceBrokerId(),
-                        spec.getTopicPartition(),
+                        spec.eventType(),
+                        spec.sourceBrokerId(),
+                        spec.topicPartition(),
                         false,
-                        spec.getEventCount()))
+                        spec.eventCount()))
                 .toList();
 
         Map<TopicPartition, RecordsToDelete> recordsToDeleteMap =

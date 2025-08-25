@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.ArrayList;
@@ -34,7 +33,7 @@ public class ShareInFlightBatch<K, V> {
     private final Map<Long, ConsumerRecord<K, V>> inFlightRecords;
     private final Set<Long> acknowledgedRecords;
     private Acknowledgements acknowledgements;
-    private KafkaException exception;
+    private ShareInFlightBatchException exception;
     private boolean hasCachedException = false;
 
     public ShareInFlightBatch(int nodeId, TopicIdPartition partition) {
@@ -102,6 +101,7 @@ public class ShareInFlightBatch<K, V> {
             acknowledgedRecords.forEach(inFlightRecords::remove);
         }
         acknowledgedRecords.clear();
+        exception = null;
 
         Acknowledgements currentAcknowledgements = acknowledgements;
         acknowledgements = Acknowledgements.empty();
@@ -116,11 +116,11 @@ public class ShareInFlightBatch<K, V> {
         return inFlightRecords.isEmpty() && acknowledgements.isEmpty();
     }
 
-    public void setException(KafkaException exception) {
+    public void setException(ShareInFlightBatchException exception) {
         this.exception = exception;
     }
 
-    public KafkaException getException() {
+    public ShareInFlightBatchException getException() {
         return exception;
     }
 
