@@ -37,10 +37,18 @@ public interface AutoTopicCreationManager {
      *                               inside Envelope to send to the controller when forwarding is enabled.
      * @return auto created topic metadata responses
      */
-    List<MetadataResponseTopic> createTopics(
-            Set<String> topics,
-            Optional<RequestContext> metadataRequestContext
-    );
+    List<MetadataResponseTopic> createTopics(Set<String> topics, Optional<RequestContext> metadataRequestContext);
+
+    /**
+     * Initiate auto topic creation for the given topics.
+     * This method is used for creating internal topics.
+     *
+     * @param topics the topics to create
+     * @return auto created topic metadata responses
+     */
+    default List<MetadataResponseTopic> createInternalTopics(Set<String> topics) {
+        return createTopics(topics, Optional.empty());
+    }
 
     /**
      * Initiate auto topic creation for the given topics.
@@ -51,8 +59,5 @@ public interface AutoTopicCreationManager {
      *                               original client principal for auditing, thus needing to wrap a plain CreateTopicsRequest
      *                               inside Envelope to send to the controller when forwarding is enabled.
      */
-    void createStreamsInternalTopics(
-            Map<String, CreatableTopic> topics,
-            RequestContext metadataRequestContext
-    );
+    void createStreamsInternalTopics(Map<String, CreatableTopic> topics, RequestContext metadataRequestContext);
 }

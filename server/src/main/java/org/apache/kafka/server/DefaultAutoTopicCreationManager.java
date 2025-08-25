@@ -32,9 +32,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
@@ -61,30 +59,27 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
 
     private final AbstractKafkaConfig config;
     private final NodeToControllerChannelManager channelManager;
-    private final GroupCoordinator groupCoordinator;
-    private final ShareCoordinator shareCoordinator;
+    private final Supplier<Properties> groupCoordinator;
+    private final Supplier<Properties> shareCoordinator;
     private final Supplier<Properties> transactionTopicConfigsSupplier;
     private final Set<String> inflightTopics = ConcurrentHashMap.newKeySet();
 
     public DefaultAutoTopicCreationManager(
             AbstractKafkaConfig config,
             NodeToControllerChannelManager channelManager,
-            GroupCoordinator groupCoordinator,
+            Supplier<Properties> groupCoordinatorConfigsSupplier,
             Supplier<Properties> transactionTopicConfigsSupplier,
-            ShareCoordinator shareCoordinator
+            Supplier<Properties> shareCoordinatorConfigsSupplier
     ) {
         this.config = config;
         this.channelManager = channelManager;
-        this.groupCoordinator = groupCoordinator;
-        this.shareCoordinator = shareCoordinator;
+        this.groupCoordinator = groupCoordinatorConfigsSupplier;
+        this.shareCoordinator = shareCoordinatorConfigsSupplier;
         this.transactionTopicConfigsSupplier = transactionTopicConfigsSupplier;
     }
 
     @Override
-    public List<MetadataResponseTopic> createTopics(
-            Set<String> topics,
-            Optional<RequestContext> metadataRequestContext
-    ) {
+    public List<MetadataResponseTopic> createTopics(Set<String> topics, Optional<RequestContext> metadataRequestContext) {
         var creatableTopics = new HashMap<String, CreatableTopic>();
         var uncreatableTopicResponses = new ArrayList<MetadataResponseTopic>();
         topics.forEach(topic -> {
@@ -221,7 +216,7 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                     .setName(topic)
                     .setNumPartitions(groupCoordinatorConfig.offsetsTopicPartitions())
                     .setReplicationFactor(groupCoordinatorConfig.offsetsTopicReplicationFactor())
-                    .setConfigs(convertToTopicConfigCollections(groupCoordinator.groupMetadataTopicConfigs()));
+                    .setConfigs(convertToTopicConfigCollections(groupCoordinator.get()));
             }
             case Topic.TRANSACTION_STATE_TOPIC_NAME -> {
                 var transactionLogConfig = new TransactionLogConfig(config);
@@ -237,7 +232,7 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                     .setName(topic)
                     .setNumPartitions(shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())
                     .setReplicationFactor(shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
-                    .setConfigs(convertToTopicConfigCollections(shareCoordinator.shareGroupStateTopicConfigs()));
+                    .setConfigs(convertToTopicConfigCollections(shareCoordinator.get()));
             }
             default -> new CreatableTopic()
                     .setName(topic)

@@ -24,10 +24,7 @@ import java.nio.ByteBuffer;
 
 public class ForwardingManagerUtils {
 
-    public static EnvelopeRequest.Builder buildEnvelopeRequest(
-            RequestContext context,
-            ByteBuffer forwardRequestBuffer
-    ) {
+    public static EnvelopeRequest.Builder buildEnvelopeRequest(RequestContext context, ByteBuffer forwardRequestBuffer) {
         var principalSerde = context.principalSerde.orElseThrow(() -> new IllegalArgumentException(
                 String.format("Cannot deserialize principal from request context %s since there is no serde defined", context))
         );

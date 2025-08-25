@@ -386,8 +386,11 @@ class BrokerServer(
         producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-        config, clientToControllerChannelManager, groupCoordinator,
-        () => transactionCoordinator.transactionTopicConfigs, shareCoordinator)
+        config, clientToControllerChannelManager,
+        () => groupCoordinator.groupMetadataTopicConfigs(),
+        () => transactionCoordinator.transactionTopicConfigs,
+        () => shareCoordinator.shareGroupStateTopicConfigs()
+      )
 
       dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),

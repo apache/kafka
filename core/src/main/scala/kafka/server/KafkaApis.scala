@@ -1350,7 +1350,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val topicMetadata = metadataCache.getTopicMetadata(internalTopics, request.context.listenerName, false, false).asScala
 
       if (topicMetadata.headOption.isEmpty) {
-        autoTopicCreationManager.createTopics(internalTopics, Optional.empty)
+        autoTopicCreationManager.createInternalTopics(internalTopics)
         (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
       } else {
         if (topicMetadata.head.errorCode != Errors.NONE.code) {

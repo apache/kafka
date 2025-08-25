@@ -42,9 +42,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.metadata.MetadataCache;
@@ -91,8 +89,6 @@ public class AutoTopicCreationManagerTest {
     private AbstractKafkaConfig config;
     private final MetadataCache metadataCache = Mockito.mock(MetadataCache.class);
     private final NodeToControllerChannelManager brokerToController = Mockito.mock(NodeToControllerChannelManager.class);
-    private final GroupCoordinator groupCoordinator = Mockito.mock(GroupCoordinator.class);
-    private final ShareCoordinator shareCoordinator = Mockito.mock(ShareCoordinator.class);
     private AutoTopicCreationManager autoTopicCreationManager;
 
     private final int internalTopicPartitions = 2;
@@ -120,7 +116,6 @@ public class AutoTopicCreationManagerTest {
 
     @Test
     public void testCreateOffsetTopic() {
-        Mockito.when(groupCoordinator.groupMetadataTopicConfigs()).thenReturn(new Properties());
         testCreateTopic(GROUP_METADATA_TOPIC_NAME, true, internalTopicPartitions, internalTopicReplicationFactor);
     }
 
@@ -131,7 +126,6 @@ public class AutoTopicCreationManagerTest {
 
     @Test
     public void testCreateShareStateTopic() {
-        Mockito.when(shareCoordinator.shareGroupStateTopicConfigs()).thenReturn(new Properties());
         testCreateTopic(SHARE_GROUP_STATE_TOPIC_NAME, true, internalTopicPartitions, internalTopicReplicationFactor);
     }
 
@@ -149,9 +143,9 @@ public class AutoTopicCreationManagerTest {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
                 brokerToController,
-                groupCoordinator,
                 Properties::new,
-                shareCoordinator);
+                Properties::new,
+                Properties::new);
 
         var topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection();
         topicsCollection.add(getNewTopic(topicName, numPartitions, replicationFactor));
@@ -272,9 +266,9 @@ public class AutoTopicCreationManagerTest {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
                 brokerToController,
-                groupCoordinator,
                 Properties::new,
-                shareCoordinator);
+                Properties::new,
+                Properties::new);
 
         autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
 
@@ -308,9 +302,9 @@ public class AutoTopicCreationManagerTest {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
                 brokerToController,
-                groupCoordinator,
                 Properties::new,
-                shareCoordinator);
+                Properties::new,
+                Properties::new);
 
         autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
 
@@ -332,9 +326,9 @@ public class AutoTopicCreationManagerTest {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
                 brokerToController,
-                groupCoordinator,
                 Properties::new,
-                shareCoordinator);
+                Properties::new,
+                Properties::new);
 
         autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
 
@@ -372,9 +366,9 @@ public class AutoTopicCreationManagerTest {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
                 brokerToController,
-                groupCoordinator,
                 Properties::new,
-                shareCoordinator);
+                Properties::new,
+                Properties::new);
 
         autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
 
@@ -412,9 +406,9 @@ public class AutoTopicCreationManagerTest {
         autoTopicCreationManager = new DefaultAutoTopicCreationManager(
                 config,
                 brokerToController,
-                groupCoordinator,
                 Properties::new,
-                shareCoordinator);
+                Properties::new,
+                Properties::new);
 
         var createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
                 .setApiKey(ApiKeys.CREATE_TOPICS.id)
