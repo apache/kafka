@@ -68,6 +68,9 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final String UNIX_PRECISION_CONFIG = "unix.precision";
     private static final String UNIX_PRECISION_DEFAULT = "milliseconds";
 
+    public static final String TIMEZONE_CONFIG = "time_zone";
+    private static final String TIMEZONE_DEFAULT = "UTC";
+
     public static final String REPLACE_NULL_WITH_DEFAULT_CONFIG = "replace.null.with.default";
 
     private static final String PURPOSE = "converting timestamp formats";
@@ -83,7 +86,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     private static final String UNIX_PRECISION_NANOS = "nanoseconds";
     private static final String UNIX_PRECISION_SECONDS = "seconds";
 
-    private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+    private static TimeZone UTC = TimeZone.getTimeZone("UTC");
+    //private static final TimeZone UTC = TimeZone.getTimeZone("Asia/Shanghai");
 
     public static final Schema OPTIONAL_DATE_SCHEMA = org.apache.kafka.connect.data.Date.builder().optional().schema();
     public static final Schema OPTIONAL_TIMESTAMP_SCHEMA = Timestamp.builder().optional().schema();
@@ -92,6 +96,8 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELD_CONFIG, ConfigDef.Type.STRING, FIELD_DEFAULT, ConfigDef.Importance.HIGH,
                     "The field containing the timestamp, or empty if the entire value is a timestamp")
+            .define(TIMEZONE_CONFIG, ConfigDef.Type.STRING, TIMEZONE_DEFAULT, ConfigDef.Importance.HIGH,
+                    "The field containing the time_zone.")
             .define(TARGET_TYPE_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
                     ConfigDef.ValidString.in(TYPE_STRING, TYPE_UNIX, TYPE_DATE, TYPE_TIME, TYPE_TIMESTAMP),
                     ConfigDef.Importance.HIGH,
@@ -271,16 +277,18 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     // This is a bit unusual, but allows the transformation config to be passed to static anonymous classes to customize
     // their behavior
     private static class Config {
-        Config(String field, String type, SimpleDateFormat format, String unixPrecision) {
+        Config(String field, String type, SimpleDateFormat format, String unixPrecision, String time_zone) {
             this.field = field;
             this.type = type;
             this.format = format;
             this.unixPrecision = unixPrecision;
+            this.time_zone= time_zone;
         }
         String field;
         String type;
         SimpleDateFormat format;
         String unixPrecision;
+        String time_zone;
     }
     private Config config;
     private Cache<Schema, Schema> schemaUpdateCache;
@@ -293,12 +301,18 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         final String type = simpleConfig.getString(TARGET_TYPE_CONFIG);
         String formatPattern = simpleConfig.getString(FORMAT_CONFIG);
         final String unixPrecision = simpleConfig.getString(UNIX_PRECISION_CONFIG);
+        final String time_zone = simpleConfig.getString(TIMEZONE_CONFIG);
         schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
         replaceNullWithDefault = simpleConfig.getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
 
         if (type.equals(TYPE_STRING) && Utils.isBlank(formatPattern)) {
             throw new ConfigException("TimestampConverter requires format option to be specified when using string timestamps");
         }
+
+        if (!Utils.isBlank(time_zone)) {
+            UTC = TimeZone.getTimeZone(time_zone);
+        }
+
         SimpleDateFormat format = null;
         if (!Utils.isBlank(formatPattern)) {
             try {
@@ -309,7 +323,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                         + formatPattern, e);
             }
         }
-        config = new Config(field, type, format, unixPrecision);
+        config = new Config(field, type, format, unixPrecision,time_zone);
     }
 
     @Override
