@@ -1244,6 +1244,7 @@ class AbstractFetcherThreadTest {
     assertEquals(1, replicaState.log.size)
     assertEquals(0, replicaState.logStartOffset)
     assertEquals(1, replicaState.logEndOffset)
+    assertEquals(Some(1), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
     for (_ <- 1 to 2) fetcher.doWork()
@@ -1301,10 +1302,12 @@ class AbstractFetcherThreadTest {
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     fetcher.doWork()
+    // Follower gets out-of-range error (no messages received), fetch offset is updated from 0 to 10
     assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
     assertEquals(0, replicaState.log.size)
     assertEquals(10, replicaState.logStartOffset)
     assertEquals(10, replicaState.logEndOffset)
+    assertEquals(Some(10), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
     for (_ <- 1 to 3) fetcher.doWork()
@@ -1370,6 +1373,7 @@ class AbstractFetcherThreadTest {
     assertEquals(0, replicaState.localLogStartOffset)
     assertEquals(1, replicaState.logEndOffset)
     assertEquals(199, replicaState.highWatermark)
+    assertEquals(Some(1), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
     for (_ <- 1 to 2) fetcher.doWork()
@@ -1435,6 +1439,7 @@ class AbstractFetcherThreadTest {
     assertEquals(0, replicaState.log.size)
     assertEquals(100, replicaState.localLogStartOffset)
     assertEquals(100, replicaState.logEndOffset)
+    assertEquals(Some(100), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
     for (_ <- 1 to 3) fetcher.doWork()
@@ -1499,6 +1504,7 @@ class AbstractFetcherThreadTest {
     assertEquals(0, replicaState.log.size)
     assertEquals(10, replicaState.localLogStartOffset)
     assertEquals(10, replicaState.logEndOffset)
+    assertEquals(Some(10), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
     for (_ <- 1 to 3) fetcher.doWork()
@@ -1569,6 +1575,7 @@ class AbstractFetcherThreadTest {
     assertEquals(0, replicaState.log.size)
     assertEquals(10, replicaState.localLogStartOffset)
     assertEquals(10, replicaState.logEndOffset)
+    assertEquals(Some(10), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     fetcher.doWork()
     // On offset-moved-to-tiered-storage error, fetch offset is updated
@@ -1576,6 +1583,7 @@ class AbstractFetcherThreadTest {
     assertEquals(0, replicaState.log.size)
     assertEquals(100, replicaState.localLogStartOffset)
     assertEquals(100, replicaState.logEndOffset)
+    assertEquals(Some(100), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
     for (_ <- 1 to 3) fetcher.doWork()
@@ -1641,6 +1649,7 @@ class AbstractFetcherThreadTest {
     assertEquals(151, replicaState.localLogStartOffset)
     assertEquals(151, replicaState.logEndOffset)
     assertEquals(151, replicaState.highWatermark)
+    assertEquals(Some(151), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     // Call once again to see if new data is received
     fetcher.doWork()
@@ -1710,6 +1719,7 @@ class AbstractFetcherThreadTest {
     assertEquals(0, replicaState.log.size)
     assertEquals(10, replicaState.localLogStartOffset)
     assertEquals(10, replicaState.logEndOffset)
+    assertEquals(Some(10), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     // On offset-moved-to-tiered-storage error, fetch offset is updated
     fetcher.doWork()
@@ -1718,6 +1728,7 @@ class AbstractFetcherThreadTest {
     assertEquals(151, replicaState.localLogStartOffset)
     assertEquals(151, replicaState.logEndOffset)
     assertEquals(151, replicaState.highWatermark)
+    assertEquals(Some(151), fetcher.fetchState(partition).map(_.fetchOffset()))
 
     // Call once again to see if new data is received
     fetcher.doWork()
