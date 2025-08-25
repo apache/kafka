@@ -1570,6 +1570,13 @@ public class SharePartition {
                 // batches align on batch boundaries. Hence, reset to last offset itself if the batch's
                 // last offset is greater than the last offset for acquisition, else there could be
                 // a situation where the batch overlaps with the initial read gap offset window batch.
+                // For example, if the initial read gap offset window is 10-30 i.e. initialReadGapOffset's
+                // startOffset is 10 and endOffset is 30, and the first persister's read batch is 15-30.
+                // Say first fetched batch from log is 10-30 and maxFetchRecords is 1, then the lastOffset
+                // in this method call would be 14. As the maxFetchRecords is lesser than the batch,
+                // hence last batch offset for request offset is fetched. In this example it will
+                // be 30, hence check if the initial read gap offset window is active and the last acquired
+                // offset should be adjusted to 14 instead of 30.
                 if (isInitialReadGapOffsetWindowActive() && lastAcquiredOffset > lastOffset) {
                     lastAcquiredOffset = lastOffset;
                 }

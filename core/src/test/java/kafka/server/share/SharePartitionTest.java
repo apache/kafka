@@ -1130,7 +1130,7 @@ public class SharePartitionTest {
                 MEMBER_ID,
                 BATCH_SIZE,
                 1,
-                DEFAULT_FETCH_OFFSET,
+                10,
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             5);
@@ -1154,7 +1154,7 @@ public class SharePartitionTest {
                 MEMBER_ID,
                 BATCH_SIZE,
                 10,
-                DEFAULT_FETCH_OFFSET,
+                15,
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             13);
@@ -1188,7 +1188,7 @@ public class SharePartitionTest {
                 MEMBER_ID,
                 BATCH_SIZE,
                 1,
-                DEFAULT_FETCH_OFFSET,
+                31,
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             19);
@@ -1246,7 +1246,7 @@ public class SharePartitionTest {
                 MEMBER_ID,
                 BATCH_SIZE,
                 500,
-                DEFAULT_FETCH_OFFSET,
+                10,
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             37);
@@ -1324,7 +1324,7 @@ public class SharePartitionTest {
                 MEMBER_ID,
                 BATCH_SIZE,
                 500,
-                DEFAULT_FETCH_OFFSET,
+                10,
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             13);
@@ -1643,7 +1643,7 @@ public class SharePartitionTest {
                 MEMBER_ID,
                 BATCH_SIZE,
                 500,
-                DEFAULT_FETCH_OFFSET,
+                5,
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             18);
