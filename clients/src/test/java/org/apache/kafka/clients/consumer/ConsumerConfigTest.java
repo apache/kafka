@@ -31,8 +31,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -266,15 +264,12 @@ public class ConsumerConfigTest {
      * Validates config/consumer.properties file to avoid getting out of sync with ConsumerConfig.
      */
     @Test
-    public void testValidateConfigPropertiesFile() throws FileNotFoundException {
+    public void testValidateConfigPropertiesFile() {
         Properties props = new Properties();
-        InputStream inputStream = new FileInputStream(
-                System.getProperty("user.dir") + "/../config/consumer.properties");
 
-        try {
+        try (InputStream inputStream = new FileInputStream(System.getProperty("user.dir") + "/../config/consumer.properties")) {
             props.load(inputStream);
-            inputStream.close();
-        } catch (IOException e) {
+        } catch (Exception e) {
             fail("Failed to load config/consumer.properties file: " + e.getMessage());
         }
 

@@ -27,8 +27,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Locale;
@@ -179,15 +177,12 @@ public class ProducerConfigTest {
      * Validates config/producer.properties file to avoid getting out of sync with ProducerConfig.
      */
     @Test
-    public void testValidateConfigPropertiesFile() throws FileNotFoundException {
+    public void testValidateConfigPropertiesFile() {
         Properties props = new Properties();
-        InputStream inputStream = new FileInputStream(
-                System.getProperty("user.dir") + "/../config/producer.properties");
 
-        try {
+        try (InputStream inputStream = new FileInputStream(System.getProperty("user.dir") + "/../config/producer.properties")) {
             props.load(inputStream);
-            inputStream.close();
-        } catch (IOException e) {
+        } catch (Exception e) {
             fail("Failed to load config/producer.properties file: " + e.getMessage());
         }
 
