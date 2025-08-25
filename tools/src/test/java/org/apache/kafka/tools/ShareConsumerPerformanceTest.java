@@ -74,6 +74,18 @@ public class ShareConsumerPerformanceTest {
     }
 
     @Test
+    public void testNumOfRecordsDeprecated() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--messages", "10"
+        };
+
+        ShareConsumerPerformance.ShareConsumerPerfOptions config = new ShareConsumerPerformance.ShareConsumerPerfOptions(args);
+        assertEquals(10, config.numRecords());
+    }
+
+    @Test
     public void testConfigWithUnrecognizedOption() {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",

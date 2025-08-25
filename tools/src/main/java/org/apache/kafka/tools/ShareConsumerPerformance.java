@@ -293,6 +293,9 @@ public class ShareConsumerPerformance {
         private final OptionSpec<Void> printMetricsOpt;
         private final OptionSpec<Void> showDetailedStatsOpt;
         private final OptionSpec<Long> recordFetchTimeoutOpt;
+        // Deprecated option, kept for backward compatibility
+        // and will be removed in a future version.
+        private final OptionSpec<Long> numMessagesOpt;
         private final OptionSpec<Long> numRecordsOpt;
         private final OptionSpec<Long> reportingIntervalOpt;
         private final OptionSpec<String> dateFormatOpt;
@@ -327,11 +330,11 @@ public class ShareConsumerPerformance {
                     .defaultsTo(2 * 1024 * 1024);
             consumerConfigOpt = parser.accepts("consumer.config", "(DEPRECATED) Share consumer config properties file. " +
                     "This option will be removed in a future version. Use --command-config instead.")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("config file")
                     .ofType(String.class);
             commandConfigOpt = parser.accepts("command-config", "Share consumer config properties file.")
-                    .withOptionalArg()
+                    .withRequiredArg()
                     .describedAs("config file")
                     .ofType(String.class);
             printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.");
@@ -342,6 +345,11 @@ public class ShareConsumerPerformance {
                     .describedAs("milliseconds")
                     .ofType(Long.class)
                     .defaultsTo(10_000L);
+            numMessagesOpt = parser.accepts("messages", "(DEPRECATED) REQUIRED: The number of records to consume. " +
+                            "This option will be removed in a future version. Use --num-records instead.")
+                    .withRequiredArg()
+                    .describedAs("count")
+                    .ofType(Long.class);
             numRecordsOpt = parser.accepts("num-records", "REQUIRED: The number of records to consume.")
                     .withRequiredArg()
                     .describedAs("count")
@@ -375,9 +383,8 @@ public class ShareConsumerPerformance {
             if (options != null) {
                 CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the share consumer performance.");
                 CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numRecordsOpt);
-                if (!options.has(consumerConfigOpt)) {
-                    CommandLineUtils.checkRequiredArgs(parser, options, commandConfigOpt);
-                }
+                CommandLineUtils.checkOneOfArgs(parser, options, numMessagesOpt, numRecordsOpt);
+                CommandLineUtils.checkOneOfArgs(parser, options, consumerConfigOpt, commandConfigOpt);
             }
         }
 
@@ -417,7 +424,9 @@ public class ShareConsumerPerformance {
         }
 
         public long numRecords() {
-            return options.valueOf(numRecordsOpt);
+            return options.has(numMessagesOpt)
+                    ? options.valueOf(numMessagesOpt)
+                    : options.valueOf(numRecordsOpt);
         }
 
         public int threads() {
