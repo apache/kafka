@@ -75,7 +75,7 @@ public class ConsumerPerformanceTest {
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
 
         assertEquals("localhost:9092", config.brokerHostsAndPorts());
-        assertTrue(config.topic().contains("test"));
+        assertTrue(config.topic().get().contains("test"));
         assertEquals(10, config.numRecords());
     }
 
@@ -91,6 +91,47 @@ public class ConsumerPerformanceTest {
         String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
 
         assertTrue(err.contains("new-consumer is not a recognized option"));
+    }
+
+    @Test
+    public void testConfigWithInclude() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--include", "test.*",
+            "--num-records", "10"
+        };
+
+        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
+
+        assertEquals("localhost:9092", config.brokerHostsAndPorts());
+        assertTrue(config.include().get().toString().contains("test.*"));
+        assertEquals(10, config.numRecords());
+    }
+
+    @Test
+    public void testConfigWithTopicAndInclude() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--include", "test.*",
+            "--num-records", "10"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
+
+        assertTrue(err.contains("Exactly one of the following arguments is required: [topic], [include]"));
+    }
+
+    @Test
+    public void testConfigWithoutTopicAndInclude() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--num-records", "10"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
+
+        assertTrue(err.contains("Exactly one of the following arguments is required: [topic], [include]"));
     }
 
     @Test
