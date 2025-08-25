@@ -24,20 +24,36 @@ import org.apache.kafka.server.quota.SensorAccess;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class RLMQuotaMetrics {
+public class RLMQuotaMetrics implements AutoCloseable {
 
-    private final Sensor sensor;
+    private final SensorAccess sensorAccess;
+    private final Metrics metrics;
+    private final String name;
+    private final String descriptionFormat;
+    private final String group;
+    private final long expirationTime;
 
     public RLMQuotaMetrics(Metrics metrics, String name, String group, String descriptionFormat, long expirationTime) {
         ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-        SensorAccess sensorAccess = new SensorAccess(lock, metrics);
-        this.sensor = sensorAccess.getOrCreate(name, expirationTime, s -> {
-            s.add(metrics.metricName(name + "-avg", group, String.format(descriptionFormat, "average")), new Avg());
-            s.add(metrics.metricName(name + "-max", group, String.format(descriptionFormat, "maximum")), new Max());
-        });
+        this.sensorAccess = new SensorAccess(lock, metrics);
+        this.metrics = metrics;
+        this.name = name;
+        this.group = group;
+        this.expirationTime = expirationTime;
+        this.descriptionFormat = descriptionFormat;
     }
 
     public Sensor sensor() {
-        return sensor;
+        return sensorAccess.getOrCreate(name, expirationTime, s -> {
+            s.add(metrics.metricName(name + "-avg", group,
+                String.format(descriptionFormat, "average")), new Avg());
+            s.add(metrics.metricName(name + "-max", group,
+                String.format(descriptionFormat, "maximum")), new Max());
+        });
+    }
+
+    @Override
+    public void close() {
+        this.metrics.removeSensor(name);
     }
 }

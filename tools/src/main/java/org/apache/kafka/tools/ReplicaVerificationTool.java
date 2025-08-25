@@ -127,7 +127,7 @@ public class ReplicaVerificationTool {
 
                 List<TopicDescription> filteredTopicMetadata = topicsMetadata.stream().filter(
                     topicMetadata -> options.topicsIncludeFilter().isTopicAllowed(topicMetadata.name(), false)
-                ).collect(Collectors.toList());
+                ).toList();
 
                 if (filteredTopicMetadata.isEmpty()) {
                     LOG.error("No topics found. {} if specified, is either filtering out all topics or there is no topic.", options.topicsIncludeOpt);
@@ -196,7 +196,7 @@ public class ReplicaVerificationTool {
                             counter.incrementAndGet()
                         );
                     })
-                    .collect(Collectors.toList());
+                    .toList();
 
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                     LOG.info("Stopping all fetchers");
@@ -348,18 +348,7 @@ public class ReplicaVerificationTool {
         }
     }
 
-    private static class MessageInfo {
-        final int replicaId;
-        final long offset;
-        final long nextOffset;
-        final long checksum;
-
-        MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
-            this.replicaId = replicaId;
-            this.offset = offset;
-            this.nextOffset = nextOffset;
-            this.checksum = checksum;
-        }
+    private record MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
     }
 
     protected static class ReplicaBuffer {

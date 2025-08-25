@@ -21,8 +21,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class VersionedPluginBuilder {
 
@@ -99,7 +99,7 @@ public class VersionedPluginBuilder {
         Path subDir = Files.createDirectory(pluginDirPath.resolve("lib"));
         subDir.toFile().deleteOnExit();
         for (BuildInfo buildInfo : pluginBuilds) {
-            Path jarFile = TestPlugins.createPluginJar(buildInfo.plugin.resourceDir(), ignored -> false, Collections.singletonMap(VERSION_PLACEHOLDER, buildInfo.version));
+            Path jarFile = TestPlugins.createPluginJar(buildInfo.plugin.resourceDir(), ignored -> false, Map.of(VERSION_PLACEHOLDER, buildInfo.version));
             Path targetJar = subDir.resolve(jarFile.getFileName()).toAbsolutePath();
             buildInfo.setLocation(targetJar.toString());
             targetJar.toFile().deleteOnExit();

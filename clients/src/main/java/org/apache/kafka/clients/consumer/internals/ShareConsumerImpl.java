@@ -561,6 +561,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * {@inheritDoc}
      */
     @Override
+    @SuppressWarnings("unchecked")
     public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
         Timer timer = time.timer(timeout);
 
@@ -601,6 +602,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             } while (timer.notExpired());
 
             return ConsumerRecords.empty();
+        } catch (ShareFetchException e) {
+            currentFetch = (ShareFetch<K, V>) e.shareFetch();
+            throw e.cause();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
@@ -687,6 +691,19 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         try {
             ensureExplicitAcknowledgement();
             currentFetch.acknowledge(record, type);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public void acknowledge(final String topic, final int partition, final long offset, final AcknowledgeType type) {
+        acquireAndEnsureOpen();
+        try {
+            ensureExplicitAcknowledgement();
+            currentFetch.acknowledge(topic, partition, offset, type);
         } finally {
             release();
         }
@@ -911,6 +928,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     private void stopFindCoordinatorOnClose() {
+        if (applicationEventHandler == null) {
+            return;
+        }
         log.debug("Stop finding coordinator during consumer close");
         applicationEventHandler.add(new StopFindCoordinatorOnCloseEvent());
     }
@@ -927,6 +947,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * 2. leave the group
      */
     private void sendAcknowledgementsAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
+        if (applicationEventHandler == null || backgroundEventProcessor == null ||
+            backgroundEventReaper == null || backgroundEventQueue == null) {
+            return;
+        }
         completeQuietly(
                 () -> applicationEventHandler.addAndGet(new ShareAcknowledgeOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer))),
                 "Failed to send pending acknowledgements with a timeout(ms)=" + timer.timeoutMs(), firstException);
@@ -1018,6 +1042,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * If the acknowledgement commit callback throws an exception, this method will throw an exception.
      */
     private void handleCompletedAcknowledgements(boolean onClose) {
+        if (backgroundEventQueue == null || backgroundEventReaper == null || backgroundEventProcessor == null) {
+            return;
+        }
         // If the user gets any fatal errors, they will get these exceptions in the background queue.
         // While closing, we ignore these exceptions so that the consumers close successfully.
         processBackgroundEvents(onClose ? e -> (e instanceof GroupAuthorizationException
