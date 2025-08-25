@@ -18,6 +18,7 @@
 package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.metrics.Sensor;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
