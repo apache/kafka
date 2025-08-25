@@ -157,12 +157,13 @@ public class VerifiableProducer implements AutoCloseable {
                 .metavar("ACKS")
                 .help("Acks required on each produced message. See Kafka docs on acks for details.");
 
-        parser.addArgument("--command-config")
+        parser.addArgument("--producer.config")
                 .action(store())
                 .required(false)
                 .type(String.class)
                 .metavar("CONFIG_FILE")
-                .help("Producer config properties file.");
+                .help("(DEPRECATED) Producer config properties file. " +
+                        "This option will be removed in a future version. Use --command-config instead.");
 
         parser.addArgument("--message-create-time")
                 .action(store())
@@ -188,6 +189,14 @@ public class VerifiableProducer implements AutoCloseable {
             .metavar("REPEATING-KEYS")
             .dest("repeatingKeys")
             .help("If specified, each produced record will have a key starting at 0 increment by 1 up to the number specified (exclusive), then the key is set to 0 again");
+
+        parser.addArgument("--command-config")
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("CONFIG-FILE")
+            .dest("commandConfigFile")
+            .help("Producer config properties file.");
 
         return parser;
     }
@@ -216,7 +225,8 @@ public class VerifiableProducer implements AutoCloseable {
         int maxMessages = res.getInt("maxMessages");
         String topic = res.getString("topic");
         int throughput = res.getInt("throughput");
-        String configFile = res.getString("command-config");
+        String configFile = res.getString("producer.config");
+        String commandConfigFile = res.getString("commandConfigFile");
         Integer valuePrefix = res.getInt("valuePrefix");
         Long createTime = res.getLong("createTime");
         Integer repeatingKeys = res.getInt("repeatingKeys");
@@ -240,14 +250,25 @@ public class VerifiableProducer implements AutoCloseable {
         producerProps.put(ProducerConfig.ACKS_CONFIG, Integer.toString(res.getInt("acks")));
         // No producer retries
         producerProps.put(ProducerConfig.RETRIES_CONFIG, "0");
+        if (configFile != null && commandConfigFile != null) {
+            throw new ArgumentParserException("Options --producer.config and --command-config are mutually exclusive.", parser);
+        }
+
         if (configFile != null) {
+            System.out.println("Option --producer-config has been deprecated and will be removed in a future version. Use --command-config instead.");
             try {
                 producerProps.putAll(loadProps(configFile));
             } catch (IOException e) {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
         }
-
+        if (commandConfigFile != null) {
+            try {
+                producerProps.putAll(loadProps(commandConfigFile));
+            } catch (IOException e) {
+                throw new ArgumentParserException(e.getMessage(), parser);
+            }
+        }
         StringSerializer serializer = new StringSerializer();
         KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps, serializer, serializer);
 
