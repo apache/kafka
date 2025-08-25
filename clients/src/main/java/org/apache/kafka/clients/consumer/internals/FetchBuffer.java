@@ -98,6 +98,7 @@ public class FetchBuffer implements AutoCloseable {
         try {
             lock.lock();
             completedFetches.add(completedFetch);
+            wokenup.set(true);
             blockingCondition.signalAll();
         } finally {
             lock.unlock();
@@ -111,6 +112,7 @@ public class FetchBuffer implements AutoCloseable {
         try {
             lock.lock();
             this.completedFetches.addAll(completedFetches);
+            wokenup.set(true);
             blockingCondition.signalAll();
         } finally {
             lock.unlock();
@@ -198,9 +200,9 @@ public class FetchBuffer implements AutoCloseable {
     }
 
     void wakeup() {
-        wokenup.set(true);
         try {
             lock.lock();
+            wokenup.set(true);
             blockingCondition.signalAll();
         } finally {
             lock.unlock();
