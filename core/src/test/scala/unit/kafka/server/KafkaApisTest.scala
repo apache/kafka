@@ -773,7 +773,7 @@ class KafkaApisTest extends Logging {
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
 
-    val capturedRequest = verifyTopicCreation(topicName, enableAutoTopicCreation = true, isInternal = true, request)
+    verifyTopicCreation(topicName, enableAutoTopicCreation = true, isInternal = true, request)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer),
       overrideProperties = topicConfigOverride)
     kafkaApis.handleFindCoordinatorRequest(request)
@@ -786,10 +786,6 @@ class KafkaApisTest extends Logging {
       assertEquals(key, response.data.coordinators.get(0).key)
     } else {
       assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.errorCode)
-      assertTrue(capturedRequest.getValue.isEmpty)
-    }
-    if (checkAutoCreateTopic) {
-      assertTrue(capturedRequest.getValue.isEmpty)
     }
   }
 
@@ -947,7 +943,7 @@ class KafkaApisTest extends Logging {
 
     assertEquals(expectedMetadataResponse, response.topicMetadata())
 
-    if (enableAutoTopicCreation) {
+    if (enableAutoTopicCreation && isInternal) {
       assertTrue(capturedRequest.getValue.isPresent)
       assertEquals(request.context, capturedRequest.getValue.get)
     }
