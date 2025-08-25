@@ -834,7 +834,7 @@ public class GroupMetadataManager {
      * The group will be materialized during the replay.
      *
      * If there is an empty classic consumer group of the same name, it will be deleted and a new streams
-     * group.
+     * group will be created.
      *
      * @param groupId           The group ID.
      * @param records           The record list to which the group tombstones are written
@@ -6076,6 +6076,10 @@ public class GroupMetadataManager {
                 // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
                 return classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
             } else if (group.type() == CONSUMER || group.type() == CLASSIC || group.type() == STREAMS && group.isEmpty()) {
+                // classicGroupJoinToClassicGroup accepts:
+                // - classic groups
+                // - empty streams groups
+                // - empty consumer groups
                 return classicGroupJoinToClassicGroup(context, request, responseFuture);
             } else {
                 // Group exists but it's not a consumer group
