@@ -351,7 +351,7 @@ class BrokerMetadataPublisher(
             true
           } else {
             val replicas = newImage.topics.partitionReplicas(log.topicId.get, log.topicPartition.partition)
-            JLogManager.isStrayReplica(replicas, brokerId, log.topicId.get, log)
+            JLogManager.isStrayReplica(replicas, brokerId, log)
           }
         }
       )

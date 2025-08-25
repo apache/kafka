@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.Uuid;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,9 +60,9 @@ public class LogManager {
      * @param log            The log object to check
      * @return true if the log should not exist on the broker, false otherwise.
      */
-    public static boolean isStrayReplica(List<Integer> replicas, int brokerId, Uuid topicId, UnifiedLog log) {
+    public static boolean isStrayReplica(List<Integer> replicas, int brokerId, UnifiedLog log) {
         if (replicas.isEmpty()) {
-            LOG.info("Found stray log dir {}: the topicId {} does not exist in the metadata image.", log, topicId);
+            LOG.info("Found stray log dir {}: the topicId {} does not exist in the metadata image.", log, log.topicId().get());
             return true;
         }
         if (!replicas.contains(brokerId)) {

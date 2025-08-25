@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -67,8 +68,9 @@ public class LogManagerTest {
     @Test
     public void testIsStrayReplica() {
         UnifiedLog log = mock(UnifiedLog.class);
-        assertTrue(LogManager.isStrayReplica(List.of(), 0, Uuid.ONE_UUID, log));
-        assertTrue(LogManager.isStrayReplica(List.of(1, 2, 3), 0, Uuid.ONE_UUID, log));
-        assertFalse(LogManager.isStrayReplica(List.of(0, 1, 2), 0, Uuid.ONE_UUID, log));
+        when(log.topicId()).thenReturn(Optional.of(Uuid.ONE_UUID));
+        assertTrue(LogManager.isStrayReplica(List.of(), 0, log));
+        assertTrue(LogManager.isStrayReplica(List.of(1, 2, 3), 0, log));
+        assertFalse(LogManager.isStrayReplica(List.of(0, 1, 2), 0, log));
     }
 }
