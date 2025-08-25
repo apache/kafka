@@ -443,27 +443,6 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka, processing_guarantee, group_protocol = 'classic', num_threads = 3, replication_factor = 3):
         super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, group_protocol, num_threads, replication_factor)
 
-class StreamsEosTestDriverService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "run", "classic")
-
-class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, group_protocol):
-        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process", group_protocol)
-
-class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, group_protocol):
-        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex", group_protocol)
-
-class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, group_protocol):
-        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify", group_protocol)
-
-
-class StreamsComplexEosTestVerifyRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka, group_protocol):
-        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify-complex", group_protocol)
-
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):

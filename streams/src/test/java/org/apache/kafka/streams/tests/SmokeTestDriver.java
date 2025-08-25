@@ -381,25 +381,25 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                             final int maxRecordsPerKey,
                                             final boolean eosEnabled) {
         final Properties props = createConsumerProperties(kafka);
-        try (final KafkaConsumer<String, Number> consumer = new KafkaConsumer<>(props)) {
-            final List<TopicPartition> partitions = getAllPartitions(consumer, NUMERIC_VALUE_TOPICS);
-            consumer.assign(partitions);
-            consumer.seekToBeginning(partitions);
+        final KafkaConsumer<String, Number> consumer = new KafkaConsumer<>(props);
+        final List<TopicPartition> partitions = getAllPartitions(consumer, NUMERIC_VALUE_TOPICS);
+        consumer.assign(partitions);
+        consumer.seekToBeginning(partitions);
 
-            final int recordsGenerated = inputs.size() * maxRecordsPerKey;
-            final RecordProcessingState state = new RecordProcessingState(recordsGenerated);
-            final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events = new HashMap<>();
+        final int recordsGenerated = inputs.size() * maxRecordsPerKey;
+        final RecordProcessingState state = new RecordProcessingState(recordsGenerated);
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events = new HashMap<>();
 
-            final long start = System.currentTimeMillis();
-            final VerificationResult verificationResult = consumeAndProcessRecords(consumer, inputs, events, state, start, eosEnabled);
+        final long start = System.currentTimeMillis();
+        final VerificationResult verificationResult = consumeAndProcessRecords(consumer, inputs, events, state, start, eosEnabled);
+        consumer.close();
 
-            final VerificationResult eosResult = performEosVerification(eosEnabled, kafka);
-            if (!eosResult.passed()) {
-                return eosResult;
-            }
-
-            return validateAndReportResults(inputs, events, state, verificationResult, start, eosEnabled);
+        final VerificationResult eosResult = performEosVerification(eosEnabled, kafka);
+        if (!eosResult.passed()) {
+            return eosResult;
         }
+
+        return validateAndReportResults(inputs, events, state, verificationResult, start, eosEnabled);
     }
 
     private static Properties createConsumerProperties(final String kafka) {
