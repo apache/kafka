@@ -2517,6 +2517,26 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeReplicaLogDirsWithAuthorizationException() throws ExecutionException, InterruptedException {
+        TopicPartitionReplica tpr = new TopicPartitionReplica("topic", 12, 1);
+
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            String broker1log0 = "/var/data/kafka0";
+            env.kafkaClient().prepareResponseFrom(
+                    prepareDescribeLogDirsResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, broker1log0),
+                    env.cluster().nodeById(tpr.brokerId()));
+
+            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(singletonList(tpr));
+            Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
+
+            Throwable e = assertThrows(Exception.class, () -> values.get(tpr).get());
+            assertInstanceOf(Errors.CLUSTER_AUTHORIZATION_FAILED.getDeclaringClass(), e.getCause());
+        }
+
+    }
+
+    @Test
     public void testCreatePartitions() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
