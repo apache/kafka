@@ -161,7 +161,7 @@ public class VerifiableProducer implements AutoCloseable {
                 .action(store())
                 .required(false)
                 .type(String.class)
-                .metavar("CONFIG_FILE")
+                .metavar("CONFIG-FILE")
                 .help("(DEPRECATED) Producer config properties file. " +
                         "This option will be removed in a future version. Use --command-config instead.");
 
@@ -196,7 +196,7 @@ public class VerifiableProducer implements AutoCloseable {
             .type(String.class)
             .metavar("CONFIG-FILE")
             .dest("commandConfigFile")
-            .help("Producer config properties file.");
+            .help("Config properties file.");
 
         return parser;
     }
@@ -251,11 +251,12 @@ public class VerifiableProducer implements AutoCloseable {
         // No producer retries
         producerProps.put(ProducerConfig.RETRIES_CONFIG, "0");
         if (configFile != null && commandConfigFile != null) {
+            System.out.println("Option --producer.config has been deprecated and will be removed in a future version. Use --command-config instead.");
             throw new ArgumentParserException("Options --producer.config and --command-config are mutually exclusive.", parser);
         }
 
         if (configFile != null) {
-            System.out.println("Option --producer-config has been deprecated and will be removed in a future version. Use --command-config instead.");
+            System.out.println("Option --producer.config has been deprecated and will be removed in a future version. Use --command-config instead.");
             try {
                 producerProps.putAll(loadProps(configFile));
             } catch (IOException e) {

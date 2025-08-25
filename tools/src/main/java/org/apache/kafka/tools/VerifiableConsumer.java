@@ -611,7 +611,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .action(store())
                 .required(false)
                 .type(String.class)
-                .metavar("CONFIG_FILE")
+                .metavar("CONFIG-FILE")
                 .help("(DEPRECATED) Consumer config properties file (config options shared with command line parameters will be overridden)." +
                         "This option will be removed in a future version. Use --command-config instead.");
 
@@ -621,7 +621,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .type(String.class)
                 .metavar("CONFIG-FILE")
                 .dest("commandConfigFile")
-                .help("Consumer config properties file.");
+                .help("Config properties file.");
 
         return parser;
     }
@@ -631,11 +631,12 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
         String configFile = res.getString("consumer.config");
-        String commandConfigFile = res.getString("command-config");
+        String commandConfigFile = res.getString("commandConfigFile");
         String brokerHostAndPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
         if (configFile != null && commandConfigFile != null) {
+            System.out.println("Option --consumer.config has been deprecated and will be removed in a future version. Use --command-config instead.");
             throw new ArgumentParserException("Options --consumer.config and --command-config are mutually exclusive.", parser);
         }
         if (configFile != null) {
@@ -645,7 +646,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
         }
-        if (res.getString(commandConfigFile) != null) {
+        if (commandConfigFile != null) {
             try {
                 consumerProps.putAll(Utils.loadProps(res.getString(commandConfigFile)));
             } catch (IOException e) {
