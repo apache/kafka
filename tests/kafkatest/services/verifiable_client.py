@@ -75,7 +75,7 @@ Command line arguments:
  * `--max-messages <n>`
  * `--assignment-strategy <s>`
  * `--consumer.config <config-file>` - (DEPRECATED) consumer config properties (typically empty). This option will be removed in a future version. Use --command-config instead.
- * `--command-config <config-file>` - consumer config properties
+ * `--command-config <config-file>` - command config properties
 
 Environment variables:
  * `LOG_DIR` - log output directory. Typically not needed if logs are written to stderr.
@@ -99,7 +99,7 @@ Command line arguments:
  * `--max-messages <n>`
  * `--throughput <msgs/s>`
  * `--producer.config <config-file>` - producer config properties (typically empty). This option will be removed in a future version. Use --command-config instead.
- * `--command-config <config-file>` - producer config properties
+ * `--command-config <config-file>` - command config properties
 
 Environment variables:
  * `LOG_DIR` - log output directory. Typically not needed if logs are written to stderr.
