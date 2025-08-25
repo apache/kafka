@@ -25,22 +25,16 @@ import org.apache.kafka.metadata.ControllerRegistration;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
-
 
 /**
  * Represents the cluster in the metadata image.
- *
+ * <p>
  * This class is thread-safe.
  */
-public final class ClusterImage {
+public record ClusterImage(Map<Integer, BrokerRegistration> brokers, Map<Integer, ControllerRegistration> controllers) {
     public static final ClusterImage EMPTY = new ClusterImage(
-            Map.of(),
-            Map.of());
-
-    private final Map<Integer, BrokerRegistration> brokers;
-
-    private final Map<Integer, ControllerRegistration> controllers;
+        Map.of(),
+        Map.of());
 
     public ClusterImage(
         Map<Integer, BrokerRegistration> brokers,
@@ -54,16 +48,8 @@ public final class ClusterImage {
         return brokers.isEmpty();
     }
 
-    public Map<Integer, BrokerRegistration> brokers() {
-        return brokers;
-    }
-
     public BrokerRegistration broker(int nodeId) {
         return brokers.get(nodeId);
-    }
-
-    public Map<Integer, ControllerRegistration> controllers() {
-        return controllers;
     }
 
     public long brokerEpoch(int brokerId) {
@@ -87,18 +73,6 @@ public final class ClusterImage {
                 }
             }
         }
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(brokers, controllers);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof ClusterImage other)) return false;
-        return brokers.equals(other.brokers) &&
-            controllers.equals(other.controllers);
     }
 
     @Override
