@@ -347,20 +347,20 @@ public class ConsumerGroupCommand {
                         for (PartitionAssignmentState consumerAssignment : consumerAssignments) {
                             if (verbose) {
                                 System.out.printf(format,
-                                    consumerAssignment.group,
-                                    consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
+                                    consumerAssignment.group(),
+                                    consumerAssignment.topic().orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.leaderEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.offset().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.lag().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId().orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.host().orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId().orElse(MISSING_COLUMN_VALUE)
                                 );
                             } else {
                                 System.out.printf(format,
-                                    consumerAssignment.group,
-                                    consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
+                                    consumerAssignment.group(),
+                                    consumerAssignment.topic().orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.offset().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.lag().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId().orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.host().orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId().orElse(MISSING_COLUMN_VALUE)
                                 );
                             }
                         }
@@ -379,10 +379,10 @@ public class ConsumerGroupCommand {
             if (assignments.isPresent()) {
                 Collection<PartitionAssignmentState> consumerAssignments = assignments.get();
                 for (PartitionAssignmentState consumerAssignment : consumerAssignments) {
-                    maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group.length());
-                    maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE).length());
-                    maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE).length());
-                    maxHostLen = Math.max(maxHostLen, consumerAssignment.host.orElse(MISSING_COLUMN_VALUE).length());
+                    maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group().length());
+                    maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic().orElse(MISSING_COLUMN_VALUE).length());
+                    maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId().orElse(MISSING_COLUMN_VALUE).length());
+                    maxHostLen = Math.max(maxHostLen, consumerAssignment.host().orElse(MISSING_COLUMN_VALUE).length());
 
                 }
             }
@@ -408,20 +408,20 @@ public class ConsumerGroupCommand {
                     // find proper columns width
                     if (assignments.isPresent()) {
                         for (MemberAssignmentState memberAssignment : assignments.get()) {
-                            maxGroupLen = Math.max(maxGroupLen, memberAssignment.group.length());
-                            maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId.length());
-                            maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId.length());
-                            maxHostLen = Math.max(maxHostLen, memberAssignment.host.length());
-                            maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length());
-                            includeGroupInstanceId = includeGroupInstanceId || !memberAssignment.groupInstanceId.isEmpty();
-                            String currentAssignment = memberAssignment.assignment.isEmpty() ?
-                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment);
-                            String targetAssignment = memberAssignment.targetAssignment.isEmpty() ?
-                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment);
+                            maxGroupLen = Math.max(maxGroupLen, memberAssignment.group().length());
+                            maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId().length());
+                            maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId().length());
+                            maxHostLen = Math.max(maxHostLen, memberAssignment.host().length());
+                            maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId().length());
+                            includeGroupInstanceId = includeGroupInstanceId || !memberAssignment.groupInstanceId().isEmpty();
+                            String currentAssignment = memberAssignment.assignment().isEmpty() ?
+                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment());
+                            String targetAssignment = memberAssignment.targetAssignment().isEmpty() ?
+                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment());
                             maxCurrentAssignment = Math.max(maxCurrentAssignment, currentAssignment.length());
                             maxTargetAssignment = Math.max(maxTargetAssignment, targetAssignment.length());
-                            hasClassicMember = hasClassicMember || (memberAssignment.upgraded.isPresent() && !memberAssignment.upgraded.get());
-                            hasConsumerMember = hasConsumerMember || (memberAssignment.upgraded.isPresent() && memberAssignment.upgraded.get());
+                            hasClassicMember = hasClassicMember || (memberAssignment.upgraded().isPresent() && !memberAssignment.upgraded().get());
+                            hasConsumerMember = hasConsumerMember || (memberAssignment.upgraded().isPresent() && memberAssignment.upgraded().get());
                         }
                     }
                 }
@@ -465,23 +465,23 @@ public class ConsumerGroupCommand {
         ) {
             for (MemberAssignmentState memberAssignment : memberAssignments) {
                 if (includeGroupInstanceId) {
-                    System.out.printf(formatWithGroupInstanceId, memberAssignment.group, memberAssignment.consumerId,
-                        memberAssignment.groupInstanceId, memberAssignment.host, memberAssignment.clientId,
-                        memberAssignment.numPartitions);
+                    System.out.printf(formatWithGroupInstanceId, memberAssignment.group(), memberAssignment.consumerId(),
+                        memberAssignment.groupInstanceId(), memberAssignment.host(), memberAssignment.clientId(),
+                        memberAssignment.numPartitions());
                 } else {
-                    System.out.printf(formatWithoutGroupInstanceId, memberAssignment.group, memberAssignment.consumerId,
-                        memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions);
+                    System.out.printf(formatWithoutGroupInstanceId, memberAssignment.group(), memberAssignment.consumerId(),
+                        memberAssignment.host(), memberAssignment.clientId(), memberAssignment.numPartitions());
                 }
                 if (verbose) {
-                    String currentEpoch = memberAssignment.currentEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE);
-                    String currentAssignment = memberAssignment.assignment.isEmpty() ?
-                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment);
-                    String targetEpoch = memberAssignment.targetEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE);
-                    String targetAssignment = memberAssignment.targetAssignment.isEmpty() ?
-                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment);
+                    String currentEpoch = memberAssignment.currentEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE);
+                    String currentAssignment = memberAssignment.assignment().isEmpty() ?
+                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment());
+                    String targetEpoch = memberAssignment.targetEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE);
+                    String targetAssignment = memberAssignment.targetAssignment().isEmpty() ?
+                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment());
                     if (hasMigrationMember) {
                         System.out.printf(formatWithUpgrade, currentEpoch, currentAssignment, targetEpoch, targetAssignment,
-                            memberAssignment.upgraded.map(Object::toString).orElse(MISSING_COLUMN_VALUE));
+                            memberAssignment.upgraded().map(Object::toString).orElse(MISSING_COLUMN_VALUE));
                     } else {
                         System.out.printf(formatWithoutUpgrade, currentEpoch, currentAssignment, targetEpoch, targetAssignment);
                     }
@@ -511,23 +511,23 @@ public class ConsumerGroupCommand {
 
         private void printStates(Map<String, GroupInformation> states, boolean verbose) {
             states.forEach((groupId, state) -> {
-                if (shouldPrintMemberState(groupId, Optional.of(state.groupState), Optional.of(1))) {
-                    String coordinator = state.coordinator.host() + ":" + state.coordinator.port() + "  (" + state.coordinator.idString() + ")";
+                if (shouldPrintMemberState(groupId, Optional.of(state.groupState()), Optional.of(1))) {
+                    String coordinator = state.coordinator().host() + ":" + state.coordinator().port() + "  (" + state.coordinator().idString() + ")";
                     int coordinatorColLen = Math.max(25, coordinator.length());
-                    int groupColLen = Math.max(15, state.group.length());
+                    int groupColLen = Math.max(15, state.group().length());
 
-                    String assignmentStrategy = state.assignmentStrategy.isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy;
+                    String assignmentStrategy = state.assignmentStrategy().isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy();
 
                     if (verbose) {
                         String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %-15s %-25s %s";
                         System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE",
                             "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-                        System.out.printf(format, state.group, coordinator, assignmentStrategy, state.groupState,
-                            state.groupEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.targetAssignmentEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.numMembers);
+                        System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(),
+                            state.groupEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.targetAssignmentEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.numMembers());
                     } else {
                         String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %s";
                         System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
-                        System.out.printf(format, state.group, coordinator, assignmentStrategy, state.groupState, state.numMembers);
+                        System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(), state.numMembers());
                     }
                     System.out.println();
                 }
@@ -623,8 +623,8 @@ public class ConsumerGroupCommand {
             // concat the data and then sort them
             return Stream.concat(existLeaderAssignments.stream(), noneLeaderAssignments.stream())
                     .sorted(Comparator.<PartitionAssignmentState, String>comparing(
-                            state -> state.topic.orElse(""), String::compareTo)
-                            .thenComparingInt(state -> state.partition.orElse(-1)))
+                            state -> state.topic().orElse(""), String::compareTo)
+                            .thenComparingInt(state -> state.partition().orElse(-1)))
                     .collect(Collectors.toList());
         }
 

@@ -102,9 +102,7 @@ public class StringFormatter {
                 String val = cols.get(x);
                 int minWidth = widths.get(x);
                 bld.append(val);
-                for (int i = 0; i < minWidth - val.length(); i++) {
-                    bld.append(" ");
-                }
+                bld.append(" ".repeat(Math.max(0, minWidth - val.length())));
             }
             bld.append(String.format("%n"));
         }
