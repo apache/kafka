@@ -113,8 +113,8 @@ public class PartitionReassignmentReplicasTest {
             replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 4, 5));
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
-        assertEquals(List.of(3, 4, 5), completedReassignment.isr);
-        assertEquals(List.of(3, 4, 5), completedReassignment.replicas);
+        assertEquals(List.of(3, 4, 5), completedReassignment.isr());
+        assertEquals(List.of(3, 4, 5), completedReassignment.replicas());
     }
 
     @Test
@@ -126,8 +126,8 @@ public class PartitionReassignmentReplicasTest {
             replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3));
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
-        assertEquals(List.of(0, 1, 3), completedReassignment.isr);
-        assertEquals(List.of(0, 1, 3), completedReassignment.replicas);
+        assertEquals(List.of(0, 1, 3), completedReassignment.isr());
+        assertEquals(List.of(0, 1, 3), completedReassignment.replicas());
     }
 
     @Test

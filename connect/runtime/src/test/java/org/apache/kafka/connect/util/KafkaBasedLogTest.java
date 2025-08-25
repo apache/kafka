@@ -49,7 +49,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -152,7 +151,7 @@ public class KafkaBasedLogTest {
             }
         };
         consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
-        consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
+        consumer.updatePartitions(TOPIC, List.of(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
         beginningOffsets.put(TP0, 0L);
         beginningOffsets.put(TP1, 0L);

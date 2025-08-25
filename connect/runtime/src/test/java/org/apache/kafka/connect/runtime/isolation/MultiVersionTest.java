@@ -30,7 +30,6 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -130,7 +129,7 @@ public class MultiVersionTest {
                 DEFAULT_COMBINED_ARTIFACT_VERSIONS.computeIfAbsent(VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION, k -> "0.4.0"));
             builder.include(VersionedPluginBuilder.VersionedTestPlugin.PREDICATE,
                 DEFAULT_COMBINED_ARTIFACT_VERSIONS.computeIfAbsent(VersionedPluginBuilder.VersionedTestPlugin.PREDICATE, k -> "0.5.0"));
-            DEFAULT_COMBINED_ARTIFACT = Collections.singletonMap(builder.build("all_versioned_artifact"), builder.buildInfos());
+            DEFAULT_COMBINED_ARTIFACT = Map.of(builder.build("all_versioned_artifact"), builder.buildInfos());
 
             Map<Path, List<VersionedPluginBuilder.BuildInfo>> artifacts = new HashMap<>();
             artifacts.putAll(DEFAULT_COMBINED_ARTIFACT);
