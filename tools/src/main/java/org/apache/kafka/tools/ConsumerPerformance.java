@@ -36,20 +36,13 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Collection;
-<<<<<<< HEAD
-=======
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
->>>>>>> trunk
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
-<<<<<<< HEAD
 import java.util.function.Function;
-=======
 import java.util.regex.Pattern;
->>>>>>> trunk
 
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
