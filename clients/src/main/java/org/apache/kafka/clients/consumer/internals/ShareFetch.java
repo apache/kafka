@@ -110,7 +110,7 @@ public class ShareFetch<K, V> {
      * Acknowledge a single record in the current batch.
      *
      * @param record The record to acknowledge
-     * @param type The acknowledgment type which indicates whether it was processed successfully
+     * @param type The acknowledge type which indicates whether it was processed successfully
      */
     public void acknowledge(final ConsumerRecord<K, V> record, final AcknowledgeType type) {
         for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> tipBatch : batches.entrySet()) {
@@ -129,7 +129,7 @@ public class ShareFetch<K, V> {
      * @param topic     The topic of the record to acknowledge
      * @param partition The partition of the record
      * @param offset    The offset of the record
-     * @param type      The acknowledgment type which indicates whether it was processed successfully
+     * @param type      The acknowledge type which indicates whether it was processed successfully
      */
     public void acknowledge(final String topic, final int partition, final long offset, final AcknowledgeType type) {
         for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> tipBatch : batches.entrySet()) {
