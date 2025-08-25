@@ -1269,6 +1269,13 @@ public class UtilsTest {
         assertEquals(expected, recorded);
     }
 
+    @Test
+    public void testMsToNs() {
+        assertEquals(1000000, Utils.msToNs(1));
+        assertEquals(0, Utils.msToNs(0));
+        assertThrows(IllegalArgumentException.class, () -> Utils.msToNs(Long.MAX_VALUE));
+    }
+
     private Callable<Void> recordingCallable(Map<String, Object> recordingMap, String success, TestException failure) {
         return () -> {
             if (success == null)

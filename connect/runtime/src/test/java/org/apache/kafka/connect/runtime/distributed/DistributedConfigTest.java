@@ -29,9 +29,6 @@ import org.mockito.quality.Strictness;
 
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -151,9 +148,9 @@ public class DistributedConfigTest {
 
     private void testSupportedAlgorithms(String type, String... expectedAlgorithms) {
         Set<String> supportedAlgorithms = DistributedConfig.supportedAlgorithms(type);
-        Set<String> unsupportedAlgorithms = new HashSet<>(Arrays.asList(expectedAlgorithms));
+        Set<String> unsupportedAlgorithms = new HashSet<>(List.of(expectedAlgorithms));
         unsupportedAlgorithms.removeAll(supportedAlgorithms);
-        assertEquals(Collections.emptySet(), unsupportedAlgorithms, type + " algorithms were found that should be supported by this JVM but are not");
+        assertEquals(Set.of(), unsupportedAlgorithms, type + " algorithms were found that should be supported by this JVM but are not");
     }
 
     @Test
@@ -214,13 +211,13 @@ public class DistributedConfigTest {
 
     @Test
     public void shouldValidateAllVerificationAlgorithms() {
-        List<String> algorithms =
-            new ArrayList<>(Arrays.asList("HmacSHA1", "HmacSHA256", "HmacMD5", "bad-algorithm"));
+        List<String> algorithms = List.of("HmacSHA1", "HmacSHA256", "HmacMD5", "bad-algorithm");
         Map<String, String> configs = configs();
         for (int i = 0; i < algorithms.size(); i++) {
             configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, String.join(",", algorithms));
             assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
-            algorithms.add(algorithms.remove(0));
+            // Rotate the algorithm list by creating a new list with rotated elements
+            algorithms = List.of(algorithms.get(1), algorithms.get(2), algorithms.get(3), algorithms.get(0));
         }
     }
 

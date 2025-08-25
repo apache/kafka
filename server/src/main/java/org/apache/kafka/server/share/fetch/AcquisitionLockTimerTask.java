@@ -32,6 +32,7 @@ public class AcquisitionLockTimerTask extends TimerTask {
     private final long lastOffset;
     private final AcquisitionLockTimeoutHandler timeoutHandler;
     private final SharePartitionMetrics sharePartitionMetrics;
+    private volatile boolean hasExpired;
 
     public AcquisitionLockTimerTask(
         Time time,
@@ -49,10 +50,15 @@ public class AcquisitionLockTimerTask extends TimerTask {
         this.lastOffset = lastOffset;
         this.timeoutHandler = timeoutHandler;
         this.sharePartitionMetrics = sharePartitionMetrics;
+        this.hasExpired = false;
     }
 
     public long expirationMs() {
         return expirationMs;
+    }
+
+    public boolean hasExpired() {
+        return hasExpired;
     }
 
     /**
@@ -60,7 +66,12 @@ public class AcquisitionLockTimerTask extends TimerTask {
      */
     @Override
     public void run() {
+        // Mark the request as expired prior executing the timeout. There might be concurrent execution
+        // of timeout task and failed acknowledgement which checks if the timeout task has expired.
+        // But only one shall update the state to available. The concurrent execution is protected by
+        // write lock on the state.
+        hasExpired = true;
         sharePartitionMetrics.recordAcquisitionLockTimeoutPerSec(lastOffset - firstOffset + 1);
-        timeoutHandler.handle(memberId, firstOffset, lastOffset);
+        timeoutHandler.handle(memberId, firstOffset, lastOffset, this);
     }
 }
