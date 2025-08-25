@@ -44,7 +44,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -459,7 +458,7 @@ public class LogCompactionTester {
         }
     }
 
-    private static Path produceMessages(String brokerUrl, String[] topics, long messages,
+    private static Path produceMessages(String brokerUrl, Set<String> topics, long messages,
                                         String compressionType, Integer compressionLevel,
                                         int dups, int percentDeletes) throws IOException {
         Map<String, Object> producerProps = new HashMap<>();
