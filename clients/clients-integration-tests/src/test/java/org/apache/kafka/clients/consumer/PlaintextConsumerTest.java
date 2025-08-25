@@ -47,14 +47,10 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.TestUtils;
-
-import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -67,6 +63,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -1593,17 +1590,11 @@ public class PlaintextConsumerTest {
         }
     }
 
-    // Override the default test timeout of 60 seconds since the core logic of the test allows up to 60 seconds to
-    // pass to detect the issue.
-    @Timeout(75)
     @ClusterTest
     public void testClassicConsumerStallBetweenPoll() throws Exception {
         testStallBetweenPoll(GroupProtocol.CLASSIC);
     }
 
-    // Override the default test timeout of 60 seconds since the core logic of the test allows up to 60 seconds to
-    // pass to detect the issue.
-    @Timeout(75)
     @ClusterTest
     public void testAsyncConsumerStallBetweenPoll() throws Exception {
         testStallBetweenPoll(GroupProtocol.CONSUMER);
@@ -1617,75 +1608,53 @@ public class PlaintextConsumerTest {
      *
      * The basic idea is to have one thread that produces a record every 500 ms. and the main thread that consumes
      * records without pausing between polls for much more than the produce delay. In the test case filed in
-     * KAFKA-19259, the consumer sometimes pauses for up to 5-10 seconds despite records being produced every
-     * quarter second.
+     * KAFKA-19259, the consumer sometimes pauses for up to 5-10 seconds despite records being produced every second.
      */
     private void testStallBetweenPoll(GroupProtocol groupProtocol) throws Exception {
-        var testTopic = "stutter-test-topic";
+        var testTopic = "stall-test-topic";
         var numPartitions = 6;
         cluster.createTopic(testTopic, numPartitions, (short) BROKER_COUNT);
 
-        // Give the test one minute to detect a stall.
-        var testTimeout = 60000;
-
         // The producer must produce slowly to tickle the scenario.
-        var produceWait = 500;
+        var produceDelay = 500;
 
-        // Assign a tolerance for how much time is allowed to pass between Consumer.poll() calls given that there
-        // should be *at least* one record to read every second.
-        var delayTolerance = produceWait * 2;
+        var executor = Executors.newScheduledThreadPool(1);
 
         try (var producer = cluster.producer()) {
             // Start a thread running that produces records at a relative trickle.
-            var producerThread = new Thread(() -> {
-                while (true) {
-                    try {
-                        Utils.sleep(produceWait);
-                        producer.send(new ProducerRecord<>(testTopic, TestUtils.randomBytes(64))).get();
-                    } catch (InterruptedException e) {
-                        break;
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            });
-            producerThread.start();
+            executor.scheduleWithFixedDelay(
+                () -> producer.send(new ProducerRecord<>(testTopic, TestUtils.randomBytes(64))),
+                0,
+                produceDelay,
+                TimeUnit.MILLISECONDS
+            );
 
             Map<String, Object> consumerConfig = Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
+
+            // Assign a tolerance for how much time is allowed to pass between Consumer.poll() calls given that there
+            // should be *at least* one record to read every second.
+            var pollDelayTolerance = 2000;
 
             try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
                 consumer.subscribe(List.of(testTopic));
 
-                // This is just to wait until the group membership and assignment is in place.
+                // This is here to allow the consumer time to settle the group membership/assignment.
                 awaitNonEmptyRecords(consumer, new TopicPartition(testTopic, 0));
-
-                var testTimer = Time.SYSTEM.timer(testTimeout);
 
                 // Keep track of the last time the poll is invoked to ensure the deltas between invocations don't
                 // exceed the delay threshold defined above.
-                var lastPoll = System.currentTimeMillis();
+                var beforePoll = System.currentTimeMillis();
+                consumer.poll(Duration.ofSeconds(5));
+                consumer.poll(Duration.ofSeconds(5));
+                var afterPoll = System.currentTimeMillis();
+                var pollDelay = afterPoll - beforePoll;
 
-                while (testTimer.notExpired()) {
-                    try {
-                        consumer.poll(Duration.ofMillis(10000));
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-
-                    var currPoll = System.currentTimeMillis();
-                    var pollDelay = currPoll - lastPoll;
-
-                    if (pollDelay > delayTolerance) {
-                        fail("Detected a stall of " + pollDelay + " ms between Consumer.poll() invocations despite a Producer producing records every " + produceWait + " ms");
-                        break;
-                    }
-
-                    lastPoll = currPoll;
-                    testTimer.update();
-                }
+                if (pollDelay > pollDelayTolerance)
+                    fail("Detected a stall of " + pollDelay + " ms between Consumer.poll() invocations despite a Producer producing records every " + produceDelay + " ms");
             } finally {
-                producerThread.interrupt();
-                producerThread.join();
+                executor.shutdownNow();
+                // Wait for any active tasks to terminate to ensure consumer is not closed while being used from another thread
+                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor did not terminate");
             }
         }
     }
