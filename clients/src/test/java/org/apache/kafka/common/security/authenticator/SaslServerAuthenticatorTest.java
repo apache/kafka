@@ -270,6 +270,35 @@ public class SaslServerAuthenticatorTest {
         }
     }
 
+    @Test
+    public void testSessionWontExpireWithLargeExpirationTime() throws IOException {
+        String mechanism = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+        SaslServer saslServer = mock(SaslServer.class);
+        MockTime time = new MockTime(0, 1, 1000);
+        // set a Long.MAX_VALUE as the expiration time
+        Duration largeExpirationTime = Duration.ofMillis(Long.MAX_VALUE);
+
+        try (
+            MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, largeExpirationTime);
+            MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
+            TransportLayer transportLayer = mockTransportLayer()
+        ) {
+
+            SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, largeExpirationTime.toMillis());
+
+            mockRequest(saslHandshakeRequest(mechanism), transportLayer);
+            authenticator.authenticate();
+
+            when(saslServer.isComplete()).thenReturn(false).thenReturn(true);
+            mockRequest(saslAuthenticateRequest(), transportLayer);
+
+            Throwable t = assertThrows(IllegalArgumentException.class, () -> authenticator.authenticate());
+            assertEquals(ArithmeticException.class, t.getCause().getClass());
+            assertEquals("Cannot convert " + Long.MAX_VALUE + " millisecond to nanosecond due to arithmetic overflow",
+                t.getMessage());
+        }
+    }
+
     private SaslServerAuthenticator getSaslServerAuthenticatorForOAuth(String mechanism, TransportLayer transportLayer, Time time, Long maxReauth) {
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
                 Collections.singletonList(mechanism));
