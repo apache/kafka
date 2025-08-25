@@ -542,7 +542,7 @@ class ZkMetadataCache(
       aliveNodes.get(brokerId).foreach { listenerMap =>
         val listeners = listenerMap.keySet
         if (!aliveNodes.values.forall(_.keySet == listeners))
-          error(s"Listeners are not identical across brokers: $aliveNodes")
+          info(s"Listeners are not identical across brokers: $aliveNodes")
       }
 
       val topicIds = mutable.Map.empty[String, Uuid]
