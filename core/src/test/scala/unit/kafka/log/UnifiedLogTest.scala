@@ -2429,7 +2429,7 @@ class UnifiedLogTest {
     val _ = prepareLogWithSequentialRecords(log, recordCount = 2)
 
     // Test state after records are appended
-    assertFetchOffsetBySpecialTimestamp(log, None, new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_OFFSET, -1, Optional.of(-1)),
+    assertFetchOffsetBySpecialTimestamp(log, None, new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)),
       ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP)
   }
 
