@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -63,6 +64,8 @@ import java.util.stream.Stream;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+
+import static java.util.stream.Collectors.toCollection;
 
 
 /**
@@ -309,9 +312,9 @@ public class LogCompactionTester {
         validateCompressionConfig(compressionType, compressionLevel);
 
         long testId = RANDOM.nextLong();
-        String[] topics = IntStream.range(0, topicCount)
+        Set<String> topics = IntStream.range(0, topicCount)
                 .mapToObj(i -> "log-cleaner-test-" + testId + "-" + i)
-                .toArray(String[]::new);
+                .collect(toCollection(LinkedHashSet::new));
         createTopics(brokerUrl, topics);
 
         System.out.println("Producing " + messages + " messages..to topics " + String.join(",", topics));
@@ -342,7 +345,7 @@ public class LogCompactionTester {
     }
 
 
-    private static void createTopics(String brokerUrl, String[] topics) throws Exception {
+    private static void createTopics(String brokerUrl, Set<String> topics) throws Exception {
         Properties adminConfig = new Properties();
         adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
 
@@ -350,7 +353,7 @@ public class LogCompactionTester {
             Map<String, String> topicConfigs = Map.of(
                     TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT
             );
-            List<NewTopic> newTopics = Arrays.stream(topics)
+            List<NewTopic> newTopics = topics.stream()
                     .map(name -> new NewTopic(name, 1, (short) 1).configs(topicConfigs)).toList();
             adminClient.createTopics(newTopics).all().get();
 
@@ -360,7 +363,7 @@ public class LogCompactionTester {
                     Set<String> allTopics = adminClient.listTopics().names().get();
                     pendingTopics.clear();
                     pendingTopics.addAll(
-                            Arrays.stream(topics)
+                            topics.stream()
                                     .filter(topicName -> !allTopics.contains(topicName))
                                     .toList()
                     );
@@ -488,8 +491,10 @@ public class LogCompactionTester {
 
             try (BufferedWriter producedWriter = Files.newBufferedWriter(
                     producedFilePath, StandardCharsets.UTF_8)) {
-                for (long i = 0; i < messages * topics.length; i++) {
-                    String topic = topics[(int) (i % topics.length)];
+                List<String> topicsList = List.copyOf(topics);
+                int size = topicsList.size();
+                for (long i = 0; i < messages * size; i++) {
+                    String topic = topicsList.get((int) (i % size));
                     int key = RANDOM.nextInt(keyCount);
                     boolean delete = (i % 100) < percentDeletes;
                     ProducerRecord<byte[], byte[]> record;
@@ -510,14 +515,14 @@ public class LogCompactionTester {
         }
     }
 
-    private static Path consumeMessages(String brokerUrl, String[] topics) throws IOException {
+    private static Path consumeMessages(String brokerUrl, Set<String> topics) throws IOException {
 
         Path consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt");
         System.out.println("Logging consumed messages to " + consumedFilePath);
 
         try (Consumer<String, String> consumer = createConsumer(brokerUrl);
              BufferedWriter consumedWriter = Files.newBufferedWriter(consumedFilePath, StandardCharsets.UTF_8)) {
-            consumer.subscribe(Arrays.asList(topics));
+            consumer.subscribe(topics);
             while (true) {
                 ConsumerRecords<String, String> consumerRecords = consumer.poll(Duration.ofSeconds(20));
                 if (consumerRecords.isEmpty()) return consumedFilePath;
