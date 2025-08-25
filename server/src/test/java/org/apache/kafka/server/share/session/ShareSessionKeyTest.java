@@ -14,24 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.quota;
 
-import org.apache.kafka.common.metrics.Sensor;
+package org.apache.kafka.server.share.session;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
+import org.apache.kafka.common.Uuid;
+import org.junit.jupiter.api.Test;
 
-/**
- * Represents the sensors aggregated per client
- * @param metricTags         quota metric tags for the client
- * @param quotaSensor        sensor that tracks the quota
- * @param throttleTimeSensor sensor that tracks the throttle time
- */
-public record ClientSensors(Map<String, String> metricTags, Sensor quotaSensor, Sensor throttleTimeSensor) {
-    public ClientSensors {
-        metricTags = new LinkedHashMap<>(metricTags);
-        Objects.requireNonNull(quotaSensor);
-        Objects.requireNonNull(throttleTimeSensor);
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+public class ShareSessionKeyTest {
+    @Test
+    public void testConstructorThrowsExceptionWhenGroupIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey(null, Uuid.randomUuid()));
+    }
+
+    @Test
+    public void testConstructorThrowsExceptionWhenMemberIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey("random", null));
+    }
+
+    @Test
+    public void testConstructorThrowsExceptionWhenBothGroupIdAndMemberIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey(null, null));
     }
 }
