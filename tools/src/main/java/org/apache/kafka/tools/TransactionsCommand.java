@@ -63,7 +63,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 
 public abstract class TransactionsCommand {
@@ -288,7 +287,7 @@ public abstract class TransactionsCommand {
     }
 
     static class DescribeProducersCommand extends TransactionsCommand {
-        static final List<String> HEADERS = asList(
+        static final List<String> HEADERS = List.of(
             "ProducerId",
             "ProducerEpoch",
             "LatestCoordinatorEpoch",
@@ -360,7 +359,7 @@ public abstract class TransactionsCommand {
                         String.valueOf(producerState.currentTransactionStartOffset().getAsLong()) :
                         "None";
 
-                return asList(
+                return List.of(
                     String.valueOf(producerState.producerId()),
                     String.valueOf(producerState.producerEpoch()),
                     String.valueOf(producerState.coordinatorEpoch().orElse(-1)),
@@ -375,7 +374,7 @@ public abstract class TransactionsCommand {
     }
 
     static class DescribeTransactionsCommand extends TransactionsCommand {
-        static final List<String> HEADERS = asList(
+        static final List<String> HEADERS = List.of(
             "CoordinatorId",
             "TransactionalId",
             "ProducerId",
@@ -436,7 +435,7 @@ public abstract class TransactionsCommand {
                 transactionDurationMsColumnValue = "None";
             }
 
-            List<String> row = asList(
+            List<String> row = List.of(
                 String.valueOf(result.coordinatorId()),
                 transactionalId,
                 String.valueOf(result.producerId()),
@@ -453,7 +452,7 @@ public abstract class TransactionsCommand {
     }
 
     static class ListTransactionsCommand extends TransactionsCommand {
-        static final List<String> HEADERS = asList(
+        static final List<String> HEADERS = List.of(
             "TransactionalId",
             "Coordinator",
             "ProducerId",
@@ -510,7 +509,7 @@ public abstract class TransactionsCommand {
                 Collection<TransactionListing> listings = brokerListingsEntry.getValue();
 
                 for (TransactionListing listing : listings) {
-                    rows.add(asList(
+                    rows.add(List.of(
                         listing.transactionalId(),
                         coordinatorIdString,
                         String.valueOf(listing.producerId()),
@@ -526,7 +525,7 @@ public abstract class TransactionsCommand {
     static class FindHangingTransactionsCommand extends TransactionsCommand {
         private static final int MAX_BATCH_SIZE = 500;
 
-        static final List<String> HEADERS = asList(
+        static final List<String> HEADERS = List.of(
             "Topic",
             "Partition",
             "ProducerId",
@@ -709,7 +708,7 @@ public abstract class TransactionsCommand {
                 long transactionDurationMinutes = TimeUnit.MILLISECONDS.toMinutes(
                     currentTimeMs - transaction.producerState.lastTimestamp());
 
-                rows.add(asList(
+                rows.add(List.of(
                     transaction.topicPartition.topic(),
                     String.valueOf(transaction.topicPartition.partition()),
                     String.valueOf(transaction.producerState.producerId()),
@@ -848,17 +847,7 @@ public abstract class TransactionsCommand {
             return candidateTransactions;
         }
 
-        private static class OpenTransaction {
-            private final TopicPartition topicPartition;
-            private final ProducerState producerState;
-
-            private OpenTransaction(
-                TopicPartition topicPartition,
-                ProducerState producerState
-            ) {
-                this.topicPartition = topicPartition;
-                this.producerState = producerState;
-            }
+        private record OpenTransaction(TopicPartition topicPartition, ProducerState producerState) {
         }
 
         private void collectCandidateOpenTransactions(
@@ -1024,7 +1013,7 @@ public abstract class TransactionsCommand {
         PrintStream out,
         Time time
     ) throws Exception {
-        List<TransactionsCommand> commands = asList(
+        List<TransactionsCommand> commands = List.of(
             new ListTransactionsCommand(time),
             new DescribeTransactionsCommand(time),
             new DescribeProducersCommand(time),
