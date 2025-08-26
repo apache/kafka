@@ -380,9 +380,20 @@ public class ShareConsumerPerformance {
             }
             if (options != null) {
                 CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the share consumer performance.");
-                CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numRecordsOpt);
+                CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
+
                 CommandLineUtils.checkOneOfArgs(parser, options, numMessagesOpt, numRecordsOpt);
-                CommandLineUtils.checkOneOfArgs(parser, options, consumerConfigOpt, commandConfigOpt);
+                CommandLineUtils.checkInvalidArgs(parser, options, consumerConfigOpt, commandConfigOpt);
+
+                if (options.has(numMessagesOpt)) {
+                    System.out.println("Warning: --messages is deprecated. Use --num-records instead.");
+                }
+
+                if (options.has(consumerConfigOpt)) {
+                    System.out.println("Warning: --consumer.config is deprecated. Use --command-config instead.");
+                }
+
+
             }
         }
 
@@ -397,7 +408,6 @@ public class ShareConsumerPerformance {
         public Properties props() throws IOException {
             String commandConfigFile;
             if (options.has(consumerConfigOpt)) {
-                System.out.println("Warning: --consumer.config is deprecated. Use --command-config instead.");
                 commandConfigFile = options.valueOf(consumerConfigOpt);
             } else {
                 commandConfigFile = options.valueOf(commandConfigOpt);

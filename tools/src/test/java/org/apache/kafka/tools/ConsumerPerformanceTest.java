@@ -80,6 +80,18 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
+    public void testNumOfRecordsNotPresent() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() ->
+                new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(err.contains("Exactly one of the following arguments is required:"));
+    }
+
+    @Test
     public void testNumOfRecordsDeprecated() {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
@@ -89,6 +101,20 @@ public class ConsumerPerformanceTest {
 
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
         assertEquals(10, config.numRecords());
+    }
+
+    @Test
+    public void testNumOfRecordsWithMessagesPresent() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--messages", "10",
+            "--num-records", "20"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() ->
+                new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(err.contains("Exactly one of the following arguments is required"));
     }
 
     @Test
@@ -170,7 +196,7 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
-    public void testConsumerConfigDeprecated() throws IOException {
+    public void testCommandConfigDeprecated() throws IOException {
         Path configPath = tempDir.resolve("test_consumer_config.conf");
         Files.deleteIfExists(configPath);
         File tempFile = Files.createFile(configPath).toFile();
@@ -190,6 +216,22 @@ public class ConsumerPerformanceTest {
 
         assertEquals("consumer-1", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
         Files.deleteIfExists(configPath);
+    }
+
+    @Test
+    public void testCommandConfigWithConsumerConfigPresent() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--num-records", "10",
+            "--consumer.config", "some-path",
+            "--command-config", "some-path"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() ->
+                new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(err.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
+                "[consumer.config]", "[command-config]")));
     }
 
     @Test

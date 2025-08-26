@@ -349,9 +349,18 @@ public class ConsumerPerformance {
             }
             if (options != null) {
                 CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the consumer performance.");
-                CommandLineUtils.checkOneOfArgs(parser, options, numMessagesOpt, numRecordsOpt);
                 CommandLineUtils.checkOneOfArgs(parser, options, topicOpt, includeOpt);
-                CommandLineUtils.checkOneOfArgs(parser, options, consumerConfigOpt, commandConfigOpt);
+
+                CommandLineUtils.checkOneOfArgs(parser, options, numMessagesOpt, numRecordsOpt);
+                CommandLineUtils.checkInvalidArgs(parser, options, consumerConfigOpt, commandConfigOpt);
+
+                if (options.has(numMessagesOpt)) {
+                    System.out.println("Warning: --messages is deprecated. Use --num-records instead.");
+                }
+
+                if (options.has(consumerConfigOpt)) {
+                    System.out.println("Warning: --consumer.config is deprecated. Use --command-config instead.");
+                }
             }
         }
 
@@ -366,7 +375,6 @@ public class ConsumerPerformance {
         public Properties props() throws IOException {
             String commandConfigFile;
             if (options.has(consumerConfigOpt)) {
-                System.out.println("Warning: --consumer.config is deprecated. Use --command-config instead.");
                 commandConfigFile = options.valueOf(consumerConfigOpt);
             } else {
                 commandConfigFile = options.valueOf(commandConfigOpt);
