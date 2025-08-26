@@ -4434,11 +4434,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
 
       TestUtils.waitUntilTrue(() => {
-        client.listGroups().all().get().stream()
-          .anyMatch(g => g.groupId() == streamsGroupId)
-      }, "Streams group not ready to describe yet")
-
-      TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
       }, "Stream group not stable yet")
@@ -4456,6 +4451,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val subtopologies = group.subtopologies().asScala
       assertTrue(subtopologies.exists(subtopology =>
         subtopology.sourceTopics().contains(testTopicName)))
+
+      // Test describing a non-existing group
+      val nonExistingGroup = "non_existing_stream_group"
+      val describedNonExistingGroupResponse = client.describeStreamsGroups(util.List.of(nonExistingGroup))
+      assertFutureThrows(classOf[GroupIdNotFoundException], describedNonExistingGroupResponse.all())
 
     } finally {
       Utils.closeQuietly(streams, "streams")
@@ -4488,7 +4488,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val streamsConfig = new Properties()
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
-        val streams = createStreamsGroup(
+        val streams = createStreamsGroupWithAggregation(
           configOverrides = streamsConfig,
           inputTopic = testTopicName,
           outputTopic = testOutputTopicName,
@@ -4501,13 +4501,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }
 
       TestUtils.waitUntilTrue(() => {
-        client.listGroups().all().get().stream()
-          .anyMatch(g => g.groupId().startsWith("stream_group_id_"))
+        val groups = client.listGroups().all().get()
+        groups.stream()
+          .anyMatch(g => g.groupId().startsWith("stream_group_id_")) &&  testNumStreamsGroup == groups.size()
       }, "Streams groups not ready to delete yet")
-
-      // Verify that there are 3 groups created
-      val groups = client.listGroups().all().get()
-      assertEquals(testNumStreamsGroup, groups.size())
 
       // Test deletion of non-empty existing groups
       var deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
@@ -4522,9 +4519,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           streams.cleanUp()
         }
 
+      var listTopicResult = client.listTopics()
+      assertEquals(5, listTopicResult.names().get().size())// input + output topic + 3 internal topics
+
       // Test deletion of emptied existing streams groups
       deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
-      assertEquals(deleteStreamsGroupResult.deletedGroups().size(),2)
+      assertEquals(2, deleteStreamsGroupResult.deletedGroups().size())
 
       // Wait for the deleted groups to be removed
       TestUtils.waitUntilTrue(() => {
@@ -4538,6 +4538,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       remainingGroups.stream().forEach(g => {
         assertTrue(targetRemainingGroups.contains(g.groupId()))
       })
+
+      // Verify internal topics persists after deletion of corresponding streams groups
+      listTopicResult = client.listTopics()
+      assertEquals(5, listTopicResult.names().get().size())// input + output topic + 3 internal topics
 
       // Test deletion of a non-existing group
       val nonExistingGroup = "non_existing_stream_group"
