@@ -30,8 +30,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -350,8 +350,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private static String formatAssignment(Map<String, Collection<String>> assignment) {
         StringBuilder result = new StringBuilder();
         for (String worker : assignment.keySet().stream().sorted().toList()) {
-            result.append(String.format("\n%s=%s", worker, assignment.getOrDefault(worker,
-                    Collections.emptyList())));
+            result.append(String.format("\n%s=%s", worker, assignment.getOrDefault(worker, List.of())));
         }
         return result.toString();
     }
