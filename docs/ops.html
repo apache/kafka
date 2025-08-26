@@ -4116,11 +4116,9 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
 
 <pre><code class="language-bash">
   $ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller.properties
-  Cannot set kraft.version to 1 unless KIP-853 configuration is present. Try removing the --feature flag for kraft.version.
 </code></pre><p>
 
-  Note: Currently it is <b>not</b> possible to convert clusters using a static controller quorum to
-  use a dynamic controller quorum. This function will be supported in the future release.
+  Note: To migrate from static voter set to dynamic voter set, please refer to the <a href="#kraft_upgrade">Upgrade</a> section.
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_add" class="anchor-link"></a><a href="#kraft_reconfig_add">Add New Controller</a></h5>
   If a dynamic controller cluster already exists, it can be expanded by first provisioning a new controller using the <a href="#kraft_nodes_observers">kafka-storage.sh tool</a> and starting the controller.

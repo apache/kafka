@@ -551,7 +551,8 @@ public class KafkaAdminClientTest {
      * Test if admin client can be closed in the callback invoked when
      * an api call completes. If calling {@link Admin#close()} in callback, AdminClient thread hangs
      */
-    @Test @Timeout(10)
+    @Test
+    @Timeout(10)
     public void testCloseAdminClientInCallback() throws InterruptedException {
         MockTime time = new MockTime();
         AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, mockCluster(3, 0));
@@ -11667,5 +11668,28 @@ public class KafkaAdminClientTest {
             .setGroupEpoch(2)
             .setAssignmentEpoch(1));
         return data;
+    }
+
+    @Test
+    @Timeout(30)
+    public void testDescribeTopicsTimeoutWhenNoBrokerResponds() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(
+            mockCluster(1, 0),
+            AdminClientConfig.RETRIES_CONFIG, "0",
+            AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "30000")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Not using prepareResponse is equivalent to "no brokers respond".
+            long start = System.currentTimeMillis();
+            DescribeTopicsResult result = env.adminClient().describeTopics(List.of("test-topic"), new DescribeTopicsOptions().timeoutMs(200));
+            Map<String, KafkaFuture<TopicDescription>> topicDescriptionMap = result.topicNameValues();
+            KafkaFuture<TopicDescription> topicDescription = topicDescriptionMap.get("test-topic");
+            ExecutionException exception = assertThrows(ExecutionException.class, topicDescription::get);
+            // Duration should be greater than or equal to 200 ms but less than 30000 ms.
+            long duration = System.currentTimeMillis() - start;
+
+            assertInstanceOf(TimeoutException.class, exception.getCause());
+            assertTrue(duration >= 150L && duration < 30000);
+        }
     }
 }
