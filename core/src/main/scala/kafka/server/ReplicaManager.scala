@@ -788,6 +788,8 @@ class ReplicaManager(val config: KafkaConfig,
             hasCustomErrorMessage = customException.isDefined
           )
       }
+      // In non-transaction paths, errorResults is typically empty, so we can 
+      // directly use entriesPerPartition instead of creating a new filtered collection
       val entriesWithoutErrorsPerPartition = 
         if (errorResults.nonEmpty) entriesPerPartition.filter { case (key, _) => !errorResults.contains(key) }
         else entriesPerPartition
