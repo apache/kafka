@@ -236,55 +236,6 @@ public class LogCompactionTester {
 
     private static final Random RANDOM = new Random();
 
-    private static void validateCompressionConfig(String compressionType, Integer compressionLevel) {
-        validateCompressionType(compressionType);
-        validateCompressionLevel(compressionType, compressionLevel);
-    }
-
-    private static void validateCompressionType(String compressionType) {
-        Set<String> validTypes = Set.of("none", "gzip", "snappy", "lz4", "zstd");
-        if (!validTypes.contains(compressionType.toLowerCase(Locale.ROOT))) {
-            System.err.println("Invalid compression type: " + compressionType);
-            System.err.println("Valid types: " + validTypes);
-            Exit.exit(1);
-        }
-    }
-
-    private static void validateCompressionLevel(String compressionType, Integer compressionLevel) {
-        if (compressionLevel == null) {
-            return;
-        }
-
-        String normalizedType = compressionType.toLowerCase(Locale.ROOT);
-        switch (normalizedType) {
-            case "none":
-            case "snappy":
-                System.err.println("Compression level not supported for " + compressionType);
-                System.err.println("Remove --compression-level option");
-                Exit.exit(1);
-                break;
-            case "gzip":
-                validateLevelRange(compressionLevel, CompressionType.GZIP, "gzip");
-                break;
-            case "lz4":
-                validateLevelRange(compressionLevel, CompressionType.LZ4, "lz4");
-                break;
-            case "zstd":
-                validateLevelRange(compressionLevel, CompressionType.ZSTD, "zstd");
-                break;
-            default:
-                // This should never happen since compression type is validated first
-                throw new IllegalStateException("Unknown compression type: " + compressionType);
-        }
-    }
-
-    private static void validateLevelRange(int level, CompressionType type, String typeName) {
-        if (level < type.minLevel() || level > type.maxLevel()) {
-            System.err.println("Invalid " + typeName + " compression level: " + level);
-            System.err.println("Valid " + typeName + " levels: " + type.minLevel() + "-" + type.maxLevel());
-            Exit.exit(1);
-        }
-    }
 
     public static void main(String[] args) throws Exception {
 
@@ -308,7 +259,7 @@ public class LogCompactionTester {
         int topicCount = optionSet.valueOf(options.topicsOpt);
         int sleepSecs = optionSet.valueOf(options.sleepSecsOpt);
 
-        validateCompressionConfig(compressionType, compressionLevel);
+        CompressionType.forName(compressionType.toLowerCase(Locale.ROOT));
 
         long testId = RANDOM.nextLong();
         Set<String> topics = IntStream.range(0, topicCount)
