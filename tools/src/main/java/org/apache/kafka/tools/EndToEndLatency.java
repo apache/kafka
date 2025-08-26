@@ -29,7 +29,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
@@ -215,7 +214,17 @@ public class EndToEndLatency {
         for (int i = 0; i < numHeaders; i++) {
             String headerKey = new String(randomBytesOfLen(random, keySize), StandardCharsets.UTF_8);
             byte[] headerValue = valueSize == -1 ? null : randomBytesOfLen(random, valueSize);
-            headers.add(new RecordHeader(headerKey, headerValue));
+            headers.add(new Header() {
+                @Override
+                public String key() {
+                    return headerKey;
+                }
+
+                @Override
+                public byte[] value() {
+                    return headerValue;
+                }
+            });
         }
         return headers;
     }
@@ -348,7 +357,7 @@ public class EndToEndLatency {
         newArgs.add(legacyArgs[4]);
 
         // properties_file -> --command-config
-        if (legacyArgs.length == 6 && !legacyArgs[5].trim().isEmpty()) {
+        if (legacyArgs.length == 6) {
             newArgs.add("--command-config");
             newArgs.add(legacyArgs[5]);
         }
@@ -411,7 +420,7 @@ public class EndToEndLatency {
                     .withOptionalArg()
                     .describedAs("count")
                     .ofType(Integer.class)
-                    .defaultsTo(1);
+                    .defaultsTo(0);
             commandConfigOpt = parser.accepts("command-config", "Optional: A property file for Kafka producer/consumer/admin client configuration.")
                     .withOptionalArg()
                     .describedAs("config-file")
