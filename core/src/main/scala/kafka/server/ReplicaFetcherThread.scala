@@ -19,7 +19,6 @@ package kafka.server
 
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse
-import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 import org.apache.kafka.server.LeaderEndPoint
 
@@ -57,10 +56,6 @@ class ReplicaFetcherThread(name: String,
 
   override protected def logEndOffset(topicPartition: TopicPartition): Long = {
     replicaMgr.localLogOrException(topicPartition).logEndOffset
-  }
-
-  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
-    replicaMgr.localLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
   override def initiateShutdown(): Boolean = {

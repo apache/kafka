@@ -34,11 +34,6 @@ import java.util.Optional;
 public interface LeaderEndPoint {
 
     /**
-     * A boolean specifying if truncation when fetching from the leader is supported
-     */
-    boolean isTruncationOnFetchSupported();
-
-    /**
      * Initiate closing access to fetches from leader.
      */
     void initiateClose();

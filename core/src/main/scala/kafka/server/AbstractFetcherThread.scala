@@ -95,8 +95,6 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def logEndOffset(topicPartition: TopicPartition): Long
 
-  protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch]
-
   override def shutdown(): Unit = {
     initiateShutdown()
     inLock(partitionMapLock) {

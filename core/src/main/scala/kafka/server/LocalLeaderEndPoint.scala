@@ -55,8 +55,6 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
   private var inProgressPartition: Option[TopicPartition] = None
 
-  override val isTruncationOnFetchSupported: Boolean = false
-
   override def initiateClose(): Unit = {} // do nothing
 
   override def close(): Unit = {} // do nothing

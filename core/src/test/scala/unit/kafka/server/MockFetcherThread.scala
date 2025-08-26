@@ -18,10 +18,8 @@
 package kafka.server
 
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.storage.internals.log.LogAppendInfo
@@ -76,7 +74,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
   ): Option[LogAppendInfo] = {
     val state = replicaPartitionState(topicPartition)
 
-    if (leader.isTruncationOnFetchSupported && FetchResponse.isDivergingEpoch(partitionData)) {
+    if (FetchResponse.isDivergingEpoch(partitionData)) {
       throw new IllegalStateException("processPartitionData should not be called for a partition with " +
         "a diverging epoch.")
     }
@@ -166,21 +164,8 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
 
   override def logEndOffset(topicPartition: TopicPartition): Long = replicaPartitionState(topicPartition).logEndOffset
 
-  override def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
-    val epochData = new EpochData()
-      .setPartition(topicPartition.partition)
-      .setLeaderEpoch(epoch)
-    val result = mockLeader.lookupEndOffsetForEpoch(topicPartition, epochData, replicaPartitionState(topicPartition))
-    if (result.endOffset == UNDEFINED_EPOCH_OFFSET)
-      Optional.empty
-    else
-      Optional.of(new OffsetAndEpoch(result.endOffset, result.leaderEpoch))
-  }
-
   def verifyLastFetchedEpoch(partition: TopicPartition, expectedEpoch: Option[Int]): Unit = {
-    if (leader.isTruncationOnFetchSupported) {
-      assertEquals(Some(ReplicaState.FETCHING), fetchState(partition).map(_.state))
-      assertEquals(expectedEpoch, fetchState(partition).map(_.lastFetchedEpoch.get()))
-    }
+    assertEquals(Some(ReplicaState.FETCHING), fetchState(partition).map(_.state))
+    assertEquals(expectedEpoch, fetchState(partition).map(_.lastFetchedEpoch.get()))
   }
 }

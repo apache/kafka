@@ -21,7 +21,7 @@ import kafka.cluster.Partition
 import kafka.server.ReplicaAlterLogDirsThread.{PromotionState, ReassignmentState}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.requests.FetchResponse
-import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch, TopicIdPartition}
+import org.apache.kafka.server.common.{DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.server.LeaderEndPoint
@@ -62,10 +62,6 @@ class ReplicaAlterLogDirsThread(name: String,
 
   override protected def logEndOffset(topicPartition: TopicPartition): Long = {
     replicaMgr.futureLocalLogOrException(topicPartition).logEndOffset
-  }
-
-  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
-    replicaMgr.futureLocalLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
   // process fetched data

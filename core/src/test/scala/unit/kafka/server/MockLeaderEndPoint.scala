@@ -36,7 +36,6 @@ import scala.jdk.OptionConverters.RichOptional
 import scala.util.Random
 
 class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "localhost", Random.nextInt()),
-                         truncateOnFetch: Boolean = true,
                          version: Short = ApiKeys.FETCH.latestVersion())
   extends LeaderEndPoint {
 
@@ -45,8 +44,6 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "l
 
   var replicaPartitionStateCallback: TopicPartition => Option[PartitionState] = { _ => Option.empty }
   var replicaId: Int = 0
-
-  override val isTruncationOnFetchSupported: Boolean = truncateOnFetch
 
   def leaderPartitionState(topicPartition: TopicPartition): PartitionState = {
     leaderPartitionStates.getOrElse(topicPartition,
