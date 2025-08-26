@@ -40,7 +40,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -65,11 +64,6 @@ public class PageViewUntypedDemo {
         private final ObjectMapper objectMapper = new ObjectMapper();
 
         @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            // No configuration needed
-        }
-
-        @Override
         public byte[] serialize(final String topic, final JsonNode data) {
             if (data == null) {
                 return null;
@@ -80,11 +74,6 @@ public class PageViewUntypedDemo {
                 throw new SerializationException("Error serializing JSON message", e);
             }
         }
-
-        @Override
-        public void close() {
-            // No resources to close
-        }
     }
 
     /**
@@ -92,11 +81,6 @@ public class PageViewUntypedDemo {
      */
     public static class JsonNodeDeserializer implements Deserializer<JsonNode> {
         private final ObjectMapper objectMapper = new ObjectMapper();
-
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            // No configuration needed
-        }
 
         @Override
         public JsonNode deserialize(final String topic, final byte[] data) {
@@ -108,11 +92,6 @@ public class PageViewUntypedDemo {
             } catch (final IOException e) {
                 throw new SerializationException("Error deserializing JSON message", e);
             }
-        }
-
-        @Override
-        public void close() {
-            // No resources to close
         }
     }
 

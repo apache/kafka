@@ -1484,7 +1484,7 @@ public class GroupCoordinatorShardTest {
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
 
         // Advance the timer to trigger the update.
@@ -1495,7 +1495,7 @@ public class GroupCoordinatorShardTest {
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
     }
 

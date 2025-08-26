@@ -3852,7 +3852,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
         topicError match {
           case Some(error) =>
-            topic.partitions.forEach(partition => responseBuilder.addPartition(topic.topicName, partition.partitionIndex, metadataCache.topicNamesToIds, error.error))
+            topic.partitions.forEach(partition => responseBuilder.addPartition(topic.topicName, partition.partitionIndex, metadataCache.topicNamesToIds, error))
           case None =>
             authorizedTopicPartitions.add(topic.duplicate)
         }
