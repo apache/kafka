@@ -52,6 +52,26 @@ public final class ReplicaKey implements Comparable<ReplicaKey> {
         }
     }
 
+    /**
+     * Determines whether this {@code ReplicaKey} is considered equivalent to the given one,
+     * based on the following rules:
+     * <ul>
+     *   <li>The {@code id} fields must be equal.</li>
+     *   <li>If both instances have a {@code directoryId} present, those must also be equal.</li>
+     *   <li>If either instance does not have a {@code directoryId}, the comparison
+     *       ignores {@code directoryId} and considers them equivalent.</li>
+     * </ul>
+     */
+    public boolean equivalentTo(ReplicaKey that) {
+        if (id() != that.id()) return false;
+
+        if (directoryId.isPresent() && that.directoryId.isPresent()) {
+            return directoryId.get().equals(that.directoryId().get());
+        } else {
+            return true;
+        }
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

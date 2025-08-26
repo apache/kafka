@@ -640,7 +640,7 @@ class KafkaRaftClientTest {
         int remoteId1 = localId + 1;
         int remoteId2 = localId + 2;
         Set<Integer> voters = Set.of(localId, remoteId1, remoteId2);
-        ReplicaKey replicaKey = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey replicaKey1 = replicaKey(localId + 1, withKip853Rpc);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
                 .withKip853Rpc(withKip853Rpc)
@@ -656,12 +656,12 @@ class KafkaRaftClientTest {
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
 
         context.time.sleep(context.beginQuorumEpochTimeoutMs / 3);
-        context.deliverRequest(context.fetchRequest(epoch, replicaKey, 0, 0, 0));
+        context.deliverRequest(context.fetchRequest(epoch, replicaKey1, 0, 0, 0));
         context.pollUntilResponse();
 
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
         context.client.poll();
-        // don't send BeginQuorumEpochRequest again if fetchRequest is sent.
+        // don't send BeginQuorumEpochRequest again for replicaKey1 since fetchRequest is sent.
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId2));
     }
 
