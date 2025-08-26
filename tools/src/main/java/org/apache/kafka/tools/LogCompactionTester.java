@@ -236,7 +236,6 @@ public class LogCompactionTester {
 
     private static final Random RANDOM = new Random();
 
-
     public static void main(String[] args) throws Exception {
 
         OptionParser parser = new OptionParser(false);
@@ -251,7 +250,7 @@ public class LogCompactionTester {
         CommandLineUtils.checkRequiredArgs(parser, optionSet, options.brokerOpt, options.numMessagesOpt);
 
         long messages = optionSet.valueOf(options.numMessagesOpt);
-        String compressionType = optionSet.valueOf(options.messageCompressionOpt);
+        CompressionType compressionType = CompressionType.forName(optionSet.valueOf(options.messageCompressionOpt));
         Integer compressionLevel = optionSet.valueOf(options.compressionLevelOpt);
         int percentDeletes = optionSet.valueOf(options.percentDeletesOpt);
         int dups = optionSet.valueOf(options.numDupsOpt);
@@ -259,7 +258,7 @@ public class LogCompactionTester {
         int topicCount = optionSet.valueOf(options.topicsOpt);
         int sleepSecs = optionSet.valueOf(options.sleepSecsOpt);
 
-        CompressionType.forName(compressionType.toLowerCase(Locale.ROOT));
+        CompressionType.forName(compressionType.name.toLowerCase(Locale.ROOT));
 
         long testId = RANDOM.nextLong();
         Set<String> topics = IntStream.range(0, topicCount)
@@ -410,7 +409,7 @@ public class LogCompactionTester {
     }
 
     private static Path produceMessages(String brokerUrl, Set<String> topics, long messages,
-                                        String compressionType, Integer compressionLevel,
+                                        CompressionType compressionType, Integer compressionLevel,
                                         int dups, int percentDeletes) throws IOException {
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, String.valueOf(Long.MAX_VALUE));
@@ -418,7 +417,7 @@ public class LogCompactionTester {
         producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType);
         
         if (compressionLevel != null) {
-            switch (compressionType.toLowerCase(Locale.ROOT)) {
+            switch (compressionType.name.toLowerCase(Locale.ROOT)) {
                 case "gzip":
                     producerProps.put(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG, compressionLevel);
                     break;
