@@ -48,9 +48,10 @@
           <ul>
               <li><a class="reference internal" href="#primitive-and-basic-types" id="id4">Primitive and basic types</a></li>
               <li><a class="reference internal" href="#json" id="id6">JSON</a></li>
-              <li><a class="reference internal" href="#implementing-custom-serdes" id="id5">Implementing custom serdes</a></li>
+              <li><a class="reference internal" href="#window-serdes" id="id7">Window Serdes</a></li>
+              <li><a class="reference internal" href="#implementing-custom-serdes" id="id8">Implementing custom serdes</a></li>
           </ul>
-          <li><a class="reference internal" href="#scala-dsl-serdes" id="id8">Kafka Streams DSL for Scala Implicit Serdes</a></li>
+          <li><a class="reference internal" href="#scala-dsl-serdes" id="id9">Kafka Streams DSL for Scala Implicit Serdes</a></li>
       </ul>
     <div class="section" id="configuring-serdes">
       <h2>Configuring Serdes<a class="headerlink" href="#configuring-serdes" title="Permalink to this headline"></a></h2>
@@ -162,6 +163,72 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
         </ul>
         <p>As shown in the example, you can use JSONSerdes inner classes <code class="docutils literal"><span class="pre">Serdes.serdeFrom(&lt;serializerInstance&gt;, &lt;deserializerInstance&gt;)</span></code> to construct JSON compatible serializers and deserializers.
         </p>
+      </div>
+      <div class="section" id="window-serdes">
+        <h3>Window Serdes<a class="headerlink" href="#window-serdes" title="Permalink to this headline"></a></h3>
+        <p>Apache Kafka Streams includes serde implementations for windowed keys in
+          its <code class="docutils literal"><span class="pre">kafka-streams</span></code> Maven artifact:</p>
+        <pre class="line-numbers"><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+    &lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
+    &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+        <p>This artifact provides the following windowed serde implementations under the package <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/kstream">org.apache.kafka.streams.kstream</a>:</p>
+        <table border="1" class="docutils">
+          <colgroup>
+            <col width="17%" />
+            <col width="83%" />
+          </colgroup>
+          <thead valign="bottom">
+          <tr class="row-odd"><th class="head">Data type</th>
+            <th class="head">Serde</th>
+          </tr>
+          </thead>
+          <tbody valign="top">
+          <tr class="row-even"><td>Windowed&lt;T&gt; (Time Windows)</td>
+            <td><code class="docutils literal"><span class="pre">new WindowedSerdes.TimeWindowedSerde&lt;&gt;(innerSerde, windowSize)</span></code>, <code class="docutils literal"><span class="pre">WindowedSerdes.timeWindowedSerdeFrom(Class&lt;T&gt; type, long windowSize)</span></code></td>
+          </tr>
+          <tr class="row-odd"><td>Windowed&lt;T&gt; (Session Windows)</td>
+            <td><code class="docutils literal"><span class="pre">new WindowedSerdes.SessionWindowedSerde&lt;&gt;(innerSerde)</span></code>, <code class="docutils literal"><span class="pre">WindowedSerdes.sessionWindowedSerdeFrom(Class&lt;T&gt; type)</span></code></td>
+          </tr>
+          <tr class="row-even"><td>TimeWindowedSerializer&lt;T&gt;</td>
+            <td><code class="docutils literal"><span class="pre">new TimeWindowedSerializer&lt;&gt;(innerSerializer)</span></code></td>
+          </tr>
+          <tr class="row-odd"><td>TimeWindowedDeserializer&lt;T&gt;</td>
+            <td><code class="docutils literal"><span class="pre">new TimeWindowedDeserializer&lt;&gt;(innerDeserializer, windowSize)</span></code></td>
+          </tr>
+          <tr class="row-even"><td>SessionWindowedSerializer&lt;T&gt;</td>
+            <td><code class="docutils literal"><span class="pre">new SessionWindowedSerializer&lt;&gt;(innerSerializer)</span></code></td>
+          </tr>
+          <tr class="row-odd"><td>SessionWindowedDeserializer&lt;T&gt;</td>
+            <td><code class="docutils literal"><span class="pre">new SessionWindowedDeserializer&lt;&gt;(innerDeserializer)</span></code></td>
+          </tr>
+          </tbody>
+        </table>
+        <h4>Migration from Deprecated Configs</h4>
+        <p>The following stream configuration parameters have been deprecated. For details, see the <a href="config-streams.html#windowed.inner.class.serde">windowed.inner.class.serde</a> configuration documentation:</p>
+        <table border="1" class="docutils">
+          <colgroup>
+            <col width="17%" />
+            <col width="83%" />
+          </colgroup>
+          <thead valign="bottom">
+            <tr class="row-odd">
+              <th class="head">Deprecated Config</th>
+              <th class="head">Replacement</th>
+            </tr>
+          </thead>
+          <tbody valign="top">
+            <tr class="row-even">
+              <td><code class="docutils literal"><span class="pre">windowed.inner.class.serde</span></code></td>
+              <td>Use <code class="docutils literal"><span class="pre">TimeWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS</span></code>, <code class="docutils literal"><span class="pre">TimeWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS</span></code>, <code class="docutils literal"><span class="pre">SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS</span></code>, or <code class="docutils literal"><span class="pre">SessionWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS</span></code></td>
+            </tr>
+            <tr class="row-odd">
+              <td><code class="docutils literal"><span class="pre">window.size.ms</span></code></td>
+              <td>Use <code class="docutils literal"><span class="pre">TimeWindowedDeserializer.WINDOW_SIZE_MS_CONFIG</span></code> or pass window size directly to constructor</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <div class="section" id="implementing-custom-serdes">
         <span id="streams-developer-guide-serdes-custom"></span><h2>Implementing custom Serdes<a class="headerlink" href="#implementing-custom-serdes" title="Permalink to this headline"></a></h2>
