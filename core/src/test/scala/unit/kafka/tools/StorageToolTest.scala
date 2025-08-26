@@ -532,7 +532,8 @@ Found problem:
 
   private def runVersionMappingCommand(
     stream: ByteArrayOutputStream,
-    releaseVersion: String
+    releaseVersion: String,
+    withConfig: Boolean
   ): Int = {
     val tempDir = TestUtils.tempDir()
     try {
@@ -548,8 +549,10 @@ Found problem:
         arguments += releaseVersion
       }
 
-      arguments += "--config"
-      arguments += configPathString
+      if (withConfig) {
+        arguments += "--config"
+        arguments += configPathString
+      }
       // Execute the StorageTool with the arguments
       StorageTool.execute(arguments.toArray, new PrintStream(stream))
     } finally {
@@ -561,7 +564,7 @@ Found problem:
   def testVersionMappingWithValidReleaseVersion(): Unit = {
     val stream = new ByteArrayOutputStream()
     // Test with a valid release version
-    assertEquals(0, runVersionMappingCommand(stream, MetadataVersion.MINIMUM_VERSION.toString))
+    assertEquals(0, runVersionMappingCommand(stream, MetadataVersion.MINIMUM_VERSION.toString, withConfig = true))
 
     val output = stream.toString()
     val metadataVersion = MetadataVersion.MINIMUM_VERSION
@@ -584,7 +587,7 @@ Found problem:
     properties.putAll(defaultStaticQuorumProperties)
 
     val stream = new ByteArrayOutputStream()
-    assertEquals(0, runVersionMappingCommand(stream, null))
+    assertEquals(0, runVersionMappingCommand(stream, null, withConfig = true))
 
     val output = stream.toString
     val metadataVersion = MetadataVersion.latestProduction()
@@ -609,7 +612,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     // Test with an invalid release version
     val exception = assertThrows(classOf[TerseFailure], () => {
-      runVersionMappingCommand(stream, "2.9-IV2")
+      runVersionMappingCommand(stream, "2.9-IV2", withConfig = true)
     })
 
     assertEquals("Unknown metadata.version '2.9-IV2'. Supported metadata.version are: " +
@@ -618,13 +621,37 @@ Found problem:
     )
 
     val exception2 = assertThrows(classOf[TerseFailure], () => {
-      runVersionMappingCommand(stream, "invalid")
+      runVersionMappingCommand(stream, "invalid", withConfig = true)
     })
 
     assertEquals("Unknown metadata.version 'invalid'. Supported metadata.version are: " +
       MetadataVersion.metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()),
       exception2.getMessage
     )
+
+    // Test without config
+    val exception3 = assertThrows(classOf[TerseFailure], () => {
+      runVersionMappingCommand(stream, "2.9-IV2", withConfig = false)
+    })
+
+    assertEquals("Unknown metadata.version '2.9-IV2'. Supported metadata.version are: " +
+      MetadataVersion.metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()),
+      exception3.getMessage
+    )
+
+    val exception4 = assertThrows(classOf[TerseFailure], () => {
+      runVersionMappingCommand(stream, "invalid", withConfig = false)
+    })
+
+    assertEquals("Unknown metadata.version 'invalid'. Supported metadata.version are: " +
+      MetadataVersion.metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()),
+      exception4.getMessage
+    )
+  }
+
+  @Test
+  def testVersionMappingWithoutConfigArgument(): Unit = {
+
   }
 
   private def runFeatureDependenciesCommand(

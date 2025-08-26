@@ -87,7 +87,8 @@ object StorageTool extends Logging {
         0
 
       case "version-mapping" =>
-        runVersionMappingCommand(namespace, printStream, Feature.PRODUCTION_FEATURES, config.get)
+        val unstableFeatureVersionsEnable = if (config.isDefined) config.get.unstableFeatureVersionsEnabled.booleanValue else false
+        runVersionMappingCommand(namespace, printStream, Feature.PRODUCTION_FEATURES, unstableFeatureVersionsEnable)
         0
 
       case "feature-dependencies" =>
@@ -168,19 +169,20 @@ object StorageTool extends Logging {
    * Maps the given release version to the corresponding metadata version
    * and prints the corresponding features.
    *
-   * @param namespace       Arguments containing the release version.
-   * @param printStream     The print stream to output the version mapping.
-   * @param validFeatures   List of features to be considered in the output
+   * @param namespace                     Arguments containing the release version.
+   * @param printStream                   The print stream to output the version mapping.
+   * @param validFeatures                 List of features to be considered in the output.
+   * @param unstableFeatureVersionsEnable Whether unreleased MetadataVersions should be enabled or not.
    */
   def runVersionMappingCommand(
     namespace: Namespace,
     printStream: PrintStream,
     validFeatures: java.util.List[Feature],
-    config: KafkaConfig
+    unstableFeatureVersionsEnable: Boolean
   ): Unit = {
     val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.LATEST_PRODUCTION.toString)
     try {
-      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion, config.unstableFeatureVersionsEnabled)
+      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion, unstableFeatureVersionsEnable)
 
       val metadataVersionLevel = metadataVersion.featureLevel()
       printStream.print(f"metadata.version=$metadataVersionLevel%d ($releaseVersion%s)%n")
@@ -347,7 +349,9 @@ object StorageTool extends Logging {
         "Using the command with no --release-version  argument will return the mapping for " +
         "the latest stable metadata version"
       )
-    addConfigArguments(versionMappingParser)
+    versionMappingParser.addArgument("--config", "-c")
+      .action(store())
+      .help("The Kafka configuration file to use.")
 
     versionMappingParser.addArgument("--release-version", "-r")
       .action(store())
