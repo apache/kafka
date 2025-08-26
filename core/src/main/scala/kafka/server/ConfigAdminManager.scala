@@ -170,7 +170,6 @@ class ConfigAdminManager(nodeId: Int,
       config =>
         val opType = AlterConfigOp.OpType.forId(config.configOperation())
         if (opType == null) {
-          log.error(s"Invalid log4j configOperation: ${config.configOperation()}. Valid operations are: ${OpType.allOpTypes()}")
           throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
         }
         new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)

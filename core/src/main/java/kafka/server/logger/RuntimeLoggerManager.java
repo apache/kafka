@@ -69,21 +69,6 @@ public class RuntimeLoggerManager {
         }
     }
 
-    /**
-     * Alters the log level configurations for specified loggers.
-     * <p>
-     * This method allows modifying log levels for individual loggers via {@link AlterableConfig}
-     * operations (SET or DELETE). Valid log levels are restricted to constants defined in {@link LogLevelConfig}.
-     * <p>
-     *
-     * @param ops A collection of {@link AlterableConfig} objects, where each object specifies:
-     * <ul>           
-     *   <li> name: The logger name to configure.
-     *   <li> value: The log level (must be a valid {@link LogLevelConfig} constant).
-     *   <li> configOperation: The operation type (SET or DELETE).
-     * </ul>
-     * @throws InvalidConfigurationException if the log level is not valid.
-     */
     void alterLogLevelConfigs(Collection<AlterableConfig> ops) {
         ops.forEach(op -> {
             String loggerName = op.name();
@@ -104,7 +89,6 @@ public class RuntimeLoggerManager {
                     }
                     break;
                 default:
-                    log.error("Invalid log4j configOperation: {}. Valid operations are: {}", op.configOperation(), OpType.allOpTypes());
                     throw new IllegalArgumentException(
                         "Invalid log4j configOperation: " + op.configOperation());
             }
@@ -158,7 +142,6 @@ public class RuntimeLoggerManager {
                     throw new InvalidRequestException(OpType.SUBTRACT +
                         " operation is not allowed for the " + BROKER_LOGGER + " resource");
                 default:
-                    log.error("Invalid log4j configOperation: {}. Valid operations are: {}", op.configOperation(), OpType.allOpTypes());
                     throw new InvalidRequestException("Unknown operation type " +
                         (int) op.configOperation() + " is not allowed for the " +
                         BROKER_LOGGER + " resource");
