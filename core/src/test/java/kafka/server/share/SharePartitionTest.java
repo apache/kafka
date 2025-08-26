@@ -1181,7 +1181,7 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(23L).batchDeliveryCount());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(26L).batchState());
         assertEquals(30L, sharePartition.endOffset());
-        // As all the gaps are now filled, the initialReadGapOffset should be null.
+        // As all the gaps are now filled, the persisterReadResultGapWindow should be null.
         assertNull(sharePartition.persisterReadResultGapWindow());
 
         // Now initial read gap is filled, so the complete batch can be acquired despite max fetch records being 1.
@@ -1279,7 +1279,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(26L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(31L).batchState());
         assertEquals(49L, sharePartition.endOffset());
-        // As all the gaps are now filled, the initialReadGapOffset should be null.
+        // As all the gaps are now filled, the persisterReadResultGapWindow should be null.
         assertNull(sharePartition.persisterReadResultGapWindow());
     }
 
@@ -1591,7 +1591,7 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(31L).batchState());
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(26L).batchState());
         assertEquals(49L, sharePartition.endOffset());
-        // As all the gaps are now filled, the initialReadGapOffset should be null.
+        // As all the gaps are now filled, the persisterReadResultGapWindow should be null.
         assertNull(sharePartition.persisterReadResultGapWindow());
     }
 
