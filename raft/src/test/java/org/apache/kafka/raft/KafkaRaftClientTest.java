@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -633,22 +634,22 @@ class KafkaRaftClientTest {
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = { true, false })
-    public void testBeginQuorumShouldNotSendAfterFetchRequest(boolean withKip853Rpc) throws Exception {
-        int localId = randomReplicaId();
-        int remoteId1 = localId + 1;
-        int remoteId2 = localId + 2;
-        Set<Integer> voters = Set.of(localId, remoteId1, remoteId2);
-        ReplicaKey replicaKey1 = replicaKey(localId + 1, withKip853Rpc);
+    @Test
+    public void testBeginQuorumShouldNotSendAfterFetchRequest() throws Exception {
+        ReplicaKey localId = replicaKey(randomReplicaId(), true);
+        int remoteId1 = localId.id() + 1;
+        int remoteId2 = localId.id() + 2;
+        ReplicaKey replicaKey1 = replicaKey(remoteId1, true);
+        ReplicaKey replicaKey2 = replicaKey(remoteId2, true);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .withKip853Rpc(withKip853Rpc)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId.id(), localId.directoryId().get())
+                .withRaftProtocol(KIP_853_PROTOCOL)
+                .withStartingVoters(VoterSetTest.voterSet(Stream.of(localId, replicaKey1, replicaKey2)), KRaftVersion.KRAFT_VERSION_1)
                 .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
-        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        assertEquals(OptionalInt.of(localId.id()), context.currentLeader());
 
         // begin epoch requests should be sent out every beginQuorumEpochTimeoutMs
         context.time.sleep(context.beginQuorumEpochTimeoutMs);

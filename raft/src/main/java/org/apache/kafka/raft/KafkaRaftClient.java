@@ -3056,14 +3056,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     .voterKeys()
                     .stream()
                     .filter(key -> key.id() != quorum.localIdOrThrow())
-                    .filter(key -> {
-                        for (ReplicaKey needToSend : needToSendBeginQuorumRequest) {
-                            if (needToSend.equivalentTo(key)) {
-                                return false;
-                            }
-                        }
-                        return true;
-                    })
+                    .filter(key -> !needToSendBeginQuorumRequest.contains(key))
                     .collect(Collectors.toSet()),
                 nodeSupplier,
                 this::buildBeginQuorumEpochRequest
