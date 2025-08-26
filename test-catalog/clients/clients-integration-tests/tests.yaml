@@ -195,7 +195,6 @@ org.apache.kafka.clients.consumer.PlaintextConsumerPollTest:
 - testClassicConsumerPollEventuallyReturnsRecordsWithZeroTimeout
 - testClassicConsumerRecoveryOnPollAfterDelayedRebalance
 org.apache.kafka.clients.consumer.PlaintextConsumerSubscriptionTest:
-- testAsyncConsumerClassicConsumerSubscribeInvalidTopicCanUnsubscribe
 - testAsyncConsumerExpandingTopicSubscriptions
 - testAsyncConsumerPatternSubscription
 - testAsyncConsumerPatternUnsubscription
@@ -204,6 +203,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerSubscriptionTest:
 - testAsyncConsumerRe2JPatternSubscriptionFetch
 - testAsyncConsumerShrinkingTopicSubscriptions
 - testAsyncConsumerSubscribeInvalidTopicCanClose
+- testAsyncConsumerSubscribeInvalidTopicCanUnsubscribe
 - testAsyncConsumerSubsequentPatternSubscription
 - testAsyncConsumerUnsubscribeTopic
 - testClassicConsumerExpandingTopicSubscriptions

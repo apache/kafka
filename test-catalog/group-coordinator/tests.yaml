@@ -254,6 +254,8 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testClassicGroupJoinOnShareGroup
 - testClassicGroupJoinOnStreamsGroup
 - testClassicGroupJoinWithEmptyConsumerGroup
+- testClassicGroupJoinWithEmptyStreamsGroup
+- testClassicGroupJoinWithNonEmptyStreamsGroup
 - testClassicGroupLeaveOnShareGroup
 - testClassicGroupLeaveOnStreamsGroup
 - testClassicGroupLeaveToConsumerGroupWithoutValidLeaveGroupMember
@@ -550,6 +552,8 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupHeartbeatOnConsumerGroup
 - testStreamsGroupHeartbeatOnShareGroup
 - testStreamsGroupHeartbeatPartialResponseWhenNothingChanges
+- testStreamsGroupHeartbeatWithEmptyClassicGroup
+- testStreamsGroupHeartbeatWithNonEmptyClassicGroup
 - testStreamsGroupMemberEpochValidation
 - testStreamsGroupMemberJoiningWithIncorrectlyPartitionedTopic
 - testStreamsGroupMemberJoiningWithMissingInternalTopic
