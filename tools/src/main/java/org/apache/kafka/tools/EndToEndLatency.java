@@ -100,7 +100,7 @@ public class EndToEndLatency {
         // optional
         Optional<String> propertiesFile = opts.options.has(opts.commandConfigOpt) ?
                 Optional.of(opts.options.valueOf(opts.commandConfigOpt)) : Optional.empty();
-        int recordKeySize = opts.options.valueOf(opts.recordKeyOpt);
+        int recordKeySize = opts.options.valueOf(opts.recordKeySizeOpt);
         int numHeaders = opts.options.valueOf(opts.numHeadersOpt);
         int headerKeySize = opts.options.valueOf(opts.recordHeaderKeySizeOpt);
         int headerValueSize = opts.options.valueOf(opts.recordHeaderValueSizeOpt);
@@ -373,7 +373,7 @@ public class EndToEndLatency {
         final OptionSpec<String> acksOpt;
         final OptionSpec<Integer> recordSizeOpt;
         final OptionSpec<String> commandConfigOpt;
-        final OptionSpec<Integer> recordKeyOpt;
+        final OptionSpec<Integer> recordKeySizeOpt;
         final OptionSpec<Integer> recordHeaderValueSizeOpt;
         final OptionSpec<Integer> recordHeaderKeySizeOpt;
         final OptionSpec<Integer> numHeadersOpt;
@@ -401,7 +401,7 @@ public class EndToEndLatency {
                     .withRequiredArg()
                     .describedAs("bytes")
                     .ofType(Integer.class);
-            recordKeyOpt = parser.accepts("record-key-size", "Optional: The size of the message key in bytes. If not set, messages are sent without a key.")
+            recordKeySizeOpt = parser.accepts("record-key-size", "Optional: The size of the message key in bytes. If not set, messages are sent without a key.")
                     .withOptionalArg()
                     .describedAs("bytes")
                     .ofType(Integer.class)
@@ -454,7 +454,7 @@ public class EndToEndLatency {
                 CommandLineUtils.printUsageAndExit(parser, "Value for --record-size must be a non-negative integer.");
             }
 
-            if (options.has(recordKeyOpt) && options.valueOf(recordKeyOpt) < 0) {
+            if (options.has(recordKeySizeOpt) && options.valueOf(recordKeySizeOpt) < 0) {
                 CommandLineUtils.printUsageAndExit(parser, "Value for --record-key-size must be a non-negative integer.");
             }
             if (options.has(recordHeaderKeySizeOpt) && options.valueOf(recordHeaderKeySizeOpt) < 0) {
