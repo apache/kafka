@@ -1181,7 +1181,7 @@ class AbstractFetcherThreadTest {
     assertEquals(0, replicaState.logEndOffset, "FetchResponse should be ignored when leader epoch does not match")
   }
 
-  private def emptyReplicaState(rlmEnabled: Boolean, partition: TopicPartition, fetcher: MockFetcherThread) = {
+  private def emptyReplicaState(rlmEnabled: Boolean, partition: TopicPartition, fetcher: MockFetcherThread): PartitionState = {
     // Follower begins with an empty log
     val replicaState = PartitionState(Seq(), leaderEpoch = 0, highWatermark = 0L, rlmEnabled = rlmEnabled)
     fetcher.setReplicaState(partition, replicaState)
@@ -1655,6 +1655,7 @@ class AbstractFetcherThreadTest {
     fetcher.doWork()
     // No metadata update expected
     assertEquals(0, replicaState.log.size)
+    assertEquals(0, replicaState.logStartOffset)
     assertEquals(151, replicaState.localLogStartOffset)
     assertEquals(151, replicaState.logEndOffset)
     assertEquals(151, replicaState.highWatermark)
@@ -1734,6 +1735,7 @@ class AbstractFetcherThreadTest {
     fetcher.doWork()
     // No metadata update expected
     assertEquals(0, replicaState.log.size)
+    assertEquals(10, replicaState.logStartOffset)
     assertEquals(151, replicaState.localLogStartOffset)
     assertEquals(151, replicaState.logEndOffset)
     assertEquals(151, replicaState.highWatermark)
