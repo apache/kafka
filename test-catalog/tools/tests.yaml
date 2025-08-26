@@ -170,7 +170,10 @@ org.apache.kafka.tools.ConsoleProducerTest:
 org.apache.kafka.tools.ConsumerPerformanceTest:
 - testClientIdOverride
 - testConfigBootStrapServer
+- testConfigWithInclude
+- testConfigWithTopicAndInclude
 - testConfigWithUnrecognizedOption
+- testConfigWithoutTopicAndInclude
 - testDefaultClientId
 - testDetailedHeaderMatchBody
 - testNonDetailedHeaderMatchBody

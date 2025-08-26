@@ -301,6 +301,10 @@ org.apache.kafka.server.share.persister.PersisterStateManagerTest:
 - testWriteStateRequestWithCoordinatorNodeLookup
 - testWriteStateRequestWithRetryAndCoordinatorNodeLookup
 org.apache.kafka.server.util.CommandLineUtilsTest:
+- testCheckOneOfArgsMultiplePresent
+- testCheckOneOfArgsNoOptions
+- testCheckOneOfArgsNonePresent
+- testCheckOneOfArgsOnePresent
 - testInitializeBootstrapPropertiesWithBothBootstraps
 - testInitializeBootstrapPropertiesWithBrokerBootstrap
 - testInitializeBootstrapPropertiesWithControllerBootstrap
