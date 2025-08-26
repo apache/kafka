@@ -206,10 +206,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     try {
       val logStartOffset = replicaManager.futureLocalLogOrException(topicPartition).logStartOffset
-      val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-        fetchState.lastFetchedEpoch
-      else
-        Optional.empty[Integer]
+      val lastFetchedEpoch = fetchState.lastFetchedEpoch
       val topicId = fetchState.topicId.orElse(Uuid.ZERO_UUID)
       requestMap.put(topicPartition, new FetchRequest.PartitionData(topicId, fetchState.fetchOffset, logStartOffset,
         fetchSize, Optional.of(fetchState.currentLeaderEpoch), lastFetchedEpoch))

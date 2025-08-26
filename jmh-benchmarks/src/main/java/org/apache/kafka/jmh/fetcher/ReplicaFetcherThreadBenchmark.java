@@ -327,11 +327,6 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Optional<OffsetAndEpoch> endOffsetForEpoch(TopicPartition topicPartition, int epoch) {
-            return Optional.of(new OffsetAndEpoch(0, 0));
-        }
-
-        @Override
         public Option<LogAppendInfo> processPartitionData(
             TopicPartition topicPartition,
             long fetchOffset,
