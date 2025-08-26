@@ -115,7 +115,13 @@ object TransactionLog {
       val version = buffer.getShort
       if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
         val value = new TransactionLogValue(new ByteBufferAccessor(buffer), version)
-        val transactionMetadata = new TransactionMetadata(
+        val state = TransactionState.fromId(value.transactionStatus)
+        val tps: util.Set[TopicPartition] = new util.HashSet[TopicPartition]()
+        if (!state.equals(TransactionState.EMPTY))
+          value.transactionPartitions.forEach(partitionsSchema => {
+            partitionsSchema.partitionIds.forEach(partitionId => tps.add(new TopicPartition(partitionsSchema.topic, partitionId.intValue())))
+          })
+        Some(new TransactionMetadata(
           transactionalId,
           value.producerId,
           value.previousProducerId,
@@ -123,20 +129,11 @@ object TransactionLog {
           value.producerEpoch,
           RecordBatch.NO_PRODUCER_EPOCH,
           value.transactionTimeoutMs,
-          TransactionState.fromId(value.transactionStatus),
-          util.Set.of(),
+          state,
+          tps,
           value.transactionStartTimestampMs,
           value.transactionLastUpdateTimestampMs,
-          TransactionVersion.fromFeatureLevel(value.clientTransactionVersion))
-
-        if (!transactionMetadata.state.equals(TransactionState.EMPTY))
-          value.transactionPartitions.forEach(partitionsSchema => {
-            transactionMetadata.addPartitions(partitionsSchema.partitionIds
-              .stream
-              .map(partitionId => new TopicPartition(partitionsSchema.topic, partitionId.intValue()))
-              .toList)
-          })
-        Some(transactionMetadata)
+          TransactionVersion.fromFeatureLevel(value.clientTransactionVersion)))
       } else throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
     }
   }
