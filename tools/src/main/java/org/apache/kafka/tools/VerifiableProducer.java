@@ -251,7 +251,6 @@ public class VerifiableProducer implements AutoCloseable {
         // No producer retries
         producerProps.put(ProducerConfig.RETRIES_CONFIG, "0");
         if (configFile != null && commandConfigFile != null) {
-            System.out.println("Option --producer.config has been deprecated and will be removed in a future version. Use --command-config instead.");
             throw new ArgumentParserException("Options --producer.config and --command-config are mutually exclusive.", parser);
         }
 

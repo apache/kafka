@@ -636,10 +636,10 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         Properties consumerProps = new Properties();
         if (configFile != null && commandConfigFile != null) {
-            System.out.println("Option --consumer.config has been deprecated and will be removed in a future version. Use --command-config instead.");
             throw new ArgumentParserException("Options --consumer.config and --command-config are mutually exclusive.", parser);
         }
         if (configFile != null) {
+            System.out.println("Option --consumer.config has been deprecated and will be removed in a future version. Use --command-config instead.");
             try {
                 consumerProps.putAll(Utils.loadProps(configFile));
             } catch (IOException e) {
