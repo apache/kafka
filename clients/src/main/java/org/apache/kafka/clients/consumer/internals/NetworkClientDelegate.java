@@ -70,7 +70,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
-    private final SharedErrorReference metadataError;
+    private final SharedExceptionReference metadataError;
     private final boolean notifyMetadataErrorsViaErrorQueue;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 

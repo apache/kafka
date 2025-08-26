@@ -82,7 +82,7 @@ public class NetworkClientDelegateTest {
         this.sharedConsumerState = mock(SharedConsumerState.class);
         this.client = new MockClient(time, Collections.singletonList(mockNode()));
 
-        SharedErrorReference metadataError = new SharedErrorReference();
+        SharedExceptionReference metadataError = new SharedExceptionReference();
         when(this.sharedConsumerState.metadataError()).thenReturn(metadataError);
     }
 
@@ -223,7 +223,7 @@ public class NetworkClientDelegateTest {
         doThrow(authException).when(metadata).maybeThrowAnyException();
 
         NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false);
-        SharedErrorReference metadataErrorRef = sharedConsumerState.metadataError();
+        SharedExceptionReference metadataErrorRef = sharedConsumerState.metadataError();
         assertTrue(metadataErrorRef.getAndClear().isEmpty());
         networkClientDelegate.poll(0, time.milliseconds());
 

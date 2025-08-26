@@ -41,7 +41,7 @@ import static java.util.Objects.requireNonNull;
  *     <li>{@link ApiVersions}</li>
  *     <li>{@link ConsumerMetadata}</li>
  *     <li>{@link OffsetFetcherUtils}</li>
- *     <li>{@link SharedErrorReference}</li>
+ *     <li>{@link SharedExceptionReference}</li>
  *     <li>{@link SubscriptionState}</li>
  *     <li>{@link Time}</li>
  * </ul>
@@ -55,8 +55,8 @@ public class SharedConsumerState {
 
     private final SubscriptionState subscriptions;
     private final OffsetFetcherUtils offsetFetcherUtils;
-    private final SharedErrorReference updatePositionsError;
-    private final SharedErrorReference metadataError;
+    private final SharedExceptionReference updatePositionsError;
+    private final SharedExceptionReference metadataError;
 
     public SharedConsumerState(LogContext logContext,
                                ConsumerMetadata metadata,
@@ -94,19 +94,19 @@ public class SharedConsumerState {
             retryBackoffMs,
             apiVersions
         );
-        this.updatePositionsError = new SharedErrorReference();
-        this.metadataError = new SharedErrorReference();
+        this.updatePositionsError = new SharedExceptionReference();
+        this.metadataError = new SharedExceptionReference();
     }
 
     OffsetFetcherUtils offsetFetcherUtils() {
         return offsetFetcherUtils;
     }
 
-    public SharedErrorReference updatePositionsError() {
+    public SharedExceptionReference updatePositionsError() {
         return updatePositionsError;
     }
 
-    public SharedErrorReference metadataError() {
+    public SharedExceptionReference metadataError() {
         return metadataError;
     }
 
@@ -144,7 +144,7 @@ public class SharedConsumerState {
      */
     public boolean canSkipUpdateFetchPositions() {
         updatePositionsError.maybeThrowException();
-        metadataError.maybeThrowException();
+        metadataError.maybeClearAndThrowException();
 
         // If the cached value is set and there are no partitions in the AWAIT_RESET, AWAIT_VALIDATION, or
         // INITIALIZING states, it's ok to skip.

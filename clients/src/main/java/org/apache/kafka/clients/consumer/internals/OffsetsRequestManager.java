@@ -92,7 +92,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
-    private final SharedErrorReference updatePositionsError;
+    private final SharedExceptionReference updatePositionsError;
 
     /**
      * This holds the last OffsetFetch request triggered to retrieve committed offsets to update

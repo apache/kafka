@@ -63,7 +63,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
     private final Supplier<RequestManagers> requestManagersSupplier;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
-    private final SharedErrorReference metadataError;
+    private final SharedExceptionReference metadataError;
     private ApplicationEventProcessor applicationEventProcessor;
     private NetworkClientDelegate networkClientDelegate;
     private RequestManagers requestManagers;
