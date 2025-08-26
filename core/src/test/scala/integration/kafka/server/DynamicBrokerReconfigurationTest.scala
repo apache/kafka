@@ -321,7 +321,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // wait for MetricsReporter
     val reporters = TestMetricsReporter.waitForReporters(servers.size)
     reporters.foreach { reporter =>
-      reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 1000)
+      reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 1000, numFetcher = 2)
       assertFalse(reporter.kafkaMetrics.isEmpty, "No metrics found")
     }
 
@@ -330,7 +330,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     alterConfigsUsingConfigCommand(updatedProps)
     waitForConfig(TestMetricsReporter.PollingIntervalProp, "1000")
     reporters.foreach { reporter =>
-      reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 1000)
+      reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 1000, numFetcher = 2)
     }
 
     // 2. verify update occurring if the value of property changed.
@@ -338,7 +338,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     alterConfigsUsingConfigCommand(updatedProps)
     waitForConfig(TestMetricsReporter.PollingIntervalProp, "2000")
     reporters.foreach { reporter =>
-      reporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 2000)
+      reporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 2000, numFetcher = 2)
     }
   }
 
@@ -947,6 +947,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // Add a new metrics reporter
     val newProps = new Properties
     newProps.put(TestMetricsReporter.PollingIntervalProp, "100")
+    newProps.put(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "1")
     configureMetricsReporters(Seq(classOf[JmxReporter], classOf[TestMetricsReporter]), newProps)
 
     val reporters = TestMetricsReporter.waitForReporters(servers.size + controllerServers.size)
@@ -1102,12 +1103,24 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // modify snapshot interval config to explicitly take snapshot on a broker with valid dynamic configs
     val props = defaultStaticConfig(numServers)
     props.put(MetadataLogConfig.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, "10000")
+    props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[TestMetricsReporter].getName)
+    props.put(TestMetricsReporter.PollingIntervalProp, "1000")
 
     val kafkaConfig = KafkaConfig.fromProps(props)
     val newBroker = createBroker(kafkaConfig).asInstanceOf[BrokerServer]
     servers += newBroker
 
     alterSslKeystoreUsingConfigCommand(sslProperties1, listenerPrefix(SecureExternal))
+
+    // Add num.replica.fetchers to the cluster-level config.
+    val clusterLevelProps = new Properties
+    clusterLevelProps.put(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "3")
+    reconfigureServers(clusterLevelProps, perBrokerConfig = false,
+      (ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "3"))
+
+    // Wait for the metrics reporter to be configured
+    val initialReporter = TestMetricsReporter.waitForReporters(1).head
+    initialReporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 1000, numFetcher = 3)
 
     TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
 
@@ -1121,11 +1134,19 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     newBroker.shutdown()
     newBroker.awaitShutdown()
 
+    // Clean up the test reporter
+    TestMetricsReporter.testReporters.clear()
+
     val invalidStaticConfigs = defaultStaticConfig(newBroker.config.brokerId)
     invalidStaticConfigs.putAll(securityProps(invalidSslConfigs, KEYSTORE_PROPS, listenerPrefix(SecureExternal)))
     newBroker.config.updateCurrentConfig(KafkaConfig.fromProps(invalidStaticConfigs))
 
     newBroker.startup()
+
+    // Verify that the custom MetricsReporter is not reconfigured after restart.
+    // If readDynamicBrokerConfigsFromSnapshot works correctly, the reporter should maintain its state.
+    val reporterAfterRestart = TestMetricsReporter.waitForReporters(1).head
+    reporterAfterRestart.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 1000, numFetcher = 3)
   }
 
   private def awaitInitialPositions(consumer: Consumer[_, _]): Unit = {
@@ -1568,6 +1589,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   @volatile var closeCount = 0
   @volatile var clusterUpdateCount = 0
   @volatile var pollingInterval: Int = -1
+  @volatile var numFetchers: Int = 1
   testReporters.add(this)
 
   override def contextChange(metricsContext: MetricsContext): Unit = {
@@ -1584,6 +1606,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
     configuredBrokers += configs.get(ServerConfigs.BROKER_ID_CONFIG).toString.toInt
     configureCount += 1
     pollingInterval = configs.get(PollingIntervalProp).toString.toInt
+    numFetchers = configs.get(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG).toString.toInt
   }
 
   override def metricChange(metric: KafkaMetric): Unit = {
@@ -1599,31 +1622,37 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   }
 
   override def reconfigurableConfigs(): util.Set[String] = {
-    util.Set.of(PollingIntervalProp)
+    util.Set.of(PollingIntervalProp, ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG)
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
     val pollingInterval = configs.get(PollingIntervalProp).toString.toInt
     if (pollingInterval <= 0)
       throw new ConfigException(s"Invalid polling interval $pollingInterval")
+
+    val numFetchers = configs.get(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG).toString.toInt
+    if (numFetchers <= 0)
+      throw new ConfigException(s"Invalid num.replica.fetchers $numFetchers")
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
     reconfigureCount += 1
     pollingInterval = configs.get(PollingIntervalProp).toString.toInt
+    numFetchers = configs.get(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG).toString.toInt
   }
 
   override def close(): Unit = {
     closeCount += 1
   }
 
-  def verifyState(reconfigureCount: Int, deleteCount: Int, pollingInterval: Int): Unit = {
+  def verifyState(reconfigureCount: Int, deleteCount: Int, pollingInterval: Int, numFetcher: Int = 1): Unit = {
     assertEquals(1, initializeCount)
     assertEquals(1, configureCount)
     assertEquals(reconfigureCount, this.reconfigureCount)
     assertEquals(deleteCount, closeCount)
     assertEquals(1, clusterUpdateCount)
     assertEquals(pollingInterval, this.pollingInterval)
+    assertEquals(numFetcher, this.numFetchers)
   }
 
   def verifyMetricValue(name: String, group: String): Unit = {
