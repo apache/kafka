@@ -63,6 +63,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
     private final Supplier<RequestManagers> requestManagersSupplier;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
+    private final SharedErrorReference metadataError;
     private ApplicationEventProcessor applicationEventProcessor;
     private NetworkClientDelegate networkClientDelegate;
     private RequestManagers requestManagers;
@@ -79,7 +80,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                                  Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                  Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                  Supplier<RequestManagers> requestManagersSupplier,
-                                 AsyncConsumerMetrics asyncConsumerMetrics) {
+                                 AsyncConsumerMetrics asyncConsumerMetrics,
+                                 SharedConsumerState sharedConsumerState) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
@@ -90,6 +92,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.requestManagersSupplier = requestManagersSupplier;
         this.running = true;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
+        this.metadataError = sharedConsumerState.metadataError();
     }
 
     @Override
@@ -378,8 +381,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         if (subscriptionMetadataEvent.isEmpty())
             return;
-        networkClientDelegate.getAndClearMetadataError().ifPresent(metadataError ->
-                subscriptionMetadataEvent.forEach(event -> event.future().completeExceptionally(metadataError))
+        metadataError.getClearAndRun(e ->
+                subscriptionMetadataEvent.forEach(event -> event.future().completeExceptionally(e))
         );
     }
 }

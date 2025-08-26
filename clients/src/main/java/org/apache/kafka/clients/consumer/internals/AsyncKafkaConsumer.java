@@ -360,7 +360,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
-    private final CommitOffsetsSharedState commitOffsetsSharedState;
+    private final SharedConsumerState sharedConsumerState;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
@@ -462,6 +462,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
+            this.sharedConsumerState = new SharedConsumerState(
+                logContext,
+                metadata,
+                subscriptions,
+                time,
+                retryBackoffMs,
+                apiVersions
+            );
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
                     logContext,
                     metadata,
@@ -472,18 +480,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
                     backgroundEventHandler,
                     false,
-                    kafkaConsumerMetrics
+                    kafkaConsumerMetrics,
+                    sharedConsumerState
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
-            this.commitOffsetsSharedState = new CommitOffsetsSharedState(
-                logContext,
-                metadata,
-                subscriptions,
-                time,
-                retryBackoffMs,
-                apiVersions
-            );
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
                     backgroundEventHandler,
@@ -500,7 +501,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker,
                     memberStateListener,
                     streamsRebalanceData,
-                    commitOffsetsSharedState
+                    sharedConsumerState
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -514,7 +515,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
-                    kafkaConsumerMetrics
+                    kafkaConsumerMetrics,
+                    sharedConsumerState
             );
             this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
@@ -572,7 +574,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        int defaultApiTimeoutMs,
                        String groupId,
                        boolean autoCommitEnabled,
-                       CommitOffsetsSharedState commitOffsetsSharedState) {
+                       SharedConsumerState sharedConsumerState) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -602,7 +604,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             time,
             kafkaConsumerMetrics
         );
-        this.commitOffsetsSharedState = commitOffsetsSharedState;
+        this.sharedConsumerState = sharedConsumerState;
     }
 
     AsyncKafkaConsumer(LogContext logContext,
@@ -661,6 +663,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             new RebalanceCallbackMetricsManager(metrics)
         );
         ApiVersions apiVersions = new ApiVersions();
+        this.sharedConsumerState = new SharedConsumerState(
+            logContext,
+            metadata,
+            subscriptions,
+            time,
+            retryBackoffMs,
+            apiVersions
+        );
         Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
             time,
             config,
@@ -669,17 +679,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             metadata,
             backgroundEventHandler,
             false,
-            kafkaConsumerMetrics
+            kafkaConsumerMetrics,
+            sharedConsumerState
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
-        this.commitOffsetsSharedState = new CommitOffsetsSharedState(
-            logContext,
-            metadata,
-            subscriptions,
-            time,
-            retryBackoffMs,
-            apiVersions
-        );
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,
@@ -697,7 +700,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetCommitCallbackInvoker,
             memberStateListener,
             Optional.empty(),
-            commitOffsetsSharedState
+            sharedConsumerState
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -712,7 +715,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
-                kafkaConsumerMetrics);
+                kafkaConsumerMetrics,
+                sharedConsumerState);
         this.backgroundEventProcessor = new BackgroundEventProcessor();
         this.backgroundEventReaper = new CompletableEventReaper(logContext);
     }
@@ -728,7 +732,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
             final Supplier<RequestManagers> requestManagersSupplier,
-            final AsyncConsumerMetrics asyncConsumerMetrics
+            final AsyncConsumerMetrics asyncConsumerMetrics,
+            final SharedConsumerState sharedConsumerState
         );
 
     }
@@ -1808,10 +1813,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
-
-        // NOTE: the use of cachedSubscriptionHasAllFetchPositions means we MUST call
-        // updateAssignmentMetadataIfNeeded before this method.
-        if (!commitOffsetsSharedState.subscriptionHasAllFetchPositions() && pollTimeout > retryBackoffMs) {
+        if (!subscriptions.hasAllFetchPositions() && pollTimeout > retryBackoffMs) {
             pollTimeout = retryBackoffMs;
         }
 
@@ -1866,7 +1868,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                                       defined
      */
     private boolean updateFetchPositions(final Timer timer) {
-        if (commitOffsetsSharedState.canSkipUpdateFetchPositions())
+        if (sharedConsumerState.canSkipUpdateFetchPositions())
             return true;
 
         try {

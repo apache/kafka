@@ -4210,10 +4210,10 @@ public class FetchRequestManagerTest {
                                              ConsumerConfig config,
                                              LogContext logContext,
                                              KafkaClient client,
-                                             Metadata metadata,
+                                             ConsumerMetadata metadata,
                                              BackgroundEventHandler backgroundEventHandler,
                                              boolean notifyMetadataErrorsViaErrorQueue) {
-            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));
+            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class), new SharedConsumerState(logContext, metadata, subscriptions, time, retryBackoffMs, apiVersions));
         }
 
         @Override

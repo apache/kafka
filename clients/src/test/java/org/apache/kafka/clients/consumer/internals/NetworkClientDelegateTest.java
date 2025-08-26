@@ -72,13 +72,18 @@ public class NetworkClientDelegateTest {
     private MockClient client;
     private Metadata metadata;
     private BackgroundEventHandler backgroundEventHandler;
+    private SharedConsumerState sharedConsumerState;
 
     @BeforeEach
     public void setup() {
         this.time = new MockTime(0);
         this.metadata = mock(Metadata.class);
         this.backgroundEventHandler = mock(BackgroundEventHandler.class);
+        this.sharedConsumerState = mock(SharedConsumerState.class);
         this.client = new MockClient(time, Collections.singletonList(mockNode()));
+
+        SharedErrorReference metadataError = new SharedErrorReference();
+        when(this.sharedConsumerState.metadataError()).thenReturn(metadataError);
     }
 
     @Test
@@ -218,10 +223,11 @@ public class NetworkClientDelegateTest {
         doThrow(authException).when(metadata).maybeThrowAnyException();
 
         NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false);
-        assertTrue(networkClientDelegate.getAndClearMetadataError().isEmpty());
+        SharedErrorReference metadataErrorRef = sharedConsumerState.metadataError();
+        assertTrue(metadataErrorRef.getAndClear().isEmpty());
         networkClientDelegate.poll(0, time.milliseconds());
 
-        Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
+        Optional<Throwable> metadataError = metadataErrorRef.getAndClear();
         assertTrue(metadataError.isPresent());
         assertInstanceOf(AuthenticationException.class, metadataError.get());
         assertEquals(authException.getMessage(), metadataError.get().getMessage());
@@ -297,7 +303,8 @@ public class NetworkClientDelegateTest {
                 this.metadata,
                 this.backgroundEventHandler,
                 notifyMetadataErrorsViaErrorQueue,
-                asyncConsumerMetrics
+                asyncConsumerMetrics,
+                sharedConsumerState
         );
     }
 

@@ -70,19 +70,19 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
-    private Optional<Exception> metadataError;
+    private final SharedErrorReference metadataError;
     private final boolean notifyMetadataErrorsViaErrorQueue;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
-    public NetworkClientDelegate(
-            final Time time,
-            final ConsumerConfig config,
-            final LogContext logContext,
-            final KafkaClient client,
-            final Metadata metadata,
-            final BackgroundEventHandler backgroundEventHandler,
-            final boolean notifyMetadataErrorsViaErrorQueue,
-            final AsyncConsumerMetrics asyncConsumerMetrics) {
+    public NetworkClientDelegate(final Time time,
+                                 final ConsumerConfig config,
+                                 final LogContext logContext,
+                                 final KafkaClient client,
+                                 final Metadata metadata,
+                                 final BackgroundEventHandler backgroundEventHandler,
+                                 final boolean notifyMetadataErrorsViaErrorQueue,
+                                 final AsyncConsumerMetrics asyncConsumerMetrics,
+                                 final SharedConsumerState sharedConsumerState) {
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -91,7 +91,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.metadataError = Optional.empty();
+        this.metadataError = sharedConsumerState.metadataError();
         this.notifyMetadataErrorsViaErrorQueue = notifyMetadataErrorsViaErrorQueue;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
@@ -163,7 +163,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             if (notifyMetadataErrorsViaErrorQueue) {
                 backgroundEventHandler.add(new ErrorEvent(e));
             } else {
-                metadataError = Optional.of(e);
+                metadataError.set(e);
             }
         }
     }
@@ -246,12 +246,6 @@ public class NetworkClientDelegate implements AutoCloseable {
             (int) unsent.timer.remainingMs(),
             unsent.handler
         );
-    }
-    
-    public Optional<Exception> getAndClearMetadataError() {
-        Optional<Exception> metadataError = this.metadataError;
-        this.metadataError = Optional.empty();
-        return metadataError;
     }
 
     public Node leastLoadedNode() {
@@ -453,7 +447,8 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final ClientTelemetrySender clientTelemetrySender,
                                                            final BackgroundEventHandler backgroundEventHandler,
                                                            final boolean notifyMetadataErrorsViaErrorQueue,
-                                                           final AsyncConsumerMetrics asyncConsumerMetrics) {
+                                                           final AsyncConsumerMetrics asyncConsumerMetrics,
+                                                           final SharedConsumerState sharedConsumerState) {
         return new CachedSupplier<>() {
             @Override
             protected NetworkClientDelegate create() {
@@ -467,7 +462,17 @@ public class NetworkClientDelegate implements AutoCloseable {
                         metadata,
                         throttleTimeSensor,
                         clientTelemetrySender);
-                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
+                return new NetworkClientDelegate(
+                    time,
+                    config,
+                    logContext,
+                    client,
+                    metadata,
+                    backgroundEventHandler,
+                    notifyMetadataErrorsViaErrorQueue,
+                    asyncConsumerMetrics,
+                    sharedConsumerState
+                );
             }
         };
     }

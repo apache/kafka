@@ -23,37 +23,69 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
 import java.time.Duration;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.atomic.AtomicReference;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * This class stores shared state needed by both the application thread ({@link AsyncKafkaConsumer}) and the
- * background thread ({@link OffsetsRequestManager}) to determine if a costly call to check offsets can be skipped
- * inside {@link Consumer#poll(Duration)}.
+ * background thread ({@link OffsetsRequestManager}) to avoid costly inter-thread communication, where possible.
+ * This class compromises on the ideal of keeping state only in the background thread. However, this class only
+ * relies on classes which are designed to be multithread-safe, thus they can be used in both the application and
+ * background threads.
  *
  * <p/>
  *
- * This class compromises on the ideal of keeping the state only in the background thread. However, this class only
- * relies on the {@link SubscriptionState} and {@link ConsumerMetadata} which are, unfortunately, already used
- * sparingly in both the application and background threads. Both of those classes are heavily synchronized given
- * their use by the {@link ClassicKafkaConsumer}, so their use in a multithreaded fashion is already established.
+ * The following thread-safe classes are used by this class:
+ *
+ * <ul>
+ *     <li>{@link ApiVersions}</li>
+ *     <li>{@link ConsumerMetadata}</li>
+ *     <li>{@link OffsetFetcherUtils}</li>
+ *     <li>{@link SharedErrorReference}</li>
+ *     <li>{@link SubscriptionState}</li>
+ *     <li>{@link Time}</li>
+ * </ul>
+ *
+ * <p/>
+ *
+ * In general, callers from the application thread should not mutate any of the state contained within this class.
+ * It should be considered as <em>read-only</em>, and only the network thread should mutate the state.
  */
-public class CommitOffsetsSharedState {
+public class SharedConsumerState {
 
-    /**
-     * Exception that occurred while updating positions after the triggering event had already
-     * expired. It will be propagated and cleared on the next call to update fetch positions.
-     */
-    private final AtomicReference<Throwable> cachedUpdatePositionsException = new AtomicReference<>();
-    private final OffsetFetcherUtils offsetFetcherUtils;
     private final SubscriptionState subscriptions;
+    private final OffsetFetcherUtils offsetFetcherUtils;
+    private final SharedErrorReference updatePositionsError;
+    private final SharedErrorReference metadataError;
 
-    CommitOffsetsSharedState(LogContext logContext,
-                             ConsumerMetadata metadata,
-                             SubscriptionState subscriptions,
-                             Time time,
-                             long retryBackoffMs,
-                             ApiVersions apiVersions) {
+    public SharedConsumerState(LogContext logContext,
+                               ConsumerMetadata metadata,
+                               SubscriptionState subscriptions,
+                               Time time,
+                               long retryBackoffMs) {
+        this(
+            logContext,
+            metadata,
+            subscriptions,
+            time,
+            retryBackoffMs,
+            new ApiVersions()
+        );
+    }
+
+    public SharedConsumerState(LogContext logContext,
+                               ConsumerMetadata metadata,
+                               SubscriptionState subscriptions,
+                               Time time,
+                               long retryBackoffMs,
+                               ApiVersions apiVersions) {
+        requireNonNull(logContext);
+        requireNonNull(metadata);
+        requireNonNull(subscriptions);
+        requireNonNull(time);
+        requireNonNull(apiVersions);
+
+        this.subscriptions = subscriptions;
         this.offsetFetcherUtils = new OffsetFetcherUtils(
             logContext,
             metadata,
@@ -62,19 +94,20 @@ public class CommitOffsetsSharedState {
             retryBackoffMs,
             apiVersions
         );
-        this.subscriptions = subscriptions;
+        this.updatePositionsError = new SharedErrorReference();
+        this.metadataError = new SharedErrorReference();
     }
 
-    Throwable getAndClearCachedUpdatePositionsException() {
-        return cachedUpdatePositionsException.getAndSet(null);
+    OffsetFetcherUtils offsetFetcherUtils() {
+        return offsetFetcherUtils;
     }
 
-    void setCachedUpdatePositionsException(Throwable exception) {
-        cachedUpdatePositionsException.set(exception);
+    public SharedErrorReference updatePositionsError() {
+        return updatePositionsError;
     }
 
-    boolean subscriptionHasAllFetchPositions() {
-        return subscriptions.hasAllFetchPositions();
+    public SharedErrorReference metadataError() {
+        return metadataError;
     }
 
     /**
@@ -109,24 +142,12 @@ public class CommitOffsetsSharedState {
      *
      * @return true if all checks pass, false if either of the latter two checks fail
      */
-    boolean canSkipUpdateFetchPositions() {
-        Throwable exception = cachedUpdatePositionsException.get();
-
-        if (exception != null) {
-            // Unwrap the ExecutionException to model what ConsumerUtils.getResult() does when handling exceptions
-            // from the call to Future.get().
-            if (exception instanceof CompletionException)
-                exception = exception.getCause();
-
-            throw ConsumerUtils.maybeWrapAsKafkaException(exception);
-        }
+    public boolean canSkipUpdateFetchPositions() {
+        updatePositionsError.maybeThrowException();
+        metadataError.maybeThrowException();
 
         // If the cached value is set and there are no partitions in the AWAIT_RESET, AWAIT_VALIDATION, or
         // INITIALIZING states, it's ok to skip.
         return offsetFetcherUtils.getPartitionsToValidate().isEmpty() && subscriptions.hasAllFetchPositions();
-    }
-
-    OffsetFetcherUtils offsetFetcherUtils() {
-        return offsetFetcherUtils;
     }
 }
