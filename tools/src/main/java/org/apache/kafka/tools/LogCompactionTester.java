@@ -428,6 +428,7 @@ public class LogCompactionTester {
                     producerProps.put(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, compressionLevel);
                     break;
                 default:
+                    System.out.println("Warning: Compression level " + compressionLevel + " is ignored for compression type " + compressionType.name + ". Only gzip, lz4, and zstd support compression levels.");
                     break;
             }
         }
