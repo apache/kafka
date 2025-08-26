@@ -3047,17 +3047,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         )
                     );
 
-            Set<ReplicaKey> needToSendBeginQuorumRequest = state.needSendBeginQuorumRequestReplicaKey(currentTimeMs);
-            Set<Integer> needToSendBeginQuorumRequestNode = needToSendBeginQuorumRequest.stream().
-                    map(ReplicaKey::id).collect(Collectors.toSet());
-
+            Set<ReplicaKey> needToSendBeginQuorumRequest = state.needSendBeginQuorumRequestNodes(currentTimeMs);
             timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
                 voters
                     .voterKeys()
                     .stream()
                     .filter(key -> key.id() != quorum.localIdOrThrow())
-                    .filter(key -> !needToSendBeginQuorumRequestNode.contains(key.id()))
+                    .filter(key -> !needToSendBeginQuorumRequest.contains(key))
                     .collect(Collectors.toSet()),
                 nodeSupplier,
                 this::buildBeginQuorumEpochRequest

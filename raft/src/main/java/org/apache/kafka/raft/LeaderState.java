@@ -54,8 +54,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.raft.ReplicaKey.NO_DIRECTORY_ID;
-
 /**
  * In the context of LeaderState, an acknowledged voter means one who has acknowledged the current leader by either
  * responding to a `BeginQuorumEpoch` request from the leader or by beginning to send `Fetch` requests.
@@ -196,12 +194,12 @@ public class LeaderState<T> implements EpochState {
         lastFetchRequestMs.put(replicaKey, beginQuorumEpochTimer.currentTimeMs());
     }
 
-    public Set<ReplicaKey> needSendBeginQuorumRequestReplicaKey(long currentTimeMs) {
+    public Set<ReplicaKey> needSendBeginQuorumRequestNodes(long currentTimeMs) {
         Set<ReplicaKey> replicaKeys = new HashSet<>();
         beginQuorumEpochTimer.update(currentTimeMs);
         for (Map.Entry<ReplicaKey, Long> entry : lastFetchRequestMs.entrySet()) {
             if (beginQuorumEpochTimer.currentTimeMs() - entry.getValue() >= beginQuorumEpochTimeoutMs) {
-                replicaKeys.add(ReplicaKey.of(entry.getKey().id(), entry.getKey().directoryId().orElse(NO_DIRECTORY_ID)));
+                replicaKeys.add(entry.getKey());
             }
         }
         return replicaKeys;
