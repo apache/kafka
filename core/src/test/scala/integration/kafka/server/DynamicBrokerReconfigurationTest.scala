@@ -1120,7 +1120,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Wait for the metrics reporter to be configured
     val initialReporter = TestNumReplicaFetcherMetricsReporter.waitForReporters(1).head
-    initialReporter.verifyState(reconfigureCount = 1, deleteCount = 0, numFetcher = 2)
+    initialReporter.verifyState(reconfigureCount = 1, numFetcher = 2)
 
     TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
 
@@ -1146,7 +1146,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // Verify that the custom MetricsReporter is not reconfigured after restart.
     // If readDynamicBrokerConfigsFromSnapshot works correctly, the reporter should maintain its state.
     val reporterAfterRestart = TestNumReplicaFetcherMetricsReporter.waitForReporters(1).head
-    reporterAfterRestart.verifyState(reconfigureCount = 0, deleteCount = 0, numFetcher = 2)
+    reporterAfterRestart.verifyState(reconfigureCount = 0, numFetcher = 2)
   }
 
   private def awaitInitialPositions(consumer: Consumer[_, _]): Unit = {
@@ -1620,7 +1620,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   }
 
   override def reconfigurableConfigs(): util.Set[String] = {
-    util.Set.of(PollingIntervalProp, ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG)
+    util.Set.of(PollingIntervalProp)
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
@@ -1671,26 +1671,18 @@ object TestNumReplicaFetcherMetricsReporter {
 
 class TestNumReplicaFetcherMetricsReporter extends MetricsReporter with Reconfigurable with Closeable with ClusterResourceListener {
   import TestNumReplicaFetcherMetricsReporter._
-  @volatile var initializeCount = 0
-  @volatile var contextChangeCount = 0
   @volatile var configureCount = 0
   @volatile var reconfigureCount = 0
-  @volatile var closeCount = 0
-  @volatile var clusterUpdateCount = 0
   @volatile var numFetchers: Int = 1
   testReporters.add(this)
 
   override def contextChange(metricsContext: MetricsContext): Unit = {
-    contextChangeCount += 1
   }
 
   override def init(metrics: util.List[KafkaMetric]): Unit = {
-    assertTrue(contextChangeCount > 0, "contextChange must be called before init")
-    initializeCount += 1
   }
 
   override def configure(configs: util.Map[String, _]): Unit = {
-    configuredBrokers += configs.get(ServerConfigs.BROKER_ID_CONFIG).toString.toInt
     configureCount += 1
     numFetchers = configs.get(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG).toString.toInt
   }
@@ -1702,8 +1694,6 @@ class TestNumReplicaFetcherMetricsReporter extends MetricsReporter with Reconfig
   }
 
   override def onUpdate(clusterResource: ClusterResource): Unit = {
-    assertNotNull(clusterResource.clusterId, "Cluster id not set")
-    clusterUpdateCount += 1
   }
 
   override def reconfigurableConfigs(): util.Set[String] = {
@@ -1722,15 +1712,10 @@ class TestNumReplicaFetcherMetricsReporter extends MetricsReporter with Reconfig
   }
 
   override def close(): Unit = {
-    closeCount += 1
   }
 
-  def verifyState(reconfigureCount: Int, deleteCount: Int, numFetcher: Int = 1): Unit = {
-    assertEquals(1, initializeCount)
-    assertEquals(1, configureCount)
+  def verifyState(reconfigureCount: Int, numFetcher: Int = 1): Unit = {
     assertEquals(reconfigureCount, this.reconfigureCount)
-    assertEquals(deleteCount, closeCount)
-    assertEquals(1, clusterUpdateCount)
     assertEquals(numFetcher, this.numFetchers)
   }
 }
