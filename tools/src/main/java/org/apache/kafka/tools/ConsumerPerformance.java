@@ -258,15 +258,13 @@ public class ConsumerPerformance {
         private final OptionSpec<Integer> fetchSizeOpt;
         private final OptionSpec<Void> resetBeginningOffsetOpt;
         private final OptionSpec<Integer> socketBufferSizeOpt;
-        // Deprecated option, kept for backward compatibility
-        // and will be removed in a future version.
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> consumerConfigOpt;
         private final OptionSpec<String> commandConfigOpt;
         private final OptionSpec<Void> printMetricsOpt;
         private final OptionSpec<Void> showDetailedStatsOpt;
         private final OptionSpec<Long> recordFetchTimeoutOpt;
-        // Deprecated option, kept for backward compatibility
-        // and will be removed in a future version.
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<Long> numMessagesOpt;
         private final OptionSpec<Long> numRecordsOpt;
         private final OptionSpec<Long> reportingIntervalOpt;
@@ -309,7 +307,7 @@ public class ConsumerPerformance {
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
-            commandConfigOpt = parser.accepts("command-config", "Consumer config properties file")
+            commandConfigOpt = parser.accepts("command-config", "Config properties file")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
@@ -321,7 +319,7 @@ public class ConsumerPerformance {
                 .describedAs("milliseconds")
                 .ofType(Long.class)
                 .defaultsTo(10_000L);
-            numMessagesOpt = parser.accepts("messages", "(DEPRECATED) REQUIRED: The number of messages to consume. " +
+            numMessagesOpt = parser.accepts("messages", "(DEPRECATED) The number of records to consume. " +
                             "This option will be removed in a future version. Use --num-records instead")
                 .withRequiredArg()
                 .describedAs("count")
