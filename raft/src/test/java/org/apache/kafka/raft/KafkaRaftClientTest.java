@@ -636,7 +636,8 @@ class KafkaRaftClientTest {
 
     @Test
     public void testBeginQuorumShouldNotSendAfterFetchRequest() throws Exception {
-        ReplicaKey localId = replicaKey(randomReplicaId(), true);
+//        ReplicaKey localId = replicaKey(randomReplicaId(), true);
+        ReplicaKey localId = replicaKey(255, true);
         int remoteId1 = localId.id() + 1;
         int remoteId2 = localId.id() + 2;
         ReplicaKey replicaKey1 = replicaKey(remoteId1, true);
@@ -656,14 +657,22 @@ class KafkaRaftClientTest {
         context.client.poll();
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
 
+        long partialDelay = context.beginQuorumEpochTimeoutMs / 3;
         context.time.sleep(context.beginQuorumEpochTimeoutMs / 3);
         context.deliverRequest(context.fetchRequest(epoch, replicaKey1, 0, 0, 0));
         context.pollUntilResponse();
 
-        context.time.sleep(context.beginQuorumEpochTimeoutMs);
+        context.time.sleep(context.beginQuorumEpochTimeoutMs - partialDelay);
         context.client.poll();
         // don't send BeginQuorumEpochRequest again for replicaKey1 since fetchRequest is sent.
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId2));
+
+        context.deliverRequest(context.fetchRequest(epoch, replicaKey1, 0, 0, 0));
+        context.pollUntilResponse();
+        context.time.sleep(context.beginQuorumEpochTimeoutMs);
+        context.client.poll();
+        // should send BeginQuorumEpochRequest if sleep time equals beginQuorumEpochTimeoutMs
+        context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
     }
 
 

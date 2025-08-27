@@ -88,7 +88,6 @@ public class LeaderState<T> implements EpochState {
     private final Timer beginQuorumEpochTimer;
     private final int beginQuorumEpochTimeoutMs;
     private final KafkaRaftMetrics kafkaRaftMetrics;
-    private final Map<ReplicaKey, Long> lastFetchRequestMs = new HashMap<>();
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
@@ -189,17 +188,12 @@ public class LeaderState<T> implements EpochState {
         beginQuorumEpochTimer.reset(beginQuorumEpochTimeoutMs);
     }
 
-    public void updateLastReceivedFetchRequest(ReplicaKey replicaKey, long currentTimeMs) {
-        beginQuorumEpochTimer.update(currentTimeMs);
-        lastFetchRequestMs.put(replicaKey, beginQuorumEpochTimer.currentTimeMs());
-    }
-
-    public Set<ReplicaKey> needSendBeginQuorumRequestNodes(long currentTimeMs) {
+    public Set<ReplicaKey> needToSendBeginQuorumRequests(long currentTimeMs) {
         Set<ReplicaKey> replicaKeys = new HashSet<>();
         beginQuorumEpochTimer.update(currentTimeMs);
-        for (Map.Entry<ReplicaKey, Long> entry : lastFetchRequestMs.entrySet()) {
-            if (beginQuorumEpochTimer.currentTimeMs() - entry.getValue() >= beginQuorumEpochTimeoutMs) {
-                replicaKeys.add(entry.getKey());
+        for (ReplicaState state : voterStates.values()) {
+            if (beginQuorumEpochTimer.currentTimeMs() - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs) {
+                replicaKeys.add(state.replicaKey());
             }
         }
         return replicaKeys;

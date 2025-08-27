@@ -358,7 +358,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs
     ) {
         final LogOffsetMetadata endOffsetMetadata = log.endOffset();
-
         if (state.updateLocalState(endOffsetMetadata, partitionState.lastVoterSet())) {
             onUpdateLeaderHighWatermark(state, currentTimeMs);
         }
@@ -1513,10 +1512,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             FetchRequest.replicaId(request),
             fetchPartition.replicaDirectoryId()
         );
-
-        if (quorum.isLeader()) {
-            quorum.leaderStateOrThrow().updateLastReceivedFetchRequest(replicaKey, currentTimeMs);
-        }
 
         FetchResponseData response = tryCompleteFetchRequest(
             requestMetadata.listenerName(),
@@ -3095,15 +3090,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                         )
                     );
 
-            Set<ReplicaKey> needToSendBeginQuorumRequest = state.needSendBeginQuorumRequestNodes(currentTimeMs);
+            Set<ReplicaKey> needToSendBeginQuorumRequests = state.needToSendBeginQuorumRequests(currentTimeMs);
             timeUntilNextBeginQuorumSend = maybeSendRequests(
                 currentTimeMs,
                 voters
                     .voterKeys()
                     .stream()
                     .filter(key -> key.id() != quorum.localIdOrThrow())
-                    .filter(key -> !needToSendBeginQuorumRequest.contains(key))
-                    .collect(Collectors.toSet()),
+                    .filter(needToSendBeginQuorumRequests::contains)
+                    .collect(Collectors.toUnmodifiableSet()),
                 nodeSupplier,
                 this::buildBeginQuorumEpochRequest
             );
