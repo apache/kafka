@@ -2591,7 +2591,8 @@ class UnifiedLogTest {
       (_, _) => {},
       brokerTopicStats,
       new Metrics(),
-      Optional.empty))
+      Optional.empty,
+      Mockito.mock(classOf[MetadataCache])))
     remoteLogManager.setDelayedOperationPurgatory(purgatory)
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1, remoteLogStorageEnable = true)
