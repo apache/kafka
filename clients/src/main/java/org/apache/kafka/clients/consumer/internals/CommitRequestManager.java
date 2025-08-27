@@ -209,7 +209,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
-        return autoCommitState.remainingMs(currentTimeMs);
+        return autoCommitState.remainingMs();
     }
 
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
@@ -240,7 +240,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         if (requestState.offsets.isEmpty()) {
             result = CompletableFuture.completedFuture(Collections.emptyMap());
         } else {
-            autoCommitState.setInflightCommitStatus(true);
+            autoCommitState.setInflightCommit(true);
             OffsetCommitRequestState request = pendingRequests.addOffsetCommitRequest(requestState);
             result = request.future;
             result.whenComplete(autoCommitCallback(request.offsets));
@@ -362,7 +362,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     private BiConsumer<? super Map<TopicPartition, OffsetAndMetadata>, ? super Throwable> autoCommitCallback(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
         return (response, throwable) -> {
-            autoCommitState.setInflightCommitStatus(false);
+            autoCommitState.setInflightCommit(false);
             if (throwable == null) {
                 offsetCommitCallbackInvoker.enqueueInterceptorInvocation(allConsumedOffsets);
                 log.debug("Completed auto-commit of offsets {}", allConsumedOffsets);

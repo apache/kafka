@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.time.Duration;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_AUTO_COMMIT_INTERVAL_MS;
 
@@ -39,11 +39,9 @@ public interface AutoCommitState {
 
     boolean shouldAutoCommit();
 
-    boolean isExpired();
-
     /**
-     * Reset the auto-commit timer to the auto-commit interval, so that the next auto-commit is
-     * sent out on the interval starting from now. If auto-commit is disabled this will
+     * Reset the auto-commit timer to the {@link ConsumerConfig#AUTO_COMMIT_INTERVAL_MS_CONFIG auto-commit interval},
+     * so that the next auto-commit is sent out on the interval starting from now. If auto-commit is disabled this will
      * perform no action.
      */
     void resetTimer();
@@ -52,13 +50,28 @@ public interface AutoCommitState {
      * Reset the auto-commit timer to the provided time (backoff), so that the next auto-commit is
      * sent out then. If auto-commit is disabled this will perform no action.
      */
-    void resetTimer(long retryBackoffMs);
+    void resetTimer(final long retryBackoffMs);
 
-    long remainingMs(final long currentTimeMs);
+    /**
+     * Return the number of milliseconds remaining on the timer based on the most previous call to
+     * {@link #updateTimer(long)} and {@link #resetTimer()}/{@link #resetTimer(long)}.
+     */
+    long remainingMs();
 
+    /**
+     * Updates the timer to the timestamp provided.
+     *
+     * <p/>
+     *
+     * Note that the timer doesn't update automatically on its own, nor is it updated periodically by the background
+     * thread. The timer's notion of the current time is only updated through this mechanism. It is expected that
+     * this method will only be called during {@link AsyncKafkaConsumer#poll(Duration)} invocation by the application
+     * thread. The network thread is free to update the auto-commit interval via either {@link #resetTimer()} or
+     * {@link #resetTimer(long)}.
+     */
     void updateTimer(final long currentTimeMs);
 
-    void setInflightCommitStatus(final boolean inflightCommitStatus);
+    void setInflightCommit(final boolean hasInflightCommit);
 
     static AutoCommitState enabled(final LogContext logContext,
                                    final Time time,
@@ -90,7 +103,7 @@ public interface AutoCommitState {
         private final Logger log;
         private final Timer timer;
         private final long autoCommitInterval;
-        private final AtomicBoolean hasInflightCommit;
+        private boolean hasInflightCommit;
 
         private AutoCommitStateEnabled(final LogContext logContext,
                                        final Time time,
@@ -98,7 +111,7 @@ public interface AutoCommitState {
             this.log = logContext.logger(AutoCommitState.class);
             this.timer = time.timer(autoCommitInterval);
             this.autoCommitInterval = autoCommitInterval;
-            this.hasInflightCommit = new AtomicBoolean();
+            this.hasInflightCommit = false;
         }
 
         @Override
@@ -112,7 +125,7 @@ public interface AutoCommitState {
                 return false;
             }
 
-            if (hasInflightCommit.get()) {
+            if (hasInflightCommit) {
                 log.trace("Skipping auto-commit on the interval because a previous one is still in-flight.");
                 return false;
             }
@@ -121,23 +134,17 @@ public interface AutoCommitState {
         }
 
         @Override
-        public synchronized boolean isExpired() {
-            return timer.isExpired();
-        }
-
-        @Override
         public synchronized void resetTimer() {
             timer.reset(autoCommitInterval);
         }
 
         @Override
-        public synchronized void resetTimer(long retryBackoffMs) {
+        public synchronized void resetTimer(final long retryBackoffMs) {
             timer.reset(retryBackoffMs);
         }
 
         @Override
-        public synchronized long remainingMs(final long currentTimeMs) {
-            timer.update(currentTimeMs);
+        public synchronized long remainingMs() {
             return timer.remainingMs();
         }
 
@@ -147,8 +154,8 @@ public interface AutoCommitState {
         }
 
         @Override
-        public synchronized void setInflightCommitStatus(final boolean inflightCommitStatus) {
-            hasInflightCommit.set(inflightCommitStatus);
+        public synchronized void setInflightCommit(final boolean hasInflightCommit) {
+            this.hasInflightCommit = hasInflightCommit;
         }
     }
 
@@ -168,22 +175,17 @@ public interface AutoCommitState {
         }
 
         @Override
-        public boolean isExpired() {
-            return false;
-        }
-
-        @Override
         public void resetTimer() {
             // No op
         }
 
         @Override
-        public void resetTimer(long retryBackoffMs) {
+        public void resetTimer(final long retryBackoffMs) {
             // No op
         }
 
         @Override
-        public long remainingMs(final long currentTimeMs) {
+        public long remainingMs() {
             return Long.MAX_VALUE;
         }
 
@@ -193,7 +195,7 @@ public interface AutoCommitState {
         }
 
         @Override
-        public void setInflightCommitStatus(final boolean inflightCommitStatus) {
+        public void setInflightCommit(final boolean inflightCommitStatus) {
             // No op
         }
     }

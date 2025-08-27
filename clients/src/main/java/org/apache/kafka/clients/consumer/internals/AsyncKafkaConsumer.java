@@ -865,7 +865,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            PollEvent event = new PollEvent(timer.currentTimeMs());
+            long currentTimeMs = timer.currentTimeMs();
+            autoCommitState.updateTimer(currentTimeMs);
+            PollEvent event = new PollEvent(currentTimeMs);
+
             // Make sure to let the background thread know that we are still polling.
             // This will trigger async auto-commits of consumed positions when hitting
             // the interval time or reconciling new assignments

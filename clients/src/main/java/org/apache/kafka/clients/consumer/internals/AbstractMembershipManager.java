@@ -111,6 +111,11 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     private final ConsumerMetadata metadata;
 
     /**
+     * Keeps track of the auto-commit state.
+     */
+    protected final AutoCommitState autoCommitState;
+
+    /**
      * Logger.
      */
     protected final Logger log;
@@ -191,8 +196,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * group, to release its assignment and wait for the timer to be reset.
      */
     private boolean isPollTimerExpired;
-
-    private final AutoCommitState autoCommitState;
 
     /**
      * Indicate the operation on consumer group membership that the consumer will perform when leaving the group.
