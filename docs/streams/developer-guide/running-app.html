@@ -134,17 +134,78 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre>
                       <li>Data should be equally distributed across topic partitions. For example, if two topic partitions each have 1 million messages, this is better than a single partition with 2 million messages and none in the other.</li>
                       <li>Processing workload should be equally distributed across topic partitions. For example, if the time to process messages varies widely, then it is better to spread the processing-intensive messages across partitions rather than storing these messages within the same partition.</li>
                   </ul>
-</div>
-</div>
-</div>
+        </div>
+              <h3>Available Listeners and Callbacks</h3>
 
+              <p>
+                  Kafka Streams provides several listener and callback APIs that allow applications
+                  to react to lifecycle events, handle errors, and observe state changes.
+              </p>
 
-               </div>
-              </div>
-              <div class="pagination">
+              <ul>
+                  <li>
+                      <b>UncaughtExceptionHandler</b><br/>
+                      Register with <code>streams.setUncaughtExceptionHandler(...)</code> to handle
+                      uncaught exceptions in stream threads. The handler decides whether to replace
+                      the thread, shut down the client, or shut down the entire application by returning
+                      a <code>StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse</code>.
+                  </li>
+
+                  <li>
+                      <b>State Listener</b><br/>
+                      Register with <code>streams.setStateListener(...)</code> to receive callbacks
+                      when the KafkaStreams instance changes state
+                      (e.g., <code>CREATED</code>, <code>RUNNING</code>, <code>REBALANCING</code>, <code>ERROR</code>).
+                  </li>
+
+                  <li>
+                      <b>Global State Restore Listener</b><br/>
+                      Register with <code>streams.setGlobalStateRestoreListener(...)</code> to observe
+                      the progress of state store restoration when a task recovers from a changelog.
+                      The <code>StateRestoreListener</code> interface provides methods:
+                      <code>onRestoreStart</code>, <code>onBatchRestored</code>, and <code>onRestoreEnd</code>.
+                  </li>
+
+                  <li>
+                      <b>ProductionExceptionHandler</b> and <b>DeserializationExceptionHandler</b><br/>
+                      Configure via <code>StreamsConfig</code> to control how the application responds
+                      to production or deserialization errors at runtime. You can plug in custom
+                      implementations to log, continue, or fail the application.
+                  </li>
+
+                  <li>
+                      <b>ConsumerRebalanceListener</b><br/>
+                      When constructing a <code>KafkaConsumer</code> manually or in advanced usage,
+                      a custom <code>ConsumerRebalanceListener</code> can be supplied to observe
+                      partition assignment and revocation events.
+                  </li>
+              </ul>
+
+              <p>Example usage of exception and state restore listeners:</p>
+
+              <pre>
+                  <code class="language-java">
+                    // Handle uncaught exceptions
+                    streams.setUncaughtExceptionHandler((thread, e) -> {
+                        log.error("Stream thread {} failed due to {}", thread, e.getMessage(), e);
+                        return StreamThreadExceptionResponse.SHUTDOWN_APPLICATION;
+                    });
+
+                    // Observe state restoration
+                    streams.setGlobalStateRestoreListener(new StateRestoreListener() {
+                        public void onRestoreStart(...) { ... }
+                        public void onBatchRestored(...) { ... }
+                        public void onRestoreEnd(...) { ... }
+                    });
+                  </code>
+              </pre>
+
+          </div>
+      </div>
+      <div class="pagination">
                 <a href="/{{version}}/documentation/streams/developer-guide/memory-mgmt" class="pagination__btn pagination__btn__prev">Previous</a>
                 <a href="/{{version}}/documentation/streams/developer-guide/manage-topics" class="pagination__btn pagination__btn__next">Next</a>
-              </div>
+      </div>
                 </script>
 
                 <!--#include virtual="../../../includes/_header.htm" -->
