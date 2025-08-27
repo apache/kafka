@@ -117,6 +117,7 @@ public class CommitRequestManagerTest {
     private OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final Metrics metrics = new Metrics();
     private Properties props;
+
     private final int defaultApiTimeoutMs = 60000;
 
 
@@ -144,6 +145,7 @@ public class CommitRequestManagerTest {
                 time
             )
         );
+
         CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
                 logContext,
