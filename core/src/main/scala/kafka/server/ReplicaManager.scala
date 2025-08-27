@@ -172,7 +172,8 @@ object ReplicaManager {
     ListOffsetsRequest.LATEST_TIMESTAMP -> 1.toShort,
     ListOffsetsRequest.MAX_TIMESTAMP -> 7.toShort,
     ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP -> 8.toShort,
-    ListOffsetsRequest.LATEST_TIERED_TIMESTAMP -> 9.toShort
+    ListOffsetsRequest.LATEST_TIERED_TIMESTAMP -> 9.toShort,
+    ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP -> 11.toShort
   )
 
   def createLogReadResult(highWatermark: Long,
