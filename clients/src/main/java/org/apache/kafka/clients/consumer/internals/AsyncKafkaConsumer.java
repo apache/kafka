@@ -1814,7 +1814,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
 
-        // NOTE: hasAllFetchPositions to return the correct answer, we MUST call
+        // NOTE: for hasAllFetchPositions to return the correct answer, we MUST call
         // updateAssignmentMetadataIfNeeded before this method.
         if (!subscriptions.hasAllFetchPositions() && pollTimeout > retryBackoffMs) {
             pollTimeout = retryBackoffMs;
