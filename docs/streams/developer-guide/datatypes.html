@@ -192,30 +192,47 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
           <li><code class="docutils literal"><span class="pre">TimeWindowedDeserializer&lt;T&gt;</span></code></li>
           <li><code class="docutils literal"><span class="pre">SessionWindowedDeserializer&lt;T&gt;</span></code></li>
         </ul>
-        <h4>Migration from Deprecated Configs</h4>
-        <p>The following stream configuration parameters have been deprecated. For details, see the <a href="config-streams.html#windowed.inner.class.serde">windowed.inner.class.serde</a> configuration documentation:</p>
-        <table border="1" class="docutils">
-          <colgroup>
-            <col width="17%" />
-            <col width="83%" />
-          </colgroup>
-          <thead valign="bottom">
-            <tr class="row-odd">
-              <th class="head">Deprecated Config</th>
-              <th class="head">Replacement</th>
-            </tr>
-          </thead>
-          <tbody valign="top">
-            <tr class="row-even">
-              <td><code class="docutils literal"><span class="pre">windowed.inner.class.serde</span></code></td>
-              <td>Use <code class="docutils literal"><span class="pre">TimeWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS</span></code>, <code class="docutils literal"><span class="pre">TimeWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS</span></code>, <code class="docutils literal"><span class="pre">SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS</span></code>, or <code class="docutils literal"><span class="pre">SessionWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS</span></code></td>
-            </tr>
-            <tr class="row-odd">
-              <td><code class="docutils literal"><span class="pre">window.size.ms</span></code></td>
-              <td>Use <code class="docutils literal"><span class="pre">TimeWindowedDeserializer.WINDOW_SIZE_MS_CONFIG</span></code> or pass window size directly to constructor</td>
-            </tr>
-          </tbody>
-        </table>
+        <h4>Usage in Code</h4>
+        <p>When using windowed serdes in your application code, you typically create instances via constructors or factory methods:</p>
+        <pre class="line-numbers"><code class="language-java">// Time windowed serde - using factory method
+Serde&lt;Windowed&lt;String&gt;&gt; timeWindowedSerde = 
+    WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
+
+// Time windowed serde - using constructor
+Serde&lt;Windowed&lt;String&gt;&gt; timeWindowedSerde2 = 
+    new WindowedSerdes.TimeWindowedSerde&lt;&gt;(Serdes.String(), 500L);
+
+// Session windowed serde - using factory method
+Serde&lt;Windowed&lt;String&gt;&gt; sessionWindowedSerde = 
+    WindowedSerdes.sessionWindowedSerdeFrom(String.class);
+
+// Session windowed serde - using constructor  
+Serde&lt;Windowed&lt;String&gt;&gt; sessionWindowedSerde2 = 
+    new WindowedSerdes.SessionWindowedSerde&lt;&gt;(Serdes.String());
+
+// Using individual serializers/deserializers
+TimeWindowedSerializer&lt;String&gt; serializer = new TimeWindowedSerializer&lt;&gt;(Serdes.String().serializer());
+TimeWindowedDeserializer&lt;String&gt; deserializer = new TimeWindowedDeserializer&lt;&gt;(Serdes.String().deserializer(), 500L);</code></pre>
+
+        <h4>Usage in Command Line</h4>
+        <p>When using command-line tools (like <code>kafka-console-consumer</code>), you can configure windowed deserializers by passing the inner class and window size via configuration properties. The property names use a prefix pattern:</p>
+        <pre class="line-numbers"><code class="language-bash"># Time windowed deserializer configuration
+--property print.key=true \
+--property key.deserializer=org.apache.kafka.streams.kstream.TimeWindowedDeserializer \
+--property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer \
+--property key.deserializer.window.size.ms=500
+
+# Session windowed deserializer configuration  
+--property print.key=true \
+--property key.deserializer=org.apache.kafka.streams.kstream.SessionWindowedDeserializer \
+--property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer</code></pre>
+
+        <h4>Deprecated Configs</h4>
+        <p>The following <code>StreamsConfig</code> parameters are deprecated in favor of passing parameters directly to serializer/deserializer constructors:</p>
+        <ul class="simple">
+          <li><code class="docutils literal"><span class="pre">StreamsConfig.WINDOWED_INNER_CLASS_SERDE</span></code> is deprecated in favor of <code class="docutils literal"><span class="pre">TimeWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS</span></code> and <code class="docutils literal"><span class="pre">TimeWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS</span></code></li>
+          <li><code class="docutils literal"><span class="pre">StreamsConfig.WINDOW_SIZE_MS_CONFIG</span></code> is deprecated in favor of <code class="docutils literal"><span class="pre">TimeWindowedDeserializer.WINDOW_SIZE_MS_CONFIG</span></code></li>
+        </ul>
       </div>
       <div class="section" id="implementing-custom-serdes">
         <span id="streams-developer-guide-serdes-custom"></span><h2>Implementing custom Serdes<a class="headerlink" href="#implementing-custom-serdes" title="Permalink to this headline"></a></h2>
