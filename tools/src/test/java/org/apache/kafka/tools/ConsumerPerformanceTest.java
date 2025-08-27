@@ -174,7 +174,7 @@ public class ConsumerPerformanceTest {
 
     @Test
     public void testClientIdOverride() throws IOException {
-        Path configPath = tempDir.resolve("test_consumer_config.conf");
+        Path configPath = tempDir.resolve("test_client_id_override_consumer_perf.conf");
         Files.deleteIfExists(configPath);
         File tempFile = Files.createFile(configPath).toFile();
         try (PrintWriter output = new PrintWriter(Files.newOutputStream(tempFile.toPath()))) {
@@ -197,7 +197,7 @@ public class ConsumerPerformanceTest {
 
     @Test
     public void testConsumerConfigDeprecated() throws IOException {
-        Path configPath = tempDir.resolve("test_consumer_config.conf");
+        Path configPath = tempDir.resolve("test_consumer_config_deprecated_consumer_perf.conf");
         Files.deleteIfExists(configPath);
         File tempFile = Files.createFile(configPath).toFile();
         try (PrintWriter output = new PrintWriter(Files.newOutputStream(tempFile.toPath()))) {
@@ -219,7 +219,7 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
-    public void testCommandConfigWithConsumerConfigPresent() throws IOException {
+    public void testCommandConfigWithConsumerConfigPresent() {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
