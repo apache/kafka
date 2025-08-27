@@ -1657,7 +1657,6 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
 
 object TestNumReplicaFetcherMetricsReporter {
   val testReporters = new ConcurrentLinkedQueue[TestNumReplicaFetcherMetricsReporter]()
-  val configuredBrokers = mutable.Set[Int]()
 
   def waitForReporters(count: Int): List[TestNumReplicaFetcherMetricsReporter] = {
     TestUtils.waitUntilTrue(() => testReporters.size == count, msg = "Metrics reporters size not matched. Expected: " + count + ", actual: " + testReporters.size())
@@ -1669,15 +1668,12 @@ object TestNumReplicaFetcherMetricsReporter {
 }
 
 
-class TestNumReplicaFetcherMetricsReporter extends MetricsReporter with Reconfigurable with Closeable with ClusterResourceListener {
+class TestNumReplicaFetcherMetricsReporter extends MetricsReporter {
   import TestNumReplicaFetcherMetricsReporter._
   @volatile var configureCount = 0
   @volatile var reconfigureCount = 0
   @volatile var numFetchers: Int = 1
   testReporters.add(this)
-
-  override def contextChange(metricsContext: MetricsContext): Unit = {
-  }
 
   override def init(metrics: util.List[KafkaMetric]): Unit = {
   }
@@ -1691,9 +1687,6 @@ class TestNumReplicaFetcherMetricsReporter extends MetricsReporter with Reconfig
   }
 
   override def metricRemoval(metric: KafkaMetric): Unit = {
-  }
-
-  override def onUpdate(clusterResource: ClusterResource): Unit = {
   }
 
   override def reconfigurableConfigs(): util.Set[String] = {
