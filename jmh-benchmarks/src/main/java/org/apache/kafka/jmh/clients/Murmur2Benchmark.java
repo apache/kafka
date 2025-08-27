@@ -1,6 +1,7 @@
 package org.apache.kafka.jmh.clients;
 
 import org.apache.kafka.common.utils.Utils;
+
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 
