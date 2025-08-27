@@ -392,8 +392,6 @@ public class ShareConsumerPerformance {
                 if (options.has(consumerConfigOpt)) {
                     System.out.println("Warning: --consumer.config is deprecated. Use --command-config instead.");
                 }
-
-
             }
         }
 

@@ -92,7 +92,7 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
-    public void testNumOfRecordsDeprecated() {
+    public void testMessagesDeprecated() {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -196,7 +196,7 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
-    public void testCommandConfigDeprecated() throws IOException {
+    public void testConsumerConfigDeprecated() throws IOException {
         Path configPath = tempDir.resolve("test_consumer_config.conf");
         Files.deleteIfExists(configPath);
         File tempFile = Files.createFile(configPath).toFile();
