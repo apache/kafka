@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metalog;
+package org.apache.kafka.controller;
 
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -66,9 +66,9 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * The LocalLogManager is a test implementation that relies on the contents of memory.
+ * The MockRaftClient is a test implementation that relies on the contents of memory.
  */
-public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, AutoCloseable {
+public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, AutoCloseable {
     interface LocalBatch {
         int epoch();
         int size();
@@ -158,9 +158,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         private static final Logger log = LoggerFactory.getLogger(SharedLogData.class);
 
         /**
-         * Maps node IDs to the matching log managers.
+         * Maps node IDs to the matching raft clients.
          */
-        private final HashMap<Integer, LocalLogManager> logManagers = new HashMap<>();
+        private final HashMap<Integer, MockRaftClient> raftClients = new HashMap<>();
 
         /**
          * Maps offsets to record batches.
@@ -198,17 +198,17 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
         }
 
-        synchronized void registerLogManager(LocalLogManager logManager) {
-            if (logManagers.put(logManager.nodeId, logManager) != null) {
-                throw new RuntimeException("Can't have multiple LocalLogManagers " +
-                    "with id " + logManager.nodeId());
+        synchronized void registerRaftClient(MockRaftClient raftClient) {
+            if (raftClients.put(raftClient.nodeId, raftClient) != null) {
+                throw new RuntimeException("Can't have multiple MockRaftClients " +
+                    "with id " + raftClient.nodeId());
             }
             electLeaderIfNeeded();
         }
 
-        synchronized void unregisterLogManager(LocalLogManager logManager) {
-            if (!logManagers.remove(logManager.nodeId, logManager)) {
-                throw new RuntimeException("Log manager " + logManager.nodeId() +
+        synchronized void unregisterRaftClient(MockRaftClient raftClient) {
+            if (!raftClients.remove(raftClient.nodeId, raftClient)) {
+                throw new RuntimeException("MockRaftClient " + raftClient.nodeId() +
                     " was not found.");
             }
         }
@@ -259,19 +259,19 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             if (batch instanceof LeaderChangeBatch leaderChangeBatch) {
                 leader = leaderChangeBatch.newLeader;
             }
-            for (LocalLogManager logManager : logManagers.values()) {
-                logManager.scheduleLogCheck();
+            for (MockRaftClient raftClient : raftClients.values()) {
+                raftClient.scheduleLogCheck();
             }
             prevOffset = nextEndOffset;
             return nextEndOffset;
         }
 
         synchronized void electLeaderIfNeeded() {
-            if (leader.leaderId().isPresent() || logManagers.isEmpty()) {
+            if (leader.leaderId().isPresent() || raftClients.isEmpty()) {
                 return;
             }
-            int nextLeaderIndex = ThreadLocalRandom.current().nextInt(logManagers.size());
-            Iterator<Integer> iter = logManagers.keySet().iterator();
+            int nextLeaderIndex = ThreadLocalRandom.current().nextInt(raftClients.size());
+            Iterator<Integer> iter = raftClients.keySet().iterator();
             Integer nextLeaderNode = null;
             for (int i = 0; i <= nextLeaderIndex; i++) {
                 nextLeaderNode = iter.next();
@@ -294,7 +294,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         /**
-         * Optionally return a snapshot reader if the offset if less than the first batch.
+         * Optionally return a snapshot reader if the offset is less than the first batch.
          */
         synchronized Optional<RawSnapshotReader> nextSnapshot(long offset) {
             return Optional.ofNullable(snapshots.lastEntry()).flatMap(entry -> {
@@ -325,7 +325,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         /**
          * Returns the snapshot id of the latest snapshot if there is one.
          *
-         * If a snapshot doesn't exists, it return an empty Optional.
+         * If a snapshot doesn't exist, it returns an empty Optional.
          */
         synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
             return Optional.ofNullable(snapshots.lastEntry()).map(entry -> entry.getValue().snapshotId());
@@ -400,65 +400,65 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     private final Logger log;
 
     /**
-     * The node ID of this local log manager. Each log manager must have a unique ID.
+     * The node ID of this raft client. Each raft client must have a unique ID.
      */
     private final int nodeId;
 
     /**
-     * A reference to the in-memory state that unites all the log managers in use.
+     * A reference to the in-memory state that unites all the raft clients in use.
      */
     private final SharedLogData shared;
 
     /**
-     * The event queue used by this local log manager.
+     * The event queue used by this raft client.
      */
     private final EventQueue eventQueue;
 
     /**
-     * The latest kraft version used by this local log manager.
+     * The latest kraft version used by this raft client.
      */
     private KRaftVersion lastKRaftVersion;
 
     /**
-     * Whether this LocalLogManager has been shut down.
+     * Whether this raft client has been shut down.
      */
     private boolean shutdown = false;
 
     /**
-     * An offset that the log manager will not read beyond. This exists only for testing
+     * An offset that the raft client will not read beyond. This exists only for testing
      * purposes.
      */
     private long maxReadOffset;
 
     /**
-     * The listener objects attached to this local log manager.
+     * The listener objects attached to this raft client.
      */
     private final Map<Listener<ApiMessageAndVersion>, MetaLogListenerData> listeners = new IdentityHashMap<>();
 
     /**
-     * The current leader, as seen by this log manager.
+     * The current leader, as seen by this raft client.
      */
     private volatile LeaderAndEpoch leader = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
-    /*
+    /**
      * If this variable is true the next scheduleAppend will fail
      */
     private final AtomicBoolean throwOnNextAppend = new AtomicBoolean(false);
 
-    public LocalLogManager(LogContext logContext,
-                           int nodeId,
-                           SharedLogData shared,
-                           String threadNamePrefix,
-                           KRaftVersion lastKRaftVersion) {
+    public MockRaftClient(LogContext logContext,
+                          int nodeId,
+                          SharedLogData shared,
+                          String threadNamePrefix,
+                          KRaftVersion lastKRaftVersion) {
         this.logContext = logContext;
-        this.log = logContext.logger(LocalLogManager.class);
+        this.log = logContext.logger(MockRaftClient.class);
         this.nodeId = nodeId;
         this.shared = shared;
         this.maxReadOffset = shared.initialMaxReadOffset();
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
                 threadNamePrefix, new ShutdownEvent());
         this.lastKRaftVersion = lastKRaftVersion;
-        shared.registerLogManager(this);
+        this.shared.registerRaftClient(this);
     }
 
     private void scheduleLogCheck() {
@@ -477,7 +477,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                 listenerData.handleLoadSnapshot(
                                     RecordsSnapshotReader.of(
                                         snapshot.get(),
-                                        new  MetadataRecordSerde(),
+                                        new MetadataRecordSerde(),
                                         BufferSupplier.create(),
                                         Integer.MAX_VALUE,
                                         true,
@@ -556,7 +556,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     public void beginShutdown() {
-        eventQueue.beginShutdown("beginShutdown");
+        eventQueue.beginShutdown("MockKafkaRaftClient");
     }
 
     class ShutdownEvent implements EventQueue.Event {
@@ -569,7 +569,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                     for (MetaLogListenerData listenerData : listeners.values()) {
                         listenerData.beginShutdown();
                     }
-                    shared.unregisterLogManager(LocalLogManager.this);
+                    shared.unregisterRaftClient(MockRaftClient.this);
                 }
             } catch (Exception e) {
                 log.error("Unexpected exception while sending beginShutdown callbacks", e);
@@ -592,7 +592,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     /**
-     * Shutdown the log manager.
+     * Shutdown the raft client.
      *
      * Even though the API suggests a non-blocking shutdown, this method always returns a completed
      * future. This means that shutdown is a blocking operation.
@@ -614,7 +614,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         CompletableFuture<Void> future = new CompletableFuture<>();
         eventQueue.append(() -> {
             if (shutdown) {
-                log.info("Node {}: can't register because local log manager has " +
+                log.info("Node {}: can't register because raft client has " +
                     "already been shut down.", nodeId);
                 future.complete(null);
             } else {
@@ -643,7 +643,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public void unregister(RaftClient.Listener<ApiMessageAndVersion> listener) {
         eventQueue.append(() -> {
             if (shutdown) {
-                log.info("Node {}: can't unregister because local log manager is shutdown", nodeId);
+                log.info("Node {}: can't unregister because raft client is shutdown", nodeId);
             } else {
                 int id = System.identityHashCode(listener);
                 if (listeners.remove(listener) == null) {

@@ -55,7 +55,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -560,7 +559,7 @@ public class DeleteStreamsGroupTest {
     private static StreamsBuilder builder(String inputTopic, String outputTopic) {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
-            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .flatMapValues(value -> List.of(value.toLowerCase(Locale.getDefault()).split("\\W+")))
             .groupBy((key, value) -> value)
             .count()
             .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));

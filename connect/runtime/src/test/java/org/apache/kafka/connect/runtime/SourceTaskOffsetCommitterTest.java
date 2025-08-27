@@ -40,7 +40,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -94,7 +93,7 @@ public class SourceTaskOffsetCommitterTest {
 
         committer.schedule(taskId, task);
         assertNotNull(taskWrapper.getValue());
-        assertEquals(singletonMap(taskId, commitFuture), committers);
+        assertEquals(Map.of(taskId, commitFuture), committers);
     }
 
     @Test
