@@ -79,11 +79,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     public List<String> logDirs() {
-        return Optional.ofNullable(getList(ServerLogConfigs.LOG_DIRS_CONFIG))
-                .orElse(getList(ServerLogConfigs.LOG_DIR_CONFIG))
-                .stream()
-                .map(String::trim)
-                .toList();
+        return Optional.ofNullable(getList(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getList(ServerLogConfigs.LOG_DIR_CONFIG));
     }
 
     public int numIoThreads() {
