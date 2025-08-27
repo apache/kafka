@@ -424,7 +424,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 
-        cmd += " --consumer.config %s" % VerifiableConsumer.CONFIG_FILE
+        cmd += " --command-config %s" % VerifiableConsumer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableConsumer.STDOUT_CAPTURE, VerifiableConsumer.STDOUT_CAPTURE)
         return cmd
 
