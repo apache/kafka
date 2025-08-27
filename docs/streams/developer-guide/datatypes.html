@@ -174,37 +174,24 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
     &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
 &lt;/dependency&gt;</code></pre>
         <p>This artifact provides the following windowed serde implementations under the package <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/kstream">org.apache.kafka.streams.kstream</a>:</p>
-        <table border="1" class="docutils">
-          <colgroup>
-            <col width="17%" />
-            <col width="83%" />
-          </colgroup>
-          <thead valign="bottom">
-          <tr class="row-odd"><th class="head">Data type</th>
-            <th class="head">Serde</th>
-          </tr>
-          </thead>
-          <tbody valign="top">
-          <tr class="row-even"><td>Windowed&lt;T&gt; (Time Windows)</td>
-            <td><code class="docutils literal"><span class="pre">new WindowedSerdes.TimeWindowedSerde&lt;&gt;(innerSerde, windowSize)</span></code>, <code class="docutils literal"><span class="pre">WindowedSerdes.timeWindowedSerdeFrom(Class&lt;T&gt; type, long windowSize)</span></code></td>
-          </tr>
-          <tr class="row-odd"><td>Windowed&lt;T&gt; (Session Windows)</td>
-            <td><code class="docutils literal"><span class="pre">new WindowedSerdes.SessionWindowedSerde&lt;&gt;(innerSerde)</span></code>, <code class="docutils literal"><span class="pre">WindowedSerdes.sessionWindowedSerdeFrom(Class&lt;T&gt; type)</span></code></td>
-          </tr>
-          <tr class="row-even"><td>TimeWindowedSerializer&lt;T&gt;</td>
-            <td><code class="docutils literal"><span class="pre">new TimeWindowedSerializer&lt;&gt;(innerSerializer)</span></code></td>
-          </tr>
-          <tr class="row-odd"><td>TimeWindowedDeserializer&lt;T&gt;</td>
-            <td><code class="docutils literal"><span class="pre">new TimeWindowedDeserializer&lt;&gt;(innerDeserializer, windowSize)</span></code></td>
-          </tr>
-          <tr class="row-even"><td>SessionWindowedSerializer&lt;T&gt;</td>
-            <td><code class="docutils literal"><span class="pre">new SessionWindowedSerializer&lt;&gt;(innerSerializer)</span></code></td>
-          </tr>
-          <tr class="row-odd"><td>SessionWindowedDeserializer&lt;T&gt;</td>
-            <td><code class="docutils literal"><span class="pre">new SessionWindowedDeserializer&lt;&gt;(innerDeserializer)</span></code></td>
-          </tr>
-          </tbody>
-        </table>
+        
+        <p><strong>Serdes:</strong></p>
+        <ul class="simple">
+          <li><code class="docutils literal"><span class="pre">WindowedSerdes.TimeWindowedSerde&lt;T&gt;</span></code></li>
+          <li><code class="docutils literal"><span class="pre">WindowedSerdes.SessionWindowedSerde&lt;T&gt;</span></code></li>
+        </ul>
+        
+        <p><strong>Serializers:</strong></p>
+        <ul class="simple">
+          <li><code class="docutils literal"><span class="pre">TimeWindowedSerializer&lt;T&gt;</span></code></li>
+          <li><code class="docutils literal"><span class="pre">SessionWindowedSerializer&lt;T&gt;</span></code></li>
+        </ul>
+        
+        <p><strong>Deserializers:</strong></p>
+        <ul class="simple">
+          <li><code class="docutils literal"><span class="pre">TimeWindowedDeserializer&lt;T&gt;</span></code></li>
+          <li><code class="docutils literal"><span class="pre">SessionWindowedDeserializer&lt;T&gt;</span></code></li>
+        </ul>
         <h4>Migration from Deprecated Configs</h4>
         <p>The following stream configuration parameters have been deprecated. For details, see the <a href="config-streams.html#windowed.inner.class.serde">windowed.inner.class.serde</a> configuration documentation:</p>
         <table border="1" class="docutils">
