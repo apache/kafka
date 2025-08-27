@@ -21,6 +21,8 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.server.record.BrokerCompressionType;
 
+import java.util.List;
+
 import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFIX;
 
 /**
@@ -36,8 +38,8 @@ public class ServerLogConfigs {
 
     public static final String LOG_DIRS_CONFIG = LOG_PREFIX + "dirs";
     public static final String LOG_DIR_CONFIG = LOG_PREFIX + "dir";
-    public static final String LOG_DIR_DEFAULT = "/tmp/kafka-logs";
-    public static final String LOG_DIR_DOC = "The directory in which the log data is kept (supplemental for " + LOG_DIRS_CONFIG + " property)";
+    public static final List<String> LOG_DIR_DEFAULT = List.of("/tmp/kafka-logs");
+    public static final String LOG_DIR_DOC = "The directories in which the log data is kept (supplemental for " + LOG_DIRS_CONFIG + " property)";
     public static final String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIR_CONFIG + " is used.";
 
     public static final String LOG_SEGMENT_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
@@ -71,11 +73,7 @@ public class ServerLogConfigs {
 
     public static final String LOG_CLEANUP_POLICY_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.CLEANUP_POLICY_CONFIG);
     public static final String LOG_CLEANUP_POLICY_DEFAULT = TopicConfig.CLEANUP_POLICY_DELETE;
-    public static final String LOG_CLEANUP_POLICY_DOC = "The default cleanup policy for segments beyond the retention window. " +
-            "A comma separated list of valid policies. The \"delete\" policy will discard old segments when their " +
-            "retention time or size limit has been reached. The \"compact\" policy will enable log compaction. " +
-            "An empty list means infinite retention - no cleanup policies will be applied by default. " +
-            "When remote storage is enabled, local retention policies are still enforced to manage local storage usage.";
+    public static final String LOG_CLEANUP_POLICY_DOC = TopicConfig.CLEANUP_POLICY_DOC;
 
     public static final String LOG_INDEX_SIZE_MAX_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
     public static final int LOG_INDEX_SIZE_MAX_BYTES_DEFAULT = 10 * 1024 * 1024;
