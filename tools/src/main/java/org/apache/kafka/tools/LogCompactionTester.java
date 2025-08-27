@@ -414,7 +414,7 @@ public class LogCompactionTester {
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, String.valueOf(Long.MAX_VALUE));
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
-        producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType);
+        producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
         
         if (compressionLevel != null) {
             switch (compressionType.name.toLowerCase(Locale.ROOT)) {
