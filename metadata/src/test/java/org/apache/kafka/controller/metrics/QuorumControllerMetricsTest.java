@@ -46,6 +46,7 @@ public class QuorumControllerMetricsTest {
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
                     "kafka.controller:type=KafkaController,name=ActiveControllerCount",
+                    "kafka.controller:type=KafkaController,name=AvgIdleRatio",
                     "kafka.controller:type=KafkaController,name=EventQueueOperationsStartedCount",
                     "kafka.controller:type=KafkaController,name=EventQueueOperationsTimedOutCount",
                     "kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs",
@@ -183,6 +184,39 @@ public class QuorumControllerMetricsTest {
             assertEquals(sessionTimeoutMs, timeSinceLastHeartbeatReceivedMs.value());
             metrics.removeTimeSinceLastHeartbeatMetrics();
             assertEquals(numMetrics - 1, registry.allMetrics().size());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @Test
+    public void testYammerTimeRatioIdleTimeTracking() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, 9000)) {
+            Gauge<Double> avgIdleRatio = (Gauge<Double>) registry.allMetrics().get(metricName("KafkaController", "AvgIdleRatio"));
+
+            // No idle time recorded yet
+            assertEquals(1.0, avgIdleRatio.value());
+
+            metrics.updateIdleStartTime();
+            time.sleep(10); //initial record is ignored
+            metrics.updateIdleEndTime();
+            time.sleep(20); // wait 20ms non-idle
+            metrics.updateIdleStartTime();
+            time.sleep(20); // 20ms idle
+            metrics.updateIdleEndTime();
+            assertEquals(0.5, avgIdleRatio.value());
+
+            metrics.updateIdleStartTime();
+            time.sleep(0);
+            metrics.updateIdleEndTime();
+            time.sleep(19);
+            metrics.updateIdleStartTime();
+            time.sleep(1);
+            metrics.updateIdleEndTime();
+            assertEquals(0.05, avgIdleRatio.value());
+
         } finally {
             registry.shutdown();
         }

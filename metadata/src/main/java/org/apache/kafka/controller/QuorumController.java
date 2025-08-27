@@ -532,6 +532,7 @@ public final class QuorumController implements Controller {
             MICROSECONDS.convert(deltaNs, NANOSECONDS));
         performanceMonitor.observeEvent(name, deltaNs);
         controllerMetrics.updateEventQueueProcessingTime(NANOSECONDS.toMillis(deltaNs));
+        controllerMetrics.updateIdleStartTime();
     }
 
     private Throwable handleEventException(
@@ -549,6 +550,7 @@ public final class QuorumController implements Controller {
         } else {
             deltaUs = OptionalLong.empty();
         }
+        controllerMetrics.updateIdleStartTime();
         EventHandlerExceptionInfo info = EventHandlerExceptionInfo.
                 fromInternal(exception, this::latestController);
         int epoch = curClaimEpoch;
@@ -596,6 +598,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
+            controllerMetrics.updateIdleEndTime();
             startProcessingTimeNs = OptionalLong.of(
                 updateEventStartMetricsAndGetTime(OptionalLong.of(eventCreatedTimeNs)));
             log.debug("Executing {}.", this);
@@ -647,6 +650,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
+            controllerMetrics.updateIdleEndTime();
             startProcessingTimeNs = OptionalLong.of(
                 updateEventStartMetricsAndGetTime(OptionalLong.of(eventCreatedTimeNs)));
             T value = handler.get();
@@ -762,6 +766,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
+            controllerMetrics.updateIdleEndTime();
             // Deferred events set the DOES_NOT_UPDATE_QUEUE_TIME flag to prevent incorrectly
             // including their deferral time in the event queue time.
             startProcessingTimeNs = OptionalLong.of(
@@ -831,6 +836,7 @@ public final class QuorumController implements Controller {
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
+                controllerMetrics.updateIdleStartTime();
                 deferredEventQueue.add(resultAndOffset.offset(), this);
             }
         }
@@ -842,6 +848,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void complete(Throwable exception) {
+            controllerMetrics.updateIdleEndTime();
             if (exception == null) {
                 handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
                 future.complete(resultAndOffset.response());
