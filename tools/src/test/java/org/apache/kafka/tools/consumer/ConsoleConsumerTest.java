@@ -423,30 +423,26 @@ public class ConsoleConsumerTest {
         @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     })
     public void testGroupMetadataMessageFormatterWithConsumerGroupProtocol(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.admin()) {
+        cluster.createTopic(topic, 1, (short) 1);
+        produceMessages(cluster);
 
-            NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-            admin.createTopics(singleton(newTopic));
-            produceMessages(cluster);
+        String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster,
+            Topic.GROUP_METADATA_TOPIC_NAME,
+            "org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
 
-            String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster,
-                Topic.GROUP_METADATA_TOPIC_NAME,
-                "org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
+        ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
+        ConsoleConsumer.ConsumerWrapper consumerWrapper =
+            new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster, GroupProtocol.CONSUMER));
 
-            ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
-            ConsoleConsumer.ConsumerWrapper consumerWrapper =
-                new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster, GroupProtocol.CONSUMER));
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream();
+             PrintStream output = new PrintStream(out)) {
+            ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
 
-            try (ByteArrayOutputStream out = new ByteArrayOutputStream();
-                 PrintStream output = new PrintStream(out)) {
-                ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
-
-                JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
-                // Consumer group protocol does not write GROUP_METADATA records, so the result is empty
-                assertTrue(jsonNode.isEmpty());
-            } finally {
-                consumerWrapper.cleanup();
-            }
+            JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
+            // Consumer group protocol does not write GROUP_METADATA records, so the result is empty
+            assertTrue(jsonNode.isEmpty());
+        } finally {
+            consumerWrapper.cleanup();
         }
     }
 
