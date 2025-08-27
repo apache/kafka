@@ -548,6 +548,11 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">Sets window size for the deserializer in order to calculate window end times.</td>
             <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
+          <tr class="row-even"><td>windowed.inner.class.serde (Deprecated. See <a href="datatypes.html#window-serdes">Window Serdes</a> for alternatives.)</td>
+            <td>Low</td>
+            <td colspan="2">Serde for the inner class of a windowed record. Must implement the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
+            <td><code class="docutils literal"><span class="pre">null</span></code></td>
+          </tr>
           </tbody>
         </table>
         <div class="section" id="acceptable-recovery-lag">
