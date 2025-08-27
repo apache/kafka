@@ -636,8 +636,7 @@ class KafkaRaftClientTest {
 
     @Test
     public void testBeginQuorumShouldNotSendAfterFetchRequest() throws Exception {
-//        ReplicaKey localId = replicaKey(randomReplicaId(), true);
-        ReplicaKey localId = replicaKey(255, true);
+        ReplicaKey localId = replicaKey(randomReplicaId(), true);
         int remoteId1 = localId.id() + 1;
         int remoteId2 = localId.id() + 2;
         ReplicaKey replicaKey1 = replicaKey(remoteId1, true);
