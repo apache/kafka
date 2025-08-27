@@ -11,6 +11,13 @@ org.apache.kafka.streams.integration.AdjustStreamThreadCountTest:
 - testRebalanceHappensBeforeStreamThreadGetDown
 org.apache.kafka.streams.integration.ConsistencyVectorIntegrationTest:
 - shouldHaveSamePositionBoundActiveAndStandBy
+org.apache.kafka.streams.integration.DeadLetterQueueIntegrationTest:
+- shouldSendToDlqAndContinueFromDeserializationError
+- shouldSendToDlqAndContinueFromDsl
+- shouldSendToDlqAndContinueFromProcessorAPI
+- shouldSendToDlqAndFailFromDeserializationError
+- shouldSendToDlqAndFailFromDsl
+- shouldSendToDlqAndFailFromProcessorAPI
 org.apache.kafka.streams.integration.EOSUncleanShutdownIntegrationTest:
 - shouldWorkWithUncleanShutdownWipeOutStateStore
 org.apache.kafka.streams.integration.EmitOnChangeIntegrationTest:
