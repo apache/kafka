@@ -3918,31 +3918,19 @@ project(':distribution') {
         user {
             read = true
             write = true
-            execute = false
         }
-        group {
-            read = true
-            execute = true
-        }
-        other {
-            read = true
-        }
+        group.read = true
+        other.read = true
     }
     dirPermissions {
         unix('rwxr-xr-x')
     }
     eachFile {
-        if (name.endsWith( ".sh")) { // I will check what's going on Windows (i.e. with a `bin/windows/ folder and *.bat files)
-            permissions {            // and test how Kafka claster starts/works there
-                user {
-                    execute = true
-                }
-                group {
-                    execute = true
-                }
-                other {
-                    execute = true
-                }
+        if (name.endsWith( ".sh")) {
+            permissions {
+                user.execute = true
+                group.execute = true
+                other.execute = true
             }
         }
     }
