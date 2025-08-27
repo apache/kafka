@@ -37,12 +37,14 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
@@ -135,8 +137,13 @@ public class ConsumerPerformance {
         long reportingIntervalMs = options.reportingIntervalMs();
         boolean showDetailedStats = options.showDetailedStats();
         SimpleDateFormat dateFormat = options.dateFormat();
-        consumer.subscribe(options.topic(),
-            new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound));
+
+        ConsumerPerfRebListener listener = new ConsumerPerfRebListener(joinTimeMs, joinStartMs, joinTimeMsInSingleRound);
+        if (options.topic().isPresent()) {
+            consumer.subscribe(options.topic().get(), listener);
+        } else {
+            consumer.subscribe(options.include().get(), listener);
+        }
 
         // now start the benchmark
         long currentTimeMs = System.currentTimeMillis();
@@ -255,6 +262,7 @@ public class ConsumerPerformance {
     protected static class ConsumerPerfOptions extends CommandDefaultOptions {
         private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<String> topicOpt;
+        private final OptionSpec<String> includeOpt;
         private final OptionSpec<String> groupIdOpt;
         private final OptionSpec<Integer> fetchSizeOpt;
         private final OptionSpec<Void> resetBeginningOffsetOpt;
@@ -274,9 +282,13 @@ public class ConsumerPerformance {
                 .withRequiredArg()
                 .describedAs("server to connect to")
                 .ofType(String.class);
-            topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
+            topicOpt = parser.accepts("topic", "The topic to consume from.")
                 .withRequiredArg()
                 .describedAs("topic")
+                .ofType(String.class);
+            includeOpt = parser.accepts("include", "Regular expression specifying list of topics to include for consumption.")
+                .withRequiredArg()
+                .describedAs("Java regex (String)")
                 .ofType(String.class);
             groupIdOpt = parser.accepts("group", "The group id to consume on.")
                 .withRequiredArg()
@@ -332,7 +344,8 @@ public class ConsumerPerformance {
             }
             if (options != null) {
                 CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the consumer performance.");
-                CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt);
+                CommandLineUtils.checkRequiredArgs(parser, options, numMessagesOpt);
+                CommandLineUtils.checkOneOfArgs(parser, options, topicOpt, includeOpt);
             }
         }
 
@@ -362,8 +375,16 @@ public class ConsumerPerformance {
             return props;
         }
 
-        public Set<String> topic() {
-            return Set.of(options.valueOf(topicOpt));
+        public Optional<Collection<String>> topic() {
+            return options.has(topicOpt)
+                    ? Optional.of(List.of(options.valueOf(topicOpt)))
+                    : Optional.empty();
+        }
+
+        public Optional<Pattern> include() {
+            return options.has(includeOpt)
+                    ? Optional.of(Pattern.compile(options.valueOf(includeOpt)))
+                    : Optional.empty();
         }
 
         public long numMessages() {

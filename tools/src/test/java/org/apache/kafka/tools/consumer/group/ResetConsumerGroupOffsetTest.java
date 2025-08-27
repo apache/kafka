@@ -896,10 +896,10 @@ public class ResetConsumerGroupOffsetTest {
     private void awaitConsumerGroupInactive(ConsumerGroupCommand.ConsumerGroupService service,
                                             String group) throws Exception {
         TestUtils.waitForCondition(() -> {
-            GroupState state = service.collectGroupState(group).groupState;
+            GroupState state = service.collectGroupState(group).groupState();
             return Objects.equals(state, GroupState.EMPTY) || Objects.equals(state, GroupState.DEAD);
         }, "Expected that consumer group is inactive. Actual state: " +
-                service.collectGroupState(group).groupState);
+            service.collectGroupState(group).groupState());
     }
 
     private void resetAndAssertOffsetsCommitted(ClusterInstance cluster,
