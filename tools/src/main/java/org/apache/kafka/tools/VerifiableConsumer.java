@@ -597,7 +597,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .setDefault("earliest")
                 .type(String.class)
                 .dest("resetPolicy")
-                .help("Set reset policy (must be either 'earliest', 'latest', or 'none'");
+                .help("Set reset policy (must be either 'earliest', 'latest', or 'none')");
 
         parser.addArgument("--assignment-strategy")
                 .action(store())
@@ -612,8 +612,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .required(false)
                 .type(String.class)
                 .metavar("CONFIG-FILE")
-                .help("(DEPRECATED) Consumer config properties file (config options shared with command line parameters will be overridden)." +
-                        "This option will be removed in a future version. Use --command-config instead.");
+                .help("(DEPRECATED) Consumer config properties file" +
+                        "This option will be removed in a future version. Use --command-config instead");
 
         parser.addArgument("--command-config")
                 .action(store())
@@ -621,7 +621,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .type(String.class)
                 .metavar("CONFIG-FILE")
                 .dest("commandConfigFile")
-                .help("Config properties file.");
+                .help("Config properties file (config options shared with command line parameters will be overridden)");
 
         return parser;
     }
