@@ -504,37 +504,32 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                BiConsumer<TopicPartition, Throwable> errorHandler) {
         LOGGER.debug("Stop partitions: {}", stopPartitions);
         for (StopPartition stopPartition: stopPartitions) {
-            TopicPartition tp = stopPartition.topicPartition;
+            TopicIdPartition tpId = stopPartition.topicIdPartition;
             try {
-                if (metadataCache.contains(tp)) {
-                    TopicIdPartition tpId = new TopicIdPartition(metadataCache.getTopicId(tp.topic()), tp);
-                    leaderCopyRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
-                        LOGGER.info("Cancelling the copy RLM task for partition: {}", tpId);
-                        task.cancel();
-                        return null;
-                    });
-                    leaderExpirationRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
-                        LOGGER.info("Cancelling the expiration RLM task for partition: {}", tpId);
-                        task.cancel();
-                        return null;
-                    });
-                    followerRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
-                        LOGGER.info("Cancelling the follower RLM task for partition: {}", tpId);
-                        task.cancel();
-                        return null;
-                    });
+                leaderCopyRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
+                    LOGGER.info("Cancelling the copy RLM task for partition: {}", tpId);
+                    task.cancel();
+                    return null;
+                });
+                leaderExpirationRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
+                    LOGGER.info("Cancelling the expiration RLM task for partition: {}", tpId);
+                    task.cancel();
+                    return null;
+                });
+                followerRLMTasks.computeIfPresent(tpId, (topicIdPartition, task) -> {
+                    LOGGER.info("Cancelling the follower RLM task for partition: {}", tpId);
+                    task.cancel();
+                    return null;
+                });
 
-                    removeRemoteTopicPartitionMetrics(tpId);
+                removeRemoteTopicPartitionMetrics(tpId);
 
-                    if (stopPartition.deleteRemoteLog) {
-                        LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
-                        deleteRemoteLogPartition(tpId);
-                    }
-                } else {
-                    LOGGER.warn("StopPartition call is not expected for partition: {}", tp);
+                if (stopPartition.deleteRemoteLog) {
+                    LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
+                    deleteRemoteLogPartition(tpId);
                 }
             } catch (Exception ex) {
-                errorHandler.accept(tp, ex);
+                errorHandler.accept(tpId.topicPartition(), ex);
                 LOGGER.error("Error while stopping the partition: {}", stopPartition, ex);
             }
         }
@@ -542,8 +537,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         // We want to remove topicId map and stopPartition on RLMM for deleteLocalLog or stopRLMM partitions because
         // in both case, they all mean the topic will not be held in this broker anymore.
         Set<TopicIdPartition> pendingActionsPartitions = stopPartitions.stream()
-                .filter(sp -> (sp.stopRemoteLogMetadataManager || sp.deleteLocalLog) && metadataCache.contains(sp.topicPartition))
-                .map(sp -> new TopicIdPartition(metadataCache.getTopicId(sp.topicPartition.topic()), sp.topicPartition))
+                .filter(sp -> (sp.stopRemoteLogMetadataManager || sp.deleteLocalLog))
+                .map(sp -> sp.topicIdPartition)
                 .collect(Collectors.toSet());
 
         if (!pendingActionsPartitions.isEmpty()) {

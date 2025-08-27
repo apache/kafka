@@ -20,6 +20,7 @@ package kafka.server
 import java.util.Properties
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
+import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.coordinator.group.GroupCoordinator
@@ -89,12 +90,14 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
       leaderPartitions.foreach(partition => {
         // delete remote logs and stop RemoteLogMetadataManager
-        stopPartitions.add(new StopPartition(partition.topicPartition, false, true, true))
+        stopPartitions.add(
+          new StopPartition(new TopicIdPartition(partition.topicId.get, partition.topicPartition), false, true, true))
       })
 
       followerPartitions.foreach(partition => {
         // we need to cancel follower tasks and stop RemoteLogMetadataManager
-        stopPartitions.add(new StopPartition(partition.topicPartition, false, false, true))
+        stopPartitions.add(
+          new StopPartition(new TopicIdPartition(partition.topicId.get, partition.topicPartition), false, false, true))
       })
 
       // update the log start offset to local log start offset for the leader replicas

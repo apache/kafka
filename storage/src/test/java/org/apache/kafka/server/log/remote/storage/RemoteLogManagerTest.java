@@ -2094,8 +2094,8 @@ public class RemoteLogManagerTest {
     public void testStopPartitionsWithoutDeletion() throws RemoteStorageException {
         BiConsumer<TopicPartition, Throwable> errorHandler = (topicPartition, throwable) -> fail("shouldn't be called");
         Set<StopPartition> partitions = new HashSet<>();
-        partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, false, false));
-        partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, false, false));
+        partitions.add(new StopPartition(leaderTopicIdPartition, true, false, false));
+        partitions.add(new StopPartition(followerTopicIdPartition, true, false, false));
         remoteLogManager.onLeadershipChange(Set.of(mockPartition(leaderTopicIdPartition)),
                 Set.of(mockPartition(followerTopicIdPartition)));
         assertNotNull(remoteLogManager.leaderCopyTask(leaderTopicIdPartition));
@@ -2116,8 +2116,8 @@ public class RemoteLogManagerTest {
         BiConsumer<TopicPartition, Throwable> errorHandler =
                 (topicPartition, ex) -> fail("shouldn't be called: " + ex);
         Set<StopPartition> partitions = new HashSet<>();
-        partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, true, true));
-        partitions.add(new StopPartition(followerTopicIdPartition.topicPartition(), true, true, true));
+        partitions.add(new StopPartition(leaderTopicIdPartition, true, true, true));
+        partitions.add(new StopPartition(followerTopicIdPartition, true, true, true));
 
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition)))
             .thenAnswer(invocation -> listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED).iterator());

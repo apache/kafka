@@ -434,7 +434,7 @@ class ReplicaManager(val config: KafkaConfig,
    */
   private def stopPartitions(partitionsToStop: Set[StopPartition]): Map[TopicPartition, Throwable] = {
     // First stop fetchers for all partitions.
-    val partitions = partitionsToStop.map(_.topicPartition)
+    val partitions = partitionsToStop.map(_.topicIdPartition.topicPartition())
     replicaFetcherManager.removeFetcherForPartitions(partitions)
     replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
 
@@ -442,7 +442,7 @@ class ReplicaManager(val config: KafkaConfig,
     // ReplicaManager to get Partition's information so they must be stopped first.
     val partitionsToDelete = mutable.Set.empty[TopicPartition]
     partitionsToStop.foreach { stopPartition =>
-      val topicPartition = stopPartition.topicPartition
+      val topicPartition = stopPartition.topicIdPartition.topicPartition()
       var topicId: Option[Uuid] = None
       if (stopPartition.deleteLocalLog) {
         getPartition(topicPartition) match {
@@ -467,7 +467,7 @@ class ReplicaManager(val config: KafkaConfig,
     // Third delete the logs and checkpoint.
     val errorMap = new mutable.HashMap[TopicPartition, Throwable]()
     val remotePartitionsToStop = partitionsToStop.filter {
-      sp => logManager.getLog(sp.topicPartition).exists(unifiedLog => unifiedLog.remoteLogEnabled())
+      sp => logManager.getLog(sp.topicIdPartition.topicPartition()).exists(unifiedLog => unifiedLog.remoteLogEnabled())
     }
     if (partitionsToDelete.nonEmpty) {
       // Delete the logs and checkpoint.
@@ -475,7 +475,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
     remoteLogManager.foreach { rlm =>
       // exclude the partitions with offline/error state
-      val partitions = remotePartitionsToStop.filterNot(sp => errorMap.contains(sp.topicPartition)).toSet.asJava
+      val partitions = remotePartitionsToStop.filterNot(sp => errorMap.contains(sp.topicIdPartition.topicPartition())).toSet.asJava
       if (!partitions.isEmpty) {
         rlm.stopPartitions(partitions, (tp, e) => errorMap.put(tp, e))
       }
@@ -2347,6 +2347,7 @@ class ReplicaManager(val config: KafkaConfig,
     // Before taking the lock, compute the local changes
     val localChanges = delta.localChanges(config.nodeId)
     val metadataVersion = newImage.features().metadataVersionOrThrow()
+    val deletedTopicIdMap = delta.image().topicNameToIdView()
 
     replicaStateChangeLock.synchronized {
       // Handle deleted partitions. We need to do this first because we might subsequently
@@ -2358,7 +2359,7 @@ class ReplicaManager(val config: KafkaConfig,
               .map(image => image.partitions().get(tp.partition()))
               .exists(partition => partition.leader == config.nodeId)
             val deleteRemoteLog = delta.topicWasDeleted(tp.topic()) && isCurrentLeader
-            new StopPartition(tp, true, deleteRemoteLog, false)
+            new StopPartition(new TopicIdPartition(deletedTopicIdMap.get(tp.topic()), tp), true, deleteRemoteLog, false)
           }
           .toSet
         stateChangeLogger.info(s"Deleting ${deletes.size} partition(s).")
@@ -2443,7 +2444,7 @@ class ReplicaManager(val config: KafkaConfig,
     stateChangeLogger.info(s"Transitioning ${localFollowers.size} partition(s) to " +
       "local followers.")
     val partitionsToStartFetching = new mutable.HashMap[TopicPartition, Partition]
-    val partitionsToStopFetching = new mutable.HashMap[TopicPartition, Boolean]
+    val partitionsToStopFetching = new mutable.HashMap[TopicIdPartition, Boolean]
     val followerTopicSet = new mutable.HashSet[String]
     localFollowers.foreachEntry { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
@@ -2462,7 +2463,7 @@ class ReplicaManager(val config: KafkaConfig,
               !info.partition.isr.contains(config.brokerId))) {
             // During controlled shutdown, replica with no leaders and replica
             // where this broker is not in the ISR are stopped.
-            partitionsToStopFetching.put(tp, false)
+            partitionsToStopFetching.put(new TopicIdPartition(info.topicId, tp), false)
           } else if (isNewLeaderEpoch) {
             // Invoke the follower transition listeners for the partition.
             partition.invokeOnBecomingFollowerListeners()

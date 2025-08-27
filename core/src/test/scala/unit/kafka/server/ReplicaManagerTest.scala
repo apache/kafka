@@ -4516,6 +4516,7 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(FOO_UUID, topicPartition)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -4546,7 +4547,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicIdPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -4564,6 +4565,7 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(FOO_UUID, topicPartition)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -4594,7 +4596,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicIdPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -4612,6 +4614,7 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(FOO_UUID, topicPartition)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -4641,7 +4644,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicIdPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -4659,6 +4662,7 @@ class ReplicaManagerTest {
     val localId = 1
     val otherId = localId + 1
     val topicPartition = new TopicPartition("foo", 0)
+    val topicIdPartition = new TopicIdPartition(FOO_UUID, topicPartition)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId, enableRemoteStorage = enableRemoteStorage)
 
     try {
@@ -4688,7 +4692,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, true, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicIdPartition, true, true, false))), any())
       }
 
       // Check that the partition was removed
