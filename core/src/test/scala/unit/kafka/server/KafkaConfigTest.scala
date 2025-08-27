@@ -1490,6 +1490,18 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testInvalidQuorumAutoJoinForKRaftBroker(): Unit = {
+    val props = TestUtils.createBrokerConfig(0)
+    props.setProperty(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, String.valueOf(true))
+    assertEquals(
+      "requirement failed: controller.quorum.auto.join.enable is only " +
+        "supported when process.roles contains the 'controller' role.",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage
+    )
+
+  }
+
+  @Test
   def testAcceptsLargeId(): Unit = {
     val largeBrokerId = 2000
     val props = new Properties()

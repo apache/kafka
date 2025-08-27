@@ -154,7 +154,7 @@ public class ShareCompletedFetch {
      * @param maxRecords The number of records to return; the number returned may be {@code 0 <= maxRecords}
      * @param checkCrcs Whether to check the CRC of fetched records
      *
-     * @return {@link ShareInFlightBatch The ShareInFlightBatch containing records and their acknowledgments}
+     * @return {@link ShareInFlightBatch The ShareInFlightBatch containing records and their acknowledgements}
      */
     <K, V> ShareInFlightBatch<K, V> fetchRecords(final Deserializers<K, V> deserializers,
                                                  final int maxRecords,

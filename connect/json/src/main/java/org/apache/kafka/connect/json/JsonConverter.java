@@ -224,6 +224,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private JsonConverterConfig config;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
+    private Schema schema = null;     // if a schema is provided in config, this schema will be used for all messages
 
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;
@@ -286,6 +287,16 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
         fromConnectSchemaCache = new SynchronizedCache<>(new LRUCache<>(config.schemaCacheSize()));
         toConnectSchemaCache = new SynchronizedCache<>(new LRUCache<>(config.schemaCacheSize()));
+
+        try {
+            final byte[] schemaContent = config.schemaContent();
+            if (schemaContent != null) {
+                final JsonNode schemaNode = deserializer.deserialize("", schemaContent);
+                this.schema = asConnectSchema(schemaNode);
+            }
+        } catch (SerializationException e) {
+            throw new DataException("Failed to parse schema in converter config due to serialization error: ", e);
+        }
     }
 
     @Override
@@ -340,13 +351,16 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
             throw new DataException("Converting byte[] to Kafka Connect data failed due to serialization error: ", e);
         }
 
-        if (config.schemasEnabled() && (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)))
-            throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
+        if (config.schemasEnabled()) {
+            if (schema != null) {
+                return new SchemaAndValue(schema, convertToConnect(schema, jsonValue, config));
+            } else if (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)) {
+                throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
                     " If you are trying to deserialize plain JSON data, set schemas.enable=false in your converter configuration.");
-
-        // The deserialized data should either be an envelope object containing the schema and the payload or the schema
-        // was stripped during serialization and we need to fill in an all-encompassing schema.
-        if (!config.schemasEnabled()) {
+            }
+        } else {
+            // The deserialized data should either be an envelope object containing the schema and the payload or the schema
+            // was stripped during serialization and we need to fill in an all-encompassing schema.
             ObjectNode envelope = JSON_NODE_FACTORY.objectNode();
             envelope.set(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME, null);
             envelope.set(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME, jsonValue);

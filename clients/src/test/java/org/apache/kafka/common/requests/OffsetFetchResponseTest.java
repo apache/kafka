@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
@@ -283,6 +284,80 @@ public class OffsetFetchResponseTest {
                     .setGroupId("group1")
                     .setErrorCode(Errors.INVALID_GROUP_ID.code()),
                 OffsetFetchResponse.groupError(group, Errors.INVALID_GROUP_ID, version)
+            );
+        }
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+    public void testErrorCounts(short version) {
+        if (version < 2) {
+            var data = new OffsetFetchResponseData()
+                .setTopics(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponseTopic()
+                        .setName("foo")
+                        .setPartitions(List.of(
+                            new OffsetFetchResponseData.OffsetFetchResponsePartition()
+                                .setPartitionIndex(0)
+                                .setErrorCode(Errors.UNSTABLE_OFFSET_COMMIT.code())
+                                .setCommittedOffset(INVALID_OFFSET)
+                                .setMetadata(NO_METADATA)
+                                .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH)
+                        ))
+                ));
+            assertEquals(
+                Map.of(Errors.UNSTABLE_OFFSET_COMMIT, 1),
+                new OffsetFetchResponse(data, version).errorCounts()
+            );
+        } else if (version < 8) {
+            // Version 2 returns a top level error code for group or coordinator level errors.
+            var data = new OffsetFetchResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setTopics(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponseTopic()
+                        .setName("foo")
+                        .setPartitions(List.of(
+                            new OffsetFetchResponseData.OffsetFetchResponsePartition()
+                                .setPartitionIndex(0)
+                                .setErrorCode(Errors.UNSTABLE_OFFSET_COMMIT.code())
+                                .setCommittedOffset(INVALID_OFFSET)
+                                .setMetadata(NO_METADATA)
+                                .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH)
+                        ))
+                ));
+            assertEquals(
+                Map.of(
+                    Errors.NONE, 1,
+                    Errors.UNSTABLE_OFFSET_COMMIT, 1
+                ),
+                new OffsetFetchResponse(data, version).errorCounts()
+            );
+        } else {
+            // Version 8 adds support for fetching offsets for multiple groups at a time.
+            var data = new OffsetFetchResponseData()
+                .setGroups(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                        .setGroupId("group1")
+                        .setErrorCode(Errors.NONE.code())
+                        .setTopics(List.of(
+                            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                                .setName("foo")
+                                .setPartitions(List.of(
+                                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                        .setPartitionIndex(0)
+                                        .setErrorCode(Errors.UNSTABLE_OFFSET_COMMIT.code())
+                                        .setCommittedOffset(INVALID_OFFSET)
+                                        .setMetadata(NO_METADATA)
+                                        .setCommittedLeaderEpoch(NO_PARTITION_LEADER_EPOCH)
+                                ))
+                        ))
+                ));
+            assertEquals(
+                Map.of(
+                    Errors.NONE, 1,
+                    Errors.UNSTABLE_OFFSET_COMMIT, 1
+                ),
+                new OffsetFetchResponse(data, version).errorCounts()
             );
         }
     }

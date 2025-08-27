@@ -1719,4 +1719,17 @@ public final class Utils {
     public interface ThrowingRunnable {
         void run() throws Exception;
     }
+
+    /**
+     * convert millisecond to nanosecond, or throw exception if overflow
+     * @param timeMs the time in millisecond
+     * @return the converted nanosecond
+     */
+    public static long msToNs(long timeMs) {
+        try {
+            return Math.multiplyExact(1000 * 1000, timeMs);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Cannot convert " + timeMs + " millisecond to nanosecond due to arithmetic overflow", e);
+        }
+    }
 }

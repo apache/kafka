@@ -27,7 +27,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.internals.FatalExitError;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -85,7 +85,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final RemotePartitionMetadataStore remotePartitionMetadataStore;
     private final Set<TopicIdPartition> pendingAssignPartitions = Collections.synchronizedSet(new HashSet<>());
-    private volatile boolean initializationFailed = false;
     private final Function<Integer, RemoteLogMetadataTopicPartitioner> partitionerFunction;
 
     public TopicBasedRemoteLogMetadataManager() {
@@ -325,6 +324,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         NewTopic newTopic = newRemoteLogMetadataTopic(rlmmConfig);
         boolean isTopicCreated = false;
         long startTimeMs = time.milliseconds();
+        boolean initializationFailed = false;
         try (Admin admin = Admin.create(rlmmConfig.commonProperties())) {
             while (!(initialized.get() || closing.get() || initializationFailed)) {
                 if (time.milliseconds() - startTimeMs > retryMaxTimeoutMs) {
@@ -368,6 +368,11 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         } catch (KafkaException e) {
             log.error("Encountered error while initializing topic-based RLMM resources", e);
             initializationFailed = true;
+        } finally {
+            if (initializationFailed) {
+                log.error("Stopping the server as it failed to initialize topic-based RLMM resources");
+                Exit.exit(1);
+            }
         }
     }
 
@@ -457,15 +462,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return initialized.get();
     }
 
-    boolean isInitializationFailed() {
-        return initializationFailed;
-    }
 
     private void ensureInitializedAndNotClosed() {
-        if (initializationFailed) {
-            // If initialization is failed, shutdown the broker.
-            throw new FatalExitError();
-        }
         if (closing.get() || !initialized.get()) {
             throw new IllegalStateException("This instance is in invalid state, initialized: " + initialized +
                                                     " close: " + closing);

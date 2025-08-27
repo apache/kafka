@@ -43,6 +43,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -66,14 +67,11 @@ import static org.mockito.Mockito.when;
 @Timeout(60)
 class CoordinatorLoaderImplTest {
 
-    private record Tuple<K, V>(K key, V value) {
-    }
-
-    private static class StringKeyValueDeserializer implements Deserializer<Tuple<String, String>> {
+    private static class StringKeyValueDeserializer implements Deserializer<Map.Entry<String, String>> {
 
         @Override
-        public Tuple<String, String> deserialize(ByteBuffer key, ByteBuffer value) throws RuntimeException {
-            return new Tuple<>(
+        public Map.Entry<String, String> deserialize(ByteBuffer key, ByteBuffer value) throws RuntimeException {
+            return Map.entry(
                     StandardCharsets.UTF_8.decode(key).toString(),
                     StandardCharsets.UTF_8.decode(value).toString()
             );
@@ -85,10 +83,10 @@ class CoordinatorLoaderImplTest {
         TopicPartition tp = new TopicPartition("foo", 0);
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.empty();
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.empty();
-        Deserializer<Tuple<String, String>> serde = mock(Deserializer.class);
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        Deserializer<Map.Entry<String, String>> serde = mock(Deserializer.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -104,10 +102,10 @@ class CoordinatorLoaderImplTest {
         TopicPartition tp = new TopicPartition("foo", 0);
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(mock(UnifiedLog.class));
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.empty();
-        Deserializer<Tuple<String, String>> serde = mock(Deserializer.class);
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        Deserializer<Map.Entry<String, String>> serde = mock(Deserializer.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -125,10 +123,10 @@ class CoordinatorLoaderImplTest {
         UnifiedLog log = mock(UnifiedLog.class);
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(9L);
-        Deserializer<Tuple<String, String>> serde = new StringKeyValueDeserializer();
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        Deserializer<Map.Entry<String, String>> serde = new StringKeyValueDeserializer();
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -188,13 +186,13 @@ class CoordinatorLoaderImplTest {
             // Includes 7 normal + 2 control (COMMIT, ABORT)
             assertEquals(9, summary.numRecords());
 
-            verify(coordinator).replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k1", "v1"));
-            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k2", "v2"));
-            verify(coordinator).replay(2L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k3", "v3"));
-            verify(coordinator).replay(3L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k4", "v4"));
-            verify(coordinator).replay(4L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k5", "v5"));
-            verify(coordinator).replay(5L, 100L, (short) 5, new Tuple<>("k6", "v6"));
-            verify(coordinator).replay(6L, 100L, (short) 5, new Tuple<>("k7", "v7"));
+            verify(coordinator).replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k1", "v1"));
+            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k2", "v2"));
+            verify(coordinator).replay(2L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k3", "v3"));
+            verify(coordinator).replay(3L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k4", "v4"));
+            verify(coordinator).replay(4L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k5", "v5"));
+            verify(coordinator).replay(5L, 100L, (short) 5, Map.entry("k6", "v6"));
+            verify(coordinator).replay(6L, 100L, (short) 5, Map.entry("k7", "v7"));
             verify(coordinator).replayEndTransactionMarker(100L, (short) 5, TransactionResult.COMMIT);
             verify(coordinator).replayEndTransactionMarker(500L, (short) 10, TransactionResult.ABORT);
             verify(coordinator).updateLastWrittenOffset(2L);
@@ -211,10 +209,10 @@ class CoordinatorLoaderImplTest {
         UnifiedLog log = mock(UnifiedLog.class);
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(100L);
-        Deserializer<Tuple<String, String>> serde = new StringKeyValueDeserializer();
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        Deserializer<Map.Entry<String, String>> serde = new StringKeyValueDeserializer();
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -257,9 +255,9 @@ class CoordinatorLoaderImplTest {
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(2L);
         StringKeyValueDeserializer serde = mock(StringKeyValueDeserializer.class);
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -278,11 +276,11 @@ class CoordinatorLoaderImplTest {
 
             when(serde.deserialize(any(ByteBuffer.class), any(ByteBuffer.class)))
                     .thenThrow(new Deserializer.UnknownRecordTypeException((short) 1))
-                    .thenReturn(new Tuple<>("k2", "v2"));
+                    .thenReturn(Map.entry("k2", "v2"));
 
             loader.load(tp, coordinator).get(10, TimeUnit.SECONDS);
 
-            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k2", "v2"));
+            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k2", "v2"));
         }
     }
 
@@ -293,9 +291,9 @@ class CoordinatorLoaderImplTest {
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(2L);
         StringKeyValueDeserializer serde = mock(StringKeyValueDeserializer.class);
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -332,9 +330,9 @@ class CoordinatorLoaderImplTest {
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(10L);
         StringKeyValueDeserializer serde = mock(StringKeyValueDeserializer.class);
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -359,10 +357,10 @@ class CoordinatorLoaderImplTest {
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(5L);
         StringKeyValueDeserializer serde = new StringKeyValueDeserializer();
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
         MockTime time = new MockTime();
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 time,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -407,9 +405,9 @@ class CoordinatorLoaderImplTest {
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(7L);
         StringKeyValueDeserializer serde = new StringKeyValueDeserializer();
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -446,13 +444,13 @@ class CoordinatorLoaderImplTest {
 
             assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS));
 
-            verify(coordinator).replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k1", "v1"));
-            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k2", "v2"));
-            verify(coordinator).replay(2L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k3", "v3"));
-            verify(coordinator).replay(3L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k4", "v4"));
-            verify(coordinator).replay(4L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k5", "v5"));
-            verify(coordinator).replay(5L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k6", "v6"));
-            verify(coordinator).replay(6L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k7", "v7"));
+            verify(coordinator).replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k1", "v1"));
+            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k2", "v2"));
+            verify(coordinator).replay(2L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k3", "v3"));
+            verify(coordinator).replay(3L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k4", "v4"));
+            verify(coordinator).replay(4L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k5", "v5"));
+            verify(coordinator).replay(5L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k6", "v6"));
+            verify(coordinator).replay(6L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k7", "v7"));
             verify(coordinator, times(0)).updateLastWrittenOffset(0L);
             verify(coordinator, times(1)).updateLastWrittenOffset(2L);
             verify(coordinator, times(1)).updateLastWrittenOffset(5L);
@@ -470,9 +468,9 @@ class CoordinatorLoaderImplTest {
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(0L);
         StringKeyValueDeserializer serde = new StringKeyValueDeserializer();
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -496,9 +494,9 @@ class CoordinatorLoaderImplTest {
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = partition -> Optional.of(7L);
         StringKeyValueDeserializer serde = new StringKeyValueDeserializer();
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
@@ -535,13 +533,13 @@ class CoordinatorLoaderImplTest {
 
             assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS));
 
-            verify(coordinator).replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k1", "v1"));
-            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k2", "v2"));
-            verify(coordinator).replay(2L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k3", "v3"));
-            verify(coordinator).replay(3L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k4", "v4"));
-            verify(coordinator).replay(4L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k5", "v5"));
-            verify(coordinator).replay(5L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k6", "v6"));
-            verify(coordinator).replay(6L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Tuple<>("k7", "v7"));
+            verify(coordinator).replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k1", "v1"));
+            verify(coordinator).replay(1L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k2", "v2"));
+            verify(coordinator).replay(2L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k3", "v3"));
+            verify(coordinator).replay(3L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k4", "v4"));
+            verify(coordinator).replay(4L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k5", "v5"));
+            verify(coordinator).replay(5L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k6", "v6"));
+            verify(coordinator).replay(6L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Map.entry("k7", "v7"));
             verify(coordinator, times(0)).updateLastWrittenOffset(0L);
             verify(coordinator, times(0)).updateLastWrittenOffset(2L);
             verify(coordinator, times(0)).updateLastWrittenOffset(5L);
@@ -560,9 +558,9 @@ class CoordinatorLoaderImplTest {
         Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier = partition -> Optional.of(log);
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = mock(Function.class);
         StringKeyValueDeserializer serde = new StringKeyValueDeserializer();
-        CoordinatorPlayback<Tuple<String, String>> coordinator = mock(CoordinatorPlayback.class);
+        CoordinatorPlayback<Map.Entry<String, String>> coordinator = mock(CoordinatorPlayback.class);
 
-        try (CoordinatorLoaderImpl<Tuple<String, String>> loader = new CoordinatorLoaderImpl<>(
+        try (CoordinatorLoaderImpl<Map.Entry<String, String>> loader = new CoordinatorLoaderImpl<>(
                 Time.SYSTEM,
                 partitionLogSupplier,
                 partitionLogEndOffsetSupplier,
