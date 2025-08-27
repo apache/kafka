@@ -19,65 +19,16 @@ package org.apache.kafka.image.loader;
 
 import org.apache.kafka.image.MetadataProvenance;
 
-import java.util.Objects;
-
-
 /**
  * Contains information about a snapshot that was loaded.
+ *
+ * @param provenance The source of this snapshot.
+ * @param elapsedNs  The time in microseconds that it took to load the snapshot.
  */
-public class SnapshotManifest implements LoaderManifest {
-    /**
-     * The source of this snapshot.
-     */
-    private final MetadataProvenance provenance;
-
-    /**
-     * The time in microseconds that it took to load the snapshot.
-     */
-    private final long elapsedNs;
-
-    public SnapshotManifest(
-        MetadataProvenance provenance,
-        long elapsedNs
-    ) {
-        this.provenance = provenance;
-        this.elapsedNs = elapsedNs;
-    }
+public record SnapshotManifest(MetadataProvenance provenance, long elapsedNs) implements LoaderManifest {
 
     @Override
     public LoaderManifestType type() {
         return LoaderManifestType.SNAPSHOT;
-    }
-
-    @Override
-    public MetadataProvenance provenance() {
-        return provenance;
-    }
-
-    public long elapsedNs() {
-        return elapsedNs;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(
-                provenance,
-                elapsedNs);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || !o.getClass().equals(this.getClass())) return false;
-        SnapshotManifest other = (SnapshotManifest) o;
-        return provenance.equals(other.provenance) &&
-                elapsedNs == other.elapsedNs;
-    }
-
-    @Override
-    public String toString() {
-        return "SnapshotManifest(" +
-                "provenance=" + provenance +
-                ", elapsedNs=" + elapsedNs +
-                ")";
     }
 }

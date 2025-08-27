@@ -1667,6 +1667,8 @@ public class UnifiedLog implements AutoCloseable {
                         } else {
                             return new OffsetResultHolder(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)));
                         }
+                    } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
+                        return fetchEarliestPendingUploadOffset(remoteOffsetReader);
                     } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                         // Cache to avoid race conditions.
                         List<LogSegment> segments = logSegments();
@@ -1707,6 +1709,31 @@ public class UnifiedLog implements AutoCloseable {
                         }
                     }
                 });
+    }
+
+    private OffsetResultHolder fetchEarliestPendingUploadOffset(Optional<AsyncOffsetReader> remoteOffsetReader) {
+        if (remoteLogEnabled()) {
+            long curHighestRemoteOffset = highestOffsetInRemoteStorage();
+
+            if (curHighestRemoteOffset == -1L) {
+                if (localLogStartOffset() == logStartOffset()) {
+                    // No segments have been uploaded yet
+                    return fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, remoteOffsetReader);
+                } else {
+                    // Leader currently does not know about the already uploaded segments
+                    return new OffsetResultHolder(Optional.of(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1))));
+                }
+            } else {
+                long earliestPendingUploadOffset = Math.max(curHighestRemoteOffset + 1, logStartOffset());
+                OptionalInt epochForOffset = leaderEpochCache.epochForOffset(earliestPendingUploadOffset);
+                Optional<Integer> epochResult = epochForOffset.isPresent()
+                    ? Optional.of(epochForOffset.getAsInt())
+                    : Optional.empty();
+                return new OffsetResultHolder(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, earliestPendingUploadOffset, epochResult));
+            }
+        } else {
+            return new OffsetResultHolder(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)));
+        }
     }
 
     /**

@@ -105,7 +105,7 @@ versions += [
   kafka_38: "3.8.1",
   kafka_39: "3.9.1",
   kafka_40: "4.0.0",
-  log4j2: "2.24.3",
+  log4j2: "2.25.1",
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
@@ -123,10 +123,7 @@ versions += [
   scoverage: "2.0.11",
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
-  // While Spotbugs 4.9.3 exists at the time of writing,
-  // Spotbugs 4.9.1 is the latest version not affected by https://github.com/spotbugs/spotbugs/pull/3311,
-  // which breaks the build, so we're sticking with that version until 4.9.4 is released.
-  spotbugs: "4.9.1",
+  spotbugs: "4.9.4",
   mockOAuth2Server: "2.2.1",
   zinc: "1.9.2",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
