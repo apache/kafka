@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -45,23 +47,26 @@ import org.junit.jupiter.api.TestInfo;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
 @Tag("integration")
 public class RebalanceProtocolMigrationIntegrationTest {
+
     public static final String INPUT_TOPIC = "migration-input";
     public static final String OUTPUT_TOPIC = "migration-output";
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+
     private String inputTopic;
     private String outputTopic;
-
     private KafkaStreams kafkaStreams;
-
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    private String safeTestName;
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -72,8 +77,6 @@ public class RebalanceProtocolMigrationIntegrationTest {
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
-    private String safeTestName;
 
     @BeforeEach
     public void createTopics(final TestInfo testInfo) throws Exception {
@@ -89,9 +92,9 @@ public class RebalanceProtocolMigrationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG,
-                                 Serdes.String().getClass());
+            Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG,
-                                 Serdes.String().getClass());
+            Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 500);
@@ -120,7 +123,9 @@ public class RebalanceProtocolMigrationIntegrationTest {
         processExactlyOneRecord(streamsBuilder, props, "1", "A");
 
         // Wait for session to time out
-        Thread.sleep(600);
+        try (final Admin adminClient = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()))) {
+            waitForEmptyConsumerGroup(adminClient, props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 1000);
+        }
 
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         processExactlyOneRecord(streamsBuilder, props, "2", "B");
@@ -144,13 +149,20 @@ public class RebalanceProtocolMigrationIntegrationTest {
         processExactlyOneRecord(streamsBuilder, props, "2", "B");
 
         // Wait for session to time out
-        Thread.sleep(600);
+        try (final Admin adminClient = Admin.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()))) {
+            waitForEmptyConsumerGroup(adminClient, props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 1000);
+        }
 
         props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
         processExactlyOneRecord(streamsBuilder, props, "3", "C");
     }
 
-    private void processExactlyOneRecord(StreamsBuilder streamsBuilder, Properties props, String key, String value) throws Exception {
+    private void processExactlyOneRecord(
+        final StreamsBuilder streamsBuilder,
+        final Properties props,
+        final String key,
+        final String value)
+        throws Exception {
         kafkaStreams = new KafkaStreams(streamsBuilder.build(), props);
         kafkaStreams.start();
 
@@ -181,8 +193,8 @@ public class RebalanceProtocolMigrationIntegrationTest {
             inputTopic,
             singletonList(KeyValue.pair(key, value)),
             TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                                     StringSerializer.class,
-                                     StringSerializer.class),
+                StringSerializer.class,
+                StringSerializer.class),
             timestamp);
 
 
@@ -196,10 +208,10 @@ public class RebalanceProtocolMigrationIntegrationTest {
 
         final List<KeyValueTimestamp<K, V>> actual =
             IntegrationTestUtils.waitUntilMinKeyValueWithTimestampRecordsReceived(
-            consumerProperties,
-            outputTopic,
-            expected.size(),
-            60 * 1000);
+                consumerProperties,
+                outputTopic,
+                expected.size(),
+                60 * 1000);
 
         assertThat(actual, is(expected));
 
