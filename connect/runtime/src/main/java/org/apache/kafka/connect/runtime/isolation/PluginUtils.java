@@ -338,7 +338,7 @@ public class PluginUtils {
             log.warn("Plugin path contains both java archives and class files. Returning only the"
                     + " archives");
         }
-        return List.of(archives.toArray(new Path[0]));
+        return List.copyOf(archives);
     }
 
     public static Set<PluginSource> pluginSources(Set<Path> pluginLocations, ClassLoader classLoader, PluginClassLoaderFactory factory) {

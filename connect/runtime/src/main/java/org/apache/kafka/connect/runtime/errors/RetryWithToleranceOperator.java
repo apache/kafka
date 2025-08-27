@@ -136,7 +136,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
     // Visible for testing
     synchronized Future<Void> report(ProcessingContext<T> context) {
         if (reporters.size() == 1) {
-            return new WorkerErrantRecordReporter.ErrantRecordFuture(List.of(reporters.iterator().next().report(context)));
+            return new WorkerErrantRecordReporter.ErrantRecordFuture(List.of(reporters.get(0).report(context)));
         }
         List<Future<RecordMetadata>> futures = reporters.stream()
                 .map(r -> r.report(context))

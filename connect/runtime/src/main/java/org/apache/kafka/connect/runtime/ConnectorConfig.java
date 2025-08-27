@@ -779,11 +779,7 @@ public class ConnectorConfig extends AbstractConfig {
 
             @Override
             public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-                List<Object> result = new ArrayList<>();
-                for (PluginDesc<T> plugin : plugins()) {
-                    result.add(plugin.pluginClass());
-                }
-                return List.copyOf(result);
+                return plugins().stream().map(p -> (Object) p.pluginClass()).toList();
             }
 
             @Override

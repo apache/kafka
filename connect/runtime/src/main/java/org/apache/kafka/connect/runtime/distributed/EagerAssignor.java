@@ -132,11 +132,11 @@ public class EagerAssignor implements ConnectAssignor {
 
         Map<String, ByteBuffer> groupAssignment = new HashMap<>();
         for (String member : members) {
-            Collection<String> connectors = connectorAssignments.get(member);
+            Collection<String> connectors = connectorAssignments.getOrDefault(member, List.of());
             if (connectors == null) {
                 connectors = List.of();
             }
-            Collection<ConnectorTaskId> tasks = taskAssignments.get(member);
+            Collection<ConnectorTaskId> tasks = taskAssignments.getOrDefault(member, List.of());
             if (tasks == null) {
                 tasks = List.of();
             }

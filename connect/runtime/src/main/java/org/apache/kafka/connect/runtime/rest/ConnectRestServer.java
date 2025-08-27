@@ -57,9 +57,7 @@ public class ConnectRestServer extends RestServer {
 
     @Override
     protected Collection<Class<?>> adminResources() {
-        return List.of(
-                LoggingResource.class
-        );
+        return List.of(LoggingResource.class);
     }
 
     @Override
