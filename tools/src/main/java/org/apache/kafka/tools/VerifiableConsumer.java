@@ -621,7 +621,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .type(String.class)
                 .metavar("CONFIG-FILE")
                 .dest("commandConfigFile")
-                .help("Config properties file (config options shared with command line parameters will be overridden)");
+                .help("Config properties file (config options shared with command line parameters will be overridden).");
 
         return parser;
     }
