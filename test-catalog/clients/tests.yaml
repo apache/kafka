@@ -389,6 +389,7 @@ org.apache.kafka.clients.admin.KafkaAdminClientTest:
 - testListGroupsWithTypesOlderBrokerVersion
 - testListOffsets
 - testListOffsetsEarliestLocalSpecMinVersion
+- testListOffsetsEarliestPendingUploadSpecSpecMinVersion
 - testListOffsetsHandlesFulfillmentTimeouts
 - testListOffsetsLatestTierSpecSpecMinVersion
 - testListOffsetsMaxTimestampUnsupportedMultipleOffsetSpec

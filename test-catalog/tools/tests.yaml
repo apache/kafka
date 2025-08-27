@@ -247,6 +247,7 @@ org.apache.kafka.tools.GetOffsetShellTest:
 - testGetEarliestOffsets
 - testGetLatestOffsets
 - testGetOffsetsByEarliestLocalSpec
+- testGetOffsetsByEarliestTieredSpec
 - testGetOffsetsByLatestTieredSpec
 - testGetOffsetsByMaxTimestamp
 - testGetOffsetsByTimestamp
