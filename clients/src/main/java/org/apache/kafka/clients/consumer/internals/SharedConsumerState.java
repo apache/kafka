@@ -28,10 +28,10 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * This class stores shared state needed by both the application thread ({@link AsyncKafkaConsumer}) and the
- * background thread ({@link OffsetsRequestManager}) to avoid costly inter-thread communication, where possible.
- * This class compromises on the ideal of keeping state only in the background thread. However, this class only
- * relies on classes which are designed to be multithread-safe, thus they can be used in both the application and
- * background threads.
+ * network thread ({@link ConsumerNetworkThread}) to avoid costly inter-thread communication, where possible.
+ * This class compromises on the ideal of keeping state only in the network thread. However, this class only
+ * relies on classes which are designed to be thread-safe, thus they can be used in both the application
+ * and network threads.
  *
  * <p/>
  *
@@ -63,14 +63,7 @@ public class SharedConsumerState {
                                SubscriptionState subscriptions,
                                Time time,
                                long retryBackoffMs) {
-        this(
-            logContext,
-            metadata,
-            subscriptions,
-            time,
-            retryBackoffMs,
-            new ApiVersions()
-        );
+        this(logContext, metadata, subscriptions, time, retryBackoffMs, new ApiVersions());
     }
 
     public SharedConsumerState(LogContext logContext,
@@ -146,8 +139,13 @@ public class SharedConsumerState {
         updatePositionsError.maybeThrowException();
         metadataError.maybeClearAndThrowException();
 
-        // If the cached value is set and there are no partitions in the AWAIT_RESET, AWAIT_VALIDATION, or
-        // INITIALIZING states, it's ok to skip.
-        return offsetFetcherUtils.getPartitionsToValidate().isEmpty() && subscriptions.hasAllFetchPositions();
+        // In cases of metadata updates, getPartitionsToValidate() will review the partitions and
+        // determine which, if any, need to be validated. If any partitions require validation, the
+        // update fetch positions step can't be skipped.
+        if (!offsetFetcherUtils.getPartitionsToValidate().isEmpty())
+            return false;
+
+        // If there are no partitions in the AWAIT_RESET, AWAIT_VALIDATION, or INITIALIZING states, it's ok to skip.
+        return subscriptions.hasAllFetchPositions();
     }
 }

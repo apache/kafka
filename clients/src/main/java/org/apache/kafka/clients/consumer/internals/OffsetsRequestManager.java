@@ -229,7 +229,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         CompletableFuture<Boolean> result = new CompletableFuture<>();
 
         try {
-            if (updatePositionsError.getClearAndRun(result::completeExceptionally)) {
+            if (maybeCompleteWithPreviousException(result)) {
                 return result;
             }
 
@@ -254,6 +254,10 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             result.completeExceptionally(maybeWrapAsKafkaException(e));
         }
         return result;
+    }
+
+    private boolean maybeCompleteWithPreviousException(CompletableFuture<Boolean> result) {
+        return updatePositionsError.getClearAndRun(result::completeExceptionally);
     }
 
     /**

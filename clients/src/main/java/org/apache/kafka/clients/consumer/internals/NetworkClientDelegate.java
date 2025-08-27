@@ -74,15 +74,16 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final boolean notifyMetadataErrorsViaErrorQueue;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
-    public NetworkClientDelegate(final Time time,
-                                 final ConsumerConfig config,
-                                 final LogContext logContext,
-                                 final KafkaClient client,
-                                 final Metadata metadata,
-                                 final BackgroundEventHandler backgroundEventHandler,
-                                 final boolean notifyMetadataErrorsViaErrorQueue,
-                                 final AsyncConsumerMetrics asyncConsumerMetrics,
-                                 final SharedConsumerState sharedConsumerState) {
+    public NetworkClientDelegate(
+            final Time time,
+            final ConsumerConfig config,
+            final LogContext logContext,
+            final KafkaClient client,
+            final Metadata metadata,
+            final BackgroundEventHandler backgroundEventHandler,
+            final boolean notifyMetadataErrorsViaErrorQueue,
+            final AsyncConsumerMetrics asyncConsumerMetrics,
+            final SharedConsumerState sharedConsumerState) {
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -462,17 +463,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                         metadata,
                         throttleTimeSensor,
                         clientTelemetrySender);
-                return new NetworkClientDelegate(
-                    time,
-                    config,
-                    logContext,
-                    client,
-                    metadata,
-                    backgroundEventHandler,
-                    notifyMetadataErrorsViaErrorQueue,
-                    asyncConsumerMetrics,
-                    sharedConsumerState
-                );
+                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics, sharedConsumerState);
             }
         };
     }
