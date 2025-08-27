@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -29,7 +30,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_AUTO_COMM
 /**
  * Encapsulates the state of auto-committing and manages the auto-commit timer.
  */
-public interface AutoCommitState {
+public interface SharedAutoCommitState {
 
     /**
      * @return {@code true} if auto-commit is enabled as defined in the configuration
@@ -44,17 +45,17 @@ public interface AutoCommitState {
      * so that the next auto-commit is sent out on the interval starting from now. If auto-commit is disabled this will
      * perform no action.
      */
-    void resetTimer();
+    void resetInterval();
 
     /**
-     * Reset the auto-commit timer to the provided time (backoff), so that the next auto-commit is
+     * Reset the auto-commit timer to the provided interval, so that the next auto-commit is
      * sent out then. If auto-commit is disabled this will perform no action.
      */
-    void resetTimer(final long retryBackoffMs);
+    void resetInterval(final long interval);
 
     /**
      * Return the number of milliseconds remaining on the timer based on the most previous call to
-     * {@link #updateTimer(long)} and {@link #resetTimer()}/{@link #resetTimer(long)}.
+     * {@link #updateTimer(long)} and {@link #resetInterval()}/{@link #resetInterval(long)}.
      */
     long remainingMs();
 
@@ -66,30 +67,30 @@ public interface AutoCommitState {
      * Note that the timer doesn't update automatically on its own, nor is it updated periodically by the background
      * thread. The timer's notion of the current time is only updated through this mechanism. It is expected that
      * this method will only be called during {@link AsyncKafkaConsumer#poll(Duration)} invocation by the application
-     * thread. The network thread is free to update the auto-commit interval via either {@link #resetTimer()} or
-     * {@link #resetTimer(long)}.
+     * thread. The network thread is free to update the auto-commit interval via either {@link #resetInterval()} or
+     * {@link #resetInterval(long)}.
      */
     void updateTimer(final long currentTimeMs);
 
     void setInflightCommit(final boolean hasInflightCommit);
 
-    static AutoCommitState enabled(final LogContext logContext,
-                                   final Time time,
-                                   final long autoCommitInterval) {
-        return new AutoCommitStateEnabled(logContext, time, autoCommitInterval);
+    static SharedAutoCommitState enabled(final LogContext logContext,
+                                         final Time time,
+                                         final long autoCommitInterval) {
+        return new SharedAutoCommitStateEnabled(logContext, time, autoCommitInterval);
     }
 
-    static AutoCommitState enabled(final LogContext logContext, final Time time) {
+    static SharedAutoCommitState enabled(final LogContext logContext, final Time time) {
         return enabled(logContext, time, DEFAULT_AUTO_COMMIT_INTERVAL_MS);
     }
 
-    static AutoCommitState disabled() {
-        return new AutoCommitStateDisabled();
+    static SharedAutoCommitState disabled() {
+        return new SharedAutoCommitStateDisabled();
     }
 
-    static AutoCommitState newInstance(final LogContext logContext,
-                                       final ConsumerConfig config,
-                                       final Time time) {
+    static SharedAutoCommitState newInstance(final LogContext logContext,
+                                             final ConsumerConfig config,
+                                             final Time time) {
         if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             final long interval = Integer.toUnsignedLong(config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
             return enabled(logContext, time, interval);
@@ -98,17 +99,17 @@ public interface AutoCommitState {
         }
     }
 
-    class AutoCommitStateEnabled implements AutoCommitState {
+    class SharedAutoCommitStateEnabled implements SharedAutoCommitState {
 
         private final Logger log;
         private final Timer timer;
         private final long autoCommitInterval;
         private boolean hasInflightCommit;
 
-        private AutoCommitStateEnabled(final LogContext logContext,
-                                       final Time time,
-                                       final long autoCommitInterval) {
-            this.log = logContext.logger(AutoCommitState.class);
+        private SharedAutoCommitStateEnabled(final LogContext logContext,
+                                             final Time time,
+                                             final long autoCommitInterval) {
+            this.log = logContext.logger(SharedAutoCommitState.class);
             this.timer = time.timer(autoCommitInterval);
             this.autoCommitInterval = autoCommitInterval;
             this.hasInflightCommit = false;
@@ -134,13 +135,13 @@ public interface AutoCommitState {
         }
 
         @Override
-        public synchronized void resetTimer() {
+        public synchronized void resetInterval() {
             timer.reset(autoCommitInterval);
         }
 
         @Override
-        public synchronized void resetTimer(final long retryBackoffMs) {
-            timer.reset(retryBackoffMs);
+        public synchronized void resetInterval(final long interval) {
+            timer.reset(interval);
         }
 
         @Override
@@ -159,9 +160,9 @@ public interface AutoCommitState {
         }
     }
 
-    class AutoCommitStateDisabled implements AutoCommitState {
+    class SharedAutoCommitStateDisabled implements SharedAutoCommitState {
 
-        private AutoCommitStateDisabled() {
+        private SharedAutoCommitStateDisabled() {
         }
 
         @Override
@@ -175,12 +176,12 @@ public interface AutoCommitState {
         }
 
         @Override
-        public void resetTimer() {
+        public void resetInterval() {
             // No op
         }
 
         @Override
-        public void resetTimer(final long retryBackoffMs) {
+        public void resetInterval(final long interval) {
             // No op
         }
 

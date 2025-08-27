@@ -30,7 +30,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,6 +50,7 @@ public class RequestManagersTest {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
+        final SharedConsumerState sharedConsumerState = new SharedConsumerState(SharedAutoCommitState.disabled());
         final RequestManagers requestManagers = RequestManagers.supplier(
             new MockTime(),
             new LogContext(),
@@ -68,8 +68,7 @@ public class RequestManagersTest {
             mock(OffsetCommitCallbackInvoker.class),
             listener,
             Optional.empty(),
-            AutoCommitState.disabled(),
-            new AtomicBoolean()
+            sharedConsumerState
         ).get();
         assertTrue(requestManagers.consumerMembershipManager.isPresent());
         assertTrue(requestManagers.streamsMembershipManager.isEmpty());
@@ -93,6 +92,7 @@ public class RequestManagersTest {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
+        final SharedConsumerState sharedConsumerState = new SharedConsumerState(SharedAutoCommitState.disabled());
         final RequestManagers requestManagers = RequestManagers.supplier(
             new MockTime(),
             new LogContext(),
@@ -110,8 +110,7 @@ public class RequestManagersTest {
             mock(OffsetCommitCallbackInvoker.class),
             listener,
             Optional.of(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of())),
-            AutoCommitState.disabled(),
-            new AtomicBoolean()
+            sharedConsumerState
         ).get();
         assertTrue(requestManagers.streamsMembershipManager.isPresent());
         assertTrue(requestManagers.streamsGroupHeartbeatRequestManager.isPresent());

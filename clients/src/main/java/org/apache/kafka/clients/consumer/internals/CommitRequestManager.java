@@ -78,7 +78,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final ConsumerMetadata metadata;
     private final LogContext logContext;
     private final Logger log;
-    private final AutoCommitState autoCommitState;
+    private final SharedAutoCommitState autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final OffsetCommitMetricsManager metricsManager;
@@ -116,7 +116,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final Optional<String> groupInstanceId,
         final Metrics metrics,
         final ConsumerMetadata metadata,
-        final AutoCommitState autoCommitState) {
+        final SharedConsumerState sharedConsumerState) {
         this(time,
             logContext,
             subscriptions,
@@ -130,10 +130,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             OptionalDouble.empty(),
             metrics,
             metadata,
-            autoCommitState);
+            sharedConsumerState);
     }
 
     // Visible for testing
+    @SuppressWarnings({"checkstyle:ParameterNumber"})
     CommitRequestManager(
         final Time time,
         final LogContext logContext,
@@ -148,13 +149,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final OptionalDouble jitter,
         final Metrics metrics,
         final ConsumerMetadata metadata,
-        final AutoCommitState autoCommitState) {
+        final SharedConsumerState sharedConsumerState) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.time = time;
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.pendingRequests = new PendingRequests();
-        this.autoCommitState = autoCommitState;
+        this.autoCommitState = sharedConsumerState.autoCommitState();
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
@@ -605,7 +606,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * perform no action.
      */
     public void resetAutoCommitTimer() {
-        autoCommitState.resetTimer();
+        autoCommitState.resetInterval();
     }
 
     /**
@@ -613,7 +614,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * sent out then. If auto-commit is not enabled this will perform no action.
      */
     public void resetAutoCommitTimer(long retryBackoffMs) {
-        autoCommitState.resetTimer(retryBackoffMs);
+        autoCommitState.resetInterval(retryBackoffMs);
     }
 
     /**

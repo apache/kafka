@@ -131,7 +131,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -356,8 +355,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final long retryBackoffMs;
     private final int requestTimeoutMs;
     private final Duration defaultApiTimeoutMs;
-    private final AtomicBoolean reconciliationInProgress = new AtomicBoolean();
-    private final AutoCommitState autoCommitState;
+    private final SharedConsumerState sharedConsumerState;
     private volatile boolean closed = false;
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
@@ -478,7 +476,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
-            this.autoCommitState = AutoCommitState.newInstance(logContext, config, time);
+            this.sharedConsumerState = new SharedConsumerState(
+                SharedAutoCommitState.newInstance(
+                    requireNonNull(logContext),
+                    requireNonNull(config),
+                    requireNonNull(time)
+                )
+            );
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
                     backgroundEventHandler,
@@ -495,8 +499,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker,
                     memberStateListener,
                     streamsRebalanceData,
-                    autoCommitState,
-                    reconciliationInProgress
+                    sharedConsumerState
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -567,7 +570,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        int requestTimeoutMs,
                        int defaultApiTimeoutMs,
                        String groupId,
-                       AutoCommitState autoCommitState) {
+                       SharedConsumerState sharedConsumerState) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -590,7 +593,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.applicationEventHandler = applicationEventHandler;
         this.kafkaConsumerMetrics = new AsyncConsumerMetrics(metrics);
         this.clientTelemetryReporter = Optional.empty();
-        this.autoCommitState = autoCommitState;
+        this.sharedConsumerState = sharedConsumerState;
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
         this.backgroundEventHandler = new BackgroundEventHandler(
             backgroundEventQueue,
@@ -665,7 +668,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             kafkaConsumerMetrics
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
-        this.autoCommitState = AutoCommitState.newInstance(logContext, config, time);
+        this.sharedConsumerState = new SharedConsumerState(
+            SharedAutoCommitState.newInstance(
+                requireNonNull(logContext),
+                requireNonNull(config),
+                requireNonNull(time)
+            )
+        );
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,
@@ -683,8 +692,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetCommitCallbackInvoker,
             memberStateListener,
             Optional.empty(),
-            autoCommitState,
-            reconciliationInProgress
+            sharedConsumerState
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -865,20 +873,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            long currentTimeMs = timer.currentTimeMs();
-            autoCommitState.updateTimer(currentTimeMs);
-            PollEvent event = new PollEvent(currentTimeMs);
-
-            // Make sure to let the background thread know that we are still polling.
-            // This will trigger async auto-commits of consumed positions when hitting
-            // the interval time or reconciling new assignments
-            applicationEventHandler.add(event);
-
-            if (reconciliationInProgress.get() || autoCommitState.shouldAutoCommit()) {
-                // Wait for reconciliation and auto-commit to be triggered, to ensure all commit requests
-                // retrieve the positions to commit before proceeding with fetching new records
-                ConsumerUtils.getResult(event.reconcileAndAutoCommit(), defaultApiTimeoutMs.toMillis());
-            }
+            sendPollEvent(timer);
 
             do {
                 // We must not allow wake-ups between polling for fetches and returning the records.
@@ -912,6 +907,29 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
+        }
+    }
+
+    private void sendPollEvent(Timer timer) {
+        long currentTimeMs = timer.currentTimeMs();
+
+        // Make sure to let the background thread know that we are still polling.
+        PollEvent event = new PollEvent(currentTimeMs);
+
+        if (sharedConsumerState.canSkipWaitingOnPoll(currentTimeMs)) {
+            // This will *not* trigger async auto-commits of consumed positions as the shared Timer for
+            // auto-commit interval will not change between the application thread and the network thread. This
+            // is true of the reconciliation state. The state will not change between the SharedConsumerState
+            // check above and the processing of the PollEvent.
+            applicationEventHandler.add(event);
+        } else {
+            // This will trigger async auto-commits of consumed positions when hitting
+            // the interval time or reconciling new assignments
+            applicationEventHandler.add(event);
+
+            // Wait for reconciliation and auto-commit to be triggered, to ensure all commit requests
+            // retrieve the positions to commit before proceeding with fetching new records
+            ConsumerUtils.getResult(event.reconcileAndAutoCommit(), defaultApiTimeoutMs.toMillis());
         }
     }
 
@@ -1526,7 +1544,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (groupMetadata.get().isEmpty())
             return;
 
-        if (autoCommitState.isAutoCommitEnabled())
+        if (sharedConsumerState.isAutoCommitEnabled())
             commitSyncAllConsumed(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());

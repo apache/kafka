@@ -258,6 +258,9 @@ public class AsyncKafkaConsumerTest {
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
         LogContext logContext = new LogContext();
+        SharedConsumerState sharedConsumerState = new SharedConsumerState(
+            autoCommitEnabled ? SharedAutoCommitState.enabled(logContext, time) : SharedAutoCommitState.disabled()
+        );
         return new AsyncKafkaConsumer<>(
             logContext,
             clientId,
@@ -277,7 +280,7 @@ public class AsyncKafkaConsumerTest {
             requestTimeoutMs,
             defaultApiTimeoutMs,
             groupId,
-            autoCommitEnabled ? AutoCommitState.enabled(logContext, time) : AutoCommitState.disabled());
+            sharedConsumerState);
     }
 
     @Test
@@ -1357,7 +1360,6 @@ public class AsyncKafkaConsumerTest {
             any(),
             applicationThreadMemberStateListener.capture(),
             any(),
-            any(),
             any()
         ));
         return applicationThreadMemberStateListener.getValue();
@@ -1430,7 +1432,6 @@ public class AsyncKafkaConsumerTest {
             any(),
             any(),
             streamRebalanceData.capture(),
-            any(),
             any()
         ));
         return streamRebalanceData.getValue();

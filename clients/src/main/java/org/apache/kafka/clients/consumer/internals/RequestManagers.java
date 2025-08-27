@@ -35,7 +35,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
@@ -169,8 +168,7 @@ public class RequestManagers implements Closeable {
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener,
                                                      final Optional<StreamsRebalanceData> streamsRebalanceData,
-                                                     final AutoCommitState autoCommitState,
-                                                     final AtomicBoolean cachedReconciliationInProgress
+                                                     final SharedConsumerState sharedConsumerState
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -220,7 +218,7 @@ public class RequestManagers implements Closeable {
                         groupRebalanceConfig.groupInstanceId,
                         metrics,
                         metadata,
-                        autoCommitState);
+                        sharedConsumerState);
                     if (streamsRebalanceData.isPresent()) {
                         streamsMembershipManager = new StreamsMembershipManager(
                             groupRebalanceConfig.groupId,
@@ -262,8 +260,7 @@ public class RequestManagers implements Closeable {
                             backgroundEventHandler,
                             time,
                             metrics,
-                            autoCommitState,
-                            cachedReconciliationInProgress);
+                            sharedConsumerState);
 
                         // Update the group member ID label in the client telemetry reporter.
                         // According to KIP-1082, the consumer will generate the member ID as the incarnation ID of the process.

@@ -66,7 +66,6 @@ import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -142,10 +141,16 @@ public class ConsumerMembershipManagerTest {
     }
 
     private ConsumerMembershipManager createMembershipManager(String groupInstanceId) {
+        SharedConsumerState sharedConsumerState = new SharedConsumerState(
+            SharedAutoCommitState.enabled(
+                LOG_CONTEXT,
+                time
+            )
+        );
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
             GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
             subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
-            backgroundEventHandler, time, rebalanceMetricsManager, AutoCommitState.enabled(LOG_CONTEXT, time), new AtomicBoolean()));
+            backgroundEventHandler, time, rebalanceMetricsManager, sharedConsumerState));
         assertMemberIdIsGenerated(manager.memberId());
         return manager;
     }
@@ -155,10 +160,16 @@ public class ConsumerMembershipManagerTest {
         String serverAssignor,
         String rackId
     ) {
+        SharedConsumerState sharedConsumerState = new SharedConsumerState(
+            SharedAutoCommitState.enabled(
+                LOG_CONTEXT,
+                time
+            )
+        );
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(rackId), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
-                metadata, LOG_CONTEXT, backgroundEventHandler, time, rebalanceMetricsManager, AutoCommitState.enabled(LOG_CONTEXT, time), new AtomicBoolean()));
+                metadata, LOG_CONTEXT, backgroundEventHandler, time, rebalanceMetricsManager, sharedConsumerState));
         assertMemberIdIsGenerated(manager.memberId());
         manager.transitionToJoining();
         return manager;
@@ -243,10 +254,16 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
+        SharedConsumerState sharedConsumerState = new SharedConsumerState(
+            SharedAutoCommitState.enabled(
+                LOG_CONTEXT,
+                time
+            )
+        );
         ConsumerMembershipManager membershipManager = new ConsumerMembershipManager(
                 GROUP_ID, Optional.empty(), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
-            backgroundEventHandler, time, rebalanceMetricsManager, AutoCommitState.enabled(LOG_CONTEXT, time), new AtomicBoolean());
+            backgroundEventHandler, time, rebalanceMetricsManager, sharedConsumerState);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 

@@ -137,7 +137,13 @@ public class CommitRequestManagerTest {
     @Test
     public void testOffsetFetchRequestStateToStringBase() {
         ConsumerConfig config = mock(ConsumerConfig.class);
-        AutoCommitState autoCommitState = AutoCommitState.newInstance(logContext, config, time);
+        SharedConsumerState sharedConsumerState = new SharedConsumerState(
+            SharedAutoCommitState.newInstance(
+                logContext,
+                config,
+                time
+            )
+        );
         CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
                 logContext,
@@ -152,7 +158,7 @@ public class CommitRequestManagerTest {
                 OptionalDouble.of(0),
                 metrics,
                 metadata,
-                autoCommitState);
+                sharedConsumerState);
 
         commitRequestManager.onMemberEpochUpdated(Optional.of(1), Uuid.randomUuid().toString());
         Set<TopicPartition> requestedPartitions = Collections.singleton(new TopicPartition("topic-1", 1));
@@ -1566,7 +1572,13 @@ public class CommitRequestManagerTest {
             props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));
 
         ConsumerConfig config = new ConsumerConfig(props);
-        AutoCommitState autoCommitState = AutoCommitState.newInstance(logContext, config, time);
+        SharedConsumerState sharedConsumerState = new SharedConsumerState(
+            SharedAutoCommitState.newInstance(
+                logContext,
+                config,
+                time
+            )
+        );
 
         return spy(new CommitRequestManager(
                 this.time,
@@ -1582,7 +1594,7 @@ public class CommitRequestManagerTest {
                 OptionalDouble.of(0),
                 metrics,
                 metadata,
-                autoCommitState));
+                sharedConsumerState));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(
