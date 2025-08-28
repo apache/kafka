@@ -38,7 +38,8 @@ public final class JsonConverterConfig extends ConverterConfig {
 
     public static final String SCHEMA_CONTENT_CONFIG = "schema.content";
     public static final String SCHEMA_CONTENT_DEFAULT = null;
-    private static final String SCHEMA_CONTENT_DOC = "When set, this is used as the schema for all messages. Otherwise, the schema will be included in the content of each message.";
+    private static final String SCHEMA_CONTENT_DOC = "When set, this is used as the schema for all messages. Otherwise, the schema will be included in the content of each message. " 
+        + " This configuration applies only to the sink connector and has no effect on the source connector.";
     private static final String SCHEMA_CONTENT_DISPLAY = "Schema Content";
 
     public static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.size";
