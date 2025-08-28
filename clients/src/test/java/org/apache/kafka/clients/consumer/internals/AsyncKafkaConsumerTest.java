@@ -250,17 +250,14 @@ public class AsyncKafkaConsumerTest {
         FetchBuffer fetchBuffer,
         ConsumerInterceptors<String, String> interceptors,
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
-        SubscriptionState subscriptions,
-        String groupId,
-        String clientId,
-        boolean autoCommitEnabled) {
+        SubscriptionState subscriptions) {
         long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
         LogContext logContext = new LogContext();
         return new AsyncKafkaConsumer<>(
             logContext,
-            clientId,
+            "client-id",
             new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics),
             fetchBuffer,
             fetchCollector,
@@ -276,8 +273,8 @@ public class AsyncKafkaConsumerTest {
             retryBackoffMs,
             requestTimeoutMs,
             defaultApiTimeoutMs,
-            groupId,
-            autoCommitEnabled,
+            "group-id",
+            false,
             new SharedConsumerState(logContext, metadata, subscriptions, time, retryBackoffMs));
     }
 
@@ -710,10 +707,7 @@ public class AsyncKafkaConsumerTest {
             mock(FetchBuffer.class),
             mock(ConsumerInterceptors.class),
             mock(ConsumerRebalanceListenerInvoker.class),
-            subscriptions,
-            "group-id",
-            "client-id",
-            false));
+            subscriptions));
         consumer.close(CloseOptions.timeout(Duration.ofMillis(timeoutMs)));
         verify(applicationEventHandler).addAndGet(any(LeaveGroupOnCloseEvent.class));
     }
@@ -733,10 +727,7 @@ public class AsyncKafkaConsumerTest {
             mock(FetchBuffer.class),
             new ConsumerInterceptors<>(Collections.emptyList(), metrics),
             invoker,
-            subscriptions,
-            "group-id",
-            "client-id",
-            false));
+            subscriptions));
         consumer.setGroupAssignmentSnapshot(partitions);
 
         Throwable t = assertThrows(KafkaException.class, () -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
@@ -757,10 +748,7 @@ public class AsyncKafkaConsumerTest {
             mock(FetchBuffer.class),
             mock(ConsumerInterceptors.class),
             mock(ConsumerRebalanceListenerInvoker.class),
-            subscriptions,
-            "group-id",
-            "client-id",
-            false));
+            subscriptions));
 
         Duration timeout = Duration.ofMillis(timeoutMs);
 
@@ -781,10 +769,7 @@ public class AsyncKafkaConsumerTest {
             mock(FetchBuffer.class),
             mock(ConsumerInterceptors.class),
             mock(ConsumerRebalanceListenerInvoker.class),
-            subscriptions,
-            "group-id",
-            "client-id",
-            false);
+            subscriptions);
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
@@ -806,10 +791,7 @@ public class AsyncKafkaConsumerTest {
             mock(FetchBuffer.class),
             mock(ConsumerInterceptors.class),
             mock(ConsumerRebalanceListenerInvoker.class),
-            subscriptions,
-            "group-id",
-            "client-id",
-            false);
+            subscriptions);
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
@@ -1656,10 +1638,7 @@ public class AsyncKafkaConsumerTest {
                 mock(FetchBuffer.class),
                 new ConsumerInterceptors<>(Collections.emptyList(), metrics),
                 mock(ConsumerRebalanceListenerInvoker.class),
-                subscriptions,
-                "group-id",
-                "client-id",
-                false);
+                subscriptions);
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
                 new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
@@ -2040,10 +2019,7 @@ public class AsyncKafkaConsumerTest {
                 mock(FetchBuffer.class),
                 mock(ConsumerInterceptors.class),
                 mock(ConsumerRebalanceListenerInvoker.class),
-                mock(SubscriptionState.class),
-                "group-id",
-                "client-id",
-                false);
+                mock(SubscriptionState.class));
         Metrics metrics = consumer.metricsRegistry();
         AsyncConsumerMetrics kafkaConsumerMetrics = consumer.kafkaConsumerMetrics();
 

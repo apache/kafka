@@ -120,7 +120,7 @@ public class SharePartitionTest {
     private static final TopicIdPartition TOPIC_ID_PARTITION = new TopicIdPartition(Uuid.randomUuid(), 0, "test-topic");
     private static final String MEMBER_ID = "member-1";
     private static final Time MOCK_TIME = new MockTime();
-    private static final short MAX_IN_FLIGHT_MESSAGES = 200;
+    private static final short MAX_IN_FLIGHT_RECORDS = 200;
     private static final int ACQUISITION_LOCK_TIMEOUT_MS = 100;
     private static final int DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS = 120;
     private static final int BATCH_SIZE = 500;
@@ -2181,14 +2181,14 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireWithMaxInFlightMessagesAndTryAcquireNewBatch() {
+    public void testAcquireWithMaxInFlightRecordsAndTryAcquireNewBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withSharePartitionMetrics(sharePartitionMetrics)
-            .withMaxInflightMessages(20)
+            .withMaxInflightRecords(20)
             .build();
 
-        // Acquire records, all 10 records should be acquired as within maxInflightMessages limit.
+        // Acquire records, all 10 records should be acquired as within maxInflightRecords limit.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
                 BATCH_SIZE,
@@ -2197,7 +2197,7 @@ public class SharePartitionTest {
                 fetchPartitionData(memoryRecords(10, 0), 0),
                 FETCH_ISOLATION_HWM),
             10);
-        // Validate all 10 records will be acquired as the maxInFlightMessages is 20.
+        // Validate all 10 records will be acquired as the maxInFlightRecords is 20.
         assertArrayEquals(expectedAcquiredRecord(0, 9, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(10, sharePartition.nextFetchOffset());
 
@@ -2212,7 +2212,7 @@ public class SharePartitionTest {
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
 
-        // Acquire records, should be acquired till maxInFlightMessages i.e. 20 records. As second batch
+        // Acquire records, should be acquired till maxInFlightRecords i.e. 20 records. As second batch
         // is ending at 24 offset, hence additional 15 records will be acquired.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
@@ -2243,11 +2243,11 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireWithMaxInFlightMessagesAndReleaseLastOffset() {
+    public void testAcquireWithMaxInFlightRecordsAndReleaseLastOffset() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withSharePartitionMetrics(sharePartitionMetrics)
-            .withMaxInflightMessages(20)
+            .withMaxInflightRecords(20)
             .build();
 
         // Create 4 batches of records.
@@ -2260,7 +2260,7 @@ public class SharePartitionTest {
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        // Acquire records, should be acquired till maxInFlightMessages i.e. 20 records till 29 offset.
+        // Acquire records, should be acquired till maxInFlightRecords i.e. 20 records till 29 offset.
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
                 MEMBER_ID,
                 BATCH_SIZE,
@@ -2270,7 +2270,7 @@ public class SharePartitionTest {
                 FETCH_ISOLATION_HWM),
             20);
 
-        // Validate 3 batches are fetched and fourth batch should be skipped. Max in-flight messages
+        // Validate 3 batches are fetched and fourth batch should be skipped. Max in-flight records
         // limit is reached.
         assertArrayEquals(expectedAcquiredRecord(10, 29, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(30, sharePartition.nextFetchOffset());
@@ -2360,29 +2360,29 @@ public class SharePartitionTest {
 
     @Test
     public void testCanAcquireRecordsWithEmptyCache() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightMessages(1).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMaxInflightRecords(1).build();
         assertTrue(sharePartition.canAcquireRecords());
     }
 
     @Test
     public void testCanAcquireRecordsWithCachedDataAndLimitNotReached() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightMessages(6)
+            .withMaxInflightRecords(6)
             .withState(SharePartitionState.ACTIVE)
             .build();
         fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);
-        // Limit not reached as only 6 in-flight messages is the limit.
+        // Limit not reached as only 6 in-flight records is the limit.
         assertTrue(sharePartition.canAcquireRecords());
     }
 
     @Test
     public void testCanAcquireRecordsWithCachedDataAndLimitReached() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightMessages(1)
+            .withMaxInflightRecords(1)
             .withState(SharePartitionState.ACTIVE)
             .build();
         fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);
-        // Limit reached as only one in-flight message is the limit.
+        // Limit reached as only one in-flight record is the limit.
         assertFalse(sharePartition.canAcquireRecords());
     }
 
@@ -6582,7 +6582,7 @@ public class SharePartitionTest {
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForBatchSubset() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightMessages(20)
+            .withMaxInflightRecords(20)
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -6608,7 +6608,7 @@ public class SharePartitionTest {
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementsFromBeginningForEntireBatch() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightMessages(20)
+            .withMaxInflightRecords(20)
             .withState(SharePartitionState.ACTIVE)
             .build();
         fetchAcquiredRecords(sharePartition, memoryRecords(15, 0), 15);
@@ -6633,7 +6633,7 @@ public class SharePartitionTest {
     @Test
     public void testMaybeUpdateCachedStateWhenAcknowledgementsInBetween() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightMessages(20)
+            .withMaxInflightRecords(20)
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -6662,7 +6662,7 @@ public class SharePartitionTest {
     @Test
     public void testMaybeUpdateCachedStateWhenAllRecordsInCachedStateAreAcknowledged() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightMessages(20)
+            .withMaxInflightRecords(20)
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -6684,7 +6684,7 @@ public class SharePartitionTest {
     @Test
     public void testMaybeUpdateCachedStateMultipleAcquisitionsAndAcknowledgements() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightMessages(100)
+            .withMaxInflightRecords(100)
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -7160,7 +7160,7 @@ public class SharePartitionTest {
     @Test
     public void testNextFetchOffsetWithMultipleConsumers() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withMaxInflightMessages(100)
+            .withMaxInflightRecords(100)
             .withState(SharePartitionState.ACTIVE)
             .build();
         MemoryRecords records1 = memoryRecords(3, 0);
@@ -8900,7 +8900,7 @@ public class SharePartitionTest {
 
         private int defaultAcquisitionLockTimeoutMs = 30000;
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
-        private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
+        private int maxInflightRecords = MAX_IN_FLIGHT_RECORDS;
 
         private Persister persister = new NoOpStatePersister();
         private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
@@ -8909,8 +8909,8 @@ public class SharePartitionTest {
         private Time time = MOCK_TIME;
         private SharePartitionMetrics sharePartitionMetrics = Mockito.mock(SharePartitionMetrics.class);
 
-        private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
-            this.maxInflightMessages = maxInflightMessages;
+        private SharePartitionBuilder withMaxInflightRecords(int maxInflightRecords) {
+            this.maxInflightRecords = maxInflightRecords;
             return this;
         }
 
@@ -8959,7 +8959,7 @@ public class SharePartitionTest {
         }
 
         public SharePartition build() {
-            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, maxInflightMessages, maxDeliveryCount,
+            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, maxInflightRecords, maxDeliveryCount,
                     defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, groupConfigManager,
                     state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics);
         }
