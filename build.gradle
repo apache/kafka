@@ -165,6 +165,7 @@ allprojects {
           libs.reload4j,
           // Workaround before `commons-validator` has new release. See KAFKA-19359.
           libs.commonsBeanutils,
+          libs.commonsLang
         )
       }
     }

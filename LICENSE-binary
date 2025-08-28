@@ -212,7 +212,7 @@ commons-cli-1.4
 commons-collections-3.2.2
 commons-digester-2.1
 commons-io-2.14.0
-commons-lang3-3.12.0
+commons-lang3-3.18.0
 commons-logging-1.3.5
 commons-validator-1.7
 error_prone_annotations-2.10.0
