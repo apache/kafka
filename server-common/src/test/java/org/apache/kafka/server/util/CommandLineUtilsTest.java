@@ -55,8 +55,8 @@ public class CommandLineUtilsTest {
         List<String> argArray = List.of("my.empty.property=", "my.empty.property1");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
-        assertEquals(props.getProperty("my.empty.property"), "", "Value of a key with missing value should be an empty string");
-        assertEquals(props.getProperty("my.empty.property1"), "", "Value of a key with missing value with no delimiter should be an empty string");
+        assertEquals("", props.getProperty("my.empty.property"), "Value of a key with missing value should be an empty string");
+        assertEquals("", props.getProperty("my.empty.property1"), "Value of a key with missing value with no delimiter should be an empty string");
     }
 
     @Test
@@ -64,7 +64,7 @@ public class CommandLineUtilsTest {
         List<String> argArray = List.of("my.property=value");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
-        assertEquals(props.getProperty("my.property"), "value", "Value of a single property should be 'value'");
+        assertEquals("value", props.getProperty("my.property"), "Value of a single property should be 'value'");
     }
 
     @Test
@@ -72,8 +72,8 @@ public class CommandLineUtilsTest {
         List<String> argArray = List.of("first.property=first", "second.property=second");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
-        assertEquals(props.getProperty("first.property"), "first", "Value of first property should be 'first'");
-        assertEquals(props.getProperty("second.property"), "second", "Value of second property should be 'second'");
+        assertEquals("first", props.getProperty("first.property"), "Value of first property should be 'first'");
+        assertEquals("second", props.getProperty("second.property"), "Value of second property should be 'second'");
     }
 
     @Test
@@ -81,9 +81,9 @@ public class CommandLineUtilsTest {
         List<String> argArray = List.of("first.property==first", "second.property=second=", "third.property=thi=rd");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
-        assertEquals(props.getProperty("first.property"), "=first", "Value of first property should be '=first'");
-        assertEquals(props.getProperty("second.property"), "second=", "Value of second property should be 'second='");
-        assertEquals(props.getProperty("third.property"), "thi=rd", "Value of second property should be 'thi=rd'");
+        assertEquals("=first", props.getProperty("first.property"), "Value of first property should be '=first'");
+        assertEquals("second=", props.getProperty("second.property"), "Value of second property should be 'second='");
+        assertEquals("thi=rd", props.getProperty("third.property"), "Value of second property should be 'thi=rd'");
     }
 
     Properties props = new Properties();
@@ -272,6 +272,7 @@ public class CommandLineUtilsTest {
                     Optional.of("127.0.0.2:9094"), Optional.of("127.0.0.3:9095"))).getMessage());
     }
 
+    @SuppressWarnings("unchecked")
     private OptionSpec<String> createMockOptionSpec(String name) {
         OptionSpec<String> spec = mock(OptionSpec.class);
         when(spec.toString()).thenReturn("[" + name.replaceAll("--", "") + "]");
