@@ -131,15 +131,20 @@ public class StreamsResetter {
             StreamsResetterOptions options = new StreamsResetterOptions(args);
 
             String groupId = options.applicationId();
-            Properties properties = new Properties();
-            if (options.hasCommandConfig()) {
-                properties.putAll(Utils.loadProps(options.commandConfig()));
+
+            String commandConfigFile;
+            if (options.hasConfig()) {
+                System.out.println("Option --config-file has been deprecated and will be removed in a future version. Use --command-config instead.");
+                commandConfigFile = options.config();
+            } else {
+                commandConfigFile = options.commandConfig();
             }
 
             String bootstrapServerValue = "localhost:9092";
             if (options.hasBootstrapServer()) {
                 bootstrapServerValue = options.bootstrapServer();
             }
+            Properties properties = commandConfigFile != null ? Utils.loadProps(commandConfigFile) : new Properties();
 
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 
@@ -573,6 +578,8 @@ public class StreamsResetter {
         private final OptionSpec<String> fromFileOption;
         private final OptionSpec<Long> shiftByOption;
         private final OptionSpecBuilder dryRunOption;
+        @Deprecated(since = "4.2", forRemoval = true)
+        private final OptionSpec<String> configOption;
         private final OptionSpec<String> commandConfigOption;
         private final OptionSpecBuilder forceOption;
 
@@ -624,7 +631,11 @@ public class StreamsResetter {
                 .withRequiredArg()
                 .describedAs("number-of-offsets")
                 .ofType(Long.class);
-            commandConfigOption = parser.accepts("config-file", "Property file containing configs to be passed to admin clients and embedded consumer.")
+            configOption = parser.accepts("config-file", "(DEPRECATED) Property file containing configs to be passed to admin clients and embedded consumer.")
+                .withRequiredArg()
+                .ofType(String.class)
+                .describedAs("file name");
+            commandConfigOption = parser.accepts("command-config", "Config properties file to be passed to admin clients and embedded consumer.")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("file name");
@@ -648,6 +659,7 @@ public class StreamsResetter {
                 CommandLineUtils.checkInvalidArgs(parser, options, toLatestOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, fromFileOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, shiftByOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption);
+                CommandLineUtils.checkInvalidArgs(parser, options, configOption, commandConfigOption);
             } catch (final OptionException e) {
                 CommandLineUtils.printUsageAndExit(parser, e.getMessage());
             }
@@ -661,8 +673,12 @@ public class StreamsResetter {
             return options.valueOf(applicationIdOption);
         }
 
-        public boolean hasCommandConfig() {
-            return options.has(commandConfigOption);
+        public boolean hasConfig() {
+            return options.has(configOption);
+        }
+
+        public String config() {
+            return options.valueOf(configOption);
         }
 
         public String commandConfig() {
