@@ -3731,10 +3731,7 @@ customized state stores; for built-in state stores, currently we have:
   The current stable branch is 3.8. Kafka is regularly updated to include the latest release in the 3.8 series.
 
   <h4 class="anchor-heading"><a id="zk_depr" class="anchor-link"></a><a href="#zk_depr">ZooKeeper Deprecation</a></h4>
-  <p>With the release of Apache Kafka 3.5, Zookeeper is now marked deprecated. Removal of ZooKeeper is planned in the next major release of Apache Kafka (version 4.0),
-     which is scheduled to happen no sooner than April 2024. During the deprecation phase, ZooKeeper is still supported for metadata management of Kafka clusters,
-     but it is not recommended for new deployments. There is a small subset of features that remain to be implemented in KRaft
-     see <a href="#kraft_missing">current missing features</a> for more information.</p>
+    <p>ZooKeeper mode was deprecated in Apache Kafka 3.5. Apache Kafka version 4.0 removed support for ZooKeeper mode.</p>
 
     <h5 class="anchor-heading"><a id="zk_depr_migration" class="anchor-link"></a><a href="#zk_drep_migration">Migration</a></h5>
     <p>Users are recommended to begin planning for migration to KRaft and also begin testing to provide any feedback. Refer to <a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a> for details on how to perform a live migration from ZooKeeper to KRaft and current limitations.</p>
@@ -3967,15 +3964,6 @@ foo
     <li>The Kafka controllers store all the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
   </ul>
 
-  <h4 class="anchor-heading"><a id="kraft_missing" class="anchor-link"></a><a href="#kraft_missing">Missing Features</a></h4>
-
-  <p>The following features are not fully implemented in KRaft mode:</p>
-
-  <ul>
-    <li>Supporting JBOD configurations with multiple storage directories. Note that an Early Access release is supported in 3.7 as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-858%3A+Handle+JBOD+broker+disk+failure+in+KRaft">KIP-858</a>. Note that it is not yet recommended for use in production environments. Please refer to the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+JBOD+in+KRaft+Early+Access+Release+Notes">release notes</a> to help us test it and provide feedback at <a href="https://issues.apache.org/jira/browse/KAFKA-16061">KAFKA-16061</a>.</li>
-    <li>Modifying certain dynamic configurations on the standalone KRaft controller</li>
-  </ul>
-
   <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
 
   <h3>Terminology</h3>
@@ -4008,8 +3996,6 @@ foo
       Brokers with broken log directories will only be able to migrate to KRaft once the directories are repaired.
       For further details refer to <a href="https://issues.apache.org/jira/browse/KAFKA-16431">KAFKA-16431</a>.
     </li>
-    <li><a href="#kraft_missing">As noted above</a>, some features are not fully implemented in KRaft mode. If you are
-      using one of those features, you will not be able to migrate to KRaft yet.</li>
     <li>
       There is a known inconsistency between ZK and KRaft modes in the arguments passed to an <code>AlterConfigPolicy</code>,
       when an <code>OpType.SUBTRACT</code> is processed.
