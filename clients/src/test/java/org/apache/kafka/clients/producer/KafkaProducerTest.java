@@ -639,6 +639,29 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
+        final int targetInterceptor = 1;
+        try {
+            Properties props = new Properties();
+            props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, org.apache.kafka.test.MockProducerInterceptor.class.getName());
+            props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
+
+            MockProducerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
+
+            assertThrows(KafkaException.class, () ->
+                    new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())
+            );
+
+            assertEquals(1, MockProducerInterceptor.CONFIG_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
+
+        } finally {
+            MockProducerInterceptor.resetCounters();
+        }
+    }
+
+    @Test
     public void testPartitionerClose() {
         try {
             Properties props = new Properties();
