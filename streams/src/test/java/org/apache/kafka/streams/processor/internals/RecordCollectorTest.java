@@ -1978,7 +1978,7 @@ public class RecordCollectorTest {
         assertNull(sourceRawData[1]);
     }
 
-
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldHaveRawDataDuringExceptionInSerialization() {
         final byte[][] sourceRawData = new byte[][]{new byte[]{}, new byte[]{}};
