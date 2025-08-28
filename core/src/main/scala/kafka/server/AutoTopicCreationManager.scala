@@ -96,6 +96,7 @@ class DefaultAutoTopicCreationManager(
     requestContext: RequestContext
   ): Unit = {
 
+    // Add default configs to CreatableTopic request to remain consistent with AutoTopicCreationManager#createTopics
     for ((_, creatableTopic) <- topics) {
       if (creatableTopic.numPartitions() == -1) {
         creatableTopic
