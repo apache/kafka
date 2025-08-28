@@ -555,7 +555,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 "header converter",
                 HEADER_CONVERTER_CLASS_CONFIG,
                 HEADER_CONVERTER_VERSION_CONFIG,
-                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName()),
+                Map.of(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName()),
                 connectorLoader,
                 reportStage
         );
@@ -568,7 +568,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 "key converter",
                 KEY_CONVERTER_CLASS_CONFIG,
                 KEY_CONVERTER_VERSION_CONFIG,
-                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.KEY.getName()),
+                Map.of(ConverterConfig.TYPE_CONFIG, ConverterType.KEY.getName()),
                 connectorLoader,
                 reportStage
         );
@@ -582,7 +582,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 "value converter",
                 VALUE_CONVERTER_CLASS_CONFIG,
                 VALUE_CONVERTER_VERSION_CONFIG,
-                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName()),
+                Map.of(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName()),
                 connectorLoader,
                 reportStage
         );
@@ -1278,7 +1278,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         if (!loggers.isValidLevel(normalizedLevel)) {
             log.warn("Ignoring request to set invalid level '{}' for namespace {}", desiredLevelStr, namespace);
-            return Collections.emptyList();
+            return List.of();
         }
 
         return loggers.setLevel(namespace, normalizedLevel);
