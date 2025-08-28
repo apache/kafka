@@ -172,6 +172,8 @@ public class LeaderElectionCommandTest {
 
             assertTrue(output.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
                 "[admin.config]", "[command-config]")));
+        } finally {
+            Exit.resetExitProcedure();
         }
     }
 

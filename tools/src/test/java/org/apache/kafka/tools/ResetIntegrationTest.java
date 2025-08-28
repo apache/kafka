@@ -314,6 +314,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
             assertTrue(output.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
                 "[config-file]", "[command-config]")));
+        } finally {
+            Exit.resetExitProcedure();
         }
     }
 
