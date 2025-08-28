@@ -74,6 +74,17 @@ public class ShareConsumerPerformanceTest {
     }
 
     @Test
+    public void testBootstrapServerNotPresent() {
+        String[] args = new String[]{
+            "--topic", "test"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() ->
+                new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+        assertTrue(err.contains("Missing required argument \"[bootstrap-server]\""));
+    }
+
+    @Test
     public void testNumOfRecordsNotPresent() {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
