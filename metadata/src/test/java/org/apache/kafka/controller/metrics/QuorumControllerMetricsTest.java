@@ -45,8 +45,8 @@ public class QuorumControllerMetricsTest {
                 Set<String> expected = Set.of(
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
+                    "kafka.controller:type=ControllerEventManager,name=AvgIdleRatio",
                     "kafka.controller:type=KafkaController,name=ActiveControllerCount",
-                    "kafka.controller:type=KafkaController,name=AvgIdleRatio",
                     "kafka.controller:type=KafkaController,name=EventQueueOperationsStartedCount",
                     "kafka.controller:type=KafkaController,name=EventQueueOperationsTimedOutCount",
                     "kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs",
@@ -194,7 +194,7 @@ public class QuorumControllerMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
         try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, 9000)) {
-            Gauge<Double> avgIdleRatio = (Gauge<Double>) registry.allMetrics().get(metricName("KafkaController", "AvgIdleRatio"));
+            Gauge<Double> avgIdleRatio = (Gauge<Double>) registry.allMetrics().get(metricName("ControllerEventManager", "AvgIdleRatio"));
 
             // No idle time recorded yet
             assertEquals(1.0, avgIdleRatio.value());

@@ -17,8 +17,9 @@
 
 package org.apache.kafka.controller.metrics;
 
-import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.raft.internals.TimeRatio;
+
+import com.yammer.metrics.core.Gauge;
 
 /**
  * Yammer Metrics facade for TimeRatio.
@@ -49,5 +50,7 @@ public class YammerTimeRatio extends Gauge<Double> {
      * @return The ratio of idle time to total time (between 0.0 and 1.0)
      */
     @Override
-    public Double value() { return timeRatio.measure(); }
+    public Double value() {
+        return timeRatio.measure();
+    }
 }
