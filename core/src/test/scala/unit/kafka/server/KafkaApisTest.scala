@@ -10969,7 +10969,7 @@ class KafkaApisTest extends Logging {
 
     // Mock AutoTopicCreationManager to return cached errors
     val mockAutoTopicCreationManager = mock(classOf[AutoTopicCreationManager])
-    when(mockAutoTopicCreationManager.getTopicCreationErrors(Set("test-topic")))
+    when(mockAutoTopicCreationManager.getTopicCreationErrors(ArgumentMatchers.eq(Set("test-topic")), any()))
       .thenReturn(Map("test-topic" -> "INVALID_REPLICATION_FACTOR"))
     // Mock the createStreamsInternalTopics method to do nothing (simulate topic creation attempt)
     doNothing().when(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any())
@@ -11002,7 +11002,7 @@ class KafkaApisTest extends Logging {
     
     // Verify that createStreamsInternalTopics was called
     verify(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any())
-    verify(mockAutoTopicCreationManager).getTopicCreationErrors(Set("test-topic"))
+    verify(mockAutoTopicCreationManager).getTopicCreationErrors(ArgumentMatchers.eq(Set("test-topic")), any())
   }
 
   @ParameterizedTest

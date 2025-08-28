@@ -443,7 +443,8 @@ class AutoTopicCreationManagerTest {
     argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
 
     // Verify that the error was cached
-    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("test-topic-1"))
+    val defaultTtlMs = config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs()
+    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("test-topic-1"), defaultTtlMs)
     assertEquals(1, cachedErrors.size)
     assertTrue(cachedErrors.contains("test-topic-1"))
     assertEquals("Topic 'test-topic-1' already exists.", cachedErrors("test-topic-1"))
@@ -493,7 +494,8 @@ class AutoTopicCreationManagerTest {
     argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
 
     // Only the failed topic should be cached
-    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("success-topic", "failed-topic", "nonexistent-topic"))
+    val defaultTtlMs = config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs()
+    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("success-topic", "failed-topic", "nonexistent-topic"), defaultTtlMs)
     assertEquals(1, cachedErrors.size)
     assertTrue(cachedErrors.contains("failed-topic"))
     assertEquals("Policy violation", cachedErrors("failed-topic"))
@@ -509,11 +511,12 @@ class AutoTopicCreationManagerTest {
       shareCoordinator,
       mockTime)
 
-    val initialResult = autoTopicCreationManager.getTopicCreationErrors(Set("nonexistent-topic"))
+    val defaultTtlMs = config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs()
+    val initialResult = autoTopicCreationManager.getTopicCreationErrors(Set("nonexistent-topic"), defaultTtlMs)
     assertTrue(initialResult.isEmpty)
 
     mockTime.sleep(config.groupCoordinatorConfig.classicGroupMaxSessionTimeoutMs + 1000)
-    val laterResult = autoTopicCreationManager.getTopicCreationErrors(Set("nonexistent-topic"))
+    val laterResult = autoTopicCreationManager.getTopicCreationErrors(Set("nonexistent-topic"), defaultTtlMs)
     assertTrue(laterResult.isEmpty)
   }
 }

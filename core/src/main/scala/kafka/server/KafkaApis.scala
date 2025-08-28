@@ -2895,7 +2895,12 @@ class KafkaApis(val requestChannel: RequestChannel,
                 responseData.status().stream().anyMatch(s => s.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
               
               if (hasMissingInternalTopicsStatus) {
-                val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(topicsToCreate.keys.toSet)
+                // Calculate group-specific error cache TTL
+                val errorCacheTtlMs = Option(groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId).orElse(null))
+                  .map(_.streamsSessionTimeoutMs().toLong)
+                  .getOrElse(config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs().toLong)
+                
+                val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(topicsToCreate.keys.toSet, errorCacheTtlMs)
                 if (cachedErrors.nonEmpty) {
                   val missingInternalTopicStatus =
                     responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
@@ -2909,7 +2914,6 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
             }
           }
-
           requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(responseData))
         }
       }

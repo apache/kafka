@@ -56,7 +56,8 @@ trait AutoTopicCreationManager {
   ): Unit
 
   def getTopicCreationErrors(
-    topicNames: Set[String]
+    topicNames: Set[String],
+    errorCacheTtlMs: Long
   ): Map[String, String]
 
   def close(): Unit = {}
@@ -81,8 +82,6 @@ class DefaultAutoTopicCreationManager(
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
   private val topicCreationErrorCache = new ConcurrentHashMap[String, CachedTopicCreationError]()
-  // Use session timeout for better semantic alignment with client lifecycle
-  private val errorCacheTtlMs = config.groupCoordinatorConfig.classicGroupMaxSessionTimeoutMs.toLong
 
   /**
    * Initiate auto topic creation for the given topics.
@@ -120,7 +119,8 @@ class DefaultAutoTopicCreationManager(
   }
 
   override def getTopicCreationErrors(
-    topicNames: Set[String]
+    topicNames: Set[String],
+    errorCacheTtlMs: Long
   ): Map[String, String] = {
     val currentTime = time.milliseconds()
     val errors = mutable.Map.empty[String, String]
