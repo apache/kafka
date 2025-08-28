@@ -112,6 +112,11 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * Keeps track of the auto-commit state.
+     *
+     * <p/>
+     *
+     * <em>Note</em>: per its class name, this state is <em>shared</em> with the application thread, so care must be
+     * taken to evaluate how it's used elsewhere when updating related logic.
      */
     protected final SharedAutoCommitState autoCommitState;
 
@@ -142,8 +147,15 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile(boolean)} has been triggered
-     * after receiving a heartbeat response, or a metadata update.
+     * assignmentReadyToReconcile. {@link SharedReconciliationState#isInProgress()} will be true if
+     * {@link #maybeReconcile(boolean)} has been triggered after receiving a heartbeat response, or a metadata update.
+     * Calling code should generally favor {@link #reconciliationInProgress()} for its clarity over direct use of
+     * this state.
+     *
+     * <p/>
+     *
+     * <em>Note</em>: per its class name, this state is <em>shared</em> with the application thread, so care must be
+     * taken to evaluate how it's used elsewhere when updating related logic.
      */
     private final SharedReconciliationState reconciliationState;
 
