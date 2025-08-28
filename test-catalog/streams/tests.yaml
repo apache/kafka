@@ -2341,6 +2341,7 @@ org.apache.kafka.streams.processor.internals.RecordCollectorTest:
 - shouldBroadcastToAllPartitions
 - shouldBuildDeadLetterQueueRecordsInDefaultExceptionHandler
 - shouldBuildDeadLetterQueueRecordsInDefaultExceptionHandlerDuringDeserialization
+- shouldCallOldImplementationExceptionHandler
 - shouldCallOldImplementationWithRecordContextExceptionHandler
 - shouldClearOffsetsOnCloseClean
 - shouldClearOffsetsOnCloseDirty

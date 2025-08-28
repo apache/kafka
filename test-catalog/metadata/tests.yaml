@@ -483,6 +483,7 @@ org.apache.kafka.image.TopicsImageTest:
 - testTopicDeltaElectionStatsWithNonEmptyImage
 - testTopicIdToNameView
 - testTopicNameToIdView
+- testTopicsDeltaCreateThenDelete
 - testUpdatedLeaders
 org.apache.kafka.image.loader.MetadataBatchLoaderTest:
 - testAlignedTransactionBatches
