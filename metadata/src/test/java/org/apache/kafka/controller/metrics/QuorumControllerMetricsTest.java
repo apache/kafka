@@ -190,7 +190,7 @@ public class QuorumControllerMetricsTest {
     }
 
     @Test
-    public void testYammerTimeRatioIdleTimeTracking() {
+    public void testAvgIdleRatio() {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
         try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, 9000)) {

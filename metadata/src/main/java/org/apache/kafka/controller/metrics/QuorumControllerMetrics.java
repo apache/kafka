@@ -17,7 +17,9 @@
 
 package org.apache.kafka.controller.metrics;
 
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.raft.internals.TimeRatio;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Gauge;
@@ -70,6 +72,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     private static final String TIME_SINCE_LAST_HEARTBEAT_RECEIVED_METRIC_NAME = "TimeSinceLastHeartbeatReceivedMs";
     private static final String BROKER_ID_TAG = "broker";
+    private static final MetricConfig METRIC_CONFIG = new MetricConfig();
 
     private final Optional<MetricsRegistry> registry;
     private final Time time;
@@ -79,7 +82,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
     private final Consumer<Long> eventQueueTimeUpdater;
     private final Consumer<Long> eventQueueProcessingTimeUpdater;
-    public final YammerTimeRatio avgIdleTimeRatio;
+    public final TimeRatio avgIdleTimeRatio;
 
     private final AtomicLong timedOutHeartbeats = new AtomicLong(0);
     private final AtomicLong operationsStarted = new AtomicLong(0);
@@ -115,7 +118,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
         this.eventQueueTimeUpdater = newHistogram(EVENT_QUEUE_TIME_MS, true);
         this.eventQueueProcessingTimeUpdater = newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, true);
         this.sessionTimeoutMs = sessionTimeoutMs;
-        this.avgIdleTimeRatio = new YammerTimeRatio(1);
+        this.avgIdleTimeRatio = new TimeRatio(1);
         registry.ifPresent(r -> r.newGauge(LAST_APPLIED_RECORD_OFFSET, new Gauge<Long>() {
             @Override
             public Long value() {
@@ -164,7 +167,12 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 return newActiveControllers();
             }
         }));
-        registry.ifPresent(r -> r.newGauge(AVERAGE_IDLE_RATIO, this.avgIdleTimeRatio));
+        registry.ifPresent(r -> r.newGauge(AVERAGE_IDLE_RATIO, new Gauge<Double>() {
+            @Override
+            public Double value() {
+                return avgIdleTimeRatio.measure(METRIC_CONFIG, time.milliseconds());
+            }
+        }));
     }
 
     public void updateIdleStartTime() {
@@ -176,7 +184,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     public void updateIdleEndTime() {
         if (this.idleStartTime.isPresent()) {
             long idleDurationMs = Math.max(time.milliseconds() - idleStartTime.getAsLong(), 0);
-            avgIdleTimeRatio.record((double) idleDurationMs, time.milliseconds());
+            avgIdleTimeRatio.record(METRIC_CONFIG, (double) idleDurationMs, time.milliseconds());
             idleStartTime = OptionalLong.empty();
         }
     }

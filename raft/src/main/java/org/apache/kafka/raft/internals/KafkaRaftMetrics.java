@@ -137,7 +137,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
                 "The ratio of time the Raft IO thread is idle as opposed to " +
                     "doing work (e.g. handling requests or replicating from the leader)"
             ),
-            new KafkaTimeRatio(1.0)
+            new TimeRatio(1.0)
         );
     }
 

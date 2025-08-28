@@ -16,17 +16,20 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.metrics.MeasurableStat;
+import org.apache.kafka.common.metrics.MetricConfig;
+
 /**
- * This metrics agnostic implementation maintain an approximate ratio of
- * the duration of a specific event over all time. For example, this can
- * be used to compute the ratio of time that a thread is busy or idle. The value
- * is approximate since the measurement and recording intervals may not be aligned.
+ * Maintains an approximate ratio of the duration of a specific event
+ * over all time. For example, this can be used to compute the ratio of
+ * time that a thread is busy or idle. The value is approximate since the
+ * measurement and recording intervals may not be aligned.
  *
  * Note that the duration of the event is assumed to be small relative to
  * the interval of measurement.
+ *
  */
-
-public class TimeRatio {
+public class TimeRatio implements MeasurableStat {
     private long intervalStartTimestampMs = -1;
     private long lastRecordedTimestampMs = -1;
     private double totalRecordedDurationMs = 0;
@@ -37,17 +40,12 @@ public class TimeRatio {
         if (defaultRatio < 0.0 || defaultRatio > 1.0) {
             throw new IllegalArgumentException("Invalid ratio: value " + defaultRatio + " is not between 0 and 1.");
         }
+
         this.defaultRatio = defaultRatio;
     }
 
-    /**
-     * Measure the ratio of the total recorded duration over the interval duration.
-     * If no recordings have been captured, it returns the default ratio.
-     * After measuring, it resets the recorded duration and starts a new interval.
-     *
-     * @return The ratio of total recorded duration to the interval duration
-     */
-    public double measure() {
+    @Override
+    public double measure(MetricConfig config, long currentTimestampMs) {
         if (lastRecordedTimestampMs < 0) {
             // Return the default value if no recordings have been captured.
             return defaultRatio;
@@ -70,15 +68,8 @@ public class TimeRatio {
         }
     }
 
-    /**
-     * Record the duration of an event at the current timestamp.
-     * If this is the first record, it initializes the interval start timestamp.
-     * Otherwise, it updates the total recorded duration and last recorded timestamp.
-     *
-     * @param value              The duration of the event in milliseconds
-     * @param currentTimestampMs The current time in milliseconds
-     */
-    public void record(double value, long currentTimestampMs) {
+    @Override
+    public void record(MetricConfig config, double value, long currentTimestampMs) {
         if (intervalStartTimestampMs < 0) {
             // Discard the initial value since the value occurred prior to the interval start
             intervalStartTimestampMs = currentTimestampMs;
@@ -87,4 +78,5 @@ public class TimeRatio {
             lastRecordedTimestampMs = currentTimestampMs;
         }
     }
+
 }

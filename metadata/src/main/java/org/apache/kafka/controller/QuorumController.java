@@ -575,6 +575,7 @@ public final class QuorumController implements Controller {
 
     private long updateEventStartMetricsAndGetTime(OptionalLong eventCreatedTimeNs) {
         long now = time.nanoseconds();
+        controllerMetrics.updateIdleEndTime();
         controllerMetrics.incrementOperationsStarted();
         if (eventCreatedTimeNs.isPresent()) {
             controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs.getAsLong()));
@@ -598,7 +599,6 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            controllerMetrics.updateIdleEndTime();
             startProcessingTimeNs = OptionalLong.of(
                 updateEventStartMetricsAndGetTime(OptionalLong.of(eventCreatedTimeNs)));
             log.debug("Executing {}.", this);
@@ -650,7 +650,6 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            controllerMetrics.updateIdleEndTime();
             startProcessingTimeNs = OptionalLong.of(
                 updateEventStartMetricsAndGetTime(OptionalLong.of(eventCreatedTimeNs)));
             T value = handler.get();
@@ -766,7 +765,6 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            controllerMetrics.updateIdleEndTime();
             // Deferred events set the DOES_NOT_UPDATE_QUEUE_TIME flag to prevent incorrectly
             // including their deferral time in the event queue time.
             startProcessingTimeNs = OptionalLong.of(
