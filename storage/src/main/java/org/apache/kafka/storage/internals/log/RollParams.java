@@ -21,17 +21,4 @@ package org.apache.kafka.storage.internals.log;
  */
 public record RollParams(long maxSegmentMs, int maxSegmentBytes, long maxTimestampInMessages, long maxOffsetInMessages,
                          int messagesSize, long now) {
-
-    @Override
-    public String toString() {
-        return "RollParams(" +
-                "maxSegmentMs=" + maxSegmentMs +
-                ", maxSegmentBytes=" + maxSegmentBytes +
-                ", maxTimestampInMessages=" + maxTimestampInMessages +
-                ", maxOffsetInMessages=" + maxOffsetInMessages +
-                ", messagesSize=" + messagesSize +
-                ", now=" + now +
-                ')';
-    }
-
 }

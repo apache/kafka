@@ -36,11 +36,4 @@ public record TimestampOffset(long timestamp, long offset) implements IndexEntry
     public long indexValue() {
         return offset;
     }
-
-    @Override
-    public String toString() {
-        return String.format("TimestampOffset(offset = %d, timestamp = %d)",
-            offset,
-            timestamp);
-    }
 }

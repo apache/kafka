@@ -26,13 +26,4 @@ public record LoadedLogOffsets(long logStartOffset, long recoveryPoint, LogOffse
         this.recoveryPoint = recoveryPoint;
         this.nextOffsetMetadata = Objects.requireNonNull(nextOffsetMetadata, "nextOffsetMetadata should not be null");
     }
-
-    @Override
-    public String toString() {
-        return "LoadedLogOffsets(" +
-                "logStartOffset=" + logStartOffset +
-                ", recoveryPoint=" + recoveryPoint +
-                ", nextOffsetMetadata=" + nextOffsetMetadata +
-                ')';
-    }
 }
