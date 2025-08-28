@@ -54,17 +54,7 @@
                 A new <code>--bootstrap-server</code> option is added to <code>kafka-producer-perf-test.sh</code>.
             </li>
             <li>
-                The option <code>--command-config</code> is used for all command-line tools which accept a file of configuration properties.
-                The tools affected are <code>kafka-cluster.sh</code> (<code>--config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
-                <code>kafka-console-share-consumer.sh</code> (<code>--consumer.config</code> and <code>--producer.config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-consumer-perf-test.sh</code> (<code>--consumer.config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-producer-perf-test.sh</code> (<code>--producer.config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-share-consumer-perf-test.sh</code> (<code>--consumer.config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-verifiable-consumer.sh</code> and <code>kafka-verifiable-producer.sh</code>
-                (<code>--consumer.config</code> and <code>--producer.config</code> deprecated in favor of <code>--command-config</code>);
-                <code>kafka-leader-election.sh</code> (<code>--admin.config</code> deprecated in favor of <code>--command-config</code>); and
-                <code>kafka-streams-application-reset.sh</code> (<code>--config-file</code> deprecated in favor of <code>--command-config</code>).
+                A new <code>--reporting-interval</code> option is added to <code>kafka-producer-perf-test.sh</code>.
             </li>
             <li>
                 The option <code>--command-property</code> is used for all command-line tools which accept configuration properties directly on
@@ -76,7 +66,17 @@
                 in line.
             </li>
             <li>
-                A new <code>--reporting-interval</code> option is added to <code>kafka-producer-perf-test.sh</code>.
+                The option <code>--command-config</code> is used for all command-line tools which accept a file of configuration properties.
+                The tools affected are <code>kafka-cluster.sh</code> (<code>--config</code> deprecated in favor of
+                <code>--command-config</code>); <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
+                <code>kafka-console-share-consumer.sh</code> (<code>--consumer.config</code> and <code>--producer.config</code> deprecated in favor of
+                <code>--command-config</code>); <code>kafka-consumer-perf-test.sh</code> (<code>--consumer.config</code> deprecated in favor of
+                <code>--command-config</code>); <code>kafka-producer-perf-test.sh</code> (<code>--producer.config</code> deprecated in favor of
+                <code>--command-config</code>); <code>kafka-share-consumer-perf-test.sh</code> (<code>--consumer.config</code> deprecated in favor of
+                <code>--command-config</code>); <code>kafka-verifiable-consumer.sh</code> and <code>kafka-verifiable-producer.sh</code>
+                (<code>--consumer.config</code> and <code>--producer.config</code> deprecated in favor of <code>--command-config</code>);
+                <code>kafka-leader-election.sh</code> (<code>--admin.config</code> deprecated in favor of <code>--command-config</code>); and
+                <code>kafka-streams-application-reset.sh</code> (<code>--config-file</code> deprecated in favor of <code>--command-config</code>).
             </li>
             <li>
                 In <code>kafka-console-consumer.sh</code> and <code>kafka-console-share-consumer.sh</code>, the option <code>--property</code>
