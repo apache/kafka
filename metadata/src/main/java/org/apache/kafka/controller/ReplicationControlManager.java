@@ -2441,14 +2441,7 @@ public class ReplicationControlManager {
         }
     }
 
-    private static final class IneligibleReplica {
-        private final int replicaId;
-        private final String reason;
-
-        private IneligibleReplica(int replicaId, String reason) {
-            this.replicaId = replicaId;
-            this.reason = reason;
-        }
+    private record IneligibleReplica(int replicaId, String reason) {
 
         @Override
         public String toString() {

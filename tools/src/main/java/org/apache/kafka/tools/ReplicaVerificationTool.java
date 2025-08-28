@@ -348,18 +348,7 @@ public class ReplicaVerificationTool {
         }
     }
 
-    private static class MessageInfo {
-        final int replicaId;
-        final long offset;
-        final long nextOffset;
-        final long checksum;
-
-        MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
-            this.replicaId = replicaId;
-            this.offset = offset;
-            this.nextOffset = nextOffset;
-            this.checksum = checksum;
-        }
+    private record MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
     }
 
     protected static class ReplicaBuffer {

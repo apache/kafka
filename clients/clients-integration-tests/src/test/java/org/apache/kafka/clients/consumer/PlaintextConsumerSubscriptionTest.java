@@ -576,7 +576,7 @@ public class PlaintextConsumerSubscriptionTest {
     }
 
     @ClusterTest
-    public void testAsyncConsumerClassicConsumerSubscribeInvalidTopicCanUnsubscribe() throws InterruptedException {
+    public void testAsyncConsumerSubscribeInvalidTopicCanUnsubscribe() throws InterruptedException {
         testSubscribeInvalidTopicCanUnsubscribe(GroupProtocol.CONSUMER);
     }
 
