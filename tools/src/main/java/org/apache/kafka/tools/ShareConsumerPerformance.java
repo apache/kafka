@@ -337,7 +337,7 @@ public class ShareConsumerPerformance {
                     .ofType(String.class);
             printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.");
             showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
-                    "interval as configured by reporting-interval");
+                    "interval as configured by reporting-interval.");
             recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
                     .withOptionalArg()
                     .describedAs("milliseconds")
@@ -364,7 +364,7 @@ public class ShareConsumerPerformance {
                     .describedAs("date format")
                     .ofType(String.class)
                     .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS");
-            hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats");
+            hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats.");
             numThreadsOpt = parser.accepts("threads", "The number of share consumers to use for sharing the load.")
                     .withRequiredArg()
                     .describedAs("count")
@@ -380,7 +380,7 @@ public class ShareConsumerPerformance {
             }
             if (options != null) {
                 CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the share consumer performance.");
-                CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
+                CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, bootstrapServerOpt);
 
                 CommandLineUtils.checkOneOfArgs(parser, options, numMessagesOpt, numRecordsOpt);
                 CommandLineUtils.checkInvalidArgs(parser, options, consumerConfigOpt, commandConfigOpt);

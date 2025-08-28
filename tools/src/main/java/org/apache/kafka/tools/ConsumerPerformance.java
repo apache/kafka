@@ -303,24 +303,24 @@ public class ConsumerPerformance {
                 .ofType(Integer.class)
                 .defaultsTo(2 * 1024 * 1024);
             consumerConfigOpt = parser.accepts("consumer.config", "(DEPRECATED) Consumer config properties file. " +
-                            "This option will be removed in a future version. Use --command-config instead")
+                            "This option will be removed in a future version. Use --command-config instead.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
-            commandConfigOpt = parser.accepts("command-config", "Config properties file")
+            commandConfigOpt = parser.accepts("command-config", "Config properties file.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
             printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.");
             showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
-                "interval as configured by reporting-interval");
+                "interval as configured by reporting-interval.");
             recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
                 .withOptionalArg()
                 .describedAs("milliseconds")
                 .ofType(Long.class)
                 .defaultsTo(10_000L);
             numMessagesOpt = parser.accepts("messages", "(DEPRECATED) The number of records to consume. " +
-                            "This option will be removed in a future version. Use --num-records instead")
+                            "This option will be removed in a future version. Use --num-records instead.")
                 .withRequiredArg()
                 .describedAs("count")
                 .ofType(Long.class);
@@ -340,7 +340,7 @@ public class ConsumerPerformance {
                 .describedAs("date format")
                 .ofType(String.class)
                 .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS");
-            hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats");
+            hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats.");
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
@@ -349,6 +349,7 @@ public class ConsumerPerformance {
             }
             if (options != null) {
                 CommandLineUtils.maybePrintHelpOrVersion(this, "This tool is used to verify the consumer performance.");
+                CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
                 CommandLineUtils.checkOneOfArgs(parser, options, topicOpt, includeOpt);
 
                 CommandLineUtils.checkOneOfArgs(parser, options, numMessagesOpt, numRecordsOpt);
