@@ -631,7 +631,8 @@ public class StreamsResetter {
                 .withRequiredArg()
                 .describedAs("number-of-offsets")
                 .ofType(Long.class);
-            configOption = parser.accepts("config-file", "(DEPRECATED) Property file containing configs to be passed to admin clients and embedded consumer.")
+            configOption = parser.accepts("config-file", "(DEPRECATED) Property file containing configs to be passed to admin clients and embedded consumer."
+                    + "This option will be removed in a future version. Use --command-config instead.")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("file name");
