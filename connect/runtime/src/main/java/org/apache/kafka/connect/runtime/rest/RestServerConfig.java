@@ -28,7 +28,6 @@ import org.eclipse.jetty.util.StringUtil;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -54,7 +53,7 @@ public abstract class RestServerConfig extends AbstractConfig {
             " Leave hostname empty to bind to default interface.\n" +
             " Examples of legal listener lists: HTTP://myhost:8083,HTTPS://myhost:8084";
     // Visible for testing
-    static final List<String> LISTENERS_DEFAULT = Collections.singletonList("http://:8083");
+    static final List<String> LISTENERS_DEFAULT = List.of("http://:8083");
 
     public static final String REST_ADVERTISED_HOST_NAME_CONFIG = "rest.advertised.host.name";
     private static final String REST_ADVERTISED_HOST_NAME_DOC
@@ -391,7 +390,7 @@ public abstract class RestServerConfig extends AbstractConfig {
         @Override
         public List<String> adminListeners() {
             // Disable admin resources (such as the logging resource)
-            return Collections.emptyList();
+            return List.of();
         }
 
         @Override
