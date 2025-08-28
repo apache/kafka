@@ -597,7 +597,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .setDefault("earliest")
                 .type(String.class)
                 .dest("resetPolicy")
-                .help("Set reset policy (must be either 'earliest', 'latest', or 'none'");
+                .help("Set reset policy (must be either 'earliest', 'latest', or 'none')");
 
         parser.addArgument("--assignment-strategy")
                 .action(store())
@@ -611,8 +611,17 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .action(store())
                 .required(false)
                 .type(String.class)
-                .metavar("CONFIG_FILE")
-                .help("Consumer config properties file (config options shared with command line parameters will be overridden).");
+                .metavar("CONFIG-FILE")
+                .help("(DEPRECATED) Consumer config properties file" +
+                        "This option will be removed in a future version. Use --command-config instead");
+
+        parser.addArgument("--command-config")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("CONFIG-FILE")
+                .dest("commandConfigFile")
+                .help("Config properties file (config options shared with command line parameters will be overridden).");
 
         return parser;
     }
@@ -622,12 +631,24 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
         String configFile = res.getString("consumer.config");
+        String commandConfigFile = res.getString("commandConfigFile");
         String brokerHostAndPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
+        if (configFile != null && commandConfigFile != null) {
+            throw new ArgumentParserException("Options --consumer.config and --command-config are mutually exclusive.", parser);
+        }
         if (configFile != null) {
+            System.out.println("Option --consumer.config has been deprecated and will be removed in a future version. Use --command-config instead.");
             try {
                 consumerProps.putAll(Utils.loadProps(configFile));
+            } catch (IOException e) {
+                throw new ArgumentParserException(e.getMessage(), parser);
+            }
+        }
+        if (commandConfigFile != null) {
+            try {
+                consumerProps.putAll(Utils.loadProps(res.getString(commandConfigFile)));
             } catch (IOException e) {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }

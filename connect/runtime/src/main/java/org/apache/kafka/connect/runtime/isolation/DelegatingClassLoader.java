@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -259,7 +258,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                         fullName,
                         pluginVersion,
                         range
-                ), Collections.singletonList(pluginVersion));
+                ), List.of(pluginVersion));
             }
         }
     }
