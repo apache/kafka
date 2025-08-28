@@ -1912,6 +1912,8 @@ class KafkaConfigTest {
       props.setProperty(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG, "8999")
       KafkaConfig.fromProps(props)
       assertTrue(appender.getMessages.contains("broker.heartbeat.interval.ms (4500 ms) must be less than or equal to half of the broker.session.timeout.ms (8999 ms). " +
+        "The broker.session.timeout.ms is configured on controller. The broker.heartbeat.interval.ms is configured on broker. " +
+        "If a broker doesn't send heartbeat request within broker.session.timeout.ms, it loses broker lease. " +
         "Please increase broker.session.timeout.ms or decrease broker.heartbeat.interval.ms."))
     }
   }
