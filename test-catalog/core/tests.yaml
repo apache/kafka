@@ -3025,8 +3025,8 @@ kafka.server.share.SharePartitionTest:
 - testAcquireWithBatchSizeAndSingleBatch
 - testAcquireWithEmptyFetchRecords
 - testAcquireWithMaxFetchRecords
-- testAcquireWithMaxInFlightMessagesAndReleaseLastOffset
-- testAcquireWithMaxInFlightMessagesAndTryAcquireNewBatch
+- testAcquireWithMaxInFlightRecordsAndReleaseLastOffset
+- testAcquireWithMaxInFlightRecordsAndTryAcquireNewBatch
 - testAcquireWithMultipleBatchesAndMaxFetchRecords
 - testAcquireWithReadCommittedIsolationLevel
 - testAcquireWithWriteShareGroupStateDelay
