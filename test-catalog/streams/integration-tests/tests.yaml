@@ -224,6 +224,9 @@ org.apache.kafka.streams.integration.RangeQueryIntegrationTest:
 - testStoreConfig
 org.apache.kafka.streams.integration.RebalanceIntegrationTest:
 - shouldCommitAllTasksIfRevokedTaskTriggerPunctuation
+org.apache.kafka.streams.integration.RebalanceProtocolMigrationIntegrationTest:
+- shouldMigrateFromAndToStreamsRebalanceProtocol
+- shouldMigrateToAndFromStreamsRebalanceProtocol
 org.apache.kafka.streams.integration.RegexSourceIntegrationTest:
 - shouldAddStateStoreToRegexDefinedSource
 - testMultipleConsumersCanReadFromPartitionedTopic
