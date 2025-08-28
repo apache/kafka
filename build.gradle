@@ -740,6 +740,7 @@ subprojects {
     // For more details, refer to https://github.com/gradle/gradle/issues/13762.
     // As a result, we need to explicitly configure the Scala compiler with this setting.
     options.compilerArgs += ["--release", String.valueOf(releaseVersion)]
+    options.compilerArgs += ["-Xlint:unchecked"]
 
     configureJavaCompiler(name, options, project.path)
 
