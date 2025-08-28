@@ -37,7 +37,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -614,7 +613,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
+                                        List.of(),
                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)

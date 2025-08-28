@@ -113,7 +113,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testControllerSecurityProtocolMissing(): Unit = {
+  def testControllerSecurityProtocolMapMissing(): Unit = {
     val properties = new Properties()
     properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)

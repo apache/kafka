@@ -138,7 +138,6 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             //    are not included in 'listeners' config when process.roles=broker)
             if (controllerListenerNames().stream().anyMatch(AbstractKafkaConfig::isSslOrSasl) ||
                     getList(SocketServerConfigs.LISTENERS_CONFIG).stream()
-                            .map(String::trim)
                             .anyMatch(listenerName -> isSslOrSasl(parseListenerName(listenerName)))) {
                 return mapValue;
             } else {

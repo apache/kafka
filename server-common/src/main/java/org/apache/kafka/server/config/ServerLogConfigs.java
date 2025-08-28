@@ -39,7 +39,7 @@ public class ServerLogConfigs {
     public static final String LOG_DIRS_CONFIG = LOG_PREFIX + "dirs";
     public static final String LOG_DIR_CONFIG = LOG_PREFIX + "dir";
     public static final List<String> LOG_DIR_DEFAULT = List.of("/tmp/kafka-logs");
-    public static final String LOG_DIR_DOC = "The directories in which the log data is kept (supplemental for " + LOG_DIRS_CONFIG + " property)";
+    public static final String LOG_DIR_DOC = "A comma-separated list of the directories where the log data is stored. (supplemental to " + LOG_DIRS_CONFIG + " property)";
     public static final String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIR_CONFIG + " is used.";
 
     public static final String LOG_SEGMENT_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
