@@ -58,25 +58,54 @@
             </li>
             <li>
                 The option <code>--command-property</code> is used for all command-line tools which accept configuration properties directly on
-                the command line. The tools affected are <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
-                <code>kafka-console-share-consumer.sh</code> (<code>--consumer-property</code> and <code>--producer-property</code> are
-                deprecated in favor of <code>--command-property</code>); and <code>kafka-producer-perf-test.sh</code> (<code>--producer-props</code>
-                is deprecated in favor of <code>--command-property</code>. In addition, <code>--command-property</code> is added to
-                <code>kafka-consumer-perf-test.sh</code> and <code>kafka-share-consumer-perf-test.sh</code> to bring all performance testing tools
-                in line.
+                the command line. The tools affected are:
+                <ul>
+                    <li>
+                        <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
+                        <code>kafka-console-share-consumer.sh</code> (<code>--consumer-property</code> and <code>--producer-property</code> are
+                        deprecated in favor of <code>--command-property</code>)
+                    </li>
+                    <li>
+                        <code>kafka-producer-perf-test.sh</code> (<code>--producer-props</code> is deprecated in favor of <code>--command-property</code>)
+                    </li>
+                    <li>
+                        <code>--command-property</code> is added to <code>kafka-consumer-perf-test.sh</code> and
+                        <code>kafka-share-consumer-perf-test.sh</code> to bring all performance testing tools in line
+                    </li>
+                </ul>
             </li>
             <li>
                 The option <code>--command-config</code> is used for all command-line tools which accept a file of configuration properties.
-                The tools affected are <code>kafka-cluster.sh</code> (<code>--config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
-                <code>kafka-console-share-consumer.sh</code> (<code>--consumer.config</code> and <code>--producer.config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-consumer-perf-test.sh</code> (<code>--consumer.config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-producer-perf-test.sh</code> (<code>--producer.config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-share-consumer-perf-test.sh</code> (<code>--consumer.config</code> deprecated in favor of
-                <code>--command-config</code>); <code>kafka-verifiable-consumer.sh</code> and <code>kafka-verifiable-producer.sh</code>
-                (<code>--consumer.config</code> and <code>--producer.config</code> deprecated in favor of <code>--command-config</code>);
-                <code>kafka-leader-election.sh</code> (<code>--admin.config</code> deprecated in favor of <code>--command-config</code>); and
-                <code>kafka-streams-application-reset.sh</code> (<code>--config-file</code> deprecated in favor of <code>--command-config</code>).
+                The tools affected are:
+                <ul>
+                    <li>
+                        <code>kafka-cluster.sh</code> (<code>--config</code> deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
+                        <code>kafka-console-share-consumer.sh</code> (<code>--consumer.config</code> and <code>--producer.config</code> deprecated in favor of
+                        <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-consumer-perf-test.sh</code> (<code>--consumer.config</code> deprecated in favor of<code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-producer-perf-test.sh</code> (<code>--producer.config</code> deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-share-consumer-perf-test.sh</code> (<code>--consumer.config</code> deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-verifiable-consumer.sh</code> and <code>kafka-verifiable-producer.sh</code>
+                        (<code>--consumer.config</code> and <code>--producer.config</code> deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-leader-election.sh</code> (<code>--admin.config</code> deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-streams-application-reset.sh</code> (<code>--config-file</code> deprecated in favor of <code>--command-config</code>)
+                    </li>
+                </ul>
             </li>
             <li>
                 In <code>kafka-console-consumer.sh</code> and <code>kafka-console-share-consumer.sh</code>, the option <code>--property</code>
