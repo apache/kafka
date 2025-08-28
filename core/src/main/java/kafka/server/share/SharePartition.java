@@ -175,11 +175,11 @@ public class SharePartition {
     private final AtomicReference<Uuid> fetchLock;
 
     /**
-     * The max in-flight messages is used to limit the number of records that can be in-flight at any
-     * given time. The max in-flight messages is used to prevent the consumer from fetching too many
+     * The max in-flight records is used to limit the number of records that can be in-flight at any
+     * given time. The max in-flight records is used to prevent the consumer from fetching too many
      * records from the leader and running out of memory.
      */
-    private final int maxInFlightMessages;
+    private final int maxInFlightRecords;
 
     /**
      * The max delivery count is used to limit the number of times a record can be delivered to the
@@ -305,7 +305,7 @@ public class SharePartition {
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightMessages,
+        int maxInFlightRecords,
         int maxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
@@ -315,7 +315,7 @@ public class SharePartition {
         GroupConfigManager groupConfigManager,
         SharePartitionListener listener
     ) {
-        this(groupId, topicIdPartition, leaderEpoch, maxInFlightMessages, maxDeliveryCount, defaultRecordLockDurationMs,
+        this(groupId, topicIdPartition, leaderEpoch, maxInFlightRecords, maxDeliveryCount, defaultRecordLockDurationMs,
             timer, time, persister, replicaManager, groupConfigManager, SharePartitionState.EMPTY, listener,
             new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()));
     }
@@ -326,7 +326,7 @@ public class SharePartition {
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightMessages,
+        int maxInFlightRecords,
         int maxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
@@ -341,7 +341,7 @@ public class SharePartition {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
         this.leaderEpoch = leaderEpoch;
-        this.maxInFlightMessages = maxInFlightMessages;
+        this.maxInFlightRecords = maxInFlightRecords;
         this.maxDeliveryCount = maxDeliveryCount;
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
@@ -1302,7 +1302,7 @@ public class SharePartition {
 
     /**
      * Checks if the records can be acquired for the share partition. The records can be acquired if
-     * the number of records in-flight is less than the max in-flight messages. Or if the fetch is
+     * the number of records in-flight is less than the max in-flight records. Or if the fetch is
      * to happen somewhere in between the record states cached in the share partition i.e. re-acquire
      * the records that are already fetched before.
      *
@@ -1312,7 +1312,7 @@ public class SharePartition {
         if (nextFetchOffset() != endOffset() + 1) {
             return true;
         }
-        return numInFlightRecords() < maxInFlightMessages;
+        return numInFlightRecords() < maxInFlightRecords;
     }
 
     /**
@@ -1492,7 +1492,7 @@ public class SharePartition {
 
     /**
      * The method calculates the last offset and maximum records to acquire. The adjustment is needed
-     * to ensure that the records acquired do not exceed the maximum in-flight messages limit.
+     * to ensure that the records acquired do not exceed the maximum in-flight records limit.
      *
      * @param fetchOffset The offset from which the records are fetched.
      * @param maxFetchRecords The maximum number of records to acquire.
@@ -1500,16 +1500,16 @@ public class SharePartition {
      * @return LastOffsetAndMaxRecords object, containing the last offset to acquire and the maximum records to acquire.
      */
     private LastOffsetAndMaxRecords lastOffsetAndMaxRecordsToAcquire(long fetchOffset, int maxFetchRecords, long lastOffset) {
-        // There can always be records fetched exceeding the max in-flight messages limit. Hence,
-        // we need to check if the share partition has reached the max in-flight messages limit
+        // There can always be records fetched exceeding the max in-flight records limit. Hence,
+        // we need to check if the share partition has reached the max in-flight records limit
         // and only acquire limited records.
         int maxRecordsToAcquire;
         long lastOffsetToAcquire = lastOffset;
         lock.readLock().lock();
         try {
             int inFlightRecordsCount = numInFlightRecords();
-            // Take minimum of maxFetchRecords and remaining capacity to fill max in-flight messages limit.
-            maxRecordsToAcquire = Math.min(maxFetchRecords, maxInFlightMessages - inFlightRecordsCount);
+            // Take minimum of maxFetchRecords and remaining capacity to fill max in-flight records limit.
+            maxRecordsToAcquire = Math.min(maxFetchRecords, maxInFlightRecords - inFlightRecordsCount);
             // If the maxRecordsToAcquire is less than or equal to 0, then ideally (check exists to not
             // fetch records for share partitions which are at capacity) the fetch must be happening
             // in-between the in-flight batches i.e. some in-flight records have been released (marked
@@ -1522,15 +1522,15 @@ public class SharePartition {
             if (maxRecordsToAcquire <= 0) {
                 if (fetchOffset <= endOffset()) {
                     // Adjust the max records to acquire to the capacity available to fill the max
-                    // in-flight messages limit. This can happen when the fetch is happening in-between
-                    // the in-flight batches and the share partition has reached the max in-flight messages limit.
+                    // in-flight records limit. This can happen when the fetch is happening in-between
+                    // the in-flight batches and the share partition has reached the max in-flight records limit.
                     maxRecordsToAcquire = Math.min(maxFetchRecords, (int) (endOffset() - fetchOffset + 1));
                     // Adjust the last offset to acquire to the endOffset of the share partition.
                     lastOffsetToAcquire = endOffset();
                 } else {
-                    // The share partition is already at max in-flight messages, hence cannot acquire more records.
-                    log.debug("Share partition {}-{} has reached max in-flight messages limit: {}. Cannot acquire more records, inflight records count: {}",
-                        groupId, topicIdPartition, maxInFlightMessages, inFlightRecordsCount);
+                    // The share partition is already at max in-flight records, hence cannot acquire more records.
+                    log.debug("Share partition {}-{} has reached max in-flight records limit: {}. Cannot acquire more records, inflight records count: {}",
+                        groupId, topicIdPartition, maxInFlightRecords, inFlightRecordsCount);
                 }
             }
         } finally {
@@ -1558,13 +1558,13 @@ public class SharePartition {
                 firstAcquiredOffset = endOffset;
             }
 
-            // Check how many messages can be acquired from the batch.
+            // Check how many records can be acquired from the batch.
             long lastAcquiredOffset = lastOffset;
             if (maxFetchRecords < lastAcquiredOffset - firstAcquiredOffset + 1) {
-                // The max messages to acquire is less than the complete available batches hence
+                // The max records to acquire is less than the complete available batches hence
                 // limit the acquired records. The last offset shall be the batches last offset
-                // which falls under the max messages limit. As the max fetch records is the soft
-                // limit, the last offset can be higher than the max messages.
+                // which falls under the max records limit. As the max fetch records is the soft
+                // limit, the last offset can be higher than the max records.
                 lastAcquiredOffset = lastOffsetFromBatchWithRequestOffset(batches, firstAcquiredOffset + maxFetchRecords - 1);
                 // If the initial read gap offset window is active then it's not guaranteed that the
                 // batches align on batch boundaries. Hence, reset to last offset itself if the batch's
@@ -2193,7 +2193,7 @@ public class SharePartition {
              a) Only full batches can be removed from the cachedState, For example if there is batch (0-99)
              and 0-49 records are acknowledged (ACCEPT or REJECT), the first 50 records will not be removed
              from the cachedState. Instead, the startOffset will be moved to 50, but the batch will only
-             be removed once all the messages (0-99) are acknowledged (ACCEPT or REJECT).
+             be removed once all the records (0-99) are acknowledged (ACCEPT or REJECT).
             */
 
             // Since only a subMap will be removed, we need to find the first and last keys of that subMap
