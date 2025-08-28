@@ -139,12 +139,12 @@ public class StreamsResetter {
             } else {
                 commandConfigFile = options.commandConfig();
             }
+            Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
             String bootstrapServerValue = "localhost:9092";
             if (options.hasBootstrapServer()) {
                 bootstrapServerValue = options.bootstrapServer();
             }
-            Properties properties = commandConfigFile != null ? Utils.loadProps(commandConfigFile) : new Properties();
 
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 

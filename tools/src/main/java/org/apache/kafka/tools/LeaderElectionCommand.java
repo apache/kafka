@@ -108,7 +108,7 @@ public class LeaderElectionCommand {
         } else {
             commandConfigFile = commandOptions.getAdminClientCommandConfig();
         }
-        Properties props = commandConfigFile != null ? Utils.loadProps(commandConfigFile) : new Properties();
+        Properties props = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOptions.getBootstrapServer());
         if (!props.containsKey(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {

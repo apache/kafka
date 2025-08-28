@@ -111,7 +111,7 @@ public class ClusterTool {
             System.out.println("Option --config has been deprecated and will be removed in a future version. Use --command-config instead.");
             commandConfigFile = configFile;
         }
-        Properties properties = (commandConfigFile == null) ? new Properties() : Utils.loadProps(commandConfigFile);
+        Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
         CommandLineUtils.initializeBootstrapProperties(properties,
                 Optional.ofNullable(namespace.getString("bootstrap_server")),
