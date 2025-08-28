@@ -28,7 +28,6 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.DataException;
-import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.HashMap;
