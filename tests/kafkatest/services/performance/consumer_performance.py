@@ -40,7 +40,7 @@ class ConsumerPerformanceService(PerformanceService):
         "socket-buffer-size", "The size of the tcp RECV size."
 
         "new-consumer", "Use the new consumer implementation."
-        "command-config", "Consumer config properties file."
+        "command-config", "Config properties file."
     """
 
     # Root directory for persistent output

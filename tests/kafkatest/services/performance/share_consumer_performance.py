@@ -33,7 +33,7 @@ class ShareConsumerPerformanceService(PerformanceService):
 
         "socket-buffer-size", "The size of the tcp RECV size."
 
-        "command-config", "Share consumer config properties file."
+        "command-config", "Config properties file."
     """
 
     # Root directory for persistent output
