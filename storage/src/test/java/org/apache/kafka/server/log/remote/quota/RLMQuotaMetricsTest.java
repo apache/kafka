@@ -58,7 +58,7 @@ public class RLMQuotaMetricsTest {
 
         // Register the sensor
         quotaMetrics.sensor();
-        var avg = metrics.metricName("metric" + "-avg", "group", String.format("format", "average"));
+        var avg = metrics.metricName("metric" + "-avg", "group", "average");
 
         // Verify that metrics are created
         assertNotNull(metrics.metric(avg));
