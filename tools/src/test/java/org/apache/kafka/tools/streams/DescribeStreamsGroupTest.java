@@ -34,7 +34,6 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -102,7 +101,7 @@ public class DescribeStreamsGroupTest {
     public void testDescribeWithUnrecognizedOption() {
         String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", bootstrapServers, "--describe", "--group", APP_ID};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
-        validateDescribeExitCode(args, 1);
+        assertEquals(1, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -133,12 +132,12 @@ public class DescribeStreamsGroupTest {
         final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--group", APP_ID};
         validateDescribeOutput(
                 Arrays.asList(args1), expectedHeader, expectedRows, List.of());
-        validateDescribeExitCode(args1, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args1));
         // --describe --offsets has the same output as --describe
         final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--group", APP_ID};
         validateDescribeOutput(
                 Arrays.asList(args2), expectedHeader, expectedRows, List.of());
-        validateDescribeExitCode(args2, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args2));
     }
 
     @Test
@@ -153,16 +152,16 @@ public class DescribeStreamsGroupTest {
         final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
                 Arrays.asList(args1), expectedHeader, expectedRows, List.of());
-        validateDescribeExitCode(args1, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args1));
         // --describe --offsets has the same output as --describe
         final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--offsets", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
                 Arrays.asList(args2), expectedHeader, expectedRows, List.of());
-        validateDescribeExitCode(args2, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args2));
         final String[] args3 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--offsets", "--group", APP_ID};
         validateDescribeOutput(
                 Arrays.asList(args3), expectedHeader, expectedRows, List.of());
-        validateDescribeExitCode(args3, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args3));
     }
 
     @Test
@@ -174,7 +173,7 @@ public class DescribeStreamsGroupTest {
         final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--state", "--group", APP_ID};
         validateDescribeOutput(
             Arrays.asList(args), expectedHeader, expectedRows, dontCares);
-        validateDescribeExitCode(args, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -187,11 +186,11 @@ public class DescribeStreamsGroupTest {
         final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--state", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
             Arrays.asList(args1), expectedHeader, expectedRows, dontCares);
-        validateDescribeExitCode(args1, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args1));
         final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--state", "--group", APP_ID};
         validateDescribeOutput(
             Arrays.asList(args2), expectedHeader, expectedRows, dontCares);
-        validateDescribeExitCode(args2, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args2));
     }
 
     @Test
@@ -206,7 +205,7 @@ public class DescribeStreamsGroupTest {
         final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--group", APP_ID};
         validateDescribeOutput(
             Arrays.asList(args), expectedHeader, expectedRows, dontCares);
-        validateDescribeExitCode(args, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -221,11 +220,11 @@ public class DescribeStreamsGroupTest {
         final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID};
         validateDescribeOutput(
             Arrays.asList(args1), expectedHeader, expectedRows, dontCares);
-        validateDescribeExitCode(args1, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args1));
         final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID};
         validateDescribeOutput(
             Arrays.asList(args2), expectedHeader, expectedRows, dontCares);
-        validateDescribeExitCode(args2, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args2));
     }
 
     @Test
@@ -252,17 +251,17 @@ public class DescribeStreamsGroupTest {
         validateDescribeOutput(
             Arrays.asList(args1),
             expectedHeader, expectedRowsMap, dontCares);
-        validateDescribeExitCode(args1, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args1));
         final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", APP_ID, "--group", APP_ID_2};
         validateDescribeOutput(
             Arrays.asList(args2),
             expectedHeader, expectedRowsMap, dontCares);
-        validateDescribeExitCode(args2, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args2));
         final String[] args3 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--all-groups"};
         validateDescribeOutput(
             Arrays.asList(args3),
             expectedHeader, expectedRowsMap, dontCares);
-        validateDescribeExitCode(args3, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args3));
 
         streams2.close();
         streams2.cleanUp();
@@ -278,11 +277,11 @@ public class DescribeStreamsGroupTest {
         final String[] args1 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", nonExistingGroup};
         validateDescribeOutput(
             Arrays.asList(args1), errorMessage);
-        validateDescribeExitCode(args1, 1);
+        assertEquals(1, StreamsGroupCommand.execute(args1));
         final String[] args2 = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--group", nonExistingGroup};
         validateDescribeOutput(
             Arrays.asList(args2), errorMessage);
-        validateDescribeExitCode(args2, 1);
+        assertEquals(1, StreamsGroupCommand.execute(args2));
     }
 
     @Test
@@ -290,7 +289,7 @@ public class DescribeStreamsGroupTest {
         final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--timeout", "1"};
         Throwable e = assertThrows(ExecutionException.class, () -> getStreamsGroupService(args).describeGroups());
         assertEquals(TimeoutException.class, e.getCause().getClass());
-        validateDescribeExitCode(args, 1);
+        assertEquals(1, StreamsGroupCommand.execute(args));
     }
 
     private static Topology topology(String inputTopic, String outputTopic) {
@@ -445,28 +444,5 @@ public class DescribeStreamsGroupTest {
             }
         }
         return groupdescMap;
-    }
-
-    /**
-     * Executes the StreamsGroupCommand with the given arguments and validates the exit code.
-     * <p>
-     * This helper method is used to test scenarios where the command is expected to exit
-     * with a specific status code (e.g., 0 for success, 1 for an error). It captures the
-     * exit code by using a mock {@link Exit.Procedure} and asserts that it matches the
-     * expected value.
-     *
-     * @param args             The command-line arguments to pass to the StreamsGroupCommand.
-     * @param expectedExitCode The expected exit code from the command execution.
-     */
-    private static void validateDescribeExitCode(String[] args, int expectedExitCode) {
-        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-        Exit.setExitProcedure(exitProcedure);
-        try {
-            StreamsGroupCommand.main(args);
-            Assertions.assertEquals(expectedExitCode, exitProcedure.statusCode());
-        } finally {
-            Exit.resetExitProcedure();
-        }
-
     }
 }

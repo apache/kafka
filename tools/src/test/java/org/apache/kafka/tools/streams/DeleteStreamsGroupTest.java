@@ -48,7 +48,6 @@ import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -130,7 +129,7 @@ public class DeleteStreamsGroupTest {
     public void testDeleteWithUnrecognizedOption() {
         final String[] args = new String[]{"--unrecognized-option", "--bootstrap-server", bootstrapServers, "--delete", "--all-groups"};
         assertThrows(OptionException.class, () -> getStreamsGroupService(args));
-        validateDeleteExitCode(args, 1);
+        assertEquals(1, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -211,7 +210,7 @@ public class DeleteStreamsGroupTest {
                 result.get(appId),
                 "The expected error was not detected while deleting streams group");
         }
-        validateDeleteExitCode(args, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -235,7 +234,7 @@ public class DeleteStreamsGroupTest {
             TestUtils.waitForCondition(() -> getInternalTopics(appId).isEmpty(),
                 "The internal topics of the streams group " + appId + " were not deleted as expected.");
         }
-        validateDeleteExitCode(args, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -246,7 +245,7 @@ public class DeleteStreamsGroupTest {
 
         String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups"};
 
-        validateDeleteExitCode(args, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args));
 
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
         KafkaStreams streams1 = startKSApp(appId1, service);
@@ -346,7 +345,7 @@ public class DeleteStreamsGroupTest {
 
         String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups", "--delete-all-internal-topics"};
 
-        validateDeleteExitCode(args, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args));
 
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args);
         KafkaStreams streams1 = startKSApp(appId1, service);
@@ -572,27 +571,5 @@ public class DeleteStreamsGroupTest {
             .count()
             .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
         return builder;
-    }
-
-    /**
-     * Executes the StreamsGroupCommand with the given arguments and validates the exit code.
-     * <p>
-     * This helper method is used to test scenarios where the command is expected to exit
-     * with a specific status code (e.g., 0 for success, 1 for an error). It captures the
-     * exit code by using a mock {@link Exit.Procedure} and asserts that it matches the
-     * expected value.
-     *
-     * @param args             The command-line arguments to pass to the StreamsGroupCommand.
-     * @param expectedExitCode The expected exit code from the command execution.
-     */
-    private static void validateDeleteExitCode(String[] args, int expectedExitCode) {
-        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-        Exit.setExitProcedure(exitProcedure);
-        try {
-            StreamsGroupCommand.main(args);
-            Assertions.assertEquals(expectedExitCode, exitProcedure.statusCode());
-        } finally {
-            Exit.resetExitProcedure();
-        }
     }
 }

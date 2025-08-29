@@ -57,6 +57,7 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -113,14 +114,14 @@ public class ListStreamsGroupTest {
             }, "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
 
         }
-        validateListExitCode(args, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
     public void testListWithUnrecognizedNewOption() {
         String[] cgcArgs = new String[]{"--new-option", "--bootstrap-server", cluster.bootstrapServers(), "--list"};
         Assertions.assertThrows(OptionException.class, () -> getStreamsGroupService(cgcArgs));
-        validateListExitCode(cgcArgs, 1);
+        assertEquals(1, StreamsGroupCommand.execute(cgcArgs));
     }
 
     @Test
@@ -142,7 +143,7 @@ public class ListStreamsGroupTest {
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
-        validateListExitCode(args, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args));
     }
 
     @Test
@@ -164,7 +165,7 @@ public class ListStreamsGroupTest {
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
-        validateListExitCode(args1, 0);
+        assertEquals(0, StreamsGroupCommand.execute(args1));
         final String[] args2 = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"};
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args2)) {
             Set<GroupListing> expectedListing = Set.of();
@@ -176,7 +177,7 @@ public class ListStreamsGroupTest {
                 return Objects.equals(expectedListing, foundListing.get());
             }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
-        validateListExitCode(args2, 1);
+        assertEquals(1, StreamsGroupCommand.execute(args2));
     }
 
     @Test
@@ -250,28 +251,6 @@ public class ListStreamsGroupTest {
                     .collect(Collectors.toSet());
                 return expectedRows.equals(groups);
             }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
-        } finally {
-            Exit.resetExitProcedure();
-        }
-
-    }
-    /**
-     * Executes the StreamsGroupCommand with the given arguments and validates the exit code.
-     * <p>
-     * This helper method is used to test scenarios where the command is expected to exit
-     * with a specific status code (e.g., 0 for success, 1 for an error). It captures the
-     * exit code by using a mock {@link Exit.Procedure} and asserts that it matches the
-     * expected value.
-     *
-     * @param args             The command-line arguments to pass to the StreamsGroupCommand.
-     * @param expectedExitCode The expected exit code from the command execution.
-     */
-    private static void validateListExitCode(String[] args, int expectedExitCode) {
-        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-        Exit.setExitProcedure(exitProcedure);
-        try {
-            StreamsGroupCommand.main(args);
-            Assertions.assertEquals(expectedExitCode, exitProcedure.statusCode());
         } finally {
             Exit.resetExitProcedure();
         }
