@@ -360,7 +360,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
-    private final SharedConsumerState sharedConsumerState;
+    private final ThreadSafeAsyncConsumerState threadSafeConsumerState;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
@@ -462,7 +462,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
-            this.sharedConsumerState = new SharedConsumerState(
+            this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
                 logContext,
                 metadata,
                 subscriptions,
@@ -481,7 +481,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     backgroundEventHandler,
                     false,
                     kafkaConsumerMetrics,
-                    sharedConsumerState
+                    threadSafeConsumerState
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
@@ -501,7 +501,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker,
                     memberStateListener,
                     streamsRebalanceData,
-                    sharedConsumerState
+                    threadSafeConsumerState
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -516,7 +516,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
                     kafkaConsumerMetrics,
-                    sharedConsumerState
+                    threadSafeConsumerState
             );
             this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
@@ -574,7 +574,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        int defaultApiTimeoutMs,
                        String groupId,
                        boolean autoCommitEnabled,
-                       SharedConsumerState sharedConsumerState) {
+                       ThreadSafeAsyncConsumerState threadSafeConsumerState) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -604,7 +604,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             time,
             kafkaConsumerMetrics
         );
-        this.sharedConsumerState = sharedConsumerState;
+        this.threadSafeConsumerState = threadSafeConsumerState;
     }
 
     AsyncKafkaConsumer(LogContext logContext,
@@ -663,7 +663,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             new RebalanceCallbackMetricsManager(metrics)
         );
         ApiVersions apiVersions = new ApiVersions();
-        this.sharedConsumerState = new SharedConsumerState(
+        this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
             logContext,
             metadata,
             subscriptions,
@@ -680,7 +680,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             backgroundEventHandler,
             false,
             kafkaConsumerMetrics,
-            sharedConsumerState
+            threadSafeConsumerState
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
@@ -700,7 +700,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetCommitCallbackInvoker,
             memberStateListener,
             Optional.empty(),
-            sharedConsumerState
+            threadSafeConsumerState
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -716,7 +716,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
                 kafkaConsumerMetrics,
-                sharedConsumerState);
+                threadSafeConsumerState);
         this.backgroundEventProcessor = new BackgroundEventProcessor();
         this.backgroundEventReaper = new CompletableEventReaper(logContext);
     }
@@ -733,7 +733,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
             final Supplier<RequestManagers> requestManagersSupplier,
             final AsyncConsumerMetrics asyncConsumerMetrics,
-            final SharedConsumerState sharedConsumerState
+            final ThreadSafeConsumerState threadSafeConsumerState
         );
 
     }
@@ -1879,7 +1879,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // Instead, let the *application thread* determine if any partitions need their positions updated. If not,
         // the application thread can skip sending an event to the network thread that will simply end up coming
         // to the same conclusion, albeit much slower.
-        if (sharedConsumerState.canSkipUpdateFetchPositions())
+        if (threadSafeConsumerState.canSkipUpdateFetchPositions())
             return true;
 
         try {

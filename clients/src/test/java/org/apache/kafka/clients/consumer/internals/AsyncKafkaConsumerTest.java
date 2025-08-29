@@ -275,7 +275,7 @@ public class AsyncKafkaConsumerTest {
             defaultApiTimeoutMs,
             "group-id",
             false,
-            new SharedConsumerState(logContext, metadata, subscriptions, time, retryBackoffMs));
+            new ThreadSafeAsyncConsumerState(logContext, metadata, subscriptions, time, retryBackoffMs));
     }
 
     @Test

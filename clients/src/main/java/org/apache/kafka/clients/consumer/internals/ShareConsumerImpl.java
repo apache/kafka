@@ -268,14 +268,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new ShareFetchBuffer(logContext);
-            SharedConsumerState sharedConsumerState = new SharedConsumerState(
-                    logContext,
-                    metadata,
-                    subscriptions,
-                    time,
-                    groupRebalanceConfig.retryBackoffMs,
-                    apiVersions
-            );
+            ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeConsumerState();
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
                     time,
                     logContext,
@@ -288,7 +281,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     backgroundEventHandler,
                     true,
                     asyncConsumerMetrics,
-                    sharedConsumerState
+                    threadSafeConsumerState
             );
             this.completedAcknowledgements = new LinkedList<>();
 
@@ -321,7 +314,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
                     asyncConsumerMetrics,
-                    sharedConsumerState);
+                    threadSafeConsumerState);
 
             this.backgroundEventProcessor = new BackgroundEventProcessor();
             this.backgroundEventReaper = backgroundEventReaperFactory.build(logContext);
@@ -392,15 +385,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
             backgroundEventQueue, time, asyncConsumerMetrics);
 
-        SharedConsumerState sharedConsumerState = new SharedConsumerState(
-                logContext,
-                metadata,
-                subscriptions,
-                time,
-                config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG)
-        );
+        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeConsumerState();
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =
-                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics, sharedConsumerState);
+                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics, threadSafeConsumerState);
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -435,7 +422,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
                 asyncConsumerMetrics,
-                sharedConsumerState);
+                threadSafeConsumerState);
 
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
@@ -500,7 +487,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                 final Supplier<RequestManagers> requestManagersSupplier,
                 final AsyncConsumerMetrics asyncConsumerMetrics,
-                final SharedConsumerState sharedConsumerState
+                final ThreadSafeConsumerState threadSafeConsumerState
         );
     }
 

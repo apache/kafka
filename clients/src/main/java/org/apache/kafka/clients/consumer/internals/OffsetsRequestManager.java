@@ -92,7 +92,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
-    private final SharedExceptionReference updatePositionsError;
+    private final ThreadSafeExceptionReference positionsUpdateError;
 
     /**
      * This holds the last OffsetFetch request triggered to retrieve committed offsets to update
@@ -112,7 +112,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final CommitRequestManager commitRequestManager,
-                                 final SharedConsumerState sharedConsumerState,
+                                 final ThreadSafeAsyncConsumerState threadSafeConsumerState,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
@@ -133,13 +133,13 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
-        this.offsetFetcherUtils = sharedConsumerState.offsetFetcherUtils();
+        this.offsetFetcherUtils = threadSafeConsumerState.offsetFetcherUtils();
         // Register the cluster metadata update callback. Note this only relies on the
         // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
         this.commitRequestManager = commitRequestManager;
-        this.updatePositionsError = sharedConsumerState.updatePositionsError();
+        this.positionsUpdateError = threadSafeConsumerState.positionsUpdateError();
     }
 
     private static class PendingFetchCommittedRequest {
@@ -257,7 +257,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     }
 
     private boolean maybeCompleteWithPreviousException(CompletableFuture<Boolean> result) {
-        return updatePositionsError.getClearAndRun(result::completeExceptionally);
+        return positionsUpdateError.getClearAndRun(result::completeExceptionally);
     }
 
     /**
@@ -307,7 +307,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         result.whenComplete((__, error) -> {
             boolean updatePositionsExpired = time.milliseconds() >= deadlineMs;
             if (error != null && updatePositionsExpired) {
-                updatePositionsError.set(error);
+                positionsUpdateError.set(error);
             }
         });
     }

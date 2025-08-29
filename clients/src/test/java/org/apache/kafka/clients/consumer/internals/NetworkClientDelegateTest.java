@@ -72,18 +72,18 @@ public class NetworkClientDelegateTest {
     private MockClient client;
     private Metadata metadata;
     private BackgroundEventHandler backgroundEventHandler;
-    private SharedConsumerState sharedConsumerState;
+    private ThreadSafeConsumerState threadSafeConsumerState;
 
     @BeforeEach
     public void setup() {
         this.time = new MockTime(0);
         this.metadata = mock(Metadata.class);
         this.backgroundEventHandler = mock(BackgroundEventHandler.class);
-        this.sharedConsumerState = mock(SharedConsumerState.class);
+        this.threadSafeConsumerState = mock(ThreadSafeConsumerState.class);
         this.client = new MockClient(time, Collections.singletonList(mockNode()));
 
-        SharedExceptionReference metadataError = new SharedExceptionReference();
-        when(this.sharedConsumerState.metadataError()).thenReturn(metadataError);
+        ThreadSafeExceptionReference metadataError = new ThreadSafeExceptionReference();
+        when(this.threadSafeConsumerState.metadataError()).thenReturn(metadataError);
     }
 
     @Test
@@ -223,7 +223,7 @@ public class NetworkClientDelegateTest {
         doThrow(authException).when(metadata).maybeThrowAnyException();
 
         NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false);
-        SharedExceptionReference metadataErrorRef = sharedConsumerState.metadataError();
+        ThreadSafeExceptionReference metadataErrorRef = threadSafeConsumerState.metadataError();
         assertTrue(metadataErrorRef.getAndClear().isEmpty());
         networkClientDelegate.poll(0, time.milliseconds());
 
@@ -304,7 +304,7 @@ public class NetworkClientDelegateTest {
                 this.backgroundEventHandler,
                 notifyMetadataErrorsViaErrorQueue,
                 asyncConsumerMetrics,
-                sharedConsumerState
+                threadSafeConsumerState
         );
     }
 

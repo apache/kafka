@@ -70,7 +70,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
-    private final SharedExceptionReference metadataError;
+    private final ThreadSafeExceptionReference metadataError;
     private final boolean notifyMetadataErrorsViaErrorQueue;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
@@ -83,7 +83,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             final BackgroundEventHandler backgroundEventHandler,
             final boolean notifyMetadataErrorsViaErrorQueue,
             final AsyncConsumerMetrics asyncConsumerMetrics,
-            final SharedConsumerState sharedConsumerState) {
+            final ThreadSafeConsumerState threadSafeConsumerState) {
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -92,7 +92,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.metadataError = sharedConsumerState.metadataError();
+        this.metadataError = threadSafeConsumerState.metadataError();
         this.notifyMetadataErrorsViaErrorQueue = notifyMetadataErrorsViaErrorQueue;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
@@ -449,7 +449,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final BackgroundEventHandler backgroundEventHandler,
                                                            final boolean notifyMetadataErrorsViaErrorQueue,
                                                            final AsyncConsumerMetrics asyncConsumerMetrics,
-                                                           final SharedConsumerState sharedConsumerState) {
+                                                           final ThreadSafeConsumerState threadSafeConsumerState) {
         return new CachedSupplier<>() {
             @Override
             protected NetworkClientDelegate create() {
@@ -463,7 +463,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                         metadata,
                         throttleTimeSensor,
                         clientTelemetrySender);
-                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics, sharedConsumerState);
+                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics, threadSafeConsumerState);
             }
         };
     }

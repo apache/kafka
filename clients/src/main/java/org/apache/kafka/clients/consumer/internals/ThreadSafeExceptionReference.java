@@ -22,10 +22,10 @@ import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
 
 /**
- * {@code SharedErrorReference} builds on top of {@link SharedReference} both to be more explicit about the contents
- * and to provide utility methods.
+ * {@code ThreadSafeExceptionReference} builds on top of {@link ThreadSafeReference} both to be more explicit
+ * about the contents and to provide utility methods.
  */
-public class SharedExceptionReference extends SharedReference<Throwable> {
+public class ThreadSafeExceptionReference extends ThreadSafeReference<Throwable> {
 
     private static final Consumer<Throwable> THROW_EXCEPTION = exception -> {
         // Unwrap the ExecutionException to model what ConsumerUtils.getResult() does when handling exceptions

@@ -63,7 +63,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final Supplier<NetworkClientDelegate> networkClientDelegateSupplier;
     private final Supplier<RequestManagers> requestManagersSupplier;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
-    private final SharedExceptionReference metadataError;
+    private final ThreadSafeExceptionReference metadataError;
     private ApplicationEventProcessor applicationEventProcessor;
     private NetworkClientDelegate networkClientDelegate;
     private RequestManagers requestManagers;
@@ -81,7 +81,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                                  Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                  Supplier<RequestManagers> requestManagersSupplier,
                                  AsyncConsumerMetrics asyncConsumerMetrics,
-                                 SharedConsumerState sharedConsumerState) {
+                                 ThreadSafeConsumerState threadSafeConsumerState) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
@@ -92,7 +92,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.requestManagersSupplier = requestManagersSupplier;
         this.running = true;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
-        this.metadataError = sharedConsumerState.metadataError();
+        this.metadataError = threadSafeConsumerState.metadataError();
     }
 
     @Override

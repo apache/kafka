@@ -68,7 +68,7 @@ public class ConsumerNetworkThreadTest {
     private final RequestManagers requestManagers;
     private final CompletableEventReaper applicationEventReaper;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
-    private final SharedConsumerState sharedConsumerState;
+    private final ThreadSafeConsumerState threadSafeConsumerState;
 
     ConsumerNetworkThreadTest() {
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
@@ -81,7 +81,7 @@ public class ConsumerNetworkThreadTest {
         this.time = new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.asyncConsumerMetrics = mock(AsyncConsumerMetrics.class);
-        this.sharedConsumerState = mock(SharedConsumerState.class);
+        this.threadSafeConsumerState = mock(ThreadSafeConsumerState.class);
         LogContext logContext = new LogContext();
 
         this.consumerNetworkThread = new ConsumerNetworkThread(
@@ -93,7 +93,7 @@ public class ConsumerNetworkThreadTest {
                 () -> networkClientDelegate,
                 () -> requestManagers,
                 asyncConsumerMetrics,
-                sharedConsumerState
+                threadSafeConsumerState
         );
     }
 
@@ -222,7 +222,7 @@ public class ConsumerNetworkThreadTest {
                      () -> networkClientDelegate,
                      () -> requestManagers,
                      asyncConsumerMetrics,
-                     sharedConsumerState
+                     threadSafeConsumerState
              )) {
             consumerNetworkThread.initializeResources();
 
@@ -257,7 +257,7 @@ public class ConsumerNetworkThreadTest {
                      () -> networkClientDelegate,
                      () -> requestManagers,
                      asyncConsumerMetrics,
-                     sharedConsumerState
+                     threadSafeConsumerState
              )) {
             consumerNetworkThread.initializeResources();
 
@@ -336,7 +336,7 @@ public class ConsumerNetworkThreadTest {
             networkClientDelegateSupplier,
             requestManagersSupplier,
             asyncConsumerMetrics,
-            sharedConsumerState
+            threadSafeConsumerState
         )) {
             assertThrows(KafkaException.class, thread::initializeResources, "initializeResources should fail because one or more Supplier throws an error on get()");
             assertDoesNotThrow(thread::cleanup, "cleanup() should not cause an error because all references are checked before use");

@@ -43,7 +43,7 @@ public class ApplicationEventHandlerTest {
     private final NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
     private final RequestManagers requestManagers = mock(RequestManagers.class);
     private final CompletableEventReaper applicationEventReaper = mock(CompletableEventReaper.class);
-    private final SharedConsumerState sharedConsumerState = mock(SharedConsumerState.class);
+    private final ThreadSafeConsumerState threadSafeConsumerState = mock(ThreadSafeConsumerState.class);
 
     @Test
     public void testRecordApplicationEventQueueSize() {
@@ -58,7 +58,7 @@ public class ApplicationEventHandlerTest {
                      () -> networkClientDelegate,
                      () -> requestManagers,
                      asyncConsumerMetrics,
-                     sharedConsumerState
+                     threadSafeConsumerState
              )) {
             // add event
             applicationEventHandler.add(new PollEvent(time.milliseconds()));

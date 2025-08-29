@@ -21,11 +21,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
- * {@code SharedReference} serves as a primitive around a {@link AtomicReference} that provides utility methods
- * for more ergonomic use.
- * @param <T>
+ * {@code ThreadSafeReference} serves as a thread-safe primitive around an object reference that provides
+ * utility methods for more ergonomic use.
  */
-public class SharedReference<T> {
+public class ThreadSafeReference<T> {
 
     private final AtomicReference<T> reference = new AtomicReference<>();
 
