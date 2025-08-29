@@ -48,7 +48,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -415,19 +414,12 @@ public class LogCompactionTester {
         producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
         
         if (compressionLevel != null) {
-            switch (compressionType.name.toLowerCase(Locale.ROOT)) {
-                case "gzip":
-                    producerProps.put(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG, compressionLevel);
-                    break;
-                case "lz4":
-                    producerProps.put(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG, compressionLevel);
-                    break;
-                case "zstd":
-                    producerProps.put(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, compressionLevel);
-                    break;
-                default:
-                    System.out.println("Warning: Compression level " + compressionLevel + " is ignored for compression type " + compressionType.name + ". Only gzip, lz4, and zstd support compression levels.");
-                    break;
+            switch (compressionType) {
+                case GZIP -> producerProps.put(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG, compressionLevel);
+                case LZ4 -> producerProps.put(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG, compressionLevel);
+                case ZSTD -> producerProps.put(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, compressionLevel);
+                default -> System.out.println("Warning: Compression level " + compressionLevel + " is ignored for compression type "
+                    + compressionType.name + ". Only gzip, lz4, and zstd support compression levels.");
             }
         }
 
