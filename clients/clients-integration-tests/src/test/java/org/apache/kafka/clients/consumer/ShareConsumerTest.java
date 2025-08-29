@@ -2716,6 +2716,50 @@ public class ShareConsumerTest {
     }
 
     /**
+     * This test is to prove that polling does not stall when there is data on the topic to fetch.
+     */
+    @ClusterTest
+    public void testShareConsumerStallBetweenPoll() throws Exception {
+        // The producer must produce slowly to tickle the scenario.
+        var produceDelay = 500;
+
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(1);
+        try (var producer = createProducer()) {
+            // Start a thread running that produces records at a relative trickle.
+            service.scheduleWithFixedDelay(
+                () -> producer.send(new ProducerRecord<>(tp.topic(), TestUtils.randomBytes(64))),
+                0,
+                produceDelay,
+                TimeUnit.MILLISECONDS
+            );
+
+            // Assign a tolerance for how much time is allowed to pass between Consumer.poll() calls given that there
+            // should be *at least* one record to read every second.
+            var pollDelayTolerance = 2000;
+
+            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+                shareConsumer.subscribe(List.of(tp.topic()));
+
+                // This is here to allow the consumer time to settle the group membership/assignment.
+                waitedPoll(shareConsumer, 5000L, 1);
+
+                // Keep track of the last time the poll is invoked to ensure the deltas between invocations don't
+                // exceed the delay threshold defined above.
+                var beforePoll = System.currentTimeMillis();
+                shareConsumer.poll(Duration.ofSeconds(5));
+                shareConsumer.poll(Duration.ofSeconds(5));
+                var afterPoll = System.currentTimeMillis();
+                var pollDelay = afterPoll - beforePoll;
+
+                if (pollDelay > pollDelayTolerance)
+                    fail("Detected a stall of " + pollDelay + " ms between ShareConsumer.poll() invocations despite a Producer producing records every " + produceDelay + " ms");
+            } finally {
+                shutdownExecutorService(service);
+            }
+        }
+    }
+
+    /**
      * Util class to encapsulate state for a consumer/producer
      * being executed by an {@link ExecutorService}.
      */

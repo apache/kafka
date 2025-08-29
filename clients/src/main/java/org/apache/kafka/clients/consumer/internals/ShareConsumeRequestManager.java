@@ -786,36 +786,37 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             final ShareFetchMetricsAggregator shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(metricsManager, partitions);
 
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
-            for (Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry : responseData.entrySet()) {
-                TopicIdPartition tip = entry.getKey();
+            if (!responseData.isEmpty()) {
+                for (Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry : responseData.entrySet()) {
+                    TopicIdPartition tip = entry.getKey();
 
-                ShareFetchResponseData.PartitionData partitionData = entry.getValue();
+                    ShareFetchResponseData.PartitionData partitionData = entry.getValue();
 
-                log.debug("ShareFetch for partition {} returned fetch data {}", tip, partitionData);
+                    log.debug("ShareFetch for partition {} returned fetch data {}", tip, partitionData);
 
-                Map<TopicIdPartition, Acknowledgements> nodeAcknowledgementsInFlight = fetchAcknowledgementsInFlight.get(fetchTarget.id());
-                if (nodeAcknowledgementsInFlight != null) {
-                    Acknowledgements acks = nodeAcknowledgementsInFlight.remove(tip);
-                    if (acks != null) {
-                        if (partitionData.acknowledgeErrorCode() != Errors.NONE.code()) {
-                            metricsManager.recordFailedAcknowledgements(acks.size());
+                    Map<TopicIdPartition, Acknowledgements> nodeAcknowledgementsInFlight = fetchAcknowledgementsInFlight.get(fetchTarget.id());
+                    if (nodeAcknowledgementsInFlight != null) {
+                        Acknowledgements acks = nodeAcknowledgementsInFlight.remove(tip);
+                        if (acks != null) {
+                            if (partitionData.acknowledgeErrorCode() != Errors.NONE.code()) {
+                                metricsManager.recordFailedAcknowledgements(acks.size());
+                            }
+                            acks.complete(Errors.forCode(partitionData.acknowledgeErrorCode()).exception());
+                            Map<TopicIdPartition, Acknowledgements> acksMap = Map.of(tip, acks);
+                            maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                         }
-                        acks.complete(Errors.forCode(partitionData.acknowledgeErrorCode()).exception());
-                        Map<TopicIdPartition, Acknowledgements> acksMap = Map.of(tip, acks);
-                        maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                     }
-                }
 
-                Errors partitionError = Errors.forCode(partitionData.errorCode());
-                if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
-                    log.debug("For {}, received error {}, with leaderIdAndEpoch {} in ShareFetch", tip, partitionError, partitionData.currentLeader());
-                    if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
-                        partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(), new Metadata.LeaderIdAndEpoch(
-                            Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
+                    Errors partitionError = Errors.forCode(partitionData.errorCode());
+                    if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
+                        log.debug("For {}, received error {}, with leaderIdAndEpoch {} in ShareFetch", tip, partitionError, partitionData.currentLeader());
+                        if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
+                            partitionsWithUpdatedLeaderInfo.put(tip.topicPartition(), new Metadata.LeaderIdAndEpoch(
+                                Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
+                        }
                     }
-                }
 
-                ShareCompletedFetch completedFetch = new ShareCompletedFetch(
+                    ShareCompletedFetch completedFetch = new ShareCompletedFetch(
                         logContext,
                         BufferSupplier.create(),
                         fetchTarget.id(),
@@ -823,11 +824,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         partitionData,
                         shareFetchMetricsAggregator,
                         requestVersion);
-                shareFetchBuffer.add(completedFetch);
+                    shareFetchBuffer.add(completedFetch);
 
-                if (!partitionData.acquiredRecords().isEmpty()) {
-                    fetchMoreRecords = false;
+                    if (!partitionData.acquiredRecords().isEmpty()) {
+                        fetchMoreRecords = false;
+                    }
                 }
+            } else {
+                shareFetchBuffer.wakeup();
             }
 
             // Handle any acknowledgements which were not received in the response for this node.

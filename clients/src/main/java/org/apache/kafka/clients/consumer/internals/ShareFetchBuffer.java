@@ -143,7 +143,7 @@ public class ShareFetchBuffer implements AutoCloseable {
      *     <li>The buffer was already non-empty on entry</li>
      *     <li>The buffer was populated during the wait</li>
      *     <li>The remaining time on the {@link Timer timer} elapsed</li>
-     *     <li>The thread was interrupted</li>
+     *     <li>The thread was interrupted or otherwise woken up</li>
      * </ol>
      *
      * @param timer Timer that provides time to wait
