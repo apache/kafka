@@ -229,8 +229,8 @@
 
     <p>
         To operate the new streams groups, explore the options of <code>kafka-streams-groups.sh</code> to list,
-        describe, and delete streams groups. In the new protocol, <code>session.timeout.ms</code>,
-        <code>heartbeat.interval.ms</code> and <code>num.standby.replicas</code> are group-level configurations,
+        describe, and delete streams groups. In the new protocol, <code>streams.session.timeout.ms</code>,
+        <code>streams.heartbeat.interval.ms</code> and <code>streams.num.standby.replicas</code> are group-level configurations,
         which are ignored when they are set on the client side. Use the <code>kafka-configs.sh</code> tool to set
         these configurations, for example:
         <code>kafka-configs.sh --bootstrap-server localhost:9092 --alter --entity-type groups
