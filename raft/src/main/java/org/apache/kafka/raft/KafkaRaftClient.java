@@ -3145,7 +3145,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return 0L;
         }
 
-        long timeUtilVoterChangeExpires = state.maybeExpirePendingOperation(currentTimeMs);
+        long timeUntilVoterChangeExpires = state.maybeExpirePendingOperation(currentTimeMs);
 
         long timeUntilFlush = maybeAppendBatches(
             state,
@@ -3163,7 +3163,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 timeUntilNextBeginQuorumSend,
                 Math.min(
                     timeUntilCheckQuorumExpires,
-                    timeUtilVoterChangeExpires
+                    timeUntilVoterChangeExpires
                 )
             )
         );

@@ -292,14 +292,7 @@ public class OAuthCompatibilityTool {
 
     }
 
-    private static class ConfigHandler {
-
-        private final Namespace namespace;
-
-
-        private ConfigHandler(Namespace namespace) {
-            this.namespace = namespace;
-        }
+    private record ConfigHandler(Namespace namespace) {
 
         private Map<String, ?> getConfigs() {
             Map<String, Object> m = new HashMap<>();
