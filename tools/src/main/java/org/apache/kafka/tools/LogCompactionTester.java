@@ -258,8 +258,6 @@ public class LogCompactionTester {
         int topicCount = optionSet.valueOf(options.topicsOpt);
         int sleepSecs = optionSet.valueOf(options.sleepSecsOpt);
 
-        CompressionType.forName(compressionType.name.toLowerCase(Locale.ROOT));
-
         long testId = RANDOM.nextLong();
         Set<String> topics = IntStream.range(0, topicCount)
                 .mapToObj(i -> "log-cleaner-test-" + testId + "-" + i)
