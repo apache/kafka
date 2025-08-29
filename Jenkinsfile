@@ -21,7 +21,7 @@ def doValidation() {
   // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
   sh """
     ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean check -x test \
-        --profile --continue -PxmlSpotBugsReport=true -PkeepAliveMode="session"
+        --profile --continue -PxmlSpotBugsReport=true -PkeepAliveMode="session" --no-build-cache
   """
 }
 
