@@ -1596,7 +1596,6 @@ kafka.server.AutoTopicCreationManagerTest:
 - testCreateShareStateTopic
 - testCreateStreamsInternalTopics
 - testCreateStreamsInternalTopicsPassesPrincipal
-- testCreateStreamsInternalTopicsWithDefaultConfig
 - testCreateStreamsInternalTopicsWithEmptyTopics
 - testCreateTxnTopic
 - testTopicCreationWithMetadataContextNoRetryUponUnsupportedVersion
