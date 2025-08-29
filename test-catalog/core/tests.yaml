@@ -2970,8 +2970,6 @@ kafka.server.share.SharePartitionManagerTest:
 - testToForgetPartitions
 - testZeroSizeShareSession
 kafka.server.share.SharePartitionTest:
-- inFlightStateCommitSuccessAndArchiveStateTransition
-- inFlightStateRollbackAndArchiveStateTransition
 - testAcknowledgeAfterAcquisitionLockTimeout
 - testAcknowledgeBatchAndOffsetPostLsoMovement
 - testAcknowledgeBatchPostLsoMovement
