@@ -48,7 +48,7 @@ public class MetricConfig {
      * @param config the {@link MetricConfig} instance to copy.
      */
     public MetricConfig(MetricConfig config) {
-        this.quota = new Quota(config.quota.bound(), config.quota.isUpperBound());
+        this.quota = config.quota == null ? null : new Quota(config.quota.bound(), config.quota.isUpperBound());
         this.samples = config.samples;
         this.eventWindow = config.eventWindow;
         this.timeWindowMs = config.timeWindowMs;
