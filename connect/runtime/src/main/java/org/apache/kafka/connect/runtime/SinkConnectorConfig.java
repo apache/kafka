@@ -27,7 +27,6 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.util.RegexValidator;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -169,7 +168,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
     private static void addErrorMessage(Map<String, ConfigValue> validatedConfig, String name, String value, String errorMessage) {
         validatedConfig.computeIfAbsent(
                 name,
-                p -> new ConfigValue(name, value, Collections.emptyList(), new ArrayList<>())
+                p -> new ConfigValue(name, value, List.of(), new ArrayList<>())
         ).addErrorMessage(
                 errorMessage
         );
@@ -189,7 +188,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public static List<String> parseTopicsList(Map<String, String> props) {
         List<String> topics = (List<String>) ConfigDef.parseType(TOPICS_CONFIG, props.get(TOPICS_CONFIG), Type.LIST);
         if (topics == null) {
-            return Collections.emptyList();
+            return List.of();
         }
         return topics
                 .stream()
