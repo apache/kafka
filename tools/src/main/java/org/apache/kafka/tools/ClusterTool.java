@@ -85,7 +85,7 @@ public class ClusterTool {
                     .help("A list of host/port pairs to use for establishing the connection to the KRaft controllers.");
             subpparser.addArgument("--config")
                     .action(store())
-                    .help("(DEPRECATED) A property file containing configurations for the Admin client." +
+                    .help("(DEPRECATED) A property file containing configurations for the Admin client. " +
                             "This option will be removed in a future version. Use --command-config instead.");
             subpparser.addArgument("--command-config", "-c")
                     .action(store())
