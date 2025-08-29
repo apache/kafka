@@ -58,6 +58,11 @@ public class ThreadSafeAsyncConsumerState extends ThreadSafeConsumerState {
 
     private final SubscriptionState subscriptions;
     private final OffsetFetcherUtils offsetFetcherUtils;
+
+    /**
+     * Exception that occurred while updating positions after the triggering event had already
+     * expired. It will be propagated and cleared on the next call to update fetch positions.
+     */
     private final ThreadSafeExceptionReference positionsUpdateError;
 
     public ThreadSafeAsyncConsumerState(LogContext logContext,

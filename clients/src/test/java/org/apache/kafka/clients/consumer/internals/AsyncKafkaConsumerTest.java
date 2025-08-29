@@ -418,7 +418,7 @@ public class AsyncKafkaConsumerTest {
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
@@ -440,7 +440,7 @@ public class AsyncKafkaConsumerTest {
             consumer.wakeup();
             return Fetch.empty();
         }).doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
@@ -464,7 +464,7 @@ public class AsyncKafkaConsumerTest {
             consumer.wakeup();
             return Fetch.forPartition(tp, records, true, new OffsetAndMetadata(4, Optional.of(0), ""));
         }).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
@@ -483,7 +483,7 @@ public class AsyncKafkaConsumerTest {
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.add(tp);
         CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, sortedPartitions);
@@ -523,7 +523,7 @@ public class AsyncKafkaConsumerTest {
         );
         doReturn(Fetch.forPartition(tp, records, true, new OffsetAndMetadata(4, Optional.of(0), "")))
             .when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
@@ -670,7 +670,7 @@ public class AsyncKafkaConsumerTest {
         completeCommitAsyncApplicationEventSuccessfully();
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         when(metadata.updateVersion()).thenReturn(-1);
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
 
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
@@ -1485,7 +1485,7 @@ public class AsyncKafkaConsumerTest {
             assertEquals(expectedException.get().getMessage(), exception.getMessage());
             assertEquals(expectedException.get().getCause(), exception.getCause());
         } else {
-            when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+            when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
             assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
         }
 
@@ -1645,7 +1645,7 @@ public class AsyncKafkaConsumerTest {
         doAnswer(invocation -> Fetch.forPartition(tp, records, true, new OffsetAndMetadata(3, Optional.of(0), "")))
                 .when(fetchCollector)
                 .collectFetch(Mockito.any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
 
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singletonList("topic1"));
@@ -1665,7 +1665,7 @@ public class AsyncKafkaConsumerTest {
         completeFetchedCommittedOffsetApplicationEventExceptionally(new TimeoutException());
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         when(metadata.updateVersion()).thenReturn(-1);
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
 
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(new TopicPartition("t1", 1)));
@@ -1704,7 +1704,7 @@ public class AsyncKafkaConsumerTest {
         }).doAnswer(invocation ->
             Fetch.forPartition(tp, records, true, nextOffsetAndMetadata)
         ).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
 
         markReconcileAndAutoCommitCompleteForPollEvent();
         // And then poll for up to 10000ms, which should return 2 records without timing out
@@ -1802,7 +1802,7 @@ public class AsyncKafkaConsumerTest {
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
@@ -1841,7 +1841,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList("topic"));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
         markReconcileAndAutoCommitCompleteForPollEvent();
         consumer.poll(Duration.ZERO);
         verify(backgroundEventReaper).reap(time.milliseconds());
@@ -1898,7 +1898,7 @@ public class AsyncKafkaConsumerTest {
     public void testUpdatePatternSubscriptionEventGeneratedOnlyIfPatternUsed() {
         consumer = newConsumer();
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(null);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         completeAssignmentChangeEventSuccessfully();
         completeTopicPatternSubscriptionChangeEventSuccessfully();

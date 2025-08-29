@@ -27,10 +27,10 @@ import java.time.Duration;
  * offsets and update positions when it gets them. This will first attempt to use the committed offsets if available. If
  * no committed offsets available, it will use the partition offsets retrieved from the leader.
  * <p/>
- * The event completes with a boolean indicating if all assigned partitions have valid fetch positions
+ * The event completes when all assigned partitions have valid fetch positions
  * (based on {@link SubscriptionState#hasAllFetchPositions()}).
  */
-public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Boolean> {
+public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Void> {
 
     public CheckAndUpdatePositionsEvent(long deadlineMs) {
         super(Type.CHECK_AND_UPDATE_POSITIONS, deadlineMs);
