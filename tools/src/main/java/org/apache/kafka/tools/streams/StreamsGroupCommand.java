@@ -77,38 +77,51 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import joptsimple.OptionException;
+
 
 public class StreamsGroupCommand {
 
     static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
+        Exit.exit(execute(args));
+    }
+
+    public static int execute(String[] args) {
         StreamsGroupCommandOptions opts = null;
+        int exitCode = 0;
         try {
             opts = new StreamsGroupCommandOptions(args);
             Objects.requireNonNull(opts).checkArgs();
             // should have exactly one action
             long numberOfActions = Stream.of(
-                opts.listOpt,
-                opts.describeOpt,
-                opts.resetOffsetsOpt,
-                opts.deleteOpt,
-                opts.deleteOffsetsOpt
+                    opts.listOpt,
+                    opts.describeOpt,
+                    opts.resetOffsetsOpt,
+                    opts.deleteOpt,
+                    opts.deleteOffsetsOpt
             ).filter(opts.options::has).count();
             if (numberOfActions != 1)
-                CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
+                throw new IllegalArgumentException("Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
 
             run(opts);
-            Exit.exit(0);
-        } catch (IllegalArgumentException e) {
-            if (opts != null)
-                CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
-            else
-                CommandLineUtils.printErrorAndExit(e.getMessage());
+        } catch (IllegalArgumentException | OptionException e) {
+            System.err.println(e.getMessage());
+            if (opts != null) {
+                try {
+                    opts.parser.printHelpOn(System.err);
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+            exitCode = 1;
         } catch (Throwable e) {
             printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
-            Exit.exit(1);
+            exitCode = 1;
         }
+
+        return exitCode;
     }
 
     public static void run(StreamsGroupCommandOptions opts) throws IllegalArgumentException, ExecutionException, InterruptedException {
