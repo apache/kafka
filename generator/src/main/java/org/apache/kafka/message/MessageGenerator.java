@@ -269,7 +269,7 @@ public final class MessageGenerator {
                 }
             }
         }
-        System.out.printf("MessageGenerator: processed %d Kafka message JSON files(s).%n", numProcessed);
+        System.out.printf("MessageGenerator: processed %d Kafka message JSON file(s).%n", numProcessed);
     }
 
     /**
