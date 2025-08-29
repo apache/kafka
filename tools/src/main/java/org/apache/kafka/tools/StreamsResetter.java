@@ -141,10 +141,7 @@ public class StreamsResetter {
             }
             Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
-            String bootstrapServerValue = "localhost:9092";
-            if (options.hasBootstrapServer()) {
-                bootstrapServerValue = options.bootstrapServer();
-            }
+            String bootstrapServerValue = options.bootstrapServer();
 
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 
@@ -590,7 +587,7 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .describedAs("id")
                 .required();
-            bootstrapServerOption = parser.accepts("bootstrap-server", "The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
+            bootstrapServerOption = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("server to connect to");
@@ -653,6 +650,7 @@ public class StreamsResetter {
                 if (CommandLineUtils.isPrintVersionNeeded(this)) {
                     CommandLineUtils.printVersionAndExit();
                 }
+                CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, toDatetimeOption, toOffsetOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, byDurationOption, toOffsetOption, toDatetimeOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
@@ -684,10 +682,6 @@ public class StreamsResetter {
 
         public String commandConfig() {
             return options.valueOf(commandConfigOption);
-        }
-
-        public boolean hasBootstrapServer() {
-            return options.has(bootstrapServerOption);
         }
 
         public String bootstrapServer() {

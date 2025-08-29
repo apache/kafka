@@ -73,18 +73,15 @@
 ---------------------                 -----------
 * --application-id &lt;String: id&gt;       The Kafka Streams application ID
                                         (application.id).
---bootstrap-server &lt;String: server to  REQUIRED unless --bootstrap-servers
-                            connect to&gt;                            (deprecated) is specified. The server
-                                         (s) to connect to. The broker list
-                                         string in the form HOST1:PORT1,HOST2:
-                                         PORT2.
+--bootstrap-server &lt;String: server to  REQUIRED: The server(s) to connect to.
+                           connect to&gt;  The broker list string in the form HOST1:PORT1,HOST2:PORT2.
 --by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
                                         current timestamp. Format: &#39;PnDTnHnMnS&#39;
---config-file &lt;String: file name&gt;    (Deprecated) Property file containing configs to be
+--config-file &lt;String: file name&gt;     (Deprecated) Property file containing configs to be
                                         passed to admin clients and embedded consumer.
                                         This option will be removed in a future version.
                                         Use --command-config instead.
---command-config &lt;String: file name&gt; Config properties file to be passed to admin clients
+--command-config &lt;String: file name&gt;  Config properties file to be passed to admin clients
                                         and embedded consumer.
 --dry-run                             Display the actions that would be
                                         performed without executing the reset

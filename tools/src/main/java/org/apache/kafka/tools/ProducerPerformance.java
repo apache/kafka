@@ -241,7 +241,7 @@ public class ProducerPerformance {
                 .action(store())
                 .required(false)
                 .type(String.class)
-                .metavar("BOOTSTRAP-SERVERS")
+                .metavar("BOOTSTRAP-SERVER")
                 .dest("bootstrapServers")
                 .help("The server(s) to connect to. This config takes precedence over bootstrap.servers specified " +
                         "via --command-property or --command-config.");
