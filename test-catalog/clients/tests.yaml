@@ -2917,6 +2917,7 @@ org.apache.kafka.clients.producer.internals.RecordAccumulatorTest:
 - testRetryBackoff
 - testSoonToExpireBatchesArePickedUpForExpiry
 - testSplitAndReenqueue
+- testSplitAndReenqueuePreventInfiniteRecursion
 - testSplitBatchOffAccumulator
 - testSplitFrequency
 - testStressfulSituation

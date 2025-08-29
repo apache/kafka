@@ -47,6 +47,9 @@ org.apache.kafka.tools.ClusterToolTest:
 - testClusterId
 - testClusterIdWithBootstrapController
 - testClusterTooOldToHaveId
+- testCommandConfig
+- testCommandConfigAndDeprecatedConfigPresent
+- testDeprecatedConfig
 - testLegacyModeClusterCannotUnregisterBroker
 - testListEndpointsArgumentWithBootstrapController
 - testListEndpointsArgumentWithBootstrapServer
@@ -326,8 +329,10 @@ org.apache.kafka.tools.LeaderElectionCommandErrorTest:
 - testPartitionWithoutTopic
 - testTopicWithoutPartition
 org.apache.kafka.tools.LeaderElectionCommandTest:
-- testAdminConfigCustomTimeouts
 - testAllTopicPartition
+- testCommandConfig
+- testCommandConfigAndDeprecatedConfigPresent
+- testDeprecatedAdminConfig
 - testElectionResultOutput
 - testPathToJsonFile
 - testPreferredReplicaElection
@@ -443,6 +448,9 @@ org.apache.kafka.tools.ResetIntegrationTest:
 - shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal
 - shouldNotAllowToResetWhileStreamsIsRunning
 - shouldOverwriteGroupProtocolOtherThanClassic
+- testCommandConfig
+- testCommandConfigAndDeprecatedConfigPresent
+- testDeprecatedConfig
 - testReprocessingByDurationAfterResetWithoutIntermediateUserTopic
 - testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic
 - testReprocessingFromFileAfterResetWithoutIntermediateUserTopic
