@@ -715,7 +715,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testInterceptorConstructorExceptionShouldCloseCreatedInstances(GroupProtocol groupProtocol) {
+    public void testInterceptorConstructorExceptionShouldCloseCreatedInstance(GroupProtocol groupProtocol) {
         final int targetInterceptor = 1;
 
         try {
