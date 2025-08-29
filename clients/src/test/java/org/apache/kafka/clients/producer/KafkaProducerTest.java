@@ -639,7 +639,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
+    public void testInterceptorConstructorExceptionShouldCloseCreatedInstances() {
         final int targetInterceptor = 1;
         try {
             Properties props = new Properties();
