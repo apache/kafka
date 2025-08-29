@@ -16,8 +16,23 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+/**
+ * A listener that is invoked when the ISR of a partition is altered. Implementations of this
+ * interface can be used to track metrics related to ISR changes.
+ */
 public interface AlterPartitionListener {
+    /**
+     * Callback invoked when the ISR is expanded.
+     */
     void markIsrExpand();
+
+    /**
+     * Callback invoked when the ISR is shrunk.
+     */
     void markIsrShrink();
+
+    /**
+     * Callback invoked when an AlterPartition request fails.
+     */
     void markFailed();
 }

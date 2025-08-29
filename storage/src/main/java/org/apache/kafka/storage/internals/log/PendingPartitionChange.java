@@ -18,7 +18,16 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.metadata.LeaderAndIsr;
 
+/**
+ * Represents a partition state that is currently undergoing a change, such as an ISR expansion or shrinking.
+ */
 public interface PendingPartitionChange extends PartitionState {
+    /**
+     * Returns the last committed partition state before this pending change.
+     */
     CommittedPartitionState lastCommittedState();
+    /**
+     * Returns the LeaderAndIsr object that was sent to the controller for this pending change.
+     */
     LeaderAndIsr sentLeaderAndIsr();
 }

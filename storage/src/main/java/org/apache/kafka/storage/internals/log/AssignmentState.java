@@ -18,11 +18,30 @@ package org.apache.kafka.storage.internals.log;
 
 import java.util.List;
 
+/**
+ * Represents the current assignment of replicas for a partition. This can be a simple assignment
+ * or an ongoing reassignment.
+ */
 public interface AssignmentState {
 
+    /**
+     * The full list of replicas in this assignment.
+     * @return the list of replica ids
+     */
     List<Integer> replicas();
 
+    /**
+     * The number of replicas in the assignment.
+     * @return the replication factor
+     */
     int replicationFactor();
 
+    /**
+     * Check whether a replica is being added to the assignment.
+     * This is only true during a reassignment.
+     *
+     * @param brokerId the replica id to check
+     * @return true if the replica is being added
+     */
     boolean isAddingReplica(int brokerId);
 }

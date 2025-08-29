@@ -20,9 +20,12 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 
 import java.util.Set;
 
+/**
+ * Represents the state of a partition, including its In-Sync Replicas (ISR) and leader recovery state.
+ */
 public interface PartitionState {
     /**
-     * Includes only the in-sync replicas which have been committed to ZK/Controller.
+     * Includes only the in-sync replicas which have been committed to Controller.
      */
     Set<Integer> isr();
 

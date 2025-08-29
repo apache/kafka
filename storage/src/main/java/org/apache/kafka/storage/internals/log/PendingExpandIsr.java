@@ -23,6 +23,13 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Represents a pending change to expand the ISR of a partition.
+ *
+ * @param newInSyncReplicaId The ID of the replica that is being added to the ISR.
+ * @param sentLeaderAndIsr The LeaderAndIsr object that was sent to the controller for this ISR expansion.
+ * @param lastCommittedState The last committed partition state before this ISR expansion.
+ */
 public record PendingExpandIsr(int newInSyncReplicaId,
                                LeaderAndIsr sentLeaderAndIsr,
                                CommittedPartitionState lastCommittedState) implements PendingPartitionChange {

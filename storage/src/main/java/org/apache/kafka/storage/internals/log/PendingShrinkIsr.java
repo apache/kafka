@@ -21,6 +21,13 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 
 import java.util.Set;
 
+/**
+ * Represents a pending change to shrink the ISR of a partition.
+ *
+ * @param outOfSyncReplicaIds The set of replica IDs that are out of sync and will be removed from the ISR.
+ * @param sentLeaderAndIsr The LeaderAndIsr object that was sent to the controller for this ISR shrinking.
+ * @param lastCommittedState The last committed partition state before this ISR shrinking.
+ */
 public record PendingShrinkIsr(Set<Integer> outOfSyncReplicaIds,
                                LeaderAndIsr sentLeaderAndIsr,
                                CommittedPartitionState lastCommittedState) implements PendingPartitionChange {
