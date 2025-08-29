@@ -314,6 +314,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC);
         metricsGroup.removeMetric(REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC);
         remoteStorageReaderThreadPool.removeMetrics();
+        Utils.closeQuietly(fetchQuotaMetrics, "fetchQuotaMetrics");
+        Utils.closeQuietly(copyQuotaMetrics, "copyQuotaMetrics");
     }
 
     // Visible for testing
@@ -2044,17 +2046,18 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 followerThreadPool.close();
                 try {
                     shutdownAndAwaitTermination(remoteStorageReaderThreadPool, "RemoteStorageReaderThreadPool", 10, TimeUnit.SECONDS);
+
+                    leaderCopyRLMTasks.clear();
+                    leaderExpirationRLMTasks.clear();
+                    followerRLMTasks.clear();
+
+                    Utils.closeQuietly(indexCache, "RemoteIndexCache");
+                    Utils.closeQuietly(remoteLogMetadataManagerPlugin, "remoteLogMetadataManagerPlugin");
+                    Utils.closeQuietly(remoteStorageManagerPlugin, "remoteStorageManagerPlugin");
+                    closed = true;
                 } finally {
                     removeMetrics();
                 }
-                leaderCopyRLMTasks.clear();
-                leaderExpirationRLMTasks.clear();
-                followerRLMTasks.clear();
-
-                Utils.closeQuietly(indexCache, "RemoteIndexCache");
-                Utils.closeQuietly(remoteLogMetadataManagerPlugin, "remoteLogMetadataManagerPlugin");
-                Utils.closeQuietly(remoteStorageManagerPlugin, "remoteStorageManagerPlugin");
-                closed = true;
             }
         }
     }
