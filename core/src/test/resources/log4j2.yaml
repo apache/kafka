@@ -36,3 +36,6 @@ Configuration:
 
       - name: org.apache.kafka
         level: WARN
+
+      - name: org.apache.kafka.coordinator.group
+        level: INFO

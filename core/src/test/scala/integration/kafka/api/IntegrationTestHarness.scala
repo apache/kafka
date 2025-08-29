@@ -22,24 +22,26 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsume
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 
-import java.util.{Optional, Properties}
+import java.util
+import java.util.{Optional, Properties, UUID}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.JaasTestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.clients.consumer.internals.{AsyncKafkaConsumer, StreamsRebalanceData}
+import org.apache.kafka.clients.consumer.internals.{AsyncKafkaConsumer, StreamsRebalanceData, StreamsRebalanceListener}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
-import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serdes, Serializer}
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.MetadataLogConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
-import org.apache.kafka.streams.{KafkaStreams, StreamsBuilder, StreamsConfig}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}  
 
 import scala.collection.mutable
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 import scala.jdk.javaapi.OptionConverters
 
 /**
@@ -57,7 +59,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val superuserClientConfig = new Properties
   val serverConfig = new Properties
   val controllerConfig = new Properties
-  var streamsGroupConfig = new Properties
+
 
   private val consumers = mutable.Buffer[Consumer[_, _]]()
   private val shareConsumers = mutable.Buffer[ShareConsumer[_, _]]()
@@ -162,10 +164,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
-    streamsGroupConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
-    streamsGroupConfig.putIfAbsent(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, classOf[Serdes.ByteArraySerde].getName)
-    streamsGroupConfig.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, classOf[Serdes.ByteArraySerde].getName)
-
     doSuperuserSetup(testInfo)
 
     if (createOffsetsTopic) {
@@ -245,35 +243,91 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
                                configsToRemove: List[String] = List(),
                                inputTopic: String,
                                outputTopic: String,
-                               streamsGroupId: String,
-                               groupProtocol: String): KafkaStreams = {
-    val streamsConfig = new Properties(streamsGroupConfig)
-    streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, streamsGroupId)
-    streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
-    streamsConfig ++= configOverrides
-    configsToRemove.foreach(streamsConfig.remove(_))
-    val builder = new StreamsBuilder()
-    builder.stream[K, V](inputTopic).to(outputTopic)
-    val streams = new KafkaStreams(builder.build(), streamsConfig)
-    streams
+                               streamsGroupId: String): AsyncKafkaConsumer[K, V] = {
+    val props = new Properties()
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, streamsGroupId)
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    props ++= configOverrides
+    configsToRemove.foreach(props.remove(_))
+    
+    val streamsRebalanceData = new StreamsRebalanceData(
+      UUID.randomUUID(),
+      Optional.empty(),
+      util.Map.of(
+        "subtopology-0", new StreamsRebalanceData.Subtopology(
+          util.Set.of(inputTopic),
+          util.Set.of(),
+          util.Map.of(),
+          util.Map.of(),
+          util.Set.of()
+        )),
+      Map.empty[String, String].asJava
+    )
+    
+    val consumer = createStreamsConsumer(
+      keyDeserializer = new ByteArrayDeserializer().asInstanceOf[Deserializer[K]],
+      valueDeserializer = new ByteArrayDeserializer().asInstanceOf[Deserializer[V]],
+      configOverrides = props,
+      streamsRebalanceData = streamsRebalanceData
+    )
+    consumer.subscribe(util.Set.of(inputTopic, outputTopic),
+      new StreamsRebalanceListener {
+        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Optional[Exception] =
+          Optional.empty()
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Optional[Exception] = {
+          Optional.empty()
+        }
+        override def onAllTasksLost(): Optional[Exception] =
+          Optional.empty()
+      })
+
+    consumer.poll(Duration.ofMillis(500L))
+    consumer
   }
+
 
   def createStreamsGroupWithAggregation[K, V](configOverrides: Properties = new Properties,
                                               configsToRemove: List[String] = List(),
                                               inputTopic: String,
                                               outputTopic: String,
                                               streamsGroupId: String,
-                                              groupProtocol: String): KafkaStreams = {
-    val streamsConfig = new Properties(streamsGroupConfig)
-    streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, streamsGroupId)
-    streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
-    streamsConfig ++= configOverrides
-    configsToRemove.foreach(streamsConfig.remove(_))
-    val builder = new StreamsBuilder()
-
-    builder.stream[K, V](inputTopic).groupByKey.count().toStream.to(outputTopic)
-    val streams = new KafkaStreams(builder.build(), streamsConfig)
-    streams
+                                              groupProtocol: String): AsyncKafkaConsumer[K, V] = {
+    val props = new Properties()
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, streamsGroupId)
+    props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    props ++= configOverrides
+    configsToRemove.foreach(props.remove(_))
+    
+    val streamsRebalanceData = new StreamsRebalanceData(
+      UUID.randomUUID(),
+      Optional.empty(),
+      util.Map.of(
+        "subtopology-0", new StreamsRebalanceData.Subtopology(
+          util.Set.of(inputTopic),
+          util.Set.of(),
+          util.Map.of(),
+          util.Map.of(outputTopic + "-store-changelog", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.empty(), util.Map.of())), // state changelog topics for aggregation
+          util.Set.of()
+        )),
+      Map.empty[String, String].asJava
+    )
+    
+    val consumer = createStreamsConsumer(
+      keyDeserializer = new ByteArrayDeserializer().asInstanceOf[Deserializer[K]],
+      valueDeserializer = new ByteArrayDeserializer().asInstanceOf[Deserializer[V]],
+      configOverrides = props,
+      streamsRebalanceData = streamsRebalanceData
+    )
+    consumer.subscribe(util.Set.of(inputTopic))
+    consumer.poll(Duration.ofMillis(500L))
+    consumer
   }
 
   def createAdminClient(
