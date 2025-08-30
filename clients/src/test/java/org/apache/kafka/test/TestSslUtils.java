@@ -211,6 +211,7 @@ public class TestSslUtils {
 
         sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagerAlgorithm);
         sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
+        sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
         List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add(tlsProtocol);
