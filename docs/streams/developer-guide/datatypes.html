@@ -215,7 +215,7 @@ TimeWindowedSerializer&lt;String&gt; serializer = new TimeWindowedSerializer&lt;
 TimeWindowedDeserializer&lt;String&gt; deserializer = new TimeWindowedDeserializer&lt;&gt;(Serdes.String().deserializer(), 500L);</code></pre>
 
         <h4>Usage in Command Line</h4>
-        <p>When using command-line tools (like <code>kafka-console-consumer</code>), you can configure windowed deserializers by passing the inner class and window size via configuration properties. The property names use a prefix pattern:</p>
+        <p>When using command-line tools (like <code>bin/kafka-console-consumer.sh</code>), you can configure windowed deserializers by passing the inner class and window size via configuration properties. The property names use a prefix pattern:</p>
         <pre class="line-numbers"><code class="language-bash"># Time windowed deserializer configuration
 --property print.key=true \
 --property key.deserializer=org.apache.kafka.streams.kstream.TimeWindowedDeserializer \
