@@ -417,7 +417,7 @@ public class ProducerPerformanceTest {
             "--transaction-duration-ms", "5000",
         };
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
-        assertEquals("localhost:9000", configs.bootstrapServers);
+        assertEquals("localhost:9000", configs.bootstrapServer);
         assertEquals("Hello-Kafka", configs.topicName);
         assertEquals(5, configs.numRecords);
         assertEquals(100, configs.throughput);
