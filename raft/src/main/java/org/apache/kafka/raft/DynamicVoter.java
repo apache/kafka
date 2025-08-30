@@ -23,49 +23,25 @@ import org.apache.kafka.common.network.ListenerName;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * The textual representation of a KIP-853 voter.
- *
+ * <p>
  * Since this is used in command-line tools, format changes to the parsing logic require a KIP,
  * and should be backwards compatible.
  */
-public final class DynamicVoter {
-    private final Uuid directoryId;
-    private final int nodeId;
-    private final String host;
-    private final int port;
-
+public record DynamicVoter(Uuid directoryId, int nodeId, String host, int port) {
     /**
      * Create a DynamicVoter object by parsing an input string.
      *
-     * @param input                         The input string.
-     *
-     * @return                              The DynamicVoter object.
-     *
-     * @throws IllegalArgumentException     If parsing fails.
+     * @param input The input string.
+     * @return The DynamicVoter object.
+     * @throws IllegalArgumentException If parsing fails.
      */
     public static DynamicVoter parse(String input) {
         input = input.trim();
         int atIndex = input.indexOf("@");
-        if (atIndex < 0) {
-            throw new IllegalArgumentException("No @ found in dynamic voter string.");
-        }
-        if (atIndex == 0) {
-            throw new IllegalArgumentException("Invalid @ at beginning of dynamic voter string.");
-        }
-        String idString = input.substring(0, atIndex);
-        int nodeId;
-        try {
-            nodeId = Integer.parseInt(idString);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Failed to parse node id in dynamic voter string.", e);
-        }
-        if (nodeId < 0) {
-            throw new IllegalArgumentException("Invalid negative node id " + nodeId +
-                " in dynamic voter string.");
-        }
+        int nodeId = getNodeId(input, atIndex);
         input = input.substring(atIndex + 1);
         if (input.isEmpty()) {
             throw new IllegalArgumentException("No hostname found after node id.");
@@ -92,6 +68,18 @@ public final class DynamicVoter {
         }
         input = input.substring(1);
         int endColonIndex = input.indexOf(":");
+        int port = getPort(input, endColonIndex);
+        String directoryIdString = input.substring(endColonIndex + 1);
+        Uuid directoryId;
+        try {
+            directoryId = Uuid.fromString(directoryIdString);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Failed to parse directory ID in dynamic voter string.", e);
+        }
+        return new DynamicVoter(directoryId, nodeId, host, port);
+    }
+
+    private static int getPort(String input, int endColonIndex) {
         if (endColonIndex < 0) {
             throw new IllegalArgumentException("No colon following port could be found.");
         }
@@ -105,50 +93,39 @@ public final class DynamicVoter {
         if (port < 0 || port > 65535) {
             throw new IllegalArgumentException("Invalid port " + port + " in dynamic voter string.");
         }
-        String directoryIdString = input.substring(endColonIndex + 1);
-        Uuid directoryId;
-        try {
-            directoryId = Uuid.fromString(directoryIdString);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Failed to parse directory ID in dynamic voter string.", e);
+        return port;
+    }
+
+    private static int getNodeId(String input, int atIndex) {
+        if (atIndex < 0) {
+            throw new IllegalArgumentException("No @ found in dynamic voter string.");
         }
-        return new DynamicVoter(directoryId, nodeId, host, port);
+        if (atIndex == 0) {
+            throw new IllegalArgumentException("Invalid @ at beginning of dynamic voter string.");
+        }
+        String idString = input.substring(0, atIndex);
+        int nodeId;
+        try {
+            nodeId = Integer.parseInt(idString);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Failed to parse node id in dynamic voter string.", e);
+        }
+        if (nodeId < 0) {
+            throw new IllegalArgumentException("Invalid negative node id " + nodeId +
+                    " in dynamic voter string.");
+        }
+        return nodeId;
     }
 
     /**
      * Create a new KIP-853 voter.
      *
-     * @param directoryId   The directory ID.
-     * @param nodeId        The voter ID.
-     * @param host          The voter hostname or IP address.
-     * @param port          The voter port.
+     * @param directoryId The directory ID.
+     * @param nodeId      The voter ID.
+     * @param host        The voter hostname or IP address.
+     * @param port        The voter port.
      */
-    public DynamicVoter(
-        Uuid directoryId,
-        int nodeId,
-        String host,
-        int port
-    ) {
-        this.directoryId = directoryId;
-        this.nodeId = nodeId;
-        this.host = host;
-        this.port = port;
-    }
-
-    public Uuid directoryId() {
-        return directoryId;
-    }
-
-    public int nodeId() {
-        return nodeId;
-    }
-
-    public String host() {
-        return host;
-    }
-
-    public int port() {
-        return port;
+    public DynamicVoter {
     }
 
     public VoterSet.VoterNode toVoterNode(String controllerListenerName) {
@@ -166,17 +143,9 @@ public final class DynamicVoter {
         if (o == null || (!(o.getClass().equals(DynamicVoter.class)))) return false;
         DynamicVoter other = (DynamicVoter) o;
         return directoryId.equals(other.directoryId) &&
-            nodeId == other.nodeId &&
-            host.equals(other.host) &&
-            port == other.port;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(directoryId,
-            nodeId,
-            host,
-            port);
+                nodeId == other.nodeId &&
+                host.equals(other.host) &&
+                port == other.port;
     }
 
     @Override

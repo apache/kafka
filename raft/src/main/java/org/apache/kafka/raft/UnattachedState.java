@@ -30,9 +30,9 @@ import static org.apache.kafka.raft.QuorumState.unattachedOrProspectiveCanGrantV
 
 /**
  * A replica is "unattached" when it doesn't know the leader or the leader's endpoint.
- *
+ * <p>
  * Typically, a replica doesn't know the leader if the KRaft topic is undergoing an election cycle.
- *
+ * <p>
  * It is also possible for a replica to be unattached if it doesn't know the leader's endpoint.
  * This typically happens when a replica starts up and the known leader id is not part of the local
  * voter set. In that case, during startup the replica transitions to unattached instead of
@@ -52,14 +52,14 @@ public class UnattachedState implements EpochState {
     private final Logger log;
 
     public UnattachedState(
-        Time time,
-        int epoch,
-        OptionalInt leaderId,
-        Optional<ReplicaKey> votedKey,
-        Set<Integer> voters,
-        Optional<LogOffsetMetadata> highWatermark,
-        long electionTimeoutMs,
-        LogContext logContext
+            Time time,
+            int epoch,
+            OptionalInt leaderId,
+            Optional<ReplicaKey> votedKey,
+            Set<Integer> voters,
+            Optional<LogOffsetMetadata> highWatermark,
+            long electionTimeoutMs,
+            LogContext logContext
     ) {
         this.epoch = epoch;
         this.leaderId = leaderId;
@@ -75,11 +75,8 @@ public class UnattachedState implements EpochState {
     public ElectionState election() {
         if (leaderId.isPresent()) {
             return ElectionState.withElectedLeader(epoch, leaderId.getAsInt(), votedKey, voters);
-        } else if (votedKey.isPresent()) {
-            return ElectionState.withVotedCandidate(epoch, votedKey.get(), voters);
-        } else {
-            return ElectionState.withUnknownLeader(epoch, voters);
-        }
+        } else
+            return votedKey.map(replicaKey -> ElectionState.withVotedCandidate(epoch, replicaKey, voters)).orElseGet(() -> ElectionState.withUnknownLeader(epoch, voters));
     }
 
     @Override
@@ -123,30 +120,31 @@ public class UnattachedState implements EpochState {
     @Override
     public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
         return unattachedOrProspectiveCanGrantVote(
-            leaderId,
-            votedKey,
-            epoch,
-            replicaKey,
-            isLogUpToDate,
-            isPreVote,
-            log
+                leaderId,
+                votedKey,
+                epoch,
+                replicaKey,
+                isLogUpToDate,
+                isPreVote,
+                log
         );
     }
 
     @Override
     public String toString() {
         return String.format(
-            "UnattachedState(epoch=%d, leaderId=%s, votedKey=%s, voters=%s, " +
-            "electionTimeoutMs=%d, highWatermark=%s)",
-            epoch,
-            leaderId,
-            votedKey,
-            voters,
-            electionTimeoutMs,
-            highWatermark
+                "UnattachedState(epoch=%d, leaderId=%s, votedKey=%s, voters=%s, " +
+                        "electionTimeoutMs=%d, highWatermark=%s)",
+                epoch,
+                leaderId,
+                votedKey,
+                voters,
+                electionTimeoutMs,
+                highWatermark
         );
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 }

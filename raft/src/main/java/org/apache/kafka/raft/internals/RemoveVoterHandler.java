@@ -156,33 +156,32 @@ public final class RemoveVoterHandler {
     }
 
     public void highWatermarkUpdated(LeaderState<?> leaderState) {
-        leaderState.removeVoterHandlerState().ifPresent(current -> {
-            leaderState.highWatermark().ifPresent(highWatermark -> {
-                if (highWatermark.offset() > current.lastOffset()) {
-                    // VotersRecord with the removed voter was committed; complete the RPC
-                    leaderState.resetRemoveVoterHandlerState(Errors.NONE, null, Optional.empty());
+        leaderState.removeVoterHandlerState().ifPresent(current ->
+                leaderState.highWatermark().ifPresent(highWatermark -> {
+            if (highWatermark.offset() > current.lastOffset()) {
+                // VotersRecord with the removed voter was committed; complete the RPC
+                leaderState.resetRemoveVoterHandlerState(Errors.NONE, null, Optional.empty());
 
-                    // Resign if the leader is not part of the new committed voter set
-                    VoterSet voters = partitionState.lastVoterSet();
-                    ReplicaKey localKey = localReplicaKey.orElseThrow(
-                        () -> new IllegalStateException(
-                            String.format(
-                                "Leaders mush have an id and directory id %s",
-                                localReplicaKey
-                            )
+                // Resign if the leader is not part of the new committed voter set
+                VoterSet voters = partitionState.lastVoterSet();
+                ReplicaKey localKey = localReplicaKey.orElseThrow(
+                    () -> new IllegalStateException(
+                        String.format(
+                            "Leaders mush have an id and directory id %s",
+                            localReplicaKey
                         )
+                    )
+                );
+                if (!voters.isVoter(localKey)) {
+                    logger.info(
+                        "Leader is not in the committed voter set {} resign from epoch {}",
+                        voters.voterKeys(),
+                        leaderState.epoch()
                     );
-                    if (!voters.isVoter(localKey)) {
-                        logger.info(
-                            "Leader is not in the committed voter set {} resign from epoch {}",
-                            voters.voterKeys(),
-                            leaderState.epoch()
-                        );
 
-                        leaderState.requestResign();
-                    }
+                    leaderState.requestResign();
                 }
-            });
-        });
+            }
+        }));
     }
 }
