@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.slf4j.event.Level
 
-import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 
 /**

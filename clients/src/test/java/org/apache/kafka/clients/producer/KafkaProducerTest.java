@@ -235,7 +235,7 @@ public class KafkaProducerTest {
         ProducerConfig config = new ProducerConfig(props);
         assertTrue(config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertTrue(Stream.of("-1", "all").anyMatch(each -> each.equalsIgnoreCase(config.getString(ProducerConfig.ACKS_CONFIG))));
-        assertEquals((int) config.getInt(ProducerConfig.RETRIES_CONFIG), Integer.MAX_VALUE);
+        assertEquals(Integer.MAX_VALUE, (int) config.getInt(ProducerConfig.RETRIES_CONFIG));
         assertTrue(config.getString(ProducerConfig.CLIENT_ID_CONFIG).equalsIgnoreCase("producer-" +
                 config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG)));
     }
@@ -639,25 +639,28 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testInterceptorConstructorExceptionShouldCloseCreatedInstance() {
+    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
         final int targetInterceptor = 1;
         try {
             Properties props = new Properties();
             props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, org.apache.kafka.test.MockProducerInterceptor.class.getName());
+            props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    CloseInterceptor.class.getName() + "," + MockProducerInterceptor.class.getName());
             props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
 
             MockProducerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
             assertThrows(KafkaException.class, () ->
-                    new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())
+                new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())
             );
 
             assertEquals(1, MockProducerInterceptor.CONFIG_COUNT.get());
             assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, CloseInterceptor.CLOSE_COUNT.get());
 
         } finally {
             MockProducerInterceptor.resetCounters();
+            CloseInterceptor.resetCounters();
         }
     }
 
@@ -3202,6 +3205,40 @@ public class KafkaProducerTest {
         public void withPluginMetrics(PluginMetrics metrics) {
             MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
             metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
+    }
+
+    public static class CloseInterceptor implements ProducerInterceptor<String, String> {
+
+        public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+
+        @Override
+        public ProducerRecord<String, String> onSend(ProducerRecord<String, String> record) {
+            return null;
+        }
+
+        @Override
+        public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
+            ProducerInterceptor.super.onAcknowledgement(metadata, exception);
+        }
+
+        @Override
+        public void onAcknowledgement(RecordMetadata metadata, Exception exception, Headers headers) {
+            ProducerInterceptor.super.onAcknowledgement(metadata, exception, headers);
+        }
+
+        @Override
+        public void close() {
+            CLOSE_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // no-op
+        }
+
+        public static void resetCounters() {
+            CLOSE_COUNT.set(0);
         }
     }
 }

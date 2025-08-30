@@ -715,14 +715,15 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testInterceptorConstructorExceptionShouldCloseCreatedInstance(GroupProtocol groupProtocol) {
+    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances(GroupProtocol groupProtocol) {
         final int targetInterceptor = 1;
 
         try {
             Properties props = new Properties();
             props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,  MockConsumerInterceptor.class.getName());
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, 
+                    CloseInterceptor.class.getName() + "," + MockConsumerInterceptor.class.getName());
 
             MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
@@ -732,8 +733,10 @@ public class KafkaConsumerTest {
             assertEquals(1, MockConsumerInterceptor.CONFIG_COUNT.get());
             assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
 
+            assertEquals(1, CloseInterceptor.CLOSE_COUNT.get());
         } finally {
             MockConsumerInterceptor.resetCounters();
+            CloseInterceptor.resetCounters();
         }
     }
 
@@ -3795,6 +3798,35 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         public void withPluginMetrics(PluginMetrics metrics) {
             MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
             metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
+    }
+
+    public static class CloseInterceptor implements ConsumerInterceptor<String, String> {
+
+        public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+
+        @Override
+        public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
+            return null;
+        }
+
+        @Override
+        public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            // no-op
+        }
+
+        @Override
+        public void close() {
+            CLOSE_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // no-op
+        }
+
+        public static void resetCounters() {
+            CLOSE_COUNT.set(0);
         }
     }
 }
