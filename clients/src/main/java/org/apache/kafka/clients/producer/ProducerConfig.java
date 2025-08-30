@@ -192,6 +192,14 @@ public class ProducerConfig extends AbstractConfig {
         "This is also effectively a cap on the maximum uncompressed record batch size. Note that the server " +
         "has its own cap on the record batch size (after compression if compression is enabled) which may be different from this.";
 
+    /** <code>max.record.size</code> */
+    public static final String MAX_RECORD_SIZE_CONFIG = "max.record.size";
+    private static final String MAX_RECORD_SIZE_DOC =
+        "The maximum size of a record in bytes before compression. This setting will limit the size of records " +
+        "that can be sent to the broker, helping maintain efficient batch sizes even with highly compressible data. " +
+        "If not set, the " + MAX_REQUEST_SIZE_CONFIG + " configuration will be used as the limit for both compressed " +
+        "request size and uncompressed record size.";
+
     /** <code>reconnect.backoff.ms</code> */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
 
@@ -408,6 +416,12 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         MAX_REQUEST_SIZE_DOC)
+                                .define(MAX_RECORD_SIZE_CONFIG,
+                                        Type.INT,
+                                        1024 * 1024,
+                                        atLeast(0),
+                                        Importance.MEDIUM,
+                                        MAX_RECORD_SIZE_DOC)
                                 .define(RECONNECT_BACKOFF_MS_CONFIG, Type.LONG, 50L, atLeast(0L), Importance.LOW, CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
                                 .define(RECONNECT_BACKOFF_MAX_MS_CONFIG, Type.LONG, 1000L, atLeast(0L), Importance.LOW, CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,

@@ -255,6 +255,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Plugin<Partitioner> partitionerPlugin;
     private final int maxRequestSize;
     private final long totalMemorySize;
+    private final int maxRecordSize;
     private final ProducerMetadata metadata;
     private final RecordAccumulator accumulator;
     private final Sender sender;
@@ -409,6 +410,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     Arrays.asList(this.keySerializerPlugin.get(), this.valueSerializerPlugin.get()));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
+            this.maxRecordSize = config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG) == null ? this.maxRequestSize : config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG);
             this.compression = configureCompression(config);
 
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
@@ -496,6 +498,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.interceptors = interceptors;
         this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
         this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
+        this.maxRecordSize = config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG) == null ? this.maxRequestSize : config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG);
         this.compression = configureCompression(config);
         this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
         this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
@@ -1260,10 +1263,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Validate that the record size isn't too large
      */
     private void ensureValidRecordSize(int size) {
-        if (size > maxRequestSize)
+        if (size > maxRecordSize)
             throw new RecordTooLargeException("The message is " + size +
-                    " bytes when serialized which is larger than " + maxRequestSize + ", which is the value of the " +
-                    ProducerConfig.MAX_REQUEST_SIZE_CONFIG + " configuration.");
+                    " bytes when serialized which is larger than " + maxRecordSize + ", which is the value of the " +
+                    ProducerConfig.MAX_RECORD_SIZE_CONFIG + " configuration.");
         if (size > totalMemorySize)
             throw new RecordTooLargeException("The message is " + size +
                     " bytes when serialized which is larger than the total memory buffer you have configured with the " +
