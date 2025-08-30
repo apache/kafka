@@ -98,8 +98,7 @@ public class EndToEndLatency {
         int recordValueSize = opts.options.valueOf(opts.recordSizeOpt);
 
         // optional
-        Optional<String> propertiesFile = opts.options.has(opts.commandConfigOpt) ?
-                Optional.of(opts.options.valueOf(opts.commandConfigOpt)) : Optional.empty();
+        Optional<String> propertiesFile = Optional.ofNullable(opts.options.valueOf(opts.commandConfigOpt));
         int recordKeySize = opts.options.valueOf(opts.recordKeySizeOpt);
         int numHeaders = opts.options.valueOf(opts.numHeadersOpt);
         int headerKeySize = opts.options.valueOf(opts.recordHeaderKeySizeOpt);
@@ -454,13 +453,13 @@ public class EndToEndLatency {
                 CommandLineUtils.printUsageAndExit(parser, "Value for --record-size must be a non-negative integer.");
             }
 
-            if (options.has(recordKeySizeOpt) && options.valueOf(recordKeySizeOpt) < 0) {
+            if (options.valueOf(recordKeySizeOpt) < 0) {
                 CommandLineUtils.printUsageAndExit(parser, "Value for --record-key-size must be a non-negative integer.");
             }
-            if (options.has(recordHeaderKeySizeOpt) && options.valueOf(recordHeaderKeySizeOpt) < 0) {
+            if (options.valueOf(recordHeaderKeySizeOpt) < 0) {
                 CommandLineUtils.printUsageAndExit(parser, "Value for --record-header-key-size must be a non-negative integer.");
             }
-            if (options.has(recordHeaderValueSizeOpt) && options.valueOf(recordHeaderValueSizeOpt) < -1) {
+            if (options.valueOf(recordHeaderValueSizeOpt) < -1) {
                 CommandLineUtils.printUsageAndExit(parser, "Value for --record-header-size must be a non-negative integer or -1 for null header value.");
             }
             if (options.valueOf(numHeadersOpt) < 0) {
