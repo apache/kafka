@@ -686,6 +686,7 @@ public class TestSslUtils {
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
             sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+            sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
             List<String> enabledProtocols  = new ArrayList<>();
             enabledProtocols.add(tlsProtocol);
