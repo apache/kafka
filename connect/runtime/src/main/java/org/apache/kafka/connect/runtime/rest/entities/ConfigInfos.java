@@ -26,13 +26,4 @@ public record ConfigInfos(
     @JsonProperty("groups") List<String> groups,
     @JsonProperty("configs") List<ConfigInfo> configs
 ) {
-    @Override
-    public String toString() {
-        return "[" +
-            name + "," +
-            errorCount + "," +
-            groups + "," +
-            configs +
-            "]";
-    }
 }

@@ -22,8 +22,4 @@ public record ConfigInfo(
     @JsonProperty("definition") ConfigKeyInfo configKey,
     @JsonProperty("value") ConfigValueInfo configValue
 ) {
-    @Override
-    public String toString() {
-        return "[" + configKey + "," + configValue + "]";
-    }
 }

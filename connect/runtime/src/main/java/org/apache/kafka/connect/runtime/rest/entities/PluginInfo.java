@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -30,18 +29,6 @@ public record PluginInfo(
     @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = NoVersionFilter.class)
     String version
 ) {
-
-    @JsonCreator
-    public PluginInfo(
-        @JsonProperty("class") String className,
-        @JsonProperty("type") PluginType type,
-        @JsonProperty("version") String version
-    ) {
-        this.className = className;
-        this.type = type;
-        this.version = version;
-    }
-
     public PluginInfo(PluginDesc<?> plugin) {
         this(plugin.className(), plugin.type(), plugin.version());
     }

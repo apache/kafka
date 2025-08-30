@@ -27,14 +27,4 @@ public record ConfigValueInfo(
     @JsonProperty("errors") List<String> errors,
     @JsonProperty("visible") boolean visible
 ) {
-    @Override
-    public String toString() {
-        return "[" +
-            name + "," +
-            value + "," +
-            recommendedValues + "," +
-            errors + "," +
-            visible +
-            "]";
-    }
 }
