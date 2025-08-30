@@ -1025,7 +1025,7 @@ public class ConfigDef {
 
         public static ValidList in(boolean isEmptyAllowed, String... validStrings) {
             if (!isEmptyAllowed && validStrings.length == 0) {
-                throw new IllegalArgumentException("Valid strings list cannot be empty for inNonEmpty validator");
+                throw new IllegalArgumentException("At least one valid string must be provided when empty values are not allowed");
             }
             return new ValidList(List.of(validStrings), isEmptyAllowed, false);
         }

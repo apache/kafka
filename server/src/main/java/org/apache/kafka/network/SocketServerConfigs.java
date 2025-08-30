@@ -63,7 +63,7 @@ public class SocketServerConfigs {
             "is assumed if no explicit mapping is provided and no other security protocol is in use.";
 
     public static final String LISTENERS_CONFIG = "listeners";
-    public static final List<String> LISTENERS_DEFAULT = List.of("PLAINTEXT://:9092");
+    public static final String LISTENERS_DEFAULT = "PLAINTEXT://:9092";
     public static final String LISTENERS_DOC = String.format("Listener List - Comma-separated list of URIs we will listen on and the listener names." +
                     " If the listener name is not a security protocol, <code>%s</code> must also be set.%n" +
                     " Listener names and port numbers must be unique unless one listener is an IPv4 address and the other listener is an IPv6 address (for the same port).%n" +
