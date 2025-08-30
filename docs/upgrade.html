@@ -25,13 +25,15 @@
 
 <h5><a id="upgrade_420_notable" href="#upgrade_420_notable">Notable changes in 4.2.0</a></h5>
 <ul>
-    <li>The <code>org.apache.kafka.disallowed.login.modules</code> config was deprecated. Please use the <code>org.apache.kafka.allowed.login.modules</code>
+    <li>
+        The <code>org.apache.kafka.disallowed.login.modules</code> config was deprecated. Please use the <code>org.apache.kafka.allowed.login.modules</code>
         instead.
     </li>
     <li>
         The <code>remote.log.manager.thread.pool.size</code> config was deprecated. Please use the <code>remote.log.manager.follower.thread.pool.size</code> instead.
     </li>
-    <li>The <code>KafkaPrincipalBuilder</code> now extends <code>KafkaPrincipalSerde</code>. Force developer to implement <code>KafkaPrincipalSerde</code> interface for custom <code>KafkaPrincipalBuilder</code>.
+    <li>
+        The <code>KafkaPrincipalBuilder</code> now extends <code>KafkaPrincipalSerde</code>. Force developer to implement <code>KafkaPrincipalSerde</code> interface for custom <code>KafkaPrincipalBuilder</code>.
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/1gq9F">KIP-1157</a>.
     </li>
     <li>
@@ -41,8 +43,72 @@
         The <code>PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG</code> in <code>ProducerConfig</code> was deprecated and will be removed in Kafka 5.0. Please use the <code>PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG</code> instead.
     </li>
     <li>
-        The <code>ConsumerPerformance</code> command line tool has a new <code>include</code> option that is alternative to the <code>topic</code> option.
+        The <code>ConsumerPerformance</code> command line tool has a new <code>--include</code> option that is an alternative to the <code>--topic</code> option.
         This new option allows to pass a regular expression specifying a list of topics to include for consumption, which is useful to test consumer performance across multiple topics or dynamically matching topic sets.
+    </li>
+    <li>
+        The consistency of argument names for the command-line tools has been improved (<a href="https://cwiki.apache.org/confluence/x/DguWF">KIP-1147</a>).
+        The deprecated options will be removed in Kafka 5.0.
+        <ul>
+            <li>
+                In <code>kafka-producer-perf-test.sh</code>, <code>--bootstrap-server</code> and <code>--reporting-interval</code> option are added.
+            </li>
+            <li>
+                In <code>kafka-console-consumer.sh</code> and <code>kafka-console-share-consumer.sh</code>, the option <code>--property</code>
+                which is used to specify the properties for the formatter is deprecated in favor of <code>--formatter-property</code>.
+            </li>
+            <li>
+                In <code>kafka-consumer-perf-test.sh</code> and <code>kafka-share-consumer-perf-test.sh</code>, the option <code>--messages</code>
+                is deprecated in favor of <code>--num-records</code> to bring all performance testing tools in line.
+            </li>
+            <li>
+                The option <code>--command-property</code> is used for all command-line tools which accept configuration properties directly on
+                the command line. The tools affected are:
+                <ul>
+                    <li>
+                        <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
+                        <code>kafka-console-share-consumer.sh</code> (<code>--consumer-property</code> and <code>--producer-property</code> are
+                        deprecated in favor of <code>--command-property</code>)
+                    </li>
+                    <li>
+                        <code>kafka-producer-perf-test.sh</code> (<code>--producer-props</code> is deprecated in favor of <code>--command-property</code>)
+                    </li>
+                    <li>
+                        <code>kafka-consumer-perf-test.sh</code> and <code>kafka-share-consumer-perf-test.sh</code> gain the
+                        <code>--command-property</code> option to bring all performance testing tools in line
+                    </li>
+                </ul>
+            </li>
+            <li>
+                The option <code>--command-config</code> is used for all command-line tools which accept a file of configuration properties.
+                The tools affected are:
+                <ul>
+                    <li>
+                        <code>kafka-cluster.sh</code> (<code>--config</code> is deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-console-consumer.sh</code>, <code>kafka-console-producer.sh</code> and
+                        <code>kafka-console-share-consumer.sh</code> (<code>--consumer.config</code> and <code>--producer.config</code> are
+                        deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-consumer-perf-test.sh</code>, <code>kafka-producer-perf-test.sh</code> and
+                        <code>kafka-share-consumer-perf-test.sh</code> (<code>--consumer.config</code> and
+                        <code>--producer.config</code> are deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-verifiable-consumer.sh</code> and <code>kafka-verifiable-producer.sh</code>
+                        (<code>--consumer.config</code> and <code>--producer.config</code> are deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-leader-election.sh</code> (<code>--admin.config</code> is deprecated in favor of <code>--command-config</code>)
+                    </li>
+                    <li>
+                        <code>kafka-streams-application-reset.sh</code> (<code>--config-file</code> is deprecated in favor of <code>--command-config</code>)
+                    </li>
+                </ul>
+            </li>
+        </ul>
     </li>
 </ul>
 
