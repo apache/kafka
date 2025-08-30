@@ -104,7 +104,7 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
         <pre class="line-numbers"><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
     &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-    &lt;version&gt;2.8.0&lt;/version&gt;
+    &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
 &lt;/dependency&gt;</code></pre>
         <p>This artifact provides the following serde implementations under the package <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization">org.apache.kafka.common.serialization</a>, which you can leverage when e.g., defining default serializers in your Streams configuration.</p>
         <table border="1" class="docutils">
