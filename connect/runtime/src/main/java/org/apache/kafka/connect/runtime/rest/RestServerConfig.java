@@ -147,7 +147,7 @@ public abstract class RestServerConfig extends AbstractConfig {
                 .define(ADMIN_LISTENERS_CONFIG,
                         ConfigDef.Type.LIST,
                         null,
-                        ConfigDef.ValidList.anyNonDuplicateValues(true, true),
+                        new AdminListenersValidator(),
                         ConfigDef.Importance.LOW,
                         ADMIN_LISTENERS_DOC);
     }
@@ -318,6 +318,37 @@ public abstract class RestServerConfig extends AbstractConfig {
                 }
                 if (Utils.isBlank((String) item)) {
                     throw new ConfigException("Empty URL found when parsing listeners list.");
+                }
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "List of comma-separated URLs, ex: http://localhost:8080,https://localhost:8443.";
+        }
+    }
+
+    private static class AdminListenersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                return;
+            }
+
+            if (!(value instanceof List<?> items)) {
+                throw new ConfigException("Invalid value type for admin.listeners (expected list).");
+            }
+
+            if (items.isEmpty()) {
+                return;
+            }
+
+            for (Object item : items) {
+                if (!(item instanceof String)) {
+                    throw new ConfigException("Invalid type for admin.listeners (expected String).");
+                }
+                if (Utils.isBlank((String) item)) {
+                    throw new ConfigException("Empty URL found when parsing admin.listeners list.");
                 }
             }
         }
