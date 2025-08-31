@@ -39,14 +39,14 @@ public class TimingWheelTest {
     private final int wheelSize = 5;
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         taskCounter = new AtomicInteger(0);
         queue = new DelayQueue<>();
         timingWheel = new TimingWheel(tickMs, wheelSize, startMs, taskCounter, queue);
     }
 
     @Test
-    void testAddValidTask() {
+    public void testAddValidTask() {
         // Create task within current time interval
         long expirationMs = startMs + tickMs * 2; // 1020ms
         TimerTask task = new TestTimerTask(tickMs * 2);
@@ -58,7 +58,7 @@ public class TimingWheelTest {
     }
 
     @Test
-    void testAddExpiredTask() {
+    public void testAddExpiredTask() {
         long expirationMs = startMs - 1; // 999ms, less than current time
         TimerTask task = new TestTimerTask(-1);
         TimerTaskEntry entry = new TimerTaskEntry(task, expirationMs);
@@ -67,7 +67,7 @@ public class TimingWheelTest {
     }
 
     @Test
-    void testAddCancelledTask() {
+    public void testAddCancelledTask() {
         long expirationMs = startMs + tickMs * 2;
         TimerTask task = new TestTimerTask(tickMs * 2);
         TimerTaskEntry entry = new TimerTaskEntry(task, expirationMs);
@@ -79,7 +79,7 @@ public class TimingWheelTest {
     }
 
     @Test
-    void testAddTaskInCurrentBucket() {
+    public void testAddTaskInCurrentBucket() {
         long expirationMs = startMs + 5; // Within current tick
         TimerTask task = new TestTimerTask(5);
         TimerTaskEntry entry = new TimerTaskEntry(task, expirationMs);
@@ -88,21 +88,21 @@ public class TimingWheelTest {
     }
 
     @Test
-    void testAdvanceClockWithinTick() {
+    public void testAdvanceClockWithinTick() {
         timingWheel.advanceClock(startMs + 5);
 
         assertEquals(startMs, timingWheel.currentTimeMs(), "Clock should not advance within the same tick");
     }
 
     @Test
-    void testAdvanceClockToNextTick() {
+    public void testAdvanceClockToNextTick() {
         timingWheel.advanceClock(startMs + tickMs);
 
         assertEquals(startMs + tickMs, timingWheel.currentTimeMs(), "Clock should advance to next tick");
     }
 
     @Test
-    void testOverflowWheelCreation() {
+    public void testOverflowWheelCreation() {
         assertNull(timingWheel.overflowWheel(), "Overflow wheel should not exist initially");
 
         // First overflow task should create parent wheel
@@ -125,7 +125,7 @@ public class TimingWheelTest {
     }
 
     @Test
-    void testAdvanceClockWithOverflowWheel() {
+    public void testAdvanceClockWithOverflowWheel() {
         // Create overflow wheel
         long interval = tickMs * wheelSize;
         long overflowTime = startMs + interval + tickMs;
