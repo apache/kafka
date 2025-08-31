@@ -95,18 +95,6 @@ class DefaultAutoTopicCreationManager(
     topics: Map[String, CreatableTopic],
     requestContext: RequestContext
   ): Unit = {
-
-    for ((_, creatableTopic) <- topics) {
-      if (creatableTopic.numPartitions() == -1) {
-        creatableTopic
-          .setNumPartitions(config.numPartitions)
-      }
-      if (creatableTopic.replicationFactor() == -1) {
-        creatableTopic
-          .setReplicationFactor(config.defaultReplicationFactor.shortValue)
-      }
-    }
-
     if (topics.nonEmpty) {
       sendCreateTopicRequest(topics, Some(requestContext))
     }
