@@ -135,6 +135,11 @@
                 Default values for certain configurations have been adjusted to ensure better consistency with related
                 settings.
             </li>
+            <li>
+                The <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to true, the
+                local log segments will be cleaned based on the values of <code>log.local.retention.bytes</code> and
+                <code>log.local.retention.ms</code>.
+            </li>
         </ul>
     </li>
 </ul>
