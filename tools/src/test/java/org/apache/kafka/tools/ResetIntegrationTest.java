@@ -320,6 +320,26 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
+    public void testRequiredBootstrapServerNotPresent(final TestInfo testInfo) throws IOException {
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+        };
+
+        try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class, Mockito.CALLS_REAL_METHODS)) {
+            Exit.setExitProcedure(new ToolsTestUtils.MockExitProcedure());
+
+            String output = ToolsTestUtils.captureStandardErr(() -> {
+                new StreamsResetter().execute(parameters);
+            });
+
+            assertTrue(output.contains("Missing required option(s) [bootstrap-server]"));
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
     public void testResetWhenLongSessionTimeoutConfiguredWithForceOption(final TestInfo testInfo) throws Exception {
         final String appID = safeUniqueTestName(testInfo);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
