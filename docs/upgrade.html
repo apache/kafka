@@ -113,6 +113,18 @@
     <li>
         The <code>num.replica.fetchers</code> config has a new lower bound of 1.
     </li>
+    <li>
+        The metrics <code>org.apache.kafka.server:type=AssignmentsManager.QueuedReplicaToDirAssignments</code>,
+        <code>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool.RemoteLogReaderTaskQueueSize</code>, and
+        <code>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool.RemoteLogReaderAvgIdlePercent</code>
+        have been deprecated and will be removed in Kafka 5.0.
+
+        As replacements, the following metrics have been introduced, which report the same information:
+        <code>kafka.server:type=AssignmentsManager.QueuedReplicaToDirAssignments</code>,
+        <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderTaskQueueSize</code>, and
+        <code>kafka.log.remote:type=RemoteStorageThreadPool.RemoteLogReaderAvgIdlePercent</code>.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/6oqMEw">KIP-1100</a>.
+    </li>
 </ul>
 
 <h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0</a></h4>
