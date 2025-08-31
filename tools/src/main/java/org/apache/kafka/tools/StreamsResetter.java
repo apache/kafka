@@ -582,15 +582,16 @@ public class StreamsResetter {
 
         public StreamsResetterOptions(String[] args) {
             super(args);
-            applicationIdOption = parser.accepts("application-id", "The Kafka Streams application ID (application.id).")
+            applicationIdOption = parser.accepts("application-id", "REQUIRED: The Kafka Streams application ID (application.id).")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("id")
                 .required();
-            bootstrapServerOption = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
+            bootstrapServerOption = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
                 .withRequiredArg()
                 .ofType(String.class)
-                .describedAs("server to connect to");
+                .describedAs("server to connect to")
+                .required();
             inputTopicsOption = parser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool by default will reset the offset to the earliest available offset. "
                     + "Reset to other offset position by appending other reset offset option, ex: --input-topics foo --shift-by 5")
                 .withRequiredArg()
@@ -650,7 +651,6 @@ public class StreamsResetter {
                 if (CommandLineUtils.isPrintVersionNeeded(this)) {
                     CommandLineUtils.printVersionAndExit();
                 }
-                CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, toDatetimeOption, toOffsetOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, byDurationOption, toOffsetOption, toDatetimeOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
