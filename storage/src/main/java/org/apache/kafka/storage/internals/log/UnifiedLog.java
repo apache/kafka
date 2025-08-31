@@ -1918,15 +1918,15 @@ public class UnifiedLog implements AutoCloseable {
         } else if (config().compact) {
             return deleteLogStartOffsetBreachedSegments();
         } else {
-            // If cleanup.policy is empty and remote storage is enable, the local log segments will 
-            // be cleaned based on the values of log.local.retention.bytes and log.local.retention.ms.
+            // If cleanup.policy is empty and remote storage is enabled, the local log segments will 
+            // be cleaned based on the values of log.local.retention.bytes and log.local.retention.ms
             if (remoteLogEnabledAndRemoteCopyEnabled()) {
                 return deleteLogStartOffsetBreachedSegments() +
                         deleteRetentionSizeBreachedSegments() +
                         deleteRetentionMsBreachedSegments();
             } else {
                 // If cleanup.policy is empty and remote storage is disabled, we should not delete any local 
-                // log segments.
+                // log segments
                 return deleteLogStartOffsetBreachedSegments();
             }
         }
