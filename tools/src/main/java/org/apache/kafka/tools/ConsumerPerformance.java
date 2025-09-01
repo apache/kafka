@@ -49,6 +49,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 import static joptsimple.util.RegexMatcher.regex;
+import static org.apache.kafka.server.util.CommandLineUtils.parseKeyValueArgs;
 
 public class ConsumerPerformance {
     private static final Logger LOG = LoggerFactory.getLogger(ConsumerPerformance.class);
@@ -256,6 +257,7 @@ public class ConsumerPerformance {
         private final OptionSpec<String> includeOpt;
         private final OptionSpec<String> groupIdOpt;
         private final OptionSpec<Integer> fetchSizeOpt;
+        private final OptionSpec<String> commandPropertiesOpt;
         private final OptionSpec<Void> resetBeginningOffsetOpt;
         private final OptionSpec<Integer> socketBufferSizeOpt;
         @Deprecated(since = "4.2", forRemoval = true)
@@ -295,6 +297,11 @@ public class ConsumerPerformance {
                 .describedAs("size")
                 .ofType(Integer.class)
                 .defaultsTo(1024 * 1024);
+            commandPropertiesOpt = parser.accepts("command-property", "Kafka consumer related configuration properties like client.id. " +
+                    "These configs take precedence over those passed via --command-config or --consumer.config.")
+                .withRequiredArg()
+                .describedAs("prop1=val1,prop2=val2...")
+                .ofType(String.class);
             resetBeginningOffsetOpt = parser.accepts("from-latest", "If the consumer does not already have an established " +
                 "offset to consume from, start with the latest record present in the log rather than the earliest record.");
             socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size.")
@@ -373,16 +380,23 @@ public class ConsumerPerformance {
             return options.valueOf(bootstrapServerOpt);
         }
 
+        private Properties readProps(List<String> commandProperties, String commandConfigFile) throws IOException {
+            Properties props = commandConfigFile != null
+                    ? Utils.loadProps(commandConfigFile)
+                    : new Properties();
+            props.putAll(parseKeyValueArgs(commandProperties));
+            return props;
+        }
+
         public Properties props() throws IOException {
+            List<String> commandProperties = options.valuesOf(commandPropertiesOpt);
             String commandConfigFile;
             if (options.has(consumerConfigOpt)) {
                 commandConfigFile = options.valueOf(consumerConfigOpt);
             } else {
                 commandConfigFile = options.valueOf(commandConfigOpt);
             }
-            Properties props = commandConfigFile != null
-                ? Utils.loadProps(commandConfigFile)
-                : new Properties();
+            Properties props = readProps(commandProperties, commandConfigFile);
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostsAndPorts());
             props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt));
             props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, options.valueOf(socketBufferSizeOpt).toString());

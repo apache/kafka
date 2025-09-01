@@ -184,6 +184,29 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
+    public void testCommandProperty() throws IOException {
+        Path configPath = tempDir.resolve("test_command_property_consumer_perf.conf");
+        Files.deleteIfExists(configPath);
+        File tempFile = Files.createFile(configPath).toFile();
+        try (PrintWriter output = new PrintWriter(Files.newOutputStream(tempFile.toPath()))) {
+            output.println("client.id=consumer-1");
+            output.flush();
+        }
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--num-records", "10",
+            "--command-property", "client.id=consumer-2",
+            "--command-config", tempFile.getAbsolutePath()
+        };
+
+        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
+
+        assertEquals("consumer-2", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+    }
+
+    @Test
     public void testClientIdOverride() throws IOException {
         Path configPath = tempDir.resolve("test_client_id_override_consumer_perf.conf");
         Files.deleteIfExists(configPath);
@@ -203,7 +226,6 @@ public class ConsumerPerformanceTest {
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
 
         assertEquals("consumer-1", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
-        Files.deleteIfExists(configPath);
     }
 
     @Test
@@ -226,7 +248,6 @@ public class ConsumerPerformanceTest {
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
 
         assertEquals("consumer-1", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
-        Files.deleteIfExists(configPath);
     }
 
     @Test
