@@ -1373,7 +1373,7 @@ public class ShareGroupCommandTest {
     }
     
     @Test
-    public void testAlterShareGroupFailureFailureWithNonExistentTopic() {
+    public void testAlterShareGroupFailureWithNonExistentTopic() {
         String group = "share-group";
         String topic = "none";
         String bootstrapServer = "localhost:9092";

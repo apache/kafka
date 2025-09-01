@@ -53,7 +53,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -199,7 +198,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
 
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).statusStorageTopicSettings()
-                                            : Collections.emptyMap();
+                                            : Map.of();
         NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic)
                 .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
@@ -402,8 +401,8 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     public Collection<TopicStatus> getAllTopics(String connector) {
         ConcurrentMap<String, TopicStatus> activeTopics = topics.get(Objects.requireNonNull(connector));
         return activeTopics != null
-               ? Collections.unmodifiableCollection(Objects.requireNonNull(activeTopics.values()))
-               : Collections.emptySet();
+               ? Set.copyOf(Objects.requireNonNull(activeTopics.values()))
+               : Set.of();
     }
 
     @Override
@@ -509,7 +508,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
         return converter.fromConnectData(
                 statusTopic,
                 TOPIC_STATUS_SCHEMA_V0,
-                Collections.singletonMap(TOPIC_STATE_KEY, struct));
+                Map.of(TOPIC_STATE_KEY, struct));
     }
 
     private String parseConnectorStatusKey(String key) {
