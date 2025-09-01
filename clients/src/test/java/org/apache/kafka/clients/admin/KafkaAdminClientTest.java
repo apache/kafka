@@ -2531,9 +2531,38 @@ public class KafkaAdminClientTest {
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
 
             Throwable e = assertThrows(Exception.class, () -> values.get(tpr).get());
-            assertInstanceOf(Errors.CLUSTER_AUTHORIZATION_FAILED.getDeclaringClass(), e.getCause());
+            assertInstanceOf(ClusterAuthorizationException.class, e.getCause());
         }
 
+    }
+
+    @Test
+    public void testDescribeReplicaLogDirsWithSingleDirException() throws ExecutionException, InterruptedException {
+        int brokerId = 1;
+        TopicPartitionReplica successfulTpr = new TopicPartitionReplica("topic", 12, brokerId);
+        TopicPartitionReplica failedTpr = new TopicPartitionReplica("failed", 12, brokerId);
+
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            String broker1log0 = "/var/data/kafka0";
+            String broker1log1 = "/var/data/kafka1";
+            int broker1Log0PartitionSize = 987654321;
+            int broker1Log0OffsetLag = 24;
+
+            DescribeLogDirsResponseData.DescribeLogDirsResult successfulResult = prepareDescribeLogDirsResult(
+                    successfulTpr, broker1log0, broker1Log0PartitionSize, broker1Log0OffsetLag, false);
+            DescribeLogDirsResponseData.DescribeLogDirsResult failedResult = new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                    .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
+                    .setLogDir(broker1log1);
+            DescribeLogDirsResponse response = new DescribeLogDirsResponse(new DescribeLogDirsResponseData().setResults(asList(successfulResult, failedResult)));
+            env.kafkaClient().prepareResponseFrom(response, env.cluster().nodeById(successfulTpr.brokerId()));
+
+            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(successfulTpr, failedTpr));
+            Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
+
+            assertNotNull(values.get(successfulTpr).get());
+            assertThrows(Exception.class, () -> values.get(failedTpr).get());
+        }
     }
 
     @Test
