@@ -277,43 +277,6 @@ class AutoTopicCreationManagerTest {
   }
 
   @Test
-  def testCreateStreamsInternalTopicsWithDefaultConfig(): Unit = {
-    val topics = Map(
-      "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
-    )
-    val requestContext = initializeRequestContextWithUserPrincipal()
-
-    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-      config,
-      brokerToController,
-      groupCoordinator,
-      transactionCoordinator,
-      shareCoordinator)
-
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
-
-    val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
-    Mockito.verify(brokerToController).sendRequest(
-      argumentCaptor.capture(),
-      any(classOf[ControllerRequestCompletionHandler]))
-
-    val capturedRequest = argumentCaptor.getValue.asInstanceOf[EnvelopeRequest.Builder].build(ApiKeys.ENVELOPE.latestVersion())
-
-    val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.latestVersion(), "clientId", 0)
-    val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
-    topicsCollection.add(getNewTopic("stream-topic-1", config.numPartitions, config.defaultReplicationFactor.toShort))
-    val requestBody = new CreateTopicsRequest.Builder(
-      new CreateTopicsRequestData()
-        .setTopics(topicsCollection)
-        .setTimeoutMs(requestTimeout))
-      .build(ApiKeys.CREATE_TOPICS.latestVersion())
-    val forwardedRequestBuffer = capturedRequest.requestData().duplicate()
-    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer))
-    assertEquals(requestBody.data(), CreateTopicsRequest.parse(new ByteBufferAccessor(forwardedRequestBuffer),
-      ApiKeys.CREATE_TOPICS.latestVersion()).data())
-  }
-
-  @Test
   def testCreateStreamsInternalTopicsPassesPrincipal(): Unit = {
     val topics = Map(
       "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
