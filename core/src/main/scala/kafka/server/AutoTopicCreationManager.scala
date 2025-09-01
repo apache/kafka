@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.Time
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
+import scala.util.control.Breaks._
 
 trait AutoTopicCreationManager {
 
@@ -71,6 +72,7 @@ case class CachedTopicCreationError(
   val timestamp: Long = time.milliseconds()
 }
 
+
 class DefaultAutoTopicCreationManager(
   config: KafkaConfig,
   channelManager: NodeToControllerChannelManager,
@@ -81,7 +83,20 @@ class DefaultAutoTopicCreationManager(
 ) extends AutoTopicCreationManager with Logging {
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
-  private val topicCreationErrorCache = new ConcurrentHashMap[String, CachedTopicCreationError]()
+  
+  // Use MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG as the size limit for the error cache
+  // This provides a reasonable bound (default 1000) to prevent unbounded growth
+  private val maxCacheSize = config.maxIncrementalFetchSessionCacheSlots
+  info(s"AutoTopicCreationManager initialized with error cache size limit: $maxCacheSize")
+  
+  // LRU cache with size limit to prevent unbounded memory growth
+  private val topicCreationErrorCache = Collections.synchronizedMap(
+    new java.util.LinkedHashMap[String, CachedTopicCreationError](16, 0.75f, false) {
+      override def removeEldestEntry(eldest: java.util.Map.Entry[String, CachedTopicCreationError]): Boolean = {
+        size() > maxCacheSize
+      }
+    }
+  )
 
   /**
    * Initiate auto topic creation for the given topics.
@@ -114,7 +129,7 @@ class DefaultAutoTopicCreationManager(
     requestContext: RequestContext
   ): Unit = {
     if (topics.nonEmpty) {
-      sendCreateTopicRequest(topics, Some(requestContext))
+      sendCreateTopicRequestWithErrorCaching(topics, Some(requestContext))
     }
   }
 
@@ -122,28 +137,49 @@ class DefaultAutoTopicCreationManager(
     topicNames: Set[String],
     errorCacheTtlMs: Long
   ): Map[String, String] = {
-    val currentTime = time.milliseconds()
-    val errors = mutable.Map.empty[String, String]
-    val expiredKeys = mutable.Set.empty[String]
+    // Proactively expire old entries using the provided TTL
+    expireOldEntries(errorCacheTtlMs)
     
-    // Check requested topics and collect expired keys
+    val errors = mutable.Map.empty[String, String]
+    
+    // Check requested topics  
     topicNames.foreach { topicName =>
       Option(topicCreationErrorCache.get(topicName)) match {
-        case Some(cachedError) if (currentTime - cachedError.timestamp) <= errorCacheTtlMs =>
-          errors.put(topicName, cachedError.errorMessage)
-        case Some(_) =>
-          expiredKeys += topicName
+        case Some(error) =>
+          errors.put(topicName, error.errorMessage)
         case None =>
       }
     }
     
-    // Remove expired entries
-    expiredKeys.foreach { key =>
-      topicCreationErrorCache.remove(key)
-      debug(s"Removed expired topic creation error cache entry for $key")
-    }
-    
     errors.toMap
+  }
+
+  /**
+   * Remove expired entries from the cache using the provided TTL.
+   * Since we use LinkedHashMap with insertion order, we only need to check 
+   * entries from the beginning until we find a non-expired entry.
+   */
+  private def expireOldEntries(ttlMs: Long): Unit = {
+    val currentTime = time.milliseconds()
+    
+    // Iterate and remove expired entries
+    val iterator = topicCreationErrorCache.entrySet().iterator()
+    
+    breakable {
+      while (iterator.hasNext) {
+        val entry = iterator.next()
+        val cachedError = entry.getValue
+        
+        if (currentTime - cachedError.timestamp > ttlMs) {
+          iterator.remove()
+          debug(s"Removed expired topic creation error cache entry for ${entry.getKey}")
+        } else {
+          // Since entries are in insertion order, if this entry is not expired,
+          // all following entries are also not expired
+          break()
+        }
+      }
+    }
   }
 
   private def sendCreateTopicRequest(
@@ -170,18 +206,11 @@ class DefaultAutoTopicCreationManager(
         if (response.authenticationException() != null) {
           val authException = response.authenticationException()
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception: ${authException.getMessage}")
-          cacheTopicCreationErrors(creatableTopics.keys.toSet, authException.getMessage)
         } else if (response.versionMismatch() != null) {
           val versionException = response.versionMismatch()
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with version mismatch exception: ${versionException.getMessage}")
-          cacheTopicCreationErrors(creatableTopics.keys.toSet, versionException.getMessage)
         } else {
-          response.responseBody() match {
-            case createTopicsResponse: CreateTopicsResponse =>
-              cacheTopicCreationErrorsFromResponse(createTopicsResponse)
-            case _ =>
-              debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
-          }
+          debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
         }
       }
     }
@@ -307,6 +336,80 @@ class DefaultAutoTopicCreationManager(
     (creatableTopics, uncreatableTopics)
   }
 
+  private def sendCreateTopicRequestWithErrorCaching(
+    creatableTopics: Map[String, CreatableTopic],
+    requestContext: Option[RequestContext]
+  ): Seq[MetadataResponseTopic] = {
+    val topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size)
+    topicsToCreate.addAll(creatableTopics.values.asJavaCollection)
+
+    val createTopicsRequest = new CreateTopicsRequest.Builder(
+      new CreateTopicsRequestData()
+        .setTimeoutMs(config.requestTimeoutMs)
+        .setTopics(topicsToCreate)
+    )
+
+    val requestCompletionHandler = new ControllerRequestCompletionHandler {
+      override def onTimeout(): Unit = {
+        clearInflightRequests(creatableTopics)
+        debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
+      }
+
+      override def onComplete(response: ClientResponse): Unit = {
+        clearInflightRequests(creatableTopics)
+        if (response.authenticationException() != null) {
+          val authException = response.authenticationException()
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception: ${authException.getMessage}")
+          cacheTopicCreationErrors(creatableTopics.keys.toSet, authException.getMessage)
+        } else if (response.versionMismatch() != null) {
+          val versionException = response.versionMismatch()
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with version mismatch exception: ${versionException.getMessage}")
+          cacheTopicCreationErrors(creatableTopics.keys.toSet, versionException.getMessage)
+        } else {
+          response.responseBody() match {
+            case createTopicsResponse: CreateTopicsResponse =>
+              cacheTopicCreationErrorsFromResponse(createTopicsResponse)
+            case _ =>
+              debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
+          }
+        }
+      }
+    }
+
+    val request = requestContext.map { context =>
+      val requestVersion =
+        channelManager.controllerApiVersions.toScala match {
+          case None =>
+            // We will rely on the Metadata request to be retried in the case
+            // that the latest version is not usable by the controller.
+            ApiKeys.CREATE_TOPICS.latestVersion()
+          case Some(nodeApiVersions) =>
+            nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS)
+        }
+
+      // Borrow client information such as client id and correlation id from the original request,
+      // in order to correlate the create request with the original metadata request.
+      val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS,
+        requestVersion,
+        context.clientId,
+        context.correlationId)
+      ForwardingManager.buildEnvelopeRequest(context,
+        createTopicsRequest.build(requestVersion).serializeWithHeader(requestHeader))
+    }.getOrElse(createTopicsRequest)
+
+    channelManager.sendRequest(request, requestCompletionHandler)
+
+    val creatableTopicResponses = creatableTopics.keySet.toSeq.map { topic =>
+      new MetadataResponseTopic()
+        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+        .setName(topic)
+        .setIsInternal(Topic.isInternal(topic))
+    }
+
+    info(s"Sent auto-creation request for ${creatableTopics.keys} to the active controller.")
+    creatableTopicResponses
+  }
+
   private def cacheTopicCreationErrors(topicNames: Set[String], errorMessage: String): Unit = {
     topicNames.foreach { topicName =>
       topicCreationErrorCache.put(topicName, CachedTopicCreationError(errorMessage, time))
@@ -325,7 +428,6 @@ class DefaultAutoTopicCreationManager(
         )
         debug(s"Cached topic creation error for ${topicResult.name()}: $errorMessage")
       }
-      
     }
   }
 

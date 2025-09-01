@@ -511,12 +511,122 @@ class AutoTopicCreationManagerTest {
       shareCoordinator,
       mockTime)
 
-    val defaultTtlMs = config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs()
-    val initialResult = autoTopicCreationManager.getTopicCreationErrors(Set("nonexistent-topic"), defaultTtlMs)
-    assertTrue(initialResult.isEmpty)
 
-    mockTime.sleep(config.groupCoordinatorConfig.classicGroupMaxSessionTimeoutMs + 1000)
-    val laterResult = autoTopicCreationManager.getTopicCreationErrors(Set("nonexistent-topic"), defaultTtlMs)
-    assertTrue(laterResult.isEmpty)
+    // First cache an error by simulating topic creation failure
+    val topics = Map(
+      "test-topic" -> new CreatableTopic().setName("test-topic").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+    Mockito.verify(brokerToController).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      argumentCaptor.capture())
+
+    // Simulate a CreateTopicsResponse with error
+    val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+    val topicResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+      .setName("test-topic")
+      .setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code())
+      .setErrorMessage("Invalid replication factor")
+    createTopicsResponseData.topics().add(topicResult)
+
+    val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+    val header = new RequestHeader(ApiKeys.CREATE_TOPICS, 0, "client", 1)
+    val clientResponse = new ClientResponse(header, null, null,
+      0, 0, false, null, null, createTopicsResponse)
+
+    // Cache the error at T0
+    argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
+
+    val shortTtlMs = 1000L // Use 1 second TTL for faster testing
+    
+    // Verify error is cached and accessible within TTL
+    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("test-topic"), shortTtlMs)
+    assertEquals(1, cachedErrors.size)
+    assertEquals("Invalid replication factor", cachedErrors("test-topic"))
+
+    // Advance time beyond TTL
+    mockTime.sleep(shortTtlMs + 100) // T0 + 1.1 seconds
+
+    // Verify error is now expired and proactively cleaned up
+    val expiredErrors = autoTopicCreationManager.getTopicCreationErrors(Set("test-topic"), shortTtlMs)
+    assertTrue(expiredErrors.isEmpty, "Expired errors should be proactively cleaned up")
+  }
+
+  @Test
+  def testErrorCacheLRUEviction(): Unit = {
+    // Create a config with a small cache size for testing
+    val props = TestUtils.createBrokerConfig(1)
+    props.setProperty(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
+    props.setProperty(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG, "3") // Small cache size for testing
+    
+    props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
+    props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
+    props.setProperty(ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG , internalTopicPartitions.toString)
+    
+    props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
+    props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
+    props.setProperty(ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
+    
+    val smallCacheConfig = KafkaConfig.fromProps(props)
+    
+    // Verify the configuration was properly set
+    assertEquals(3, smallCacheConfig.maxIncrementalFetchSessionCacheSlots, "Cache size configuration should be 3")
+    
+    // Replace the test class's config with our smallCacheConfig
+    // so that initializeRequestContext will use the correct config
+    config = smallCacheConfig
+    
+    val requestContext = initializeRequestContextWithUserPrincipal()
+    
+    // Create 5 topics to exceed the cache size of 3
+    val topicNames = (1 to 5).map(i => s"test-topic-$i")
+    
+    // Add errors for all 5 topics to the cache
+    topicNames.zipWithIndex.foreach { case (topicName, idx) =>
+      val topics = Map(
+        topicName -> new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)
+      )
+      
+      autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+      
+      val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+      Mockito.verify(brokerToController, Mockito.atLeastOnce()).sendRequest(
+        any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+        argumentCaptor.capture())
+      
+      // Simulate error response for this topic
+      val createTopicsResponseData = new org.apache.kafka.common.message.CreateTopicsResponseData()
+      val topicResult = new org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult()
+        .setName(topicName)
+        .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code())
+        .setErrorMessage(s"Topic '$topicName' already exists.")
+      createTopicsResponseData.topics().add(topicResult)
+      
+      val createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData)
+      val header = new RequestHeader(ApiKeys.CREATE_TOPICS, 0, "client", 1)
+      val clientResponse = new ClientResponse(header, null, null,
+        0, 0, false, null, null, createTopicsResponse)
+      
+      argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
+      
+      // Advance time slightly between additions to ensure different timestamps
+      mockTime.sleep(10)
+      
+    }
+    
+    // With cache size of 3, topics 1 and 2 should have been evicted
+    val longTtlMs = 60000L // Use a long TTL to ensure entries aren't expired by time
+    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(topicNames.toSet, longTtlMs)
+    
+    // Only the last 3 topics should be in the cache (topics 3, 4, 5)
+    assertEquals(3, cachedErrors.size, "Cache should contain only the most recent 3 entries")
+    assertTrue(cachedErrors.contains("test-topic-3"), "test-topic-3 should be in cache")
+    assertTrue(cachedErrors.contains("test-topic-4"), "test-topic-4 should be in cache")
+    assertTrue(cachedErrors.contains("test-topic-5"), "test-topic-5 should be in cache")
+    assertTrue(!cachedErrors.contains("test-topic-1"), "test-topic-1 should have been evicted")
+    assertTrue(!cachedErrors.contains("test-topic-2"), "test-topic-2 should have been evicted")
   }
 }
