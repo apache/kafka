@@ -118,7 +118,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * <em>Note</em>: per its class name, this state is <em>shared</em> with the application thread, so care must be
      * taken to evaluate how it's used elsewhere when updating related logic.
      */
-    protected final SharedAutoCommitState autoCommitState;
+    protected final ThreadSafeAutoCommitState autoCommitState;
 
     /**
      * Logger.
@@ -147,7 +147,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. {@link SharedReconciliationState#isInProgress()} will be true if
+     * assignmentReadyToReconcile. {@link ThreadSafeReconciliationState#isInProgress()} will be true if
      * {@link #maybeReconcile(boolean)} has been triggered after receiving a heartbeat response, or a metadata update.
      * Calling code should generally favor {@link #reconciliationInProgress()} for its clarity over direct use of
      * this state.
@@ -157,7 +157,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * <em>Note</em>: per its class name, this state is <em>shared</em> with the application thread, so care must be
      * taken to evaluate how it's used elsewhere when updating related logic.
      */
-    private final SharedReconciliationState reconciliationState;
+    private final ThreadSafeReconciliationState reconciliationState;
 
     /**
      * True if a reconciliation is in progress and the member rejoined the group since the start
@@ -223,7 +223,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                               Logger log,
                               Time time,
                               RebalanceMetricsManager metricsManager,
-                              SharedConsumerState sharedConsumerState) {
+                              ThreadSafeConsumerState threadSafeConsumerState) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.subscriptions = subscriptions;
@@ -235,8 +235,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         this.stateUpdatesListeners = new ArrayList<>();
         this.time = time;
         this.metricsManager = metricsManager;
-        this.autoCommitState = sharedConsumerState.autoCommitState();
-        this.reconciliationState = sharedConsumerState.reconciliationState();
+        this.autoCommitState = threadSafeConsumerState.autoCommitState();
+        this.reconciliationState = threadSafeConsumerState.reconciliationState();
     }
 
     /**

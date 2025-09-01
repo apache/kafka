@@ -355,7 +355,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final long retryBackoffMs;
     private final int requestTimeoutMs;
     private final Duration defaultApiTimeoutMs;
-    private final SharedConsumerState sharedConsumerState;
+    private final ThreadSafeAsyncConsumerState threadSafeConsumerState;
     private volatile boolean closed = false;
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
@@ -476,8 +476,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
-            this.sharedConsumerState = new SharedConsumerState(
-                SharedAutoCommitState.newInstance(
+            this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
+                ThreadSafeAutoCommitState.newInstance(
                     requireNonNull(logContext),
                     requireNonNull(config),
                     requireNonNull(time)
@@ -499,7 +499,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker,
                     memberStateListener,
                     streamsRebalanceData,
-                    sharedConsumerState
+                threadSafeConsumerState
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -570,7 +570,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        int requestTimeoutMs,
                        int defaultApiTimeoutMs,
                        String groupId,
-                       SharedConsumerState sharedConsumerState) {
+                       ThreadSafeAsyncConsumerState threadSafeConsumerState) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -593,7 +593,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.applicationEventHandler = applicationEventHandler;
         this.kafkaConsumerMetrics = new AsyncConsumerMetrics(metrics);
         this.clientTelemetryReporter = Optional.empty();
-        this.sharedConsumerState = sharedConsumerState;
+        this.threadSafeConsumerState = threadSafeConsumerState;
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
         this.backgroundEventHandler = new BackgroundEventHandler(
             backgroundEventQueue,
@@ -668,8 +668,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             kafkaConsumerMetrics
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
-        this.sharedConsumerState = new SharedConsumerState(
-            SharedAutoCommitState.newInstance(
+        this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
+            ThreadSafeAutoCommitState.newInstance(
                 requireNonNull(logContext),
                 requireNonNull(config),
                 requireNonNull(time)
@@ -692,7 +692,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsetCommitCallbackInvoker,
             memberStateListener,
             Optional.empty(),
-            sharedConsumerState
+            threadSafeConsumerState
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -917,7 +917,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // Make sure to let the background thread know that we are still polling.
         PollEvent event = new PollEvent(currentTimeMs);
 
-        if (sharedConsumerState.canSkipWaitingOnPoll(currentTimeMs)) {
+        if (threadSafeConsumerState.canSkipWaitingOnPoll(currentTimeMs)) {
             // This will *not* trigger async auto-commits of consumed positions as the shared Timer for
             // auto-commit interval will not change between the application thread and the network thread. This
             // is true of the reconciliation state. The state will not change between the SharedConsumerState
@@ -1545,7 +1545,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (groupMetadata.get().isEmpty())
             return;
 
-        if (sharedConsumerState.isAutoCommitEnabled())
+        if (threadSafeConsumerState.isAutoCommitEnabled())
             commitSyncAllConsumed(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());

@@ -78,7 +78,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final ConsumerMetadata metadata;
     private final LogContext logContext;
     private final Logger log;
-    private final SharedAutoCommitState autoCommitState;
+    private final ThreadSafeAutoCommitState autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final OffsetCommitMetricsManager metricsManager;
@@ -116,7 +116,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final Optional<String> groupInstanceId,
         final Metrics metrics,
         final ConsumerMetadata metadata,
-        final SharedConsumerState sharedConsumerState) {
+        final ThreadSafeConsumerState threadSafeConsumerState) {
         this(time,
             logContext,
             subscriptions,
@@ -130,7 +130,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             OptionalDouble.empty(),
             metrics,
             metadata,
-            sharedConsumerState);
+            threadSafeConsumerState);
     }
 
     // Visible for testing
@@ -149,13 +149,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final OptionalDouble jitter,
         final Metrics metrics,
         final ConsumerMetadata metadata,
-        final SharedConsumerState sharedConsumerState) {
+        final ThreadSafeConsumerState threadSafeConsumerState) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.time = time;
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.pendingRequests = new PendingRequests();
-        this.autoCommitState = sharedConsumerState.autoCommitState();
+        this.autoCommitState = threadSafeConsumerState.autoCommitState();
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;

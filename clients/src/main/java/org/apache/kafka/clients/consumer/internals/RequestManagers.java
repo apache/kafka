@@ -168,7 +168,7 @@ public class RequestManagers implements Closeable {
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener,
                                                      final Optional<StreamsRebalanceData> streamsRebalanceData,
-                                                     final SharedConsumerState sharedConsumerState
+                                                     final ThreadSafeConsumerState threadSafeConsumerState
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -218,7 +218,7 @@ public class RequestManagers implements Closeable {
                         groupRebalanceConfig.groupInstanceId,
                         metrics,
                         metadata,
-                        sharedConsumerState);
+                        threadSafeConsumerState);
                     if (streamsRebalanceData.isPresent()) {
                         streamsMembershipManager = new StreamsMembershipManager(
                             groupRebalanceConfig.groupId,
@@ -260,7 +260,7 @@ public class RequestManagers implements Closeable {
                             backgroundEventHandler,
                             time,
                             metrics,
-                            sharedConsumerState);
+                            threadSafeConsumerState);
 
                         // Update the group member ID label in the client telemetry reporter.
                         // According to KIP-1082, the consumer will generate the member ID as the incarnation ID of the process.

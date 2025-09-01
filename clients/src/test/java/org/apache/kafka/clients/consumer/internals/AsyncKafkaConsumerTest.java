@@ -255,7 +255,7 @@ public class AsyncKafkaConsumerTest {
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
         LogContext logContext = new LogContext();
-        SharedConsumerState sharedConsumerState = new SharedConsumerState(SharedAutoCommitState.disabled());
+        ThreadSafeAsyncConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState.disabled());
         return new AsyncKafkaConsumer<>(
             logContext,
             "client-id",
@@ -275,7 +275,7 @@ public class AsyncKafkaConsumerTest {
             requestTimeoutMs,
             defaultApiTimeoutMs,
             "group-id",
-            sharedConsumerState);
+            threadSafeConsumerState);
     }
 
     @Test

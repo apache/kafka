@@ -21,9 +21,9 @@ import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * This class is constructed from within the {@link SharedConsumerState} instance, which means it's available
+ * This class is constructed from within the {@link ThreadSafeConsumerState} instance, which means it's available
  * for both the application and network threads to use. The main user is the {@link AbstractMembershipManager} for
- * mutations and the {@link SharedConsumerState#canSkipWaitingOnPoll(long)} method for determining if the costly
+ * mutations and the {@link ThreadSafeConsumerState#canSkipWaitingOnPoll(long)} method for determining if the costly
  * {@link PollEvent} can be sent in the background or not.
  *
  * <p/>
@@ -31,15 +31,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Yes, this class is a wrapper around a simple {@link AtomicBoolean}, but the intention behind dedicating a class
  * to it hopefully makes the shared nature and its purpose more apparent.
  */
-public class SharedReconciliationState {
+public class ThreadSafeReconciliationState {
 
     private final AtomicBoolean value;
 
-    public SharedReconciliationState() {
+    public ThreadSafeReconciliationState() {
         this(false);
     }
 
-    public SharedReconciliationState(boolean value) {
+    public ThreadSafeReconciliationState(boolean value) {
         this.value = new AtomicBoolean(value);
     }
 

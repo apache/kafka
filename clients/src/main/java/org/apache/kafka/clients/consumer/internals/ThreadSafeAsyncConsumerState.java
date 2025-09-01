@@ -22,41 +22,18 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * This class stores shared state needed by both the application thread ({@link AsyncKafkaConsumer}) and the
- * network thread ({@link ConsumerNetworkThread}) to avoid costly inter-thread communication, where possible.
- * This class compromises on the ideal of keeping state only in the network thread. However, this class only
- * relies on classes which are designed to be thread-safe, thus they can be used in both the application
- * and network threads.
- *
- * <p/>
- *
- * The following thread-safe classes are used by this class:
- *
- * <ul>
- *     <li>{@link SharedAutoCommitState}</li>
- *     <li>{@link SharedReconciliationState}</li>
- * </ul>
- *
- * <p/>
- *
- * In general, callers from the application thread should not mutate any of the state contained within this class.
- * It should be considered as <em>read-only</em>, and only the network thread should mutate the state.
+ * network thread ({@link ConsumerNetworkThread}) for the {@link AsyncKafkaConsumer}.
  */
-public class SharedConsumerState {
+public class ThreadSafeAsyncConsumerState extends ThreadSafeConsumerState {
 
-    private final SharedAutoCommitState autoCommitState;
-    private final SharedReconciliationState sharedReconciliationState;
+    private final ThreadSafeAutoCommitState autoCommitState;
 
-    public SharedConsumerState(SharedAutoCommitState autoCommitState) {
+    public ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState autoCommitState) {
         this.autoCommitState = requireNonNull(autoCommitState);
-        this.sharedReconciliationState = new SharedReconciliationState();
     }
 
-    public SharedAutoCommitState autoCommitState() {
+    public ThreadSafeAutoCommitState autoCommitState() {
         return autoCommitState;
-    }
-
-    public SharedReconciliationState reconciliationState() {
-        return sharedReconciliationState;
     }
 
     /**
@@ -88,7 +65,7 @@ public class SharedConsumerState {
      * @return true if all checks pass, false if either of the latter two checks fail
      */
     public boolean canSkipWaitingOnPoll(long currentTimeMs) {
-        if (sharedReconciliationState.isInProgress())
+        if (reconciliationState.isInProgress())
             return false;
 
         autoCommitState.updateTimer(currentTimeMs);
