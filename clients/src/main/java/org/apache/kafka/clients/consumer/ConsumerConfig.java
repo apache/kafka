@@ -145,7 +145,6 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String AUTO_COMMIT_INTERVAL_MS_CONFIG = "auto.commit.interval.ms";
     private static final String AUTO_COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds that the consumer offsets are auto-committed to Kafka if <code>enable.auto.commit</code> is set to <code>true</code>.";
-    public static final int DEFAULT_AUTO_COMMIT_INTERVAL_MS = 5000;
 
     /**
      * <code>partition.assignment.strategy</code>
@@ -463,7 +462,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         ENABLE_AUTO_COMMIT_DOC)
                                 .define(AUTO_COMMIT_INTERVAL_MS_CONFIG,
                                         Type.INT,
-                                        DEFAULT_AUTO_COMMIT_INTERVAL_MS,
+                                        5000,
                                         atLeast(0),
                                         Importance.LOW,
                                         AUTO_COMMIT_INTERVAL_MS_DOC)

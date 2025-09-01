@@ -25,8 +25,6 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.DEFAULT_AUTO_COMMIT_INTERVAL_MS;
-
 /**
  * Encapsulates the state of auto-committing and manages the auto-commit timer.
  */
@@ -81,7 +79,8 @@ public interface ThreadSafeAutoCommitState {
     }
 
     static ThreadSafeAutoCommitState enabled(final LogContext logContext, final Time time) {
-        return enabled(logContext, time, DEFAULT_AUTO_COMMIT_INTERVAL_MS);
+        int defaultAutoCommitIntervalMs = 5000;     // This is as defined in ConsumerConfig
+        return enabled(logContext, time, defaultAutoCommitIntervalMs);
     }
 
     static ThreadSafeAutoCommitState disabled() {
