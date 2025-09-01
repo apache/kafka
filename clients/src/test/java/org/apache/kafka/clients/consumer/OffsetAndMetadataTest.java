@@ -65,4 +65,11 @@ public class OffsetAndMetadataTest {
         assertEquals(new OffsetAndMetadata(10, Optional.of(235), "test commit metadata"), deserializedObject);
     }
 
+    @Test
+    public void testEqualsWithNullAndNegativeLeaderEpoch() {
+        OffsetAndMetadata metadataWithNullEpoch = new OffsetAndMetadata(100L, Optional.empty(), "metadata");
+        OffsetAndMetadata metadataWithNegativeEpoch = new OffsetAndMetadata(100L, Optional.of(-1), "metadata");
+        assertEquals(metadataWithNullEpoch, metadataWithNegativeEpoch);
+        assertEquals(metadataWithNullEpoch.hashCode(), metadataWithNegativeEpoch.hashCode());
+    }
 }

@@ -99,6 +99,14 @@ public class OffsetAndMetadata implements Serializable {
         return Optional.of(leaderEpoch);
     }
 
+    /**
+     * Normalizes leader epoch values for comparison and hashing.
+     * Both null and negative values are considered equivalent (representing absent/unknown epoch).
+     */
+    private Integer normalizeLeaderEpoch(Integer leaderEpoch) {
+        return (leaderEpoch == null || leaderEpoch < 0) ? null : leaderEpoch;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -106,21 +114,20 @@ public class OffsetAndMetadata implements Serializable {
         OffsetAndMetadata that = (OffsetAndMetadata) o;
         return offset == that.offset &&
                 Objects.equals(metadata, that.metadata) &&
-                Objects.equals(leaderEpoch, that.leaderEpoch);
+                Objects.equals(normalizeLeaderEpoch(leaderEpoch), normalizeLeaderEpoch(that.leaderEpoch));
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(offset, metadata, leaderEpoch);
+        return Objects.hash(offset, metadata, normalizeLeaderEpoch(leaderEpoch));
     }
 
     @Override
     public String toString() {
         return "OffsetAndMetadata{" +
                 "offset=" + offset +
-                ", leaderEpoch=" + leaderEpoch +
+                ", leaderEpoch=" + leaderEpoch().orElse(null) +
                 ", metadata='" + metadata + '\'' +
                 '}';
     }
-
 }
