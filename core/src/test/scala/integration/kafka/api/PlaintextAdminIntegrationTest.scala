@@ -34,6 +34,7 @@ import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer
 import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
@@ -56,8 +57,6 @@ import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVe
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
-import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
-import org.apache.kafka.streams.GroupProtocol.STREAMS
 import org.apache.kafka.test.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
 import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
@@ -2595,25 +2594,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val streamsConfig = new Properties()
     streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
 
     val streamsGroup = createStreamsGroup(
-      configOverrides = streamsConfig,
-      inputTopic = testTopicName,
-      outputTopic = testStreamsOutputTopicName,
-      streamsGroupId = streamsGroupId,
-      groupProtocol = STREAMS.toString
+      configOverrides = streamsConfig ,
+      inputTopic = testTopicName ,
+      outputTopic = testStreamsOutputTopicName ,
+      streamsGroupId = streamsGroupId
     )
+    streamsGroup.poll(JDuration.ofMillis(500L))
 
     val config = createConfig
     client = Admin.create(config)
     try {
-      client.createTopics(util.Set.of(
-        new NewTopic(testTopicName, 1, 1.toShort),
-        new NewTopic(testStreamsOutputTopicName, 1, 1.toShort)
-      )).all().get()
-
-      waitForTopics(client, List(testTopicName), List())
+      //      client.createTopics(util.Set.of(
+      //        new NewTopic(testTopicName, 1, 1.toShort),
+      //        new NewTopic(testStreamsOutputTopicName, 1, 1.toShort)
+      //      )).all().get()
+      //
+      //      waitForTopics(client, List(testTopicName), List())
       val topicPartition = new TopicPartition(testTopicName, 0)
 
       classicGroup.subscribe(util.Set.of(testTopicName))
@@ -2622,7 +2620,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       consumerGroup.poll(JDuration.ofMillis(1000))
       shareGroup.subscribe(util.Set.of(testTopicName))
       shareGroup.poll(JDuration.ofMillis(1000))
-      streamsGroup.start()
 
       val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(simpleGroupId,
         util.Map.of(topicPartition, new OffsetAndMetadata(0L)))
@@ -4401,9 +4398,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
-  def testDescribeStreamsGroups(groupProtocol: String): Unit = {
+  @Test
+  def testDescribeStreamsGroups(): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"
     val testOutputTopicName = "test_output_topic"
@@ -4417,26 +4413,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val streamsConfig = new Properties()
     streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
     val streams = createStreamsGroup(
       configOverrides = streamsConfig,
       inputTopic = testTopicName,
       outputTopic = testOutputTopicName,
-      streamsGroupId = streamsGroupId,
-      groupProtocol = groupProtocol
+      streamsGroupId = streamsGroupId
     )
+    streams.poll(JDuration.ofMillis(500L))
 
     try {
-      streams.cleanUp()
-      streams.start()
-
-      TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
-
-      TestUtils.waitUntilTrue(() => {
-        client.listGroups().all().get().stream()
-          .anyMatch(g => g.groupId() == streamsGroupId)
-      }, "Streams group not ready to describe yet")
-
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
@@ -4456,15 +4441,19 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertTrue(subtopologies.exists(subtopology =>
         subtopology.sourceTopics().contains(testTopicName)))
 
+      // Test describing a non-existing group
+      val nonExistingGroup = "non_existing_stream_group"
+      val describedNonExistingGroupResponse = client.describeStreamsGroups(util.List.of(nonExistingGroup))
+      assertFutureThrows(classOf[GroupIdNotFoundException], describedNonExistingGroupResponse.all())
+
     } finally {
       Utils.closeQuietly(streams, "streams")
       Utils.closeQuietly(client, "adminClient")
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
-  def testDeleteStreamsGroups(groupProtocol: String): Unit = {
+  @Test
+  def testDeleteStreamsGroups(): Unit = {
     val testTopicName = "test_topic"
     val testOutputTopicName = "test_output_topic"
     val testNumPartitions = 3
@@ -4479,34 +4468,29 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
     prepareRecords(testTopicName)
 
-    val streamsList = scala.collection.mutable.ListBuffer[(String, KafkaStreams)]()
+    val streamsList = scala.collection.mutable.ListBuffer[(String, AsyncKafkaConsumer[_,_])]()
 
     try {
       for (i <- 1 to testNumStreamsGroup) {
         val streamsGroupId = s"stream_group_id_$i"
         val streamsConfig = new Properties()
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000)
+
         val streams = createStreamsGroup(
           configOverrides = streamsConfig,
           inputTopic = testTopicName,
           outputTopic = testOutputTopicName,
           streamsGroupId = streamsGroupId,
-          groupProtocol = groupProtocol
         )
-        streams.cleanUp()
-        streams.start()
+        streams.poll(JDuration.ofMillis(500L))
         streamsList += ((streamsGroupId, streams))
       }
 
       TestUtils.waitUntilTrue(() => {
-        client.listGroups().all().get().stream()
-          .anyMatch(g => g.groupId().startsWith("stream_group_id_"))
+        val groups = client.listGroups().all().get()
+        groups.stream()
+          .anyMatch(g => g.groupId().startsWith("stream_group_id_")) &&  testNumStreamsGroup == groups.size()
       }, "Streams groups not ready to delete yet")
-
-      // Verify that there are 3 groups created
-      val groups = client.listGroups().all().get()
-      assertEquals(testNumStreamsGroup, groups.size())
 
       // Test deletion of non-empty existing groups
       var deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
@@ -4517,13 +4501,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       streamsList
         .filter { case (groupId, _) => targetDeletedGroups.contains(groupId) }
         .foreach { case (_, streams) =>
-          streams.close(java.time.Duration.ofSeconds(10))
-          streams.cleanUp()
+          streams.close()
         }
+
+      val listTopicResult = client.listTopics()
+      assertEquals(3, listTopicResult.names().get().size())
 
       // Test deletion of emptied existing streams groups
       deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
-      assertEquals(deleteStreamsGroupResult.deletedGroups().size(),2)
+      assertEquals(2, deleteStreamsGroupResult.deletedGroups().size())
 
       // Wait for the deleted groups to be removed
       TestUtils.waitUntilTrue(() => {
@@ -4546,16 +4532,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     } finally{
       streamsList.foreach { case (_, streams) =>
-        streams.close(java.time.Duration.ofSeconds(10))
-        streams.cleanUp()
+        streams.close()
       }
       Utils.closeQuietly(client, "adminClient")
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
-  def testListStreamsGroupOffsets(groupProtocol: String): Unit = {
+  @Test
+  def testListStreamsGroupOffsets(): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"
     val testOutputTopicName = "test_output_topic"
@@ -4568,32 +4552,34 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
     prepareRecords(testTopicName)
 
+    // Producer sends messages
+    for (i <- 1 to 20) {
+      TestUtils.waitUntilTrue(() => {
+        val producerRecord = producer.send(
+            new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
+          .get()
+        producerRecord != null && producerRecord.topic() == testTopicName
+      }, "Fail to produce record to topic")
+    }
+
     val streamsConfig = new Properties()
     streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000)
+    streamsConfig.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000)
     val streams = createStreamsGroup(
       configOverrides = streamsConfig,
       inputTopic = testTopicName,
       outputTopic = testOutputTopicName,
       streamsGroupId = streamsGroupId,
-      groupProtocol = groupProtocol
     )
 
     try {
-      streams.cleanUp()
-      streams.start()
+      TestUtils.waitUntilTrue(() => {
+        streams.poll(JDuration.ofMillis(100L))
+        !streams.assignment().isEmpty
+      }, "Consumer not assigned to partitions")
 
-      TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
-
-      // Producer sends messages
-      for (i <- 1 to 20) {
-        TestUtils.waitUntilTrue(() => {
-          val producerRecord = producer.send(
-            new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
-            .get()
-          producerRecord != null && producerRecord.topic() == testTopicName
-        }, "Fail to produce record to topic")
-      }
+      streams.poll(JDuration.ofMillis(1000L))
+      streams.commitSync()
 
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
@@ -4619,9 +4605,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
-  def testDeleteStreamsGroupOffsets(groupProtocol: String): Unit = {
+  @Test
+  def testDeleteStreamsGroupOffsets(): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"
     val testOutputTopicName = "test_output_topic"
@@ -4633,33 +4618,35 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
     prepareRecords(testTopicName)
+    // Producer sends messages
+    for (i <- 1 to 20) {
+      TestUtils.waitUntilTrue(() => {
+        val producerRecord = producer.send(
+            new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
+          .get()
+        producerRecord != null && producerRecord.topic() == testTopicName
+      }, "Fail to produce record to topic")
+    }
 
     val streamsConfig = new Properties()
     streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000)
+    streamsConfig.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000)
     val streams = createStreamsGroup(
       configOverrides = streamsConfig,
       inputTopic = testTopicName,
       outputTopic = testOutputTopicName,
       streamsGroupId = streamsGroupId,
-      groupProtocol = groupProtocol
     )
 
     try {
-      streams.cleanUp()
-      streams.start()
+      TestUtils.waitUntilTrue(() => {
+        streams.poll(JDuration.ofMillis(100L))
+        !streams.assignment().isEmpty
+      }, "Consumer not assigned to partitions")
 
-      TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
+      streams.poll(JDuration.ofMillis(1000L))
+      streams.commitSync()
 
-      // Producer sends messages
-      for (i <- 1 to 20) {
-        TestUtils.waitUntilTrue(() => {
-          val producerRecord = producer.send(
-              new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
-            .get()
-          producerRecord != null && producerRecord.topic() == testTopicName
-        }, "Fail to produce record to topic")
-      }
       // List streams group offsets
       TestUtils.waitUntilTrue(() => {
          val allTopicPartitions = client.listStreamsGroupOffsets(
@@ -4702,9 +4689,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersStreamsGroupProtocolOnly"))
-  def testAlterStreamsGroupOffsets(groupProtocol: String): Unit = {
+  @Test
+  def testAlterStreamsGroupOffsets(): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"
     val testOutputTopicName = "test_output_topic"
@@ -4717,32 +4703,35 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
     prepareRecords(testTopicName)
 
+    // Producer sends messages
+    for (i <- 1 to 20) {
+      TestUtils.waitUntilTrue(() => {
+        val producerRecord = producer.send(
+            new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
+          .get()
+        producerRecord != null && producerRecord.topic() == testTopicName
+      }, "Fail to produce record to topic")
+    }
+
     val streamsConfig = new Properties()
     streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000)
+    streamsConfig.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000)
     val streams = createStreamsGroup(
       configOverrides = streamsConfig,
       inputTopic = testTopicName,
       outputTopic = testOutputTopicName,
       streamsGroupId = streamsGroupId,
-      groupProtocol = groupProtocol
     )
 
     try {
-      streams.cleanUp()
-      streams.start()
+      TestUtils.waitUntilTrue(() => {
+        streams.poll(JDuration.ofMillis(100L))
+        !streams.assignment().isEmpty
+      }, "Consumer not assigned to partitions")
 
-      TestUtils.waitUntilTrue(() => streams.state() == KafkaStreams.State.RUNNING, "Streams not in RUNNING state")
+      streams.poll(JDuration.ofMillis(1000L))
+      streams.commitSync()
 
-      // Producer sends messages
-      for (i <- 1 to 20) {
-        TestUtils.waitUntilTrue(() => {
-          val producerRecord = producer.send(
-              new ProducerRecord[Array[Byte], Array[Byte]](testTopicName, s"key-$i".getBytes(), s"value-$i".getBytes()))
-            .get()
-          producerRecord != null && producerRecord.topic() == testTopicName
-        }, "Fail to produce record to topic")
-      }
       // List streams group offsets
       TestUtils.waitUntilTrue(() => {
         val allTopicPartitions = client.listStreamsGroupOffsets(

@@ -44,7 +44,6 @@ import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.kafka.server.util.timer.SystemTimer
-import org.apache.kafka.streams.GroupProtocol.STREAMS
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 import org.junit.jupiter.params.provider.Arguments
@@ -419,13 +418,6 @@ object QuorumTestHarness {
   def getTestGroupProtocolParametersConsumerGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
       Arguments.of(GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
-    )
-  }
-
-  // For tests that only work with the streams group protocol
-  def getTestGroupProtocolParametersStreamsGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of(STREAMS.name.toLowerCase(Locale.ROOT))
     )
   }
 }
