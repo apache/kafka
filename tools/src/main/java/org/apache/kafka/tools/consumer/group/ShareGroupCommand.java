@@ -381,10 +381,6 @@ public class ShareGroupCommand {
         void resetOffsets() {
             String groupId = opts.options.valueOf(opts.groupOpt);
             try {
-                ShareGroupDescription shareGroupDescription = describeShareGroups(List.of(groupId)).get(groupId);
-                if (!(GroupState.EMPTY.equals(shareGroupDescription.groupState()) || GroupState.DEAD.equals(shareGroupDescription.groupState()))) {
-                    CommandLineUtils.printErrorAndExit(String.format("Share group '%s' is not empty.", groupId));
-                }
                 Map<TopicPartition, OffsetAndMetadata> offsetsToReset = prepareOffsetsToReset(groupId);
                 if (offsetsToReset == null) {
                     return;
@@ -418,18 +414,6 @@ public class ShareGroupCommand {
 
             if (opts.options.has(opts.topicOpt)) {
                 partitionsToReset = offsetsUtils.parseTopicPartitionsToReset(opts.options.valuesOf(opts.topicOpt));
-                Set<String> subscribedTopics = offsetsByTopicPartitions.keySet().stream()
-                    .map(TopicPartition::topic)
-                    .collect(Collectors.toSet());
-                Set<String> resetTopics = partitionsToReset.stream()
-                    .map(TopicPartition::topic)
-                    .collect(Collectors.toSet());
-                if (!subscribedTopics.containsAll(resetTopics)) {
-                    CommandLineUtils
-                        .printErrorAndExit(String.format("Share group '%s' is not subscribed to topic '%s'.",
-                            groupId, resetTopics.stream().filter(topic -> !subscribedTopics.contains(topic)).collect(Collectors.joining(", "))));
-                    return null;
-                }
             } else {
                 partitionsToReset = offsetsByTopicPartitions.keySet();
             }
