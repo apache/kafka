@@ -122,9 +122,9 @@ public class SharePartitionManager implements AutoCloseable {
     private final Timer timer;
 
     /**
-     * The max in flight messages is the maximum number of messages that can be in flight at any one time per share-partition.
+     * The max in flight records is the maximum number of records that can be in flight at any one time per share-partition.
      */
-    private final int maxInFlightMessages;
+    private final int maxInFlightRecords;
 
     /**
      * The max delivery count is the maximum number of times a message can be delivered before it is considered to be archived.
@@ -156,7 +156,7 @@ public class SharePartitionManager implements AutoCloseable {
         ShareSessionCache cache,
         int defaultRecordLockDurationMs,
         int maxDeliveryCount,
-        int maxInFlightMessages,
+        int maxInFlightRecords,
         long remoteFetchMaxWaitMs,
         Persister persister,
         GroupConfigManager groupConfigManager,
@@ -168,7 +168,7 @@ public class SharePartitionManager implements AutoCloseable {
             new SharePartitionCache(),
             defaultRecordLockDurationMs,
             maxDeliveryCount,
-            maxInFlightMessages,
+            maxInFlightRecords,
             remoteFetchMaxWaitMs,
             persister,
             groupConfigManager,
@@ -184,7 +184,7 @@ public class SharePartitionManager implements AutoCloseable {
         SharePartitionCache partitionCache,
         int defaultRecordLockDurationMs,
         int maxDeliveryCount,
-        int maxInFlightMessages,
+        int maxInFlightRecords,
         long remoteFetchMaxWaitMs,
         Persister persister,
         GroupConfigManager groupConfigManager,
@@ -199,7 +199,7 @@ public class SharePartitionManager implements AutoCloseable {
             new SystemTimerReaper("share-group-lock-timeout-reaper",
                 new SystemTimer("share-group-lock-timeout")),
             maxDeliveryCount,
-            maxInFlightMessages,
+            maxInFlightRecords,
             remoteFetchMaxWaitMs,
             persister,
             groupConfigManager,
@@ -217,7 +217,7 @@ public class SharePartitionManager implements AutoCloseable {
             int defaultRecordLockDurationMs,
             Timer timer,
             int maxDeliveryCount,
-            int maxInFlightMessages,
+            int maxInFlightRecords,
             long remoteFetchMaxWaitMs,
             Persister persister,
             GroupConfigManager groupConfigManager,
@@ -231,7 +231,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.maxDeliveryCount = maxDeliveryCount;
-        this.maxInFlightMessages = maxInFlightMessages;
+        this.maxInFlightRecords = maxInFlightRecords;
         this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
         this.persister = persister;
         this.groupConfigManager = groupConfigManager;
@@ -710,7 +710,7 @@ public class SharePartitionManager implements AutoCloseable {
                             sharePartitionKey.groupId(),
                             sharePartitionKey.topicIdPartition(),
                             leaderEpoch,
-                            maxInFlightMessages,
+                            maxInFlightRecords,
                             maxDeliveryCount,
                             defaultRecordLockDurationMs,
                             timer,
