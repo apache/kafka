@@ -138,14 +138,11 @@ public class CommitRequestManagerTest {
     @Test
     public void testOffsetFetchRequestStateToStringBase() {
         ConsumerConfig config = mock(ConsumerConfig.class);
-        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
-            ThreadSafeAutoCommitState.newInstance(
-                logContext,
-                config,
-                time
-            )
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(
+            logContext,
+            config,
+            time
         );
-
         CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
                 logContext,
@@ -1574,14 +1571,11 @@ public class CommitRequestManagerTest {
             props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));
 
         ConsumerConfig config = new ConsumerConfig(props);
-        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
-            ThreadSafeAutoCommitState.newInstance(
-                logContext,
-                config,
-                time
-            )
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(
+            logContext,
+            config,
+            time
         );
-
         return spy(new CommitRequestManager(
                 this.time,
                 this.logContext,

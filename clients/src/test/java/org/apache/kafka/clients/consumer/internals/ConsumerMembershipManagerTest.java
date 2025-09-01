@@ -141,11 +141,9 @@ public class ConsumerMembershipManagerTest {
     }
 
     private ConsumerMembershipManager createMembershipManager(String groupInstanceId) {
-        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
-            ThreadSafeAutoCommitState.enabled(
-                LOG_CONTEXT,
-                time
-            )
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitEnabled(
+            LOG_CONTEXT,
+            time
         );
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
             GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
@@ -160,11 +158,9 @@ public class ConsumerMembershipManagerTest {
         String serverAssignor,
         String rackId
     ) {
-        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
-            ThreadSafeAutoCommitState.enabled(
-                LOG_CONTEXT,
-                time
-            )
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitEnabled(
+            LOG_CONTEXT,
+            time
         );
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(rackId), REBALANCE_TIMEOUT,
@@ -254,11 +250,9 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
-        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
-            ThreadSafeAutoCommitState.enabled(
-                LOG_CONTEXT,
-                time
-            )
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitEnabled(
+            LOG_CONTEXT,
+            time
         );
         ConsumerMembershipManager membershipManager = new ConsumerMembershipManager(
                 GROUP_ID, Optional.empty(), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),

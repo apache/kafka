@@ -50,7 +50,7 @@ public class RequestManagersTest {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
-        final ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState.disabled());
+        final ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitDisabled();
         final RequestManagers requestManagers = RequestManagers.supplier(
             new MockTime(),
             new LogContext(),
@@ -92,7 +92,7 @@ public class RequestManagersTest {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
-        final ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState.disabled());
+        final ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitDisabled();
         final RequestManagers requestManagers = RequestManagers.supplier(
             new MockTime(),
             new LogContext(),

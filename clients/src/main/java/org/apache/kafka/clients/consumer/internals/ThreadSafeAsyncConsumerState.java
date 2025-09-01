@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ThreadSafeAutoCommitState.AUTO_COMMIT_DISABLED;
 
 /**
  * This class stores shared state needed by both the application thread ({@link AsyncKafkaConsumer}) and the
@@ -30,6 +34,25 @@ public class ThreadSafeAsyncConsumerState extends ThreadSafeConsumerState {
 
     public ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState autoCommitState) {
         this.autoCommitState = requireNonNull(autoCommitState);
+    }
+
+    public static ThreadSafeAsyncConsumerState fromConfig(LogContext logContext, ConsumerConfig config, Time time) {
+        return new ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState.fromConfig(logContext, config, time));
+    }
+
+    static ThreadSafeAsyncConsumerState withAutoCommitEnabled(final LogContext logContext, final Time time) {
+        int defaultAutoCommitIntervalMs = 5000;     // This is as defined in ConsumerConfig
+        return new ThreadSafeAsyncConsumerState(
+            new ThreadSafeAutoCommitState.AutoCommitEnabled(
+                logContext,
+                time,
+                defaultAutoCommitIntervalMs
+            )
+        );
+    }
+
+    static ThreadSafeAsyncConsumerState withAutoCommitDisabled() {
+        return new ThreadSafeAsyncConsumerState(AUTO_COMMIT_DISABLED);
     }
 
     public ThreadSafeAutoCommitState autoCommitState() {

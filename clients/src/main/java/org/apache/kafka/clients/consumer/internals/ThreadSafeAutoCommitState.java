@@ -72,29 +72,14 @@ public interface ThreadSafeAutoCommitState {
 
     void setInflightCommit(final boolean hasInflightCommit);
 
-    static ThreadSafeAutoCommitState enabled(final LogContext logContext,
-                                             final Time time,
-                                             final long autoCommitInterval) {
-        return new AutoCommitEnabled(logContext, time, autoCommitInterval);
-    }
-
-    static ThreadSafeAutoCommitState enabled(final LogContext logContext, final Time time) {
-        int defaultAutoCommitIntervalMs = 5000;     // This is as defined in ConsumerConfig
-        return enabled(logContext, time, defaultAutoCommitIntervalMs);
-    }
-
-    static ThreadSafeAutoCommitState disabled() {
-        return AUTO_COMMIT_DISABLED;
-    }
-
-    static ThreadSafeAutoCommitState newInstance(final LogContext logContext,
-                                                 final ConsumerConfig config,
-                                                 final Time time) {
+    static ThreadSafeAutoCommitState fromConfig(final LogContext logContext,
+                                                final ConsumerConfig config,
+                                                final Time time) {
         if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             final long interval = Integer.toUnsignedLong(config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-            return enabled(logContext, time, interval);
+            return new AutoCommitEnabled(logContext, time, interval);
         } else {
-            return disabled();
+            return AUTO_COMMIT_DISABLED;
         }
     }
 
@@ -105,9 +90,9 @@ public interface ThreadSafeAutoCommitState {
         private final long autoCommitInterval;
         private boolean hasInflightCommit;
 
-        private AutoCommitEnabled(final LogContext logContext,
-                                  final Time time,
-                                  final long autoCommitInterval) {
+        public AutoCommitEnabled(final LogContext logContext,
+                                 final Time time,
+                                 final long autoCommitInterval) {
             this.log = logContext.logger(ThreadSafeAutoCommitState.class);
             this.timer = time.timer(autoCommitInterval);
             this.autoCommitInterval = autoCommitInterval;

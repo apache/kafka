@@ -476,13 +476,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
-            this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
-                ThreadSafeAutoCommitState.newInstance(
-                    requireNonNull(logContext),
-                    requireNonNull(config),
-                    requireNonNull(time)
-                )
-            );
+            this.threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(logContext, config, time);
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
                     backgroundEventHandler,
@@ -668,13 +662,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             kafkaConsumerMetrics
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
-        this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
-            ThreadSafeAutoCommitState.newInstance(
-                requireNonNull(logContext),
-                requireNonNull(config),
-                requireNonNull(time)
-            )
-        );
+        this.threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(logContext, config, time);
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,

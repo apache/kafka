@@ -254,7 +254,7 @@ public class AsyncKafkaConsumerTest {
         long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
-        ThreadSafeAsyncConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState.disabled());
+        ThreadSafeAsyncConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitDisabled();
         return new AsyncKafkaConsumer<>(
             new LogContext(),
             "client-id",
