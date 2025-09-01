@@ -71,11 +71,4 @@ public class ThreadSafeAsyncConsumerState extends ThreadSafeConsumerState {
         autoCommitState.updateTimer(currentTimeMs);
         return !autoCommitState.shouldAutoCommit();
     }
-
-    /**
-     * Determines if auto-commit is enabled.
-     */
-    public boolean isAutoCommitEnabled() {
-        return autoCommitState.isAutoCommitEnabled();
-    }
 }

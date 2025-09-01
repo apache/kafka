@@ -1545,7 +1545,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (groupMetadata.get().isEmpty())
             return;
 
-        if (threadSafeConsumerState.isAutoCommitEnabled())
+        if (threadSafeConsumerState.autoCommitState().isAutoCommitEnabled())
             commitSyncAllConsumed(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());
