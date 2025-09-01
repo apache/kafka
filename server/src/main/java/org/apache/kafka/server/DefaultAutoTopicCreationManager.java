@@ -116,14 +116,6 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
         if (topics.isEmpty()) {
             return;
         }
-        topics.values().forEach(creatableTopic -> {
-            if (creatableTopic.numPartitions() == -1) {
-                creatableTopic.setNumPartitions(config.numPartitions());
-            }
-            if (creatableTopic.replicationFactor() == -1) {
-                creatableTopic.setReplicationFactor((short) config.defaultReplicationFactor());
-            }
-        });
         sendCreateTopicRequest(topics, Optional.of(requestContext));
     }
 

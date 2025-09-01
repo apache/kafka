@@ -80,7 +80,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-public class AutoTopicCreationManagerTest {
+public class DefaultAutoTopicCreationManagerTest {
     @SuppressWarnings("unchecked")
     private static final Class<AbstractRequest.Builder<? extends AbstractRequest>> ABSTRACT_REQUEST_BUILDER_CLASS =
             (Class<AbstractRequest.Builder<? extends AbstractRequest>>) (Class<?>) AbstractRequest.Builder.class;
@@ -311,46 +311,6 @@ public class AutoTopicCreationManagerTest {
         verify(brokerToController, never()).sendRequest(
                 any(ABSTRACT_REQUEST_BUILDER_CLASS),
                 any(ControllerRequestCompletionHandler.class));
-    }
-
-    @Test
-    public void testCreateStreamsInternalTopicsWithDefaultConfig() throws UnknownHostException {
-        var topics = Map.of(
-                "stream-topic-1",
-                new CreatableTopic()
-                        .setName("stream-topic-1")
-                        .setNumPartitions(-1)
-                        .setReplicationFactor((short) -1));
-        var requestContext = initializeRequestContextWithUserPrincipal();
-
-        autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-                config,
-                brokerToController,
-                Properties::new,
-                Properties::new,
-                Properties::new);
-
-        autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
-
-        var argumentCaptor = ArgumentCaptor.forClass(ABSTRACT_REQUEST_BUILDER_CLASS);
-        verify(brokerToController).sendRequest(
-                argumentCaptor.capture(),
-                any(ControllerRequestCompletionHandler.class));
-
-        var capturedRequest = ((EnvelopeRequest.Builder) argumentCaptor.getValue()).build(ApiKeys.ENVELOPE.latestVersion());
-
-        var requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.latestVersion(), "clientId", 0);
-        var topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection();
-        topicsCollection.add(getNewTopic("stream-topic-1", config.numPartitions(), (short) config.defaultReplicationFactor()));
-        var requestBody = new CreateTopicsRequest.Builder(
-                new CreateTopicsRequestData()
-                        .setTopics(topicsCollection)
-                        .setTimeoutMs(requestTimeout))
-                .build(ApiKeys.CREATE_TOPICS.latestVersion());
-        var forwardedRequestBuffer = capturedRequest.requestData().duplicate();
-        assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer));
-        assertEquals(requestBody.data(), CreateTopicsRequest.parse(new ByteBufferAccessor(forwardedRequestBuffer),
-                ApiKeys.CREATE_TOPICS.latestVersion()).data());
     }
 
     @Test
