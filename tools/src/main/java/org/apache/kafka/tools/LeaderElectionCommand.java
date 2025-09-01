@@ -101,10 +101,15 @@ public class LeaderElectionCommand {
          */
         Optional<Set<TopicPartition>> topicPartitions = jsonFileTopicPartitions.or(() -> singleTopicPartition);
 
-        Properties props = new Properties();
+        String commandConfigFile;
         if (commandOptions.hasAdminClientConfig()) {
-            props.putAll(Utils.loadProps(commandOptions.getAdminClientConfig()));
+            System.out.println("Option --admin.config has been deprecated and will be removed in a future version. Use --command-config instead.");
+            commandConfigFile = commandOptions.getAdminClientConfig();
+        } else {
+            commandConfigFile = commandOptions.getCommandConfig();
         }
+        Properties props = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
+
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOptions.getBootstrapServer());
         if (!props.containsKey(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG)) {
             props.setProperty(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, Integer.toString((int) timeoutMs.toMillis()));
@@ -242,7 +247,9 @@ public class LeaderElectionCommand {
 
     static class LeaderElectionCommandOptions extends CommandDefaultOptions {
         private final ArgumentAcceptingOptionSpec<String> bootstrapServer;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final ArgumentAcceptingOptionSpec<String> adminClientConfig;
+        private final ArgumentAcceptingOptionSpec<String> commandConfig;
         private final ArgumentAcceptingOptionSpec<String> pathToJsonFile;
         private final ArgumentAcceptingOptionSpec<String> topic;
         private final ArgumentAcceptingOptionSpec<Integer> partition;
@@ -260,9 +267,17 @@ public class LeaderElectionCommand {
             adminClientConfig = parser
                 .accepts(
                     "admin.config",
-                    "Configuration properties files to pass to the admin client")
+                    "(DEPRECATED) Configuration properties files to pass to the admin client. " +
+                    "This option will be removed in a future version. Use --command-config instead.")
                 .withRequiredArg()
                 .describedAs("config file")
+                .ofType(String.class);
+            commandConfig = parser
+                .accepts(
+                    "command-config",
+                    "Config properties file to pass to the admin client.")
+                .withRequiredArg()
+                .describedAs("Config file")
                 .ofType(String.class);
             pathToJsonFile = parser
                 .accepts(
@@ -322,6 +337,10 @@ public class LeaderElectionCommand {
             return options.valueOf(adminClientConfig);
         }
 
+        public String getCommandConfig() {
+            return options.valueOf(commandConfig);
+        }
+
         public String getTopic() {
             return options.valueOf(topic);
         }
@@ -343,6 +362,8 @@ public class LeaderElectionCommand {
             if (!missingOptions.isEmpty()) {
                 throw new AdminCommandFailedException("Missing required option(s): " + String.join(", ", missingOptions));
             }
+
+            CommandLineUtils.checkInvalidArgs(parser, options, adminClientConfig, commandConfig);
 
             // One and only one is required: --topic, --all-topic-partitions or --path-to-json-file
             List<AbstractOptionSpec<?>> mutuallyExclusiveOptions = List.of(
