@@ -386,6 +386,84 @@ Found problem:
   }
 
   @Test
+  def testFormatWithReleaseVersionAndFeatureOverride(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties, Seq(
+      "--release-version", "3.7-IV0",
+      "--feature", "share.version=1")))
+
+    // Verify that the feature override is applied by checking the bootstrap metadata
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+
+    // Verify that the share.version feature is set to 1 as specified
+    assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
+      "share.version should be set to 1")
+
+    // Verify the command output contains the expected release version
+    assertTrue(stream.toString().contains("3.7-IV0"),
+      "Failed to find release version in output: " + stream.toString())
+
+    // Verify that the format command completed successfully with features
+    assertTrue(stream.toString().contains("Formatting metadata directory"),
+      "Failed to find formatting message in output: " + stream.toString())
+  }
+
+  @Test
+  def testFormatWithMultipleFeatures(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties, Seq(
+      "--release-version", "3.8-IV0",
+      "--feature", "share.version=1",
+      "--feature", "transaction.version=2",
+      "--feature", "group.version=1")))
+
+    // Verify that all features are properly bootstrapped by checking the bootstrap metadata
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+
+    // Verify that all specified features are set correctly
+    assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
+      "share.version should be set to 1")
+    assertEquals(2.toShort, bootstrapMetadata.featureLevel("transaction.version"),
+      "transaction.version should be set to 2")
+    assertEquals(1.toShort, bootstrapMetadata.featureLevel("group.version"),
+      "group.version should be set to 1")
+
+    // Verify the command output contains the expected release version
+    assertTrue(stream.toString().contains("3.8-IV0"),
+      "Failed to find release version in output: " + stream.toString())
+
+    // Verify that the format command completed successfully with multiple features
+    assertTrue(stream.toString().contains("Formatting metadata directory"),
+      "Failed to find formatting message in output: " + stream.toString())
+  }
+  
+  @Test
+  def testFormatWithInvalidFeatureThrowsError(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+
+    // Test with an invalid feature that doesn't exist
+    val exception = assertThrows(classOf[FormatterException], () => {
+      runFormatCommand(stream, properties, Seq(
+        "--release-version", "3.7-IV0",
+        "--feature", "stream.version=1"))
+    })
+
+    assertTrue(exception.getMessage.contains("Unsupported feature: stream.version."))
+  }
+
+  @Test
   def testFormatWithStandaloneFlagOnBrokerFails(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()

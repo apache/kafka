@@ -2008,6 +2008,7 @@ public class RecordCollectorTest {
         }
     }
 
+    @Test
     public void shouldCallOldImplementationExceptionHandler() {
         final KafkaException exception = new KafkaException("KABOOM!");
         final StreamsProducer streamProducer = getExceptionalStreamsProducerOnSend(exception);
