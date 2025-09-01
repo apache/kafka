@@ -4418,6 +4418,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       outputTopic = testOutputTopicName,
       streamsGroupId = streamsGroupId
     )
+    streams.poll(JDuration.ofMillis(500L))
 
     try {
       TestUtils.waitUntilTrue(() => {
@@ -4480,6 +4481,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           outputTopic = testOutputTopicName,
           streamsGroupId = streamsGroupId,
         )
+        streams.poll(JDuration.ofMillis(500L))
         streamsList += ((streamsGroupId, streams))
       }
 

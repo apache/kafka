@@ -283,8 +283,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
         override def onAllTasksLost(): Optional[Exception] =
           Optional.empty()
       })
-
-    consumer.poll(Duration.ofMillis(500L))
     consumer
   }
 
