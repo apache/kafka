@@ -325,7 +325,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         boolean isTopicCreated = false;
         long startTimeMs = time.milliseconds();
         boolean initializationFailed = false;
-        try (Admin admin = Admin.create(rlmmConfig.commonProperties())) {
+        try (Admin admin = Admin.create(rlmmConfig.adminProperties())) {
             while (!(initialized.get() || closing.get() || initializationFailed)) {
                 if (time.milliseconds() - startTimeMs > retryMaxTimeoutMs) {
                     log.error("Timed out to initialize the resources within {} ms.", retryMaxTimeoutMs);
