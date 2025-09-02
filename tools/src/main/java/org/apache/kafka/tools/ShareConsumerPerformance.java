@@ -326,7 +326,7 @@ public class ShareConsumerPerformance {
             commandPropertiesOpt = parser.accepts("command-property", "Kafka share consumer related configuration properties like client.id. " +
                             "These configs take precedence over those passed via --command-config or --consumer.config.")
                     .withRequiredArg()
-                    .describedAs("prop1=val1,prop2=val2...")
+                    .describedAs("prop1=val1")
                     .ofType(String.class);
             socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size.")
                     .withRequiredArg()

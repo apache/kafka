@@ -300,7 +300,7 @@ public class ConsumerPerformance {
             commandPropertiesOpt = parser.accepts("command-property", "Kafka consumer related configuration properties like client.id. " +
                     "These configs take precedence over those passed via --command-config or --consumer.config.")
                 .withRequiredArg()
-                .describedAs("prop1=val1,prop2=val2...")
+                .describedAs("prop1=val1")
                 .ofType(String.class);
             resetBeginningOffsetOpt = parser.accepts("from-latest", "If the consumer does not already have an established " +
                 "offset to consume from, start with the latest record present in the log rather than the earliest record.");

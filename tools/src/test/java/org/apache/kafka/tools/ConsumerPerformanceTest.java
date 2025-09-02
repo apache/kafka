@@ -198,12 +198,14 @@ public class ConsumerPerformanceTest {
             "--topic", "test",
             "--num-records", "10",
             "--command-property", "client.id=consumer-2",
-            "--command-config", tempFile.getAbsolutePath()
+            "--command-config", tempFile.getAbsolutePath(),
+            "--command-property", "prop=val"
         };
 
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
 
         assertEquals("consumer-2", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+        assertEquals("val", config.props().getProperty("prop"));
     }
 
     @Test
