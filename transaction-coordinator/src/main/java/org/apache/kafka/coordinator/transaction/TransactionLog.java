@@ -27,7 +27,10 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.server.common.TransactionVersion;
 
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -45,8 +48,8 @@ public class TransactionLog {
     //  2. compression = none
     //  3. unclean leader election = disabled
     //  4. required acks = -1 when writing
-    public static final Compression EnforcedCompression = Compression.NONE;
-    public static final short EnforcedRequiredAcks = (short) -1;
+    public static final Compression ENFORCED_COMPRESSION = Compression.NONE;
+    public static final short ENFORCED_REQUIRED_ACKS = (short) -1;
 
     /**
      * Generates the bytes for transaction log message key
@@ -82,12 +85,11 @@ public class TransactionLog {
                         schema.setTopic(entry.getKey());
                         schema.setPartitionIds(
                                 entry.getValue().stream()
-                                        .map(tp -> Integer.valueOf(tp.partition()))
-                                        .collect(Collectors.toList())
+                                        .map(TopicPartition::partition)
+                                        .toList()
                         );
                         return schema;
-                    })
-                    .collect(Collectors.toList());
+                    }).toList();
         }
 
         return MessageUtil.toVersionPrefixedBytes(
@@ -138,7 +140,7 @@ public class TransactionLog {
                 if (!state.equals(TransactionState.EMPTY)) {
                     for (TransactionLogValue.PartitionsSchema partitionsSchema : value.transactionPartitions()) {
                         for (Integer partitionId : partitionsSchema.partitionIds()) {
-                            tps.add(new TopicPartition(partitionsSchema.topic(), partitionId.intValue()));
+                            tps.add(new TopicPartition(partitionsSchema.topic(), partitionId));
                         }
                     }
                 }
