@@ -32,12 +32,16 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.server.telemetry.ClientTelemetry;
+import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -150,6 +154,42 @@ public class ClientTelemetryTest {
 
     private static String[] toArray(Collection<List<String>> lists) {
         return lists.stream().flatMap(List::stream).toArray(String[]::new);
+    }
+
+    /**
+     * We should add a ClientTelemetry into plugins to test the clientInstanceId method Otherwise the
+     * {@link org.apache.kafka.common.protocol.ApiKeys#GET_TELEMETRY_SUBSCRIPTIONS} command will not be supported
+     * by the server
+     **/
+    @SuppressWarnings("unused")
+    public static class GetIdClientTelemetry implements ClientTelemetry, MetricsReporter {
+
+
+        @Override
+        public void init(List<KafkaMetric> metrics) {
+        }
+
+        @Override
+        public void metricChange(KafkaMetric metric) {
+        }
+
+        @Override
+        public void metricRemoval(KafkaMetric metric) {
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+        }
+
+        @Override
+        public ClientTelemetryReceiver clientReceiver() {
+            return (context, payload) -> {
+            };
+        }
     }
 
 }
