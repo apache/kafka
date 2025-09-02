@@ -3140,9 +3140,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 1)
 
     def assertUnknownTopicOrPartition(
-                                       topicPartition: TopicPartition,
-                                       result: ElectLeadersResult
-                                     ): Unit = {
+      topicPartition: TopicPartition,
+      result: ElectLeadersResult
+    ): Unit = {
       val exception = result.partitions.get.get(topicPartition).get
       assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
       assertEquals(s"No such topic as ${topicPartition.topic()}", exception.getMessage)
@@ -3179,9 +3179,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     def assertPreferredLeaderNotAvailable(
-                                           topicPartition: TopicPartition,
-                                           result: ElectLeadersResult
-                                         ): Unit = {
+      topicPartition: TopicPartition,
+      result: ElectLeadersResult
+    : Unit = {
       val exception = result.partitions.get.get(topicPartition).get
       assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
       assertTrue(exception.getMessage.contains(
@@ -3959,12 +3959,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-   * 1. Assume kafka logger == TRACE
-   * 2. Change kafka.server.ControllerServer logger to INFO
-   * 3. Unset kafka.server.ControllerServer via AlterConfigOp.OpType.DELETE (resets it to the kafka logger - TRACE)
-   * 4. Change kafka logger to ERROR
-   * 5. Ensure the kafka.server.ControllerServer logger's level is ERROR (the current kafka logger level)
-   */
+    * 1. Assume kafka logger == TRACE
+    * 2. Change kafka.server.ControllerServer logger to INFO
+    * 3. Unset kafka.server.ControllerServer via AlterConfigOp.OpType.DELETE (resets it to the kafka logger - TRACE)
+    * 4. Change kafka logger to ERROR
+    * 5. Ensure the kafka.server.ControllerServer logger's level is ERROR (the current kafka logger level)
+    */
   @Test
   def testIncrementalAlterConfigsForLog4jLogLevelsCanResetLoggerToCurrentRoot(): Unit = {
     client = createAdminClient
@@ -4403,7 +4403,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareRecords(testTopicName)
 
     val streamsConfig = new Properties()
-    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     val streams = createStreamsGroup(
       configOverrides = streamsConfig,
       inputTopic = testTopicName,
