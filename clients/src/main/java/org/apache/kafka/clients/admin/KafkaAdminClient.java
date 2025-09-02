@@ -2335,7 +2335,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         // First, we need to retrieve the node info.
-        DescribeClusterResult clusterResult = describeCluster();
+        DescribeClusterResult clusterResult = describeCluster(new DescribeClusterOptions().timeoutMs(options.timeoutMs()));
         clusterResult.nodes().whenComplete(
             (nodes, exception) -> {
                 if (exception != null) {
@@ -5175,6 +5175,8 @@ public class KafkaAdminClient extends AdminClient {
             return ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
         } else if (offsetSpec instanceof OffsetSpec.LatestTieredSpec) {
             return ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.EarliestPendingUploadSpec) {
+            return ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP;
         }
         return ListOffsetsRequest.LATEST_TIMESTAMP;
     }

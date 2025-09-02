@@ -27,6 +27,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -43,8 +44,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -60,6 +62,8 @@ import java.util.stream.Stream;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+
+import static java.util.stream.Collectors.toCollection;
 
 
 /**
@@ -84,6 +88,7 @@ public class LogCompactionTester {
     public static class Options {
         public final OptionSpec<Long> numMessagesOpt;
         public final OptionSpec<String>  messageCompressionOpt;
+        public final OptionSpec<Integer> compressionLevelOpt;
         public final OptionSpec<Integer> numDupsOpt;
         public final OptionSpec<String>  brokerOpt;
         public final OptionSpec<Integer> topicsOpt;
@@ -105,6 +110,12 @@ public class LogCompactionTester {
                     .describedAs("compressionType")
                     .ofType(String.class)
                     .defaultsTo("none");
+
+            compressionLevelOpt = parser
+                    .accepts("compression-level", "The compression level to use with the specified compression type.")
+                    .withOptionalArg()
+                    .describedAs("level")
+                    .ofType(Integer.class);
 
             numDupsOpt = parser
                     .accepts("duplicates", "The number of duplicates for each key.")
@@ -238,7 +249,8 @@ public class LogCompactionTester {
         CommandLineUtils.checkRequiredArgs(parser, optionSet, options.brokerOpt, options.numMessagesOpt);
 
         long messages = optionSet.valueOf(options.numMessagesOpt);
-        String compressionType = optionSet.valueOf(options.messageCompressionOpt);
+        CompressionType compressionType = CompressionType.forName(optionSet.valueOf(options.messageCompressionOpt));
+        Integer compressionLevel = optionSet.valueOf(options.compressionLevelOpt);
         int percentDeletes = optionSet.valueOf(options.percentDeletesOpt);
         int dups = optionSet.valueOf(options.numDupsOpt);
         String brokerUrl = optionSet.valueOf(options.brokerOpt);
@@ -246,15 +258,16 @@ public class LogCompactionTester {
         int sleepSecs = optionSet.valueOf(options.sleepSecsOpt);
 
         long testId = RANDOM.nextLong();
-        String[] topics = IntStream.range(0, topicCount)
+        Set<String> topics = IntStream.range(0, topicCount)
                 .mapToObj(i -> "log-cleaner-test-" + testId + "-" + i)
-                .toArray(String[]::new);
+                .collect(toCollection(LinkedHashSet::new));
         createTopics(brokerUrl, topics);
 
         System.out.println("Producing " + messages + " messages..to topics " + String.join(",", topics));
         Path producedDataFilePath = produceMessages(
                 brokerUrl, topics, messages,
-                compressionType, dups, percentDeletes);
+                compressionType, compressionLevel,
+                dups, percentDeletes);
         System.out.println("Sleeping for " + sleepSecs + "seconds...");
         TimeUnit.MILLISECONDS.sleep(sleepSecs * 1000L);
         System.out.println("Consuming messages...");
@@ -278,7 +291,7 @@ public class LogCompactionTester {
     }
 
 
-    private static void createTopics(String brokerUrl, String[] topics) throws Exception {
+    private static void createTopics(String brokerUrl, Set<String> topics) throws Exception {
         Properties adminConfig = new Properties();
         adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
 
@@ -286,7 +299,7 @@ public class LogCompactionTester {
             Map<String, String> topicConfigs = Map.of(
                     TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT
             );
-            List<NewTopic> newTopics = Arrays.stream(topics)
+            List<NewTopic> newTopics = topics.stream()
                     .map(name -> new NewTopic(name, 1, (short) 1).configs(topicConfigs)).toList();
             adminClient.createTopics(newTopics).all().get();
 
@@ -296,7 +309,7 @@ public class LogCompactionTester {
                     Set<String> allTopics = adminClient.listTopics().names().get();
                     pendingTopics.clear();
                     pendingTopics.addAll(
-                            Arrays.stream(topics)
+                            topics.stream()
                                     .filter(topicName -> !allTopics.contains(topicName))
                                     .toList()
                     );
@@ -392,13 +405,23 @@ public class LogCompactionTester {
         }
     }
 
-    private static Path produceMessages(String brokerUrl, String[] topics, long messages,
-                                        String compressionType, int dups, int percentDeletes) throws IOException {
-        Map<String, Object> producerProps = Map.of(
-                ProducerConfig.MAX_BLOCK_MS_CONFIG, String.valueOf(Long.MAX_VALUE),
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl,
-                ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType
-        );
+    private static Path produceMessages(String brokerUrl, Set<String> topics, long messages,
+                                        CompressionType compressionType, Integer compressionLevel,
+                                        int dups, int percentDeletes) throws IOException {
+        Map<String, Object> producerProps = new HashMap<>();
+        producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, String.valueOf(Long.MAX_VALUE));
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
+        producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
+        
+        if (compressionLevel != null) {
+            switch (compressionType) {
+                case GZIP -> producerProps.put(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG, compressionLevel);
+                case LZ4 -> producerProps.put(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG, compressionLevel);
+                case ZSTD -> producerProps.put(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, compressionLevel);
+                default -> System.out.println("Warning: Compression level " + compressionLevel + " is ignored for compression type "
+                    + compressionType.name + ". Only gzip, lz4, and zstd support compression levels.");
+            }
+        }
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
                 producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
@@ -408,8 +431,10 @@ public class LogCompactionTester {
 
             try (BufferedWriter producedWriter = Files.newBufferedWriter(
                     producedFilePath, StandardCharsets.UTF_8)) {
-                for (long i = 0; i < messages * topics.length; i++) {
-                    String topic = topics[(int) (i % topics.length)];
+                List<String> topicsList = List.copyOf(topics);
+                int size = topicsList.size();
+                for (long i = 0; i < messages * size; i++) {
+                    String topic = topicsList.get((int) (i % size));
                     int key = RANDOM.nextInt(keyCount);
                     boolean delete = (i % 100) < percentDeletes;
                     ProducerRecord<byte[], byte[]> record;
@@ -430,14 +455,14 @@ public class LogCompactionTester {
         }
     }
 
-    private static Path consumeMessages(String brokerUrl, String[] topics) throws IOException {
+    private static Path consumeMessages(String brokerUrl, Set<String> topics) throws IOException {
 
         Path consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt");
         System.out.println("Logging consumed messages to " + consumedFilePath);
 
         try (Consumer<String, String> consumer = createConsumer(brokerUrl);
              BufferedWriter consumedWriter = Files.newBufferedWriter(consumedFilePath, StandardCharsets.UTF_8)) {
-            consumer.subscribe(Arrays.asList(topics));
+            consumer.subscribe(topics);
             while (true) {
                 ConsumerRecords<String, String> consumerRecords = consumer.poll(Duration.ofSeconds(20));
                 if (consumerRecords.isEmpty()) return consumedFilePath;

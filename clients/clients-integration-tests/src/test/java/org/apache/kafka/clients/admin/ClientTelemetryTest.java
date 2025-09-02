@@ -123,6 +123,7 @@ public class ClientTelemetryTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
     public void testIntervalMsParser(ClusterInstance clusterInstance) {
         List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
@@ -152,6 +153,7 @@ public class ClientTelemetryTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static String[] toArray(List<String>... lists) {
         return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
     }
