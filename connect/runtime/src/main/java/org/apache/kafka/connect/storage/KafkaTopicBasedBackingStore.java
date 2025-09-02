@@ -18,9 +18,11 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -44,14 +46,24 @@ public abstract class KafkaTopicBasedBackingStore {
                 // Create the topic if it doesn't exist
                 Set<String> newTopics = createTopics(topicDescription, admin, config, time);
                 if (!newTopics.contains(topic)) {
-                    // It already existed, so check that the topic cleanup policy is compact only and not delete
-                    log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                    admin.verifyTopicCleanupPolicyOnlyCompact(topic, getTopicConfig(), getTopicPurpose());
+                    verifyTopicConfig(topic, admin);
                 }
 			} else {
-                //TODO throw an exception if the topic does not exist
+                log.debug("Skipping creation of Connect internal topic for {} because automatic topic creation is disabled", getTopicPurpose());
+                Map<String, TopicDescription> existing = admin.describeTopics(topic);
+                if (existing.isEmpty()) {
+                    throw new ConnectException("Topic '" + topic + "' does not exist and automatic topic creation is disabled.");
+                }
+
+                verifyTopicConfig(topic, admin);
             }
         };
+    }
+
+    private void verifyTopicConfig(String topic, TopicAdmin admin) {
+        // It already existed, so check that the topic cleanup policy is compact only and not delete
+        log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+        admin.verifyTopicCleanupPolicyOnlyCompact(topic, getTopicConfig(), getTopicPurpose());
     }
 
     private Set<String> createTopics(NewTopic topicDescription, TopicAdmin admin, WorkerConfig config, Time time) {
