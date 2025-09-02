@@ -221,10 +221,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def createStreamsConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                                  valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                                  configOverrides: Properties = new Properties,
-                                  configsToRemove: List[String] = List(),
-                                  streamsRebalanceData: StreamsRebalanceData): AsyncKafkaConsumer[K, V] = {
+                                valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                                configOverrides: Properties = new Properties,
+                                configsToRemove: List[String] = List(),
+                                streamsRebalanceData: StreamsRebalanceData): AsyncKafkaConsumer[K, V] = {
     val props = new Properties
     props ++= streamsConsumerConfig
     props ++= configOverrides
@@ -242,7 +242,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   def createStreamsGroup[K, V](configOverrides: Properties = new Properties,
                                configsToRemove: List[String] = List(),
                                inputTopic: String,
-                               outputTopic: String,
                                streamsGroupId: String): AsyncKafkaConsumer[K, V] = {
     val props = new Properties()
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
@@ -261,7 +260,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
           util.Set.of(inputTopic),
           util.Set.of(),
           util.Map.of(),
-          util.Map.of(outputTopic + "-store-changelog", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.empty(), util.Map.of())),
+          util.Map.of(inputTopic + "-store-changelog", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.empty(), util.Map.of())),
           util.Set.of()
         )),
       Map.empty[String, String].asJava
@@ -273,7 +272,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       configOverrides = props,
       streamsRebalanceData = streamsRebalanceData
     )
-    consumer.subscribe(util.Set.of(inputTopic, outputTopic),
+    consumer.subscribe(util.Set.of(inputTopic),
       new StreamsRebalanceListener {
         override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Optional[Exception] =
           Optional.empty()
@@ -287,9 +286,9 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def createAdminClient(
-                         listenerName: ListenerName = listenerName,
-                         configOverrides: Properties = new Properties
-                       ): Admin = {
+    listenerName: ListenerName = listenerName,
+    configOverrides: Properties = new Properties
+  ): Admin = {
     val props = new Properties
     props ++= adminClientConfig
     props ++= configOverrides
@@ -299,9 +298,9 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def createSuperuserAdminClient(
-                                  listenerName: ListenerName = listenerName,
-                                  configOverrides: Properties = new Properties
-                                ): Admin = {
+    listenerName: ListenerName = listenerName,
+    configOverrides: Properties = new Properties
+  ): Admin = {
     val props = new Properties
     props ++= superuserClientConfig
     props ++= configOverrides
