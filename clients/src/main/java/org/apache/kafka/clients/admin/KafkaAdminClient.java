@@ -89,6 +89,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -3115,6 +3116,8 @@ public class KafkaAdminClient extends AdminClient {
                         // No replica info will be provided if the log directory is offline
                         if (logDirInfo.error() instanceof KafkaStorageException)
                             continue;
+                        if (logDirInfo.error() instanceof ClusterAuthorizationException)
+                            handleFailure(logDirInfo.error());
                         if (logDirInfo.error() != null)
                             handleFailure(new IllegalStateException(
                                 "The error " + logDirInfo.error().getClass().getName() + " for log directory " + logDir + " in the response from broker " + brokerId + " is illegal"));
