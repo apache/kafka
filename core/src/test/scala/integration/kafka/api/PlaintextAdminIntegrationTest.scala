@@ -2590,11 +2590,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     shareGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, shareGroupId)
     val shareGroup = createShareConsumer(configOverrides = shareGroupConfig)
 
-    val streamsConfig = new Properties()
-    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-
     val streamsGroup = createStreamsGroup(
-      configOverrides = streamsConfig,
       inputTopic = testTopicName,
       streamsGroupId = streamsGroupId
     )
