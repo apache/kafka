@@ -31,7 +31,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -82,7 +81,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
     private final Consumer<Long> eventQueueTimeUpdater;
     private final Consumer<Long> eventQueueProcessingTimeUpdater;
-    public final TimeRatio avgIdleTimeRatio;
+    private final TimeRatio avgIdleTimeRatio;
 
     private final AtomicLong timedOutHeartbeats = new AtomicLong(0);
     private final AtomicLong operationsStarted = new AtomicLong(0);
@@ -90,7 +89,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong newActiveControllers = new AtomicLong(0);
     private final Map<Integer, Long> brokerContactTimesMs = new ConcurrentHashMap<>();
     private final int sessionTimeoutMs;
-    private volatile OptionalLong idleStartTime = OptionalLong.empty();
+    private final AtomicLong idleStartTime = new AtomicLong(-1);
 
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
         if (registry.isPresent()) {
@@ -176,18 +175,17 @@ public class QuorumControllerMetrics implements AutoCloseable {
     }
 
     public void updateIdleStartTime() {
-        if (idleStartTime.isEmpty()) {
-            idleStartTime = OptionalLong.of(time.milliseconds());
-        }
+        idleStartTime.compareAndExchange(-1, time.milliseconds());
     }
 
     public void updateIdleEndTime() {
-        if (this.idleStartTime.isPresent()) {
-            long idleDurationMs = Math.max(time.milliseconds() - idleStartTime.getAsLong(), 0);
+        long startTime = idleStartTime.getAndSet(-1);
+        if (startTime != -1) {
+            long idleDurationMs = Math.max(time.milliseconds() - startTime, 0);
             avgIdleTimeRatio.record(METRIC_CONFIG, (double) idleDurationMs, time.milliseconds());
-            idleStartTime = OptionalLong.empty();
         }
     }
+
     public void addTimeSinceLastHeartbeatMetric(int brokerId) {
         brokerContactTimesMs.put(brokerId, time.milliseconds());
         registry.ifPresent(r -> r.newGauge(
