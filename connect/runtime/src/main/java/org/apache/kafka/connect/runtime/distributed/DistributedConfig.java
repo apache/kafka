@@ -187,10 +187,10 @@ public final class DistributedConfig extends WorkerConfig {
     public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.SESSIONED.toString();
 
 
-    public static final String INTERNAL_TOPICS_CREATION_CONFIG = "internal.topics.creation";
-    public static final String INTERNAL_TOPICS_CREATION_DOC = "Whether to automatically create internal topics used by Connect, such as the offset, config, and status topics. "
-            + "If set to false, these topics must be created manually before starting the Connect worker.";
-    public static final Boolean INTERNAL_TOPICS_CREATION_DEFAULT = true;
+    public static final String INTERNAL_TOPIC_CREATION_ENABLE_CONFIG = "internal.topic.creation.enable";
+    public static final String INTERNAL_TOPIC_CREATION_ENABLE_DOC = "Whether to automatically create internal topics used by Connect, such as the offset, config, and status topics. "
+                                                                    + "If set to false, these topics must be created manually before starting the Connect worker.";
+    public static final Boolean INTERNAL_TOPIC_CREATION_ENABLE_DEFAULT = true;
 
     /**
      * <code>scheduled.rebalance.max.delay.ms</code>
@@ -432,10 +432,12 @@ public final class DistributedConfig extends WorkerConfig {
                     WORKER_UNSYNC_BACKOFF_MS_DEFAULT,
                     ConfigDef.Importance.MEDIUM,
                     WORKER_UNSYNC_BACKOFF_MS_DOC)
-            .define(INTERNAL_TOPICS_CREATION_CONFIG,
+            .define(
+                    INTERNAL_TOPIC_CREATION_ENABLE_CONFIG,
                     Type.BOOLEAN,
+                    INTERNAL_TOPIC_CREATION_ENABLE_DEFAULT,
                     ConfigDef.Importance.HIGH,
-                    INTERNAL_TOPICS_CREATION_DOC)
+                    INTERNAL_TOPIC_CREATION_ENABLE_DOC)
             .define(OFFSET_STORAGE_TOPIC_CONFIG,
                     ConfigDef.Type.STRING,
                     ConfigDef.Importance.HIGH,
@@ -596,7 +598,7 @@ public final class DistributedConfig extends WorkerConfig {
 
     @Override
     public boolean internalTopicsCreationEnabled() {
-        return Boolean.TRUE.equals(getBoolean(INTERNAL_TOPICS_CREATION_CONFIG));
+        return Boolean.TRUE.equals(getBoolean(INTERNAL_TOPIC_CREATION_ENABLE_CONFIG));
     }
 
     @Override
