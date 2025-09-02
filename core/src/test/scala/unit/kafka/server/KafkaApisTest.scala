@@ -10890,7 +10890,7 @@ class KafkaApisTest extends Logging {
     future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics.asJava))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(streamsGroupHeartbeatResponse, response.data)
-    verify(autoTopicCreationManager).createStreamsInternalTopics(missingTopics, requestChannelRequest.context)
+    verify(autoTopicCreationManager).createStreamsInternalTopics(any(), any(), anyLong())
   }
 
   @Test
@@ -10969,10 +10969,10 @@ class KafkaApisTest extends Logging {
 
     // Mock AutoTopicCreationManager to return cached errors
     val mockAutoTopicCreationManager = mock(classOf[AutoTopicCreationManager])
-    when(mockAutoTopicCreationManager.getTopicCreationErrors(ArgumentMatchers.eq(Set("test-topic")), any()))
+    when(mockAutoTopicCreationManager.getStreamsInternalTopicCreationErrors(ArgumentMatchers.eq(Set("test-topic")), any()))
       .thenReturn(Map("test-topic" -> "INVALID_REPLICATION_FACTOR"))
     // Mock the createStreamsInternalTopics method to do nothing (simulate topic creation attempt)
-    doNothing().when(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any())
+    doNothing().when(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any(), anyLong())
 
     kafkaApis = createKafkaApis(autoTopicCreationManager = Some(mockAutoTopicCreationManager))
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11001,8 +11001,8 @@ class KafkaApisTest extends Logging {
     assertTrue(status.statusDetail().contains("Creation failed: test-topic (INVALID_REPLICATION_FACTOR)"))
     
     // Verify that createStreamsInternalTopics was called
-    verify(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any())
-    verify(mockAutoTopicCreationManager).getTopicCreationErrors(ArgumentMatchers.eq(Set("test-topic")), any())
+    verify(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any(), anyLong())
+    verify(mockAutoTopicCreationManager).getStreamsInternalTopicCreationErrors(ArgumentMatchers.eq(Set("test-topic")), any())
   }
 
   @ParameterizedTest

@@ -2888,19 +2888,21 @@ class KafkaApis(val requestChannel: RequestChannel,
                 )
               }
             } else {
-              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext);
+              // Compute group-specific expiration time for freshly cached errors
+              val sessionTimeoutMs = Option(groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId).orElse(null))
+                .map(_.streamsSessionTimeoutMs().toLong)
+                .getOrElse(config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs().toLong)
+              val expirationTimeMs = time.milliseconds() + sessionTimeoutMs
+
+              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, expirationTimeMs)
               
               // Check for cached topic creation errors only if there's already a MISSING_INTERNAL_TOPICS status
               val hasMissingInternalTopicsStatus = responseData.status() != null && 
                 responseData.status().stream().anyMatch(s => s.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
               
               if (hasMissingInternalTopicsStatus) {
-                // Calculate group-specific error cache TTL
-                val errorCacheTtlMs = Option(groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId).orElse(null))
-                  .map(_.streamsSessionTimeoutMs().toLong)
-                  .getOrElse(config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs().toLong)
-                
-                val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(topicsToCreate.keys.toSet, errorCacheTtlMs)
+                val currentTimeMs = time.milliseconds()
+                val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicsToCreate.keys.toSet, currentTimeMs)
                 if (cachedErrors.nonEmpty) {
                   val missingInternalTopicStatus =
                     responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()

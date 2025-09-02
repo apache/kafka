@@ -54,6 +54,7 @@ import scala.collection.{Map, Seq}
 class AutoTopicCreationManagerTest {
 
   private val requestTimeout = 100
+  private val testCacheCapacity = 3
   private var config: KafkaConfig = _
   private val metadataCache = Mockito.mock(classOf[MetadataCache])
   private val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
@@ -120,7 +121,8 @@ class AutoTopicCreationManagerTest {
       groupCoordinator,
       transactionCoordinator,
       shareCoordinator,
-      mockTime)
+      mockTime,
+      cacheCapacity = testCacheCapacity)
 
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
     topicsCollection.add(getNewTopic(topicName, numPartitions, replicationFactor))
@@ -237,9 +239,10 @@ class AutoTopicCreationManagerTest {
       groupCoordinator,
       transactionCoordinator,
       shareCoordinator,
-      mockTime)
+      mockTime,
+      cacheCapacity = testCacheCapacity)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
@@ -274,9 +277,10 @@ class AutoTopicCreationManagerTest {
       groupCoordinator,
       transactionCoordinator,
       shareCoordinator,
-      mockTime)
+      mockTime,
+      cacheCapacity = testCacheCapacity)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
 
     Mockito.verify(brokerToController, never()).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
@@ -296,9 +300,10 @@ class AutoTopicCreationManagerTest {
       groupCoordinator,
       transactionCoordinator,
       shareCoordinator,
-      mockTime)
+      mockTime,
+      cacheCapacity = testCacheCapacity)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
@@ -328,7 +333,8 @@ class AutoTopicCreationManagerTest {
       groupCoordinator,
       transactionCoordinator,
       shareCoordinator,
-      mockTime)
+      mockTime,
+      cacheCapacity = testCacheCapacity)
 
     val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
       .setApiKey(ApiKeys.CREATE_TOPICS.id)
@@ -381,7 +387,7 @@ class AutoTopicCreationManagerTest {
     )
     val requestContext = initializeRequestContextWithUserPrincipal()
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     Mockito.verify(brokerToController).sendRequest(
@@ -405,8 +411,7 @@ class AutoTopicCreationManagerTest {
     argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
 
     // Verify that the error was cached
-    val defaultTtlMs = config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs()
-    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("test-topic-1"), defaultTtlMs)
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic-1"), mockTime.milliseconds())
     assertEquals(1, cachedErrors.size)
     assertTrue(cachedErrors.contains("test-topic-1"))
     assertEquals("Topic 'test-topic-1' already exists.", cachedErrors("test-topic-1"))
@@ -427,7 +432,7 @@ class AutoTopicCreationManagerTest {
       "failed-topic" -> new CreatableTopic().setName("failed-topic").setNumPartitions(1).setReplicationFactor(1)
     )
     val requestContext = initializeRequestContextWithUserPrincipal()
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     Mockito.verify(brokerToController).sendRequest(
@@ -456,8 +461,7 @@ class AutoTopicCreationManagerTest {
     argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
 
     // Only the failed topic should be cached
-    val defaultTtlMs = config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs()
-    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("success-topic", "failed-topic", "nonexistent-topic"), defaultTtlMs)
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("success-topic", "failed-topic", "nonexistent-topic"), mockTime.milliseconds())
     assertEquals(1, cachedErrors.size)
     assertTrue(cachedErrors.contains("failed-topic"))
     assertEquals("Policy violation", cachedErrors("failed-topic"))
@@ -479,7 +483,8 @@ class AutoTopicCreationManagerTest {
       "test-topic" -> new CreatableTopic().setName("test-topic").setNumPartitions(1).setReplicationFactor(1)
     )
     val requestContext = initializeRequestContextWithUserPrincipal()
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+    val shortTtlMs = 1000L // Use 1 second TTL for faster testing
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + shortTtlMs)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     Mockito.verify(brokerToController).sendRequest(
@@ -502,10 +507,8 @@ class AutoTopicCreationManagerTest {
     // Cache the error at T0
     argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
 
-    val shortTtlMs = 1000L // Use 1 second TTL for faster testing
-    
     // Verify error is cached and accessible within TTL
-    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(Set("test-topic"), shortTtlMs)
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
     assertEquals(1, cachedErrors.size)
     assertEquals("Invalid replication factor", cachedErrors("test-topic"))
 
@@ -513,7 +516,7 @@ class AutoTopicCreationManagerTest {
     mockTime.sleep(shortTtlMs + 100) // T0 + 1.1 seconds
 
     // Verify error is now expired and proactively cleaned up
-    val expiredErrors = autoTopicCreationManager.getTopicCreationErrors(Set("test-topic"), shortTtlMs)
+    val expiredErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
     assertTrue(expiredErrors.isEmpty, "Expired errors should be proactively cleaned up")
   }
 
@@ -552,7 +555,7 @@ class AutoTopicCreationManagerTest {
         topicName -> new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)
       )
       
-      autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+      autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
       
       val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
       Mockito.verify(brokerToController, Mockito.atLeastOnce()).sendRequest(
@@ -580,8 +583,7 @@ class AutoTopicCreationManagerTest {
     }
     
     // With cache size of 3, topics 1 and 2 should have been evicted
-    val longTtlMs = 60000L // Use a long TTL to ensure entries aren't expired by time
-    val cachedErrors = autoTopicCreationManager.getTopicCreationErrors(topicNames.toSet, longTtlMs)
+    val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicNames.toSet, mockTime.milliseconds())
     
     // Only the last 3 topics should be in the cache (topics 3, 4, 5)
     assertEquals(3, cachedErrors.size, "Cache should contain only the most recent 3 entries")
