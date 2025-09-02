@@ -850,11 +850,16 @@ public class GroupMetadataManager {
     ) {
         Group group = groups.get(groupId);
 
+        // Streams groups are inserted immediately into the `groups` map to allow soft-state
         if (group == null) {
-            return new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+            StreamsGroup newGroup = new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+            groups.put(groupId, newGroup);
+            return newGroup;
         } else if (maybeDeleteEmptyClassicGroup(group, records)) {
+            StreamsGroup newGroup = new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+            groups.put(groupId, newGroup);
             log.info("[GroupId {}] Converted the empty classic group to a streams group.", groupId);
-            return new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+            return newGroup;
         } else {
             return castToStreamsGroup(group);
         }
@@ -1029,8 +1034,8 @@ public class GroupMetadataManager {
         } else if (group.type() == STREAMS) {
             return (StreamsGroup) group;
         } else {
-            // We don't support upgrading/downgrading between protocols at the moment, so
-            // we throw an exception if a group exists with the wrong type.
+            // Conversion between groups is handled explicitly in the heartbeat implementation.
+            // We should not convert by reading a record, so this is an illegal state.
             throw new IllegalStateException(String.format("Group %s is not a streams group.", groupId));
         }
     }
@@ -6005,7 +6010,13 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
-            removeGroup(groupId);
+            // In case of streams groups, which get inserted into memory immediately to store soft state,
+            // It may happen that the groups map contains the new streams groups already, and the classic group
+            // was removed already. In this case, we can ignore the tombstone.
+            Group group = groups.get(groupId);
+            if (group instanceof ClassicGroup) {
+                removeGroup(groupId);
+            }
         } else {
             List<ClassicGroupMember> loadedMembers = new ArrayList<>();
             for (GroupMetadataValue.MemberMetadata member : value.members()) {

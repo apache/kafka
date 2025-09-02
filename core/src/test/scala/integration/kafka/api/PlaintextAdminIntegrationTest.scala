@@ -24,7 +24,7 @@ import java.lang.{Long => JLong}
 import java.time.{Duration => JDuration}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
-import java.util.{Collections, Locale, Optional, Properties}
+import java.util.{Collections, Locale, Optional, Properties, UUID}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -34,7 +34,7 @@ import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer
+import org.apache.kafka.clients.consumer.internals.{AsyncKafkaConsumer, StreamsRebalanceData, StreamsRebalanceListener}
 import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, GroupProtocol, KafkaConsumer, OffsetAndMetadata, ShareConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
@@ -2318,6 +2318,89 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
+  @Test
+  def testDescribeStreamsGroups(): Unit = {
+    val streamsGroupId = "stream_group_id"
+    val testTopicName = "test_topic"
+    val testNumPartitions = 1
+
+    val config = createConfig
+    client = Admin.create(config)
+
+    prepareTopics(List(testTopicName), testNumPartitions)
+    prepareRecords(testTopicName)
+
+    val streams = createStreamsGroupToDescribe(
+      inputTopic = testTopicName,
+      streamsGroupId = streamsGroupId
+    )
+
+    try {
+      TestUtils.waitUntilTrue(() => {
+        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
+        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+      }, "Stream group not stable yet")
+
+      // Verify the describe call works correctly
+      val describedGroups = client.describeStreamsGroups(util.List.of(streamsGroupId)).all().get()
+      val group = describedGroups.get(streamsGroupId)
+      assertNotNull(group)
+      assertEquals(streamsGroupId, group.groupId())
+      assertFalse(group.members().isEmpty)
+      assertNotNull(group.subtopologies())
+      assertFalse(group.subtopologies().isEmpty)
+
+      // Verify the topology contains the expected source and sink topics
+      val subtopologies = group.subtopologies().asScala
+      assertTrue(subtopologies.exists(subtopology =>
+        subtopology.sourceTopics().contains(testTopicName)))
+
+      // Test describing a non-existing group
+      val nonExistingGroup = "non_existing_stream_group"
+      val describedNonExistingGroupResponse = client.describeStreamsGroups(util.List.of(nonExistingGroup))
+      assertFutureThrows(classOf[GroupIdNotFoundException], describedNonExistingGroupResponse.all())
+
+    } finally {
+      Utils.closeQuietly(streams, "streams")
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+  private def createStreamsGroupToDescribe(
+                                            inputTopic: String,
+                                            streamsGroupId: String
+                                          ): Consumer[Array[Byte], Array[Byte]] = {
+    streamsConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, streamsGroupId)
+    streamsConsumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    val consumer = createStreamsConsumer(streamsRebalanceData = new StreamsRebalanceData(
+      UUID.randomUUID(),
+      Optional.empty(),
+      util.Map.of(
+        "subtopology-0", new StreamsRebalanceData.Subtopology(
+          util.Set.of(inputTopic),
+          util.Set.of(),
+          util.Map.of(),
+          util.Map.of(),
+          util.Set.of()
+        )),
+      Map.empty[String, String].asJava
+    ))
+    consumer.subscribe(
+      util.Set.of(inputTopic),
+      new StreamsRebalanceListener {
+        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Optional[Exception] =
+          Optional.empty()
+
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Optional[Exception] =
+          Optional.empty()
+
+        override def onAllTasksLost(): Optional[Exception] =
+          Optional.empty()
+      }
+    )
+    consumer.poll(JDuration.ofMillis(500L))
+    consumer
+  }
 
   /**
    * Test the consumer group APIs for member removal.

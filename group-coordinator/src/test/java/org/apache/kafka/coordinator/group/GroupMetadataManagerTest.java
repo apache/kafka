@@ -16378,6 +16378,7 @@ public class GroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
+        assertEquals(StreamsGroupState.NOT_READY, context.streamsGroupState(groupId));
         assertRecordsEquals(expectedRecords, result.records());
     }
 
@@ -16461,6 +16462,7 @@ public class GroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)
         );
 
+        assertEquals(StreamsGroupState.NOT_READY, context.streamsGroupState(groupId));
         assertRecordsEquals(expectedRecords, result.records());
     }
 
@@ -17194,8 +17196,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(1)
-                .setHeartbeatIntervalMs(5000)
-                .setEndpointInformationEpoch(-1),
+                .setHeartbeatIntervalMs(5000),
             result.response().data()
         );
     }
@@ -18229,7 +18230,7 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(-1),
+                .setEndpointInformationEpoch(0),
             result.response().data()
         );
 
@@ -18258,7 +18259,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(0),
+                .setEndpointInformationEpoch(1),
             result.response().data()
         );
 
@@ -18289,7 +18290,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId1)
                 .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
-                .setEndpointInformationEpoch(0),
+                .setEndpointInformationEpoch(1),
             result.response().data()
         );
 
@@ -18387,7 +18388,7 @@ public class GroupMetadataManagerTest {
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(-1),
+                .setEndpointInformationEpoch(0),
             result.response().data()
         );
 
@@ -18415,7 +18416,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
-                .setEndpointInformationEpoch(0),
+                .setEndpointInformationEpoch(1),
             result.response().data()
         );
 
