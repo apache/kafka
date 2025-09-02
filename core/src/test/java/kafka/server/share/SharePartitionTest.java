@@ -110,6 +110,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("resource")
 public class SharePartitionTest {
 
     private static final String ACQUISITION_LOCK_NEVER_GOT_RELEASED = "Acquisition lock never got released.";
@@ -7991,6 +7992,7 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(69L).acquisitionLockTimeoutTask());
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void testContainsAbortMarker() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
