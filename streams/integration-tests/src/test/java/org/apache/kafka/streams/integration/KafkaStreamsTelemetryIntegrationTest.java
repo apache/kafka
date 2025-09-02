@@ -275,7 +275,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("singleAndMultiTaskParameters")
+    @MethodSource("topologyComplexityAndRebalanceProtocol")
     public void shouldPassMetrics(final String topologyType, final String groupProtocol) throws Exception {
         // Streams metrics should get passed to Admin and Consumer
         streamsApplicationProperties = props(groupProtocol);
@@ -444,7 +444,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 .toList();
     }
 
-    private static Stream<Arguments> singleAndMultiTaskParameters() {
+    private static Stream<Arguments> topologyComplexityAndRebalanceProtocol() {
         return Stream.of(
             Arguments.of("simple", "classic"),
             Arguments.of("complex", "classic"),
