@@ -3109,6 +3109,10 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
+
+                    Set<TopicPartition> pendingPartitions = new HashSet<>(replicaDirInfoByPartition.keySet());
+                    Map<String, Throwable> directoryFailures = new HashMap<>();
+
                     for (Map.Entry<String, LogDirDescription> responseEntry : logDirDescriptions(response).entrySet()) {
                         String logDir = responseEntry.getKey();
                         LogDirDescription logDirInfo = responseEntry.getValue();
@@ -3118,27 +3122,41 @@ public class KafkaAdminClient extends AdminClient {
                             continue;
                         if (logDirInfo.error() instanceof ClusterAuthorizationException)
                             handleFailure(logDirInfo.error());
-                        if (logDirInfo.error() != null)
-                            handleFailure(new IllegalStateException(
-                                "The error " + logDirInfo.error().getClass().getName() + " for log directory " + logDir + " in the response from broker " + brokerId + " is illegal"));
 
-                        for (Map.Entry<TopicPartition, ReplicaInfo> replicaInfoEntry : logDirInfo.replicaInfos().entrySet()) {
-                            TopicPartition tp = replicaInfoEntry.getKey();
-                            ReplicaInfo replicaInfo = replicaInfoEntry.getValue();
-                            ReplicaLogDirInfo replicaLogDirInfo = replicaDirInfoByPartition.get(tp);
-                            if (replicaLogDirInfo == null) {
-                                log.warn("Server response from broker {} mentioned unknown partition {}", brokerId, tp);
-                            } else if (replicaInfo.isFuture()) {
-                                replicaDirInfoByPartition.put(tp, new ReplicaLogDirInfo(replicaLogDirInfo.getCurrentReplicaLogDir(),
-                                    replicaLogDirInfo.getCurrentReplicaOffsetLag(),
-                                    logDir,
-                                    replicaInfo.offsetLag()));
-                            } else {
-                                replicaDirInfoByPartition.put(tp, new ReplicaLogDirInfo(logDir,
-                                    replicaInfo.offsetLag(),
-                                    replicaLogDirInfo.getFutureReplicaLogDir(),
-                                    replicaLogDirInfo.getFutureReplicaOffsetLag()));
+                        if (logDirInfo.error() == null) {
+                            for (Map.Entry<TopicPartition, ReplicaInfo> replicaInfoEntry : logDirInfo.replicaInfos().entrySet()) {
+                                TopicPartition tp = replicaInfoEntry.getKey();
+                                ReplicaInfo replicaInfo = replicaInfoEntry.getValue();
+                                ReplicaLogDirInfo replicaLogDirInfo = replicaDirInfoByPartition.get(tp);
+                                if (replicaLogDirInfo == null) {
+                                    log.warn("Server response from broker {} mentioned unknown partition {}", brokerId, tp);
+                                } else if (replicaInfo.isFuture()) {
+                                    replicaDirInfoByPartition.put(tp, new ReplicaLogDirInfo(replicaLogDirInfo.getCurrentReplicaLogDir(),
+                                            replicaLogDirInfo.getCurrentReplicaOffsetLag(),
+                                            logDir,
+                                            replicaInfo.offsetLag()));
+                                } else {
+                                    replicaDirInfoByPartition.put(tp, new ReplicaLogDirInfo(logDir,
+                                            replicaInfo.offsetLag(),
+                                            replicaLogDirInfo.getFutureReplicaLogDir(),
+                                            replicaLogDirInfo.getFutureReplicaOffsetLag()));
+                                }
+                                pendingPartitions.remove(tp);
                             }
+                        } else {
+                            directoryFailures.put(logDir, logDirInfo.error());
+                        }
+                    }
+
+                    if (!pendingPartitions.isEmpty() && !directoryFailures.isEmpty()) {
+                        ArrayList<String> errorAtDir = new ArrayList<>();
+                        for (Map.Entry<String, Throwable> entry : directoryFailures.entrySet()) {
+                            errorAtDir.add(entry.getValue().getClass().getName() + " at " + entry.getKey());
+                        }
+                        Throwable error = new IllegalStateException("The error " + String.join(", ", errorAtDir) + " in the response from broker " + brokerId + " is illegal");
+                        for (TopicPartition tp: pendingPartitions) {
+                            KafkaFutureImpl<ReplicaLogDirInfo> future = futures.get(new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId));
+                            future.completeExceptionally(error);
                         }
                     }
 
