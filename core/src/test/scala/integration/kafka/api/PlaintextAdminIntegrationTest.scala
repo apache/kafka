@@ -2576,6 +2576,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val simpleGroupId = "simple_group_id"
     val streamsGroupId = "streams_group_id"
     val testTopicName = "test_topic"
+
+    val config = createConfig
+    client = Admin.create(config)
+    client.createTopics(util.Set.of(
+      new NewTopic(testTopicName, 1, 1.toShort)
+    )).all().get()
+    waitForTopics(client, List(testTopicName), List())
+    val topicPartition = new TopicPartition(testTopicName, 0)
+
     consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name)
     val classicGroupConfig = new Properties(consumerConfig)
     classicGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, classicGroupId)
@@ -2595,11 +2604,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       streamsGroupId = streamsGroupId
     )
 
-    val config = createConfig
-    client = Admin.create(config)
     try {
-      val topicPartition = new TopicPartition(testTopicName, 0)
-
       classicGroup.subscribe(util.Set.of(testTopicName))
       classicGroup.poll(JDuration.ofMillis(1000))
       consumerGroup.subscribe(util.Set.of(testTopicName))
@@ -2663,8 +2668,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Utils.closeQuietly(classicGroup, "classicGroup")
       Utils.closeQuietly(consumerGroup, "consumerGroup")
       Utils.closeQuietly(shareGroup, "shareGroup")
-      Utils.closeQuietly(client, "adminClient")
       Utils.closeQuietly(streamsGroup, "streamsGroup")
+      Utils.closeQuietly(client, "adminClient")
     }
   }
 
@@ -4405,7 +4410,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     try {
       TestUtils.waitUntilTrue(() => {
-        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
+        val firstGroup = client.listGroups().all().get().stream()
+          .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
       }, "Stream group not stable yet")
 

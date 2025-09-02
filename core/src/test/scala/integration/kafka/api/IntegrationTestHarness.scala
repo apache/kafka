@@ -59,7 +59,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val superuserClientConfig = new Properties
   val serverConfig = new Properties
   val controllerConfig = new Properties
-  var streamsGroupConfig = new Properties
 
   private val consumers = mutable.Buffer[Consumer[_, _]]()
   private val shareConsumers = mutable.Buffer[ShareConsumer[_, _]]()
