@@ -31,6 +31,8 @@ TAGS
 Vagrantfile.local
 /logs
 .DS_Store
+.bloop/
+.metals/
 
 config/server-*
 config/zookeeper-*
