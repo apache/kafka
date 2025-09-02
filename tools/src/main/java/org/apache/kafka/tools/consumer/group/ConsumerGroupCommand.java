@@ -32,11 +32,7 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
-import org.apache.kafka.clients.admin.ListOffsetsOptions;
-import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberDescription;
-import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
@@ -46,28 +42,20 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
+import org.apache.kafka.tools.OffsetsUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
-import java.text.ParseException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,7 +71,6 @@ import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -91,7 +78,6 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 public class ConsumerGroupCommand {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommand.class);
 
     static final String MISSING_COLUMN_VALUE = "-";
 
@@ -132,7 +118,7 @@ public class ConsumerGroupCommand {
             return;
         }
 
-        try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Collections.emptyMap())) {
+        try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt))
                 consumerGroupService.listGroups();
             else if (opts.options.has(opts.describeOpt))
@@ -145,7 +131,7 @@ public class ConsumerGroupCommand {
                     String exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset);
                     System.out.println(exported);
                 } else
-                    printOffsetsToReset(offsetsToReset);
+                    OffsetsUtils.printOffsetsToReset(offsetsToReset);
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 consumerGroupService.deleteOffsets();
             }
@@ -191,26 +177,12 @@ public class ConsumerGroupCommand {
         e.ifPresent(Throwable::printStackTrace);
     }
 
-    static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
-        String format = "%n%-30s %-30s %-10s %-15s";
-        if (!groupAssignmentsToReset.isEmpty())
-            System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
-
-        groupAssignmentsToReset.forEach((groupId, assignment) ->
-            assignment.forEach((consumerAssignment, offsetAndMetadata) ->
-                System.out.printf(format,
-                    groupId,
-                    consumerAssignment.topic(),
-                    consumerAssignment.partition(),
-                    offsetAndMetadata.offset())));
-        System.out.println();
-    }
-
     @SuppressWarnings("ClassFanOutComplexity")
     static class ConsumerGroupService implements AutoCloseable {
         final ConsumerGroupCommandOptions opts;
         final Map<String, String> configOverrides;
         private final Admin adminClient;
+        private final OffsetsUtils offsetsUtils;
 
         ConsumerGroupService(ConsumerGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
@@ -220,19 +192,18 @@ public class ConsumerGroupCommand {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
         }
 
-        Optional<Map<String, Map<TopicPartition, OffsetAndMetadata>>> resetPlanFromFile() {
-            if (opts.options.has(opts.resetFromFileOpt)) {
-                try {
-                    String resetPlanPath = opts.options.valueOf(opts.resetFromFileOpt);
-                    String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
-                    Map<String, Map<TopicPartition, OffsetAndMetadata>> resetPlan = parseResetPlan(resetPlanCsv);
-                    return Optional.of(resetPlan);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            } else return Optional.empty();
+        private OffsetsUtils.OffsetsUtilsOptions getOffsetsUtilsOptions(ConsumerGroupCommandOptions opts) {
+            return
+                new OffsetsUtils.OffsetsUtilsOptions(opts.options.valuesOf(opts.groupOpt),
+                    opts.options.valuesOf(opts.resetToOffsetOpt),
+                    opts.options.valuesOf(opts.resetFromFileOpt),
+                    opts.options.valuesOf(opts.resetToDatetimeOpt),
+                    opts.options.valueOf(opts.resetByDurationOpt),
+                    opts.options.valueOf(opts.resetShiftByOpt),
+                    opts.options.valueOf(opts.timeoutMsOpt));
         }
 
         void listGroups() throws ExecutionException, InterruptedException {
@@ -253,14 +224,14 @@ public class ConsumerGroupCommand {
         private Set<GroupState> stateValues() {
             String stateValue = opts.options.valueOf(opts.stateOpt);
             return (stateValue == null || stateValue.isEmpty())
-                ? Collections.emptySet()
+                ? Set.of()
                 : groupStatesFromString(stateValue);
         }
 
         private Set<GroupType> typeValues() {
             String typeValue = opts.options.valueOf(opts.typeOpt);
             return (typeValue == null || typeValue.isEmpty())
-                ? Collections.emptySet()
+                ? Set.of()
                 : consumerGroupTypesFromString(typeValue);
         }
 
@@ -376,20 +347,20 @@ public class ConsumerGroupCommand {
                         for (PartitionAssignmentState consumerAssignment : consumerAssignments) {
                             if (verbose) {
                                 System.out.printf(format,
-                                    consumerAssignment.group,
-                                    consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
+                                    consumerAssignment.group(),
+                                    consumerAssignment.topic().orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.leaderEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.offset().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.lag().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId().orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.host().orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId().orElse(MISSING_COLUMN_VALUE)
                                 );
                             } else {
                                 System.out.printf(format,
-                                    consumerAssignment.group,
-                                    consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
+                                    consumerAssignment.group(),
+                                    consumerAssignment.topic().orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.offset().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.lag().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId().orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.host().orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId().orElse(MISSING_COLUMN_VALUE)
                                 );
                             }
                         }
@@ -408,10 +379,10 @@ public class ConsumerGroupCommand {
             if (assignments.isPresent()) {
                 Collection<PartitionAssignmentState> consumerAssignments = assignments.get();
                 for (PartitionAssignmentState consumerAssignment : consumerAssignments) {
-                    maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group.length());
-                    maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE).length());
-                    maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE).length());
-                    maxHostLen = Math.max(maxHostLen, consumerAssignment.host.orElse(MISSING_COLUMN_VALUE).length());
+                    maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group().length());
+                    maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic().orElse(MISSING_COLUMN_VALUE).length());
+                    maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId().orElse(MISSING_COLUMN_VALUE).length());
+                    maxHostLen = Math.max(maxHostLen, consumerAssignment.host().orElse(MISSING_COLUMN_VALUE).length());
 
                 }
             }
@@ -437,20 +408,20 @@ public class ConsumerGroupCommand {
                     // find proper columns width
                     if (assignments.isPresent()) {
                         for (MemberAssignmentState memberAssignment : assignments.get()) {
-                            maxGroupLen = Math.max(maxGroupLen, memberAssignment.group.length());
-                            maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId.length());
-                            maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId.length());
-                            maxHostLen = Math.max(maxHostLen, memberAssignment.host.length());
-                            maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length());
-                            includeGroupInstanceId = includeGroupInstanceId || !memberAssignment.groupInstanceId.isEmpty();
-                            String currentAssignment = memberAssignment.assignment.isEmpty() ?
-                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment);
-                            String targetAssignment = memberAssignment.targetAssignment.isEmpty() ?
-                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment);
+                            maxGroupLen = Math.max(maxGroupLen, memberAssignment.group().length());
+                            maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId().length());
+                            maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId().length());
+                            maxHostLen = Math.max(maxHostLen, memberAssignment.host().length());
+                            maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId().length());
+                            includeGroupInstanceId = includeGroupInstanceId || !memberAssignment.groupInstanceId().isEmpty();
+                            String currentAssignment = memberAssignment.assignment().isEmpty() ?
+                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment());
+                            String targetAssignment = memberAssignment.targetAssignment().isEmpty() ?
+                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment());
                             maxCurrentAssignment = Math.max(maxCurrentAssignment, currentAssignment.length());
                             maxTargetAssignment = Math.max(maxTargetAssignment, targetAssignment.length());
-                            hasClassicMember = hasClassicMember || (memberAssignment.upgraded.isPresent() && !memberAssignment.upgraded.get());
-                            hasConsumerMember = hasConsumerMember || (memberAssignment.upgraded.isPresent() && memberAssignment.upgraded.get());
+                            hasClassicMember = hasClassicMember || (memberAssignment.upgraded().isPresent() && !memberAssignment.upgraded().get());
+                            hasConsumerMember = hasConsumerMember || (memberAssignment.upgraded().isPresent() && memberAssignment.upgraded().get());
                         }
                     }
                 }
@@ -494,23 +465,23 @@ public class ConsumerGroupCommand {
         ) {
             for (MemberAssignmentState memberAssignment : memberAssignments) {
                 if (includeGroupInstanceId) {
-                    System.out.printf(formatWithGroupInstanceId, memberAssignment.group, memberAssignment.consumerId,
-                        memberAssignment.groupInstanceId, memberAssignment.host, memberAssignment.clientId,
-                        memberAssignment.numPartitions);
+                    System.out.printf(formatWithGroupInstanceId, memberAssignment.group(), memberAssignment.consumerId(),
+                        memberAssignment.groupInstanceId(), memberAssignment.host(), memberAssignment.clientId(),
+                        memberAssignment.numPartitions());
                 } else {
-                    System.out.printf(formatWithoutGroupInstanceId, memberAssignment.group, memberAssignment.consumerId,
-                        memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions);
+                    System.out.printf(formatWithoutGroupInstanceId, memberAssignment.group(), memberAssignment.consumerId(),
+                        memberAssignment.host(), memberAssignment.clientId(), memberAssignment.numPartitions());
                 }
                 if (verbose) {
-                    String currentEpoch = memberAssignment.currentEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE);
-                    String currentAssignment = memberAssignment.assignment.isEmpty() ?
-                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment);
-                    String targetEpoch = memberAssignment.targetEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE);
-                    String targetAssignment = memberAssignment.targetAssignment.isEmpty() ?
-                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment);
+                    String currentEpoch = memberAssignment.currentEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE);
+                    String currentAssignment = memberAssignment.assignment().isEmpty() ?
+                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment());
+                    String targetEpoch = memberAssignment.targetEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE);
+                    String targetAssignment = memberAssignment.targetAssignment().isEmpty() ?
+                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment());
                     if (hasMigrationMember) {
                         System.out.printf(formatWithUpgrade, currentEpoch, currentAssignment, targetEpoch, targetAssignment,
-                            memberAssignment.upgraded.map(Object::toString).orElse(MISSING_COLUMN_VALUE));
+                            memberAssignment.upgraded().map(Object::toString).orElse(MISSING_COLUMN_VALUE));
                     } else {
                         System.out.printf(formatWithoutUpgrade, currentEpoch, currentAssignment, targetEpoch, targetAssignment);
                     }
@@ -540,23 +511,23 @@ public class ConsumerGroupCommand {
 
         private void printStates(Map<String, GroupInformation> states, boolean verbose) {
             states.forEach((groupId, state) -> {
-                if (shouldPrintMemberState(groupId, Optional.of(state.groupState), Optional.of(1))) {
-                    String coordinator = state.coordinator.host() + ":" + state.coordinator.port() + "  (" + state.coordinator.idString() + ")";
+                if (shouldPrintMemberState(groupId, Optional.of(state.groupState()), Optional.of(1))) {
+                    String coordinator = state.coordinator().host() + ":" + state.coordinator().port() + "  (" + state.coordinator().idString() + ")";
                     int coordinatorColLen = Math.max(25, coordinator.length());
-                    int groupColLen = Math.max(15, state.group.length());
+                    int groupColLen = Math.max(15, state.group().length());
 
-                    String assignmentStrategy = state.assignmentStrategy.isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy;
+                    String assignmentStrategy = state.assignmentStrategy().isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy();
 
                     if (verbose) {
                         String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %-15s %-25s %s";
                         System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE",
                             "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-                        System.out.printf(format, state.group, coordinator, assignmentStrategy, state.groupState,
-                            state.groupEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.targetAssignmentEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.numMembers);
+                        System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(),
+                            state.groupEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.targetAssignmentEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.numMembers());
                     } else {
                         String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %s";
                         System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
-                        System.out.printf(format, state.group, coordinator, assignmentStrategy, state.groupState, state.numMembers);
+                        System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(), state.numMembers());
                     }
                     System.out.println();
                 }
@@ -596,13 +567,12 @@ public class ConsumerGroupCommand {
             Optional<String> clientIdOpt
         ) {
             if (topicPartitions.isEmpty()) {
-                return Collections.singleton(
+                return Set.of(
                     new PartitionAssignmentState(group, coordinator, Optional.empty(), Optional.empty(), Optional.empty(),
                         getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty(), Optional.empty())
                 );
             } else {
-                List<TopicPartition> topicPartitionsSorted = topicPartitions.stream().sorted(Comparator.comparingInt(TopicPartition::partition)).collect(Collectors.toList());
-                return describePartitions(group, coordinator, topicPartitionsSorted, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
+                return describePartitions(group, coordinator, topicPartitions, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
             }
         }
 
@@ -613,7 +583,7 @@ public class ConsumerGroupCommand {
         private Collection<PartitionAssignmentState> describePartitions(
             String group,
             Optional<Node> coordinator,
-            List<TopicPartition> topicPartitions,
+            Collection<TopicPartition> topicPartitions,
             Map<TopicPartition, OffsetAndMetadata> committedOffsets,
             Optional<String> consumerIdOpt,
             Optional<String> hostOpt,
@@ -628,19 +598,34 @@ public class ConsumerGroupCommand {
                     consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
-            return getLogEndOffsets(topicPartitions).entrySet().stream().map(logEndOffsetResult -> {
-                if (logEndOffsetResult.getValue() instanceof LogOffset)
+            List<TopicPartition> topicPartitionsWithoutLeader = offsetsUtils.filterNoneLeaderPartitions(topicPartitions);
+            List<TopicPartition> topicPartitionsWithLeader = topicPartitions.stream().filter(tp -> !topicPartitionsWithoutLeader.contains(tp)).toList();
+
+            // prepare data for partitions with leaders
+            List<PartitionAssignmentState> existLeaderAssignments = offsetsUtils.getLogEndOffsets(topicPartitionsWithLeader).entrySet().stream().map(logEndOffsetResult -> {
+                if (logEndOffsetResult.getValue() instanceof OffsetsUtils.LogOffset)
                     return getDescribePartitionResult.apply(
                         logEndOffsetResult.getKey(),
-                        Optional.of(((LogOffset) logEndOffsetResult.getValue()).value)
+                        Optional.of(((OffsetsUtils.LogOffset) logEndOffsetResult.getValue()).value())
                     );
-                else if (logEndOffsetResult.getValue() instanceof Unknown)
+                else if (logEndOffsetResult.getValue() instanceof OffsetsUtils.Unknown)
                     return getDescribePartitionResult.apply(logEndOffsetResult.getKey(), Optional.empty());
-                else if (logEndOffsetResult.getValue() instanceof Ignore)
+                else if (logEndOffsetResult.getValue() instanceof OffsetsUtils.Ignore)
                     return null;
 
                 throw new IllegalStateException("Unknown LogOffset subclass: " + logEndOffsetResult.getValue());
-            }).collect(Collectors.toList());
+            }).toList();
+
+            // prepare data for partitions without leaders
+            List<PartitionAssignmentState> noneLeaderAssignments = topicPartitionsWithoutLeader.stream()
+                    .map(tp -> getDescribePartitionResult.apply(tp, Optional.empty())).toList();
+
+            // concat the data and then sort them
+            return Stream.concat(existLeaderAssignments.stream(), noneLeaderAssignments.stream())
+                    .sorted(Comparator.<PartitionAssignmentState, String>comparing(
+                            state -> state.topic().orElse(""), String::compareTo)
+                            .thenComparingInt(state -> state.partition().orElse(-1)))
+                    .collect(Collectors.toList());
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
@@ -665,7 +650,7 @@ public class ConsumerGroupCommand {
                             break;
                         default:
                             printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
-                            result.put(groupId, Collections.emptyMap());
+                            result.put(groupId, Map.of());
                     }
                 } catch (InterruptedException ie) {
                     throw new RuntimeException(ie);
@@ -721,7 +706,7 @@ public class ConsumerGroupCommand {
                     topicWithoutPartitions.add(topic);
             }
 
-            List<TopicPartition> knownPartitions = topicWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).collect(Collectors.toList());
+            List<TopicPartition> knownPartitions = topicWithPartitions.stream().flatMap(offsetsUtils::parseTopicsWithPartitions).toList();
 
             // Get the partitions of topics that the user did not explicitly specify the partitions
             DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(
@@ -836,7 +821,7 @@ public class ConsumerGroupCommand {
          * Returns the state of the specified consumer group and partition assignment states
          */
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) throws Exception {
-            return collectGroupsOffsets(Collections.singletonList(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
+            return collectGroupsOffsets(List.of(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
         }
 
         /**
@@ -880,7 +865,7 @@ public class ConsumerGroupCommand {
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE))
-                    : Collections.emptyList();
+                    : List.of();
 
                 rowsWithConsumer.addAll(rowsWithoutConsumer);
 
@@ -891,7 +876,7 @@ public class ConsumerGroupCommand {
         }
 
         Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId) throws Exception {
-            return collectGroupsMembers(Collections.singleton(groupId)).get(groupId);
+            return collectGroupsMembers(Set.of(groupId)).get(groupId);
         }
 
         TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds) throws Exception {
@@ -909,7 +894,7 @@ public class ConsumerGroupCommand {
                         consumer.groupInstanceId().orElse(""),
                         consumer.assignment().topicPartitions().size(),
                         consumer.assignment().topicPartitions().stream().toList(),
-                        consumer.targetAssignment().map(a -> a.topicPartitions().stream().toList()).orElse(Collections.emptyList()),
+                        consumer.targetAssignment().map(a -> a.topicPartitions().stream().toList()).orElse(List.of()),
                         consumer.memberEpoch(),
                         consumerGroup.targetAssignmentEpoch(),
                         consumer.upgraded()
@@ -920,7 +905,7 @@ public class ConsumerGroupCommand {
         }
 
         GroupInformation collectGroupState(String groupId) throws Exception {
-            return collectGroupsState(Collections.singleton(groupId)).get(groupId);
+            return collectGroupsState(Set.of(groupId)).get(groupId);
         }
 
         TreeMap<String, GroupInformation> collectGroupsState(Collection<String> groupIds) throws Exception {
@@ -937,70 +922,6 @@ public class ConsumerGroupCommand {
                     groupDescription.targetAssignmentEpoch()
                 )));
             return res;
-        }
-
-        private Map<TopicPartition, LogOffsetResult> getLogEndOffsets(Collection<TopicPartition> topicPartitions) {
-            return getLogOffsets(topicPartitions, OffsetSpec.latest());
-        }
-
-        private Map<TopicPartition, LogOffsetResult> getLogStartOffsets(Collection<TopicPartition> topicPartitions) {
-            return getLogOffsets(topicPartitions, OffsetSpec.earliest());
-        }
-
-        private Map<TopicPartition, LogOffsetResult> getLogOffsets(Collection<TopicPartition> topicPartitions, OffsetSpec offsetSpec) {
-            try {
-                Map<TopicPartition, OffsetSpec> startOffsets = topicPartitions.stream()
-                    .collect(Collectors.toMap(Function.identity(), tp -> offsetSpec));
-
-                Map<TopicPartition, ListOffsetsResultInfo> offsets = adminClient.listOffsets(
-                    startOffsets,
-                    withTimeoutMs(new ListOffsetsOptions())
-                ).all().get();
-
-                return topicPartitions.stream().collect(Collectors.toMap(
-                    Function.identity(),
-                    tp -> offsets.containsKey(tp)
-                        ? new LogOffset(offsets.get(tp).offset())
-                        : new Unknown()
-                ));
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        private Map<TopicPartition, LogOffsetResult> getLogTimestampOffsets(Collection<TopicPartition> topicPartitions, long timestamp) {
-            try {
-                Map<TopicPartition, OffsetSpec> timestampOffsets = topicPartitions.stream()
-                    .collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.forTimestamp(timestamp)));
-
-                Map<TopicPartition, ListOffsetsResultInfo> offsets = adminClient.listOffsets(
-                    timestampOffsets,
-                    withTimeoutMs(new ListOffsetsOptions())
-                ).all().get();
-
-                Map<TopicPartition, ListOffsetsResultInfo> successfulOffsetsForTimes = new HashMap<>();
-                Map<TopicPartition, ListOffsetsResultInfo> unsuccessfulOffsetsForTimes = new HashMap<>();
-
-                offsets.forEach((tp, offsetsResultInfo) -> {
-                    if (offsetsResultInfo.offset() != ListOffsetsResponse.UNKNOWN_OFFSET)
-                        successfulOffsetsForTimes.put(tp, offsetsResultInfo);
-                    else
-                        unsuccessfulOffsetsForTimes.put(tp, offsetsResultInfo);
-                });
-
-                Map<TopicPartition, LogOffsetResult> successfulLogTimestampOffsets = successfulOffsetsForTimes.entrySet().stream()
-                    .collect(Collectors.toMap(Entry::getKey, e -> new LogOffset(e.getValue().offset())));
-
-                unsuccessfulOffsetsForTimes.forEach((tp, offsetResultInfo) ->
-                    System.out.println("\nWarn: Partition " + tp.partition() + " from topic " + tp.topic() +
-                    " is empty. Falling back to latest known offset."));
-
-                successfulLogTimestampOffsets.putAll(getLogEndOffsets(unsuccessfulOffsetsForTimes.keySet()));
-
-                return successfulLogTimestampOffsets;
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
         }
 
         @Override
@@ -1021,76 +942,24 @@ public class ConsumerGroupCommand {
             return options.timeoutMs(t);
         }
 
-        private Stream<TopicPartition> parseTopicsWithPartitions(String topicArg) {
-            ToIntFunction<String> partitionNum = partition -> {
-                try {
-                    return Integer.parseInt(partition);
-                } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("Invalid partition '" + partition + "' specified in topic arg '" + topicArg + "''");
-                }
-            };
-
-            String[] arr = topicArg.split(":");
-
-            if (arr.length != 2)
-                throw new IllegalArgumentException("Invalid topic arg '" + topicArg + "', expected topic name and partitions");
-
-            String topic = arr[0];
-            String partitions = arr[1];
-
-            return Arrays.stream(partitions.split(",")).
-                map(partition -> new TopicPartition(topic, partitionNum.applyAsInt(partition)));
-        }
-
-        private List<TopicPartition> parseTopicPartitionsToReset(List<String> topicArgs) throws ExecutionException, InterruptedException {
-            List<String> topicsWithPartitions = new ArrayList<>();
-            List<String> topics = new ArrayList<>();
-
-            topicArgs.forEach(topicArg -> {
-                if (topicArg.contains(":"))
-                    topicsWithPartitions.add(topicArg);
-                else
-                    topics.add(topicArg);
-            });
-
-            List<TopicPartition> specifiedPartitions = topicsWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).collect(Collectors.toList());
-
-            List<TopicPartition> unspecifiedPartitions = new ArrayList<>();
-
-            if (!topics.isEmpty()) {
-                Map<String, TopicDescription> descriptionMap = adminClient.describeTopics(
-                    topics,
-                    withTimeoutMs(new DescribeTopicsOptions())
-                ).allTopicNames().get();
-
-                descriptionMap.forEach((topic, description) ->
-                    description.partitions().forEach(tpInfo -> unspecifiedPartitions.add(new TopicPartition(topic, tpInfo.partition())))
-                );
-            }
-
-            specifiedPartitions.addAll(unspecifiedPartitions);
-
-            return specifiedPartitions;
-        }
-
         private Collection<TopicPartition> getPartitionsToReset(String groupId) throws ExecutionException, InterruptedException {
             if (opts.options.has(opts.allTopicsOpt)) {
                 return getCommittedOffsets(groupId).keySet();
             } else if (opts.options.has(opts.topicOpt)) {
                 List<String> topics = opts.options.valuesOf(opts.topicOpt);
-                return parseTopicPartitionsToReset(topics);
+                return offsetsUtils.parseTopicPartitionsToReset(topics);
             } else {
                 if (!opts.options.has(opts.resetFromFileOpt))
                     CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
 
-                return Collections.emptyList();
+                return List.of();
             }
         }
 
         private Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
             try {
                 return adminClient.listConsumerGroupOffsets(
-                    Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec()),
+                    Map.of(groupId, new ListConsumerGroupOffsetsSpec()),
                     withTimeoutMs(new ListConsumerGroupOffsetsOptions())
                 ).partitionsToOffsetAndMetadata(groupId).get();
             } catch (InterruptedException | ExecutionException e) {
@@ -1098,209 +967,32 @@ public class ConsumerGroupCommand {
             }
         }
 
-        private Map<String, Map<TopicPartition, OffsetAndMetadata>> parseResetPlan(String resetPlanCsv) {
-            ObjectReader csvReader = CsvUtils.readerFor(CsvUtils.CsvRecordNoGroup.class);
-            String[] lines = resetPlanCsv.split("\n");
-            boolean isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1;
-            boolean isOldCsvFormat = false;
-            try {
-                if (lines.length > 0) {
-                    csvReader.readValue(lines[0], CsvUtils.CsvRecordNoGroup.class);
-                    isOldCsvFormat = true;
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-                // Ignore.
-            }
-
-            Map<String, Map<TopicPartition, OffsetAndMetadata>> dataMap = new HashMap<>();
-
-            try {
-                // Single group CSV format: "topic,partition,offset"
-                if (isSingleGroupQuery && isOldCsvFormat) {
-                    String group = opts.options.valueOf(opts.groupOpt);
-                    for (String line : lines) {
-                        CsvUtils.CsvRecordNoGroup rec = csvReader.readValue(line, CsvUtils.CsvRecordNoGroup.class);
-                        dataMap.computeIfAbsent(group, k -> new HashMap<>())
-                            .put(new TopicPartition(rec.getTopic(), rec.getPartition()), new OffsetAndMetadata(rec.getOffset()));
-                    }
-                } else {
-                    csvReader = CsvUtils.readerFor(CsvUtils.CsvRecordWithGroup.class);
-                    for (String line : lines) {
-                        CsvUtils.CsvRecordWithGroup rec = csvReader.readValue(line, CsvUtils.CsvRecordWithGroup.class);
-                        dataMap.computeIfAbsent(rec.getGroup(), k -> new HashMap<>())
-                            .put(new TopicPartition(rec.getTopic(), rec.getPartition()), new OffsetAndMetadata(rec.getOffset()));
-                    }
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-
-            return dataMap;
-        }
-
-        @SuppressWarnings("CyclomaticComplexity")
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+            // ensure all partitions are valid, otherwise throw a runtime exception
+            offsetsUtils.checkAllTopicPartitionsValid(partitionsToReset);
+
             if (opts.options.has(opts.resetToOffsetOpt)) {
-                long offset = opts.options.valueOf(opts.resetToOffsetOpt);
-                return checkOffsetsRange(partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), tp -> offset)))
-                    .entrySet().stream().collect(Collectors.toMap(Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
+                return offsetsUtils.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
-                Map<TopicPartition, LogOffsetResult> logStartOffsets = getLogStartOffsets(partitionsToReset);
-                return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                    LogOffsetResult logOffsetResult = logStartOffsets.get(topicPartition);
-
-                    if (!(logOffsetResult instanceof LogOffset)) {
-                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting starting offset of topic partition: " + topicPartition);
-                    }
-
-                    return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
-                }));
+                return offsetsUtils.resetToEarliest(partitionsToReset);
             } else if (opts.options.has(opts.resetToLatestOpt)) {
-                Map<TopicPartition, LogOffsetResult> logEndOffsets = getLogEndOffsets(partitionsToReset);
-                return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                    LogOffsetResult logOffsetResult = logEndOffsets.get(topicPartition);
-
-                    if (!(logOffsetResult instanceof LogOffset)) {
-                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + topicPartition);
-                    }
-
-                    return new OffsetAndMetadata(((LogOffset) logOffsetResult).value);
-                }));
+                return offsetsUtils.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetShiftByOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                Map<TopicPartition, Long> requestedOffsets = partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                    long shiftBy = opts.options.valueOf(opts.resetShiftByOpt);
-                    OffsetAndMetadata currentOffset = currentCommittedOffsets.get(topicPartition);
-
-                    if (currentOffset == null) {
-                        throw new IllegalArgumentException("Cannot shift offset for partition " + topicPartition + " since there is no current committed offset");
-                    }
-
-                    return currentOffset.offset() + shiftBy;
-                }));
-                return checkOffsetsRange(requestedOffsets).entrySet().stream()
-                    .collect(Collectors.toMap(Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
+                return offsetsUtils.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
-                try {
-                    long timestamp = Utils.getDateTime(opts.options.valueOf(opts.resetToDatetimeOpt));
-                    Map<TopicPartition, LogOffsetResult> logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp);
-                    return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                        LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
-
-                        if (!(logTimestampOffset instanceof LogOffset)) {
-                            CommandLineUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
-                        }
-
-                        return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
-                    }));
-                } catch (ParseException e) {
-                    throw new RuntimeException(e);
-                }
+                return offsetsUtils.resetToDateTime(partitionsToReset);
             } else if (opts.options.has(opts.resetByDurationOpt)) {
-                String duration = opts.options.valueOf(opts.resetByDurationOpt);
-                Duration durationParsed = Duration.parse(duration);
-                Instant now = Instant.now();
-                durationParsed.negated().addTo(now);
-                long timestamp = now.minus(durationParsed).toEpochMilli();
-                Map<TopicPartition, LogOffsetResult> logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp);
-                return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                    LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
-
-                    if (!(logTimestampOffset instanceof LogOffset)) {
-                        CommandLineUtils.printUsageAndExit(opts.parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
-                    }
-
-                    return new OffsetAndMetadata(((LogOffset) logTimestampOffset).value);
-                }));
-            } else if (resetPlanFromFile().isPresent()) {
-                return resetPlanFromFile().map(resetPlan -> {
-                    Map<TopicPartition, OffsetAndMetadata> resetPlanForGroup = resetPlan.get(groupId);
-
-                    if (resetPlanForGroup == null) {
-                        printError("No reset plan for group " + groupId + " found", Optional.empty());
-                        return Collections.<TopicPartition, OffsetAndMetadata>emptyMap();
-                    }
-
-                    Map<TopicPartition, Long> requestedOffsets = resetPlanForGroup.keySet().stream().collect(Collectors.toMap(
-                        Function.identity(),
-                        topicPartition -> resetPlanForGroup.get(topicPartition).offset()));
-
-                    return checkOffsetsRange(requestedOffsets).entrySet().stream()
-                        .collect(Collectors.toMap(Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));
-                }).orElseGet(Collections::emptyMap);
+                return offsetsUtils.resetByDuration(partitionsToReset);
+            } else if (offsetsUtils.resetPlanFromFile().isPresent()) {
+                return offsetsUtils.resetFromFile(groupId);
             } else if (opts.options.has(opts.resetToCurrentOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                Collection<TopicPartition> partitionsToResetWithCommittedOffset = new ArrayList<>();
-                Collection<TopicPartition> partitionsToResetWithoutCommittedOffset = new ArrayList<>();
-
-                for (TopicPartition topicPartition : partitionsToReset) {
-                    if (currentCommittedOffsets.containsKey(topicPartition))
-                        partitionsToResetWithCommittedOffset.add(topicPartition);
-                    else
-                        partitionsToResetWithoutCommittedOffset.add(topicPartition);
-                }
-
-                Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithCommittedOffset = partitionsToResetWithCommittedOffset.stream()
-                    .collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                        OffsetAndMetadata committedOffset = currentCommittedOffsets.get(topicPartition);
-
-                        if (committedOffset == null) {
-                            throw new IllegalStateException("Expected a valid current offset for topic partition: " + topicPartition);
-                        }
-
-                        return new OffsetAndMetadata(committedOffset.offset());
-                    }));
-
-                Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(partitionsToResetWithoutCommittedOffset)
-                    .entrySet().stream().collect(Collectors.toMap(Entry::getKey, e -> {
-                        if (!(e.getValue() instanceof LogOffset)) {
-                            CommandLineUtils.printUsageAndExit(opts.parser, "Error getting ending offset of topic partition: " + e.getKey());
-                        }
-
-                        return new OffsetAndMetadata(((LogOffset) e.getValue()).value);
-                    }));
-
-                preparedOffsetsForPartitionsWithCommittedOffset.putAll(preparedOffsetsForPartitionsWithoutCommittedOffset);
-
-                return preparedOffsetsForPartitionsWithCommittedOffset;
+                return offsetsUtils.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
             CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
-        }
-
-        private Map<TopicPartition, Long> checkOffsetsRange(Map<TopicPartition, Long> requestedOffsets) {
-            Map<TopicPartition, LogOffsetResult> logStartOffsets = getLogStartOffsets(requestedOffsets.keySet());
-            Map<TopicPartition, LogOffsetResult> logEndOffsets = getLogEndOffsets(requestedOffsets.keySet());
-
-            Map<TopicPartition, Long> res = new HashMap<>();
-
-            requestedOffsets.forEach((topicPartition, offset) -> {
-                LogOffsetResult logEndOffset = logEndOffsets.get(topicPartition);
-
-                if (logEndOffset != null) {
-                    if (logEndOffset instanceof LogOffset && offset > ((LogOffset) logEndOffset).value) {
-                        long endOffset = ((LogOffset) logEndOffset).value;
-                        LOGGER.warn("New offset (" + offset + ") is higher than latest offset for topic partition " + topicPartition + ". Value will be set to " + endOffset);
-                        res.put(topicPartition, endOffset);
-                    } else {
-                        LogOffsetResult logStartOffset = logStartOffsets.get(topicPartition);
-
-                        if (logStartOffset instanceof LogOffset && offset < ((LogOffset) logStartOffset).value) {
-                            long startOffset = ((LogOffset) logStartOffset).value;
-                            LOGGER.warn("New offset (" + offset + ") is lower than earliest offset for topic partition " + topicPartition + ". Value will be set to " + startOffset);
-                            res.put(topicPartition, startOffset);
-                        } else
-                            res.put(topicPartition, offset);
-                    }
-                } else {
-                    // the control should not reach here
-                    throw new IllegalStateException("Unexpected non-existing offset value for topic partition " + topicPartition);
-                }
-            });
-
-            return res;
         }
 
         String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> assignments) {
@@ -1368,18 +1060,4 @@ public class ConsumerGroupCommand {
             return failed;
         }
     }
-
-    interface LogOffsetResult { }
-
-    private static class LogOffset implements LogOffsetResult {
-        final long value;
-
-        LogOffset(long value) {
-            this.value = value;
-        }
-    }
-
-    private static class Unknown implements LogOffsetResult { }
-
-    private static class Ignore implements LogOffsetResult { }
 }

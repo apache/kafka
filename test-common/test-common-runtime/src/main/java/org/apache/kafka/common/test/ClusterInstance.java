@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.test;
 
-import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
@@ -36,14 +35,18 @@ import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
@@ -65,9 +68,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import scala.jdk.javaapi.CollectionConverters;
 
@@ -126,36 +129,18 @@ public interface ClusterInstance {
      */
     String bootstrapControllers();
 
-    /**
-     * A collection of all brokers in the cluster.
-     */
-    default Collection<SocketServer> brokerSocketServers() {
+    default List<Integer> controllerBoundPorts() {
+        return controllers().values().stream()
+            .map(ControllerServer::socketServer)
+            .map(ss -> ss.boundPort(controllerListenerName()))
+            .toList();
+    }
+
+    default List<Integer> brokerBoundPorts() {
         return brokers().values().stream()
-                .map(KafkaBroker::socketServer)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * A collection of all controllers in the cluster.
-     */
-    Collection<SocketServer> controllerSocketServers();
-
-    /**
-     * Return any one of the broker servers. Throw an error if none are found
-     */
-    default SocketServer anyBrokerSocketServer() {
-        return brokerSocketServers().stream()
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No broker SocketServers found"));
-    }
-
-    /**
-     * Return any one of the controller servers. Throw an error if none are found
-     */
-    default SocketServer anyControllerSocketServer() {
-        return controllerSocketServers().stream()
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
+            .map(KafkaBroker::socketServer)
+            .map(ss -> ss.boundPort(clientListener()))
+            .toList();
     }
 
     String clusterId();
@@ -193,12 +178,20 @@ public interface ClusterInstance {
     }
 
     default <K, V> ShareConsumer<K, V> shareConsumer(Map<String, Object> configs) {
+        return shareConsumer(configs, null, null);
+    }
+
+    default <K, V> ShareConsumer<K, V> shareConsumer(Map<String, Object> configs, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         Map<String, Object> props = new HashMap<>(configs);
-        props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        if (keyDeserializer == null) {
+            props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        }
+        if (valueDeserializer == null) {
+            props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        }
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaShareConsumer<>(setClientSaslConfig(props));
+        return new KafkaShareConsumer<>(setClientSaslConfig(props), keyDeserializer, valueDeserializer);
     }
 
     default Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {
@@ -273,7 +266,54 @@ public interface ClusterInstance {
     //---------------------------[wait]---------------------------//
 
     default void waitTopicDeletion(String topic) throws InterruptedException {
-        waitForTopic(topic, 0);
+        Collection<KafkaBroker> brokers = aliveBrokers().values();
+        // wait for metadata
+        TestUtils.waitForCondition(
+            () -> brokers.stream().allMatch(
+                broker -> broker.metadataCache().numPartitions(topic).isEmpty()),
+                60000L, topic + " metadata not propagated after 60000 ms");
+
+        ensureConsistentMetadata(brokers, controllers().values());
+
+        TopicPartition topicPartition = new TopicPartition(topic, 0);
+
+        // Ensure that the topic-partition has been deleted from all brokers' replica managers
+        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
+                broker.replicaManager().onlinePartition(topicPartition).isEmpty()
+        ), "Replica manager's should have deleted all of this topic's partitions");
+
+        // Ensure that logs from all replicas are deleted
+        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
+                broker.logManager().getLog(topicPartition, false).isEmpty()
+        ), "Replica logs not deleted after delete topic is complete");
+
+        // Ensure that the topic is removed from all cleaner offsets
+        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker -> {
+            List<File> liveLogDirs = CollectionConverters.asJava(broker.logManager().liveLogDirs());
+            return liveLogDirs.stream().allMatch(logDir -> {
+                OffsetCheckpointFile checkpointFile;
+                try {
+                    checkpointFile = new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                return !checkpointFile.read().containsKey(topicPartition);
+            });
+        }), "Cleaner offset for deleted partition should have been removed");
+
+        // Ensure that the topic directories are soft-deleted
+        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
+                broker.config().logDirs().stream().allMatch(logDir ->
+                    !new File(logDir, topicPartition.topic() + "-" + topicPartition.partition()).exists())
+        ), "Failed to soft-delete the data to a delete directory");
+
+        // Ensure that the topic directories are hard-deleted
+        TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
+                broker.config().logDirs().stream().allMatch(logDir ->
+                    Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
+                        partitionDirectoryName.startsWith(topicPartition.topic() + "-" + topicPartition.partition()) &&
+                            partitionDirectoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)))
+        ), "Failed to hard-delete the delete directory");
     }
 
     default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
@@ -283,7 +323,7 @@ public interface ClusterInstance {
     default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
             admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
-            waitForTopic(topicName, partitions);
+            waitTopicCreation(topicName, partitions);
         }
     }
 
@@ -293,7 +333,7 @@ public interface ClusterInstance {
      * @param topicName The name of the topic to delete
      * @throws InterruptedException If the operation is interrupted
      */
-    default void deleteTopic(String topicName) throws InterruptedException {
+    default void deleteTopic(String topicName) throws InterruptedException, ExecutionException {
         try (Admin admin = admin()) {
             admin.deleteTopics(List.of(topicName));
             waitTopicDeletion(topicName);
@@ -302,69 +342,30 @@ public interface ClusterInstance {
 
     void waitForReadyBrokers() throws InterruptedException;
 
-    default void waitForTopic(String topic, int partitions) throws InterruptedException {
+    default void waitTopicCreation(String topic, int partitions) throws InterruptedException {
+        if (partitions <= 0) {
+            throw new IllegalArgumentException("Partition count must be > 0, but was " + partitions);
+        }
+
         // wait for metadata
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         TestUtils.waitForCondition(
-            () -> brokers.stream().allMatch(broker -> partitions == 0 ?
-                broker.metadataCache().numPartitions(topic).isEmpty() :
-                broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()
-        ), 60000L, topic + " metadata not propagated after 60000 ms");
+            () -> brokers.stream().allMatch(broker -> broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
+                60000L, topic + " metadata not propagated after 60000 ms");
 
-        for (ControllerServer controller : controllers().values()) {
+        ensureConsistentMetadata(brokers, controllers().values());
+    }
+
+    default void ensureConsistentMetadata() throws InterruptedException  {
+        ensureConsistentMetadata(aliveBrokers().values(), controllers().values());
+    }
+
+    default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
+        for (ControllerServer controller : controllers) {
             long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");
-        }
-
-        if (partitions == 0) {
-            List<TopicPartition> topicPartitions = IntStream.range(0, 1)
-                .mapToObj(partition -> new TopicPartition(topic, partition))
-                .toList();
-
-            // Ensure that the topic-partition has been deleted from all brokers' replica managers
-            TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                    topicPartitions.stream().allMatch(tp -> broker.replicaManager().onlinePartition(tp).isEmpty())),
-                "Replica manager's should have deleted all of this topic's partitions");
-
-            // Ensure that logs from all replicas are deleted
-            TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                    topicPartitions.stream().allMatch(tp -> broker.logManager().getLog(tp, false).isEmpty())),
-                "Replica logs not deleted after delete topic is complete");
-
-            // Ensure that the topic is removed from all cleaner offsets
-            TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                    topicPartitions.stream().allMatch(tp -> {
-                        List<File> liveLogDirs = CollectionConverters.asJava(broker.logManager().liveLogDirs());
-                        return liveLogDirs.stream().allMatch(logDir -> {
-                            OffsetCheckpointFile checkpointFile;
-                            try {
-                                checkpointFile = new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                            return !checkpointFile.read().containsKey(tp);
-                        });
-                    })),
-                "Cleaner offset for deleted partition should have been removed");
-
-            // Ensure that the topic directories are soft-deleted
-            TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                    broker.config().logDirs().stream().allMatch(logDir ->
-                        topicPartitions.stream().noneMatch(tp ->
-                            new File(logDir, tp.topic() + "-" + tp.partition()).exists()))),
-                "Failed to soft-delete the data to a delete directory");
-
-            // Ensure that the topic directories are hard-deleted
-            TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                broker.config().logDirs().stream().allMatch(logDir ->
-                    topicPartitions.stream().allMatch(tp ->
-                        Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
-                            partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
-                                partitionDirectoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)))
-                )
-            ), "Failed to hard-delete the delete directory");
         }
     }
 
@@ -405,5 +406,48 @@ public interface ClusterInstance {
                     .findFirst()
                     .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
+    }
+
+    /**
+     * Wait for a leader to be elected or changed using the provided admin client.
+     */
+    default int waitUntilLeaderIsElectedOrChangedWithAdmin(Admin admin,
+                                                           String topic,
+                                                           int partitionNumber,
+                                                           long timeoutMs) throws Exception {
+        long startTime = System.currentTimeMillis();
+        TopicPartition topicPartition = new TopicPartition(topic, partitionNumber);
+
+        while (System.currentTimeMillis() < startTime + timeoutMs) {
+            try {
+                TopicDescription topicDescription = admin.describeTopics(List.of(topic))
+                        .allTopicNames().get().get(topic);
+
+                Optional<Integer> leader = topicDescription.partitions().stream()
+                        .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
+                        .findFirst()
+                        .map(partitionInfo -> {
+                            int leaderId = partitionInfo.leader().id();
+                            return leaderId == Node.noNode().id() ? null : leaderId;
+                        });
+
+                if (leader.isPresent()) {
+                    return leader.get();
+                }
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof UnknownTopicOrPartitionException ||
+                        cause instanceof LeaderNotAvailableException) {
+                    continue;
+                } else {
+                    throw e;
+                }
+            }
+
+            TimeUnit.MILLISECONDS.sleep(Math.min(100L, timeoutMs));
+        }
+
+        throw new AssertionError("Timing out after " + timeoutMs +
+                " ms since a leader was not elected for partition " + topicPartition);
     }
 }

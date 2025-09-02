@@ -79,7 +79,7 @@ public class ClientTelemetryTest {
         try (Admin admin = Admin.create(configs)) {
             String testTopicName = "test_topic";
             admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1)));
-            clusterInstance.waitForTopic(testTopicName, 1);
+            clusterInstance.waitTopicCreation(testTopicName, 1);
 
             Map<String, Object> producerConfigs = new HashMap<>();
             producerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
@@ -123,6 +123,7 @@ public class ClientTelemetryTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
     public void testIntervalMsParser(ClusterInstance clusterInstance) {
         List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
@@ -152,6 +153,7 @@ public class ClientTelemetryTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static String[] toArray(List<String>... lists) {
         return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
     }

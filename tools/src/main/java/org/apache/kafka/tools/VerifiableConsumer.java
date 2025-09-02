@@ -58,7 +58,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -231,7 +230,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public void run() {
         try {
             printJson(new StartupComplete());
-            consumer.subscribe(Collections.singletonList(topic), this);
+            consumer.subscribe(List.of(topic), this);
 
             while (!isFinished()) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
@@ -598,7 +597,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .setDefault("earliest")
                 .type(String.class)
                 .dest("resetPolicy")
-                .help("Set reset policy (must be either 'earliest', 'latest', or 'none'");
+                .help("Set reset policy (must be either 'earliest', 'latest', or 'none')");
 
         parser.addArgument("--assignment-strategy")
                 .action(store())
@@ -612,8 +611,17 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .action(store())
                 .required(false)
                 .type(String.class)
-                .metavar("CONFIG_FILE")
-                .help("Consumer config properties file (config options shared with command line parameters will be overridden).");
+                .metavar("CONFIG-FILE")
+                .help("(DEPRECATED) Consumer config properties file" +
+                        "This option will be removed in a future version. Use --command-config instead");
+
+        parser.addArgument("--command-config")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("CONFIG-FILE")
+                .dest("commandConfigFile")
+                .help("Config properties file (config options shared with command line parameters will be overridden).");
 
         return parser;
     }
@@ -623,12 +631,24 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
         boolean useAutoCommit = res.getBoolean("useAutoCommit");
         String configFile = res.getString("consumer.config");
-        String brokerHostandPort = res.getString("bootstrapServer");
+        String commandConfigFile = res.getString("commandConfigFile");
+        String brokerHostAndPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
+        if (configFile != null && commandConfigFile != null) {
+            throw new ArgumentParserException("Options --consumer.config and --command-config are mutually exclusive.", parser);
+        }
         if (configFile != null) {
+            System.out.println("Option --consumer.config has been deprecated and will be removed in a future version. Use --command-config instead.");
             try {
                 consumerProps.putAll(Utils.loadProps(configFile));
+            } catch (IOException e) {
+                throw new ArgumentParserException(e.getMessage(), parser);
+            }
+        }
+        if (commandConfigFile != null) {
+            try {
+                consumerProps.putAll(Utils.loadProps(res.getString(commandConfigFile)));
             } catch (IOException e) {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
@@ -664,7 +684,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         }
 
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostAndPort);
 
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));

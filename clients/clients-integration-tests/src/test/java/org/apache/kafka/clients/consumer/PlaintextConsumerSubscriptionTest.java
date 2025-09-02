@@ -22,11 +22,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
@@ -576,7 +576,7 @@ public class PlaintextConsumerSubscriptionTest {
     }
 
     @ClusterTest
-    public void testAsyncConsumerClassicConsumerSubscribeInvalidTopicCanUnsubscribe() throws InterruptedException {
+    public void testAsyncConsumerSubscribeInvalidTopicCanUnsubscribe() throws InterruptedException {
         testSubscribeInvalidTopicCanUnsubscribe(GroupProtocol.CONSUMER);
     }
 

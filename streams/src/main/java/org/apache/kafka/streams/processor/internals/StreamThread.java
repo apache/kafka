@@ -45,6 +45,7 @@ import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -52,9 +53,11 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ConsumerWrapper;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
@@ -72,6 +75,7 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -370,6 +374,8 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile KafkaFutureImpl<Uuid> restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> producerInstanceIdFuture = new KafkaFutureImpl<>();
 
+    private Timer topicsReadyTimer;
+
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -396,7 +402,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
         final LogContext logContext = new LogContext(logPrefix);
         final LogContext restorationLogContext = stateUpdaterEnabled ? new LogContext(String.format("state-updater [%s] ", restorationThreadId)) : logContext;
-        final Logger log = logContext.logger(StreamThread.class);
+        final Logger log = LoggerFactory.getLogger(StreamThread.class);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
         referenceContainer.adminClient = adminClient;
@@ -404,7 +410,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         referenceContainer.time = time;
         referenceContainer.clientTags = config.getClientTags();
 
-        log.info("Creating restore consumer client");
+        log.info("Creating restore consumer client for thread {}", threadId);
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(restoreConsumerClientId(restorationThreadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
@@ -433,7 +439,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             threadId,
             threadIdx,
             processId,
-            log,
+            logContext,
             stateUpdaterEnabled,
             proceessingThreadsEnabled
         );
@@ -444,10 +450,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             stateDirectory,
             changelogReader,
             threadId,
-            log,
+            logContext,
             stateUpdaterEnabled);
 
-        final Tasks tasks = new Tasks(new LogContext(logPrefix));
+        final Tasks tasks = new Tasks(logContext);
         final boolean processingThreadsEnabled =
             InternalConfig.processingThreadsEnabled(config.originals());
 
@@ -482,7 +488,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         );
         referenceContainer.taskManager = taskManager;
 
-        log.info("Creating consumer client");
+        log.info("Creating consumer client for thread {}", threadId);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, consumerClientId(threadId), threadIdx);
         consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
@@ -493,7 +499,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, log, consumerConfigs);
+        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, log, threadId, consumerConfigs);
 
         taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
         referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
@@ -534,6 +540,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final KafkaClientSupplier clientSupplier,
                                                        final UUID processId,
                                                        final Logger log,
+                                                       final String threadId,
                                                        final Map<String, Object> consumerConfigs) {
         if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
@@ -646,7 +653,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
             return new DefaultStateUpdater(
                 name,
-                streamsMetrics.metricsRegistry(),
+                streamsMetrics,
                 streamsConfig,
                 restoreConsumer,
                 changelogReader,
@@ -1533,10 +1540,27 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public void handleStreamsRebalanceData() {
         if (streamsRebalanceData.isPresent()) {
+            boolean hasMissingSourceTopics = false;
+            String missingTopicsDetail = null;
+            
             for (final StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
                 if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
                     shutdownErrorHook.run();
+                } else if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code()) {
+                    hasMissingSourceTopics = true;
+                    missingTopicsDetail = status.statusDetail();
+                } else if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.INCORRECTLY_PARTITIONED_TOPICS.code()) {
+                    final String errorMsg = status.statusDetail();
+                    log.error(errorMsg);
+                    throw new TopologyException(errorMsg);
                 }
+            }
+            
+            if (hasMissingSourceTopics) {
+                handleMissingSourceTopicsWithTimeout(missingTopicsDetail);
+            } else {
+                // Reset timeout tracking when no missing source topics are reported
+                topicsReadyTimer = null;
             }
 
             final Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> partitionsByEndpoint =
@@ -1555,6 +1579,30 @@ public class StreamThread extends Thread implements ProcessingThread {
             );
         }
     }
+
+    private void handleMissingSourceTopicsWithTimeout(final String missingTopicsDetail) {
+        // Start timeout tracking on first encounter with missing topics
+        if (topicsReadyTimer == null) {
+            topicsReadyTimer = time.timer(maxPollTimeMs);
+            log.info("Missing source topics detected: {}. Will wait up to {}ms before failing.", 
+                missingTopicsDetail, maxPollTimeMs);
+        } else {
+            topicsReadyTimer.update();
+        }
+        
+        if (topicsReadyTimer.isExpired()) {
+            final long elapsedTime = topicsReadyTimer.elapsedMs();
+            final String errorMsg = String.format("Missing source topics: %s. Timeout exceeded after %dms.", 
+                missingTopicsDetail, elapsedTime);
+            log.error(errorMsg);
+            
+            throw new MissingSourceTopicException(errorMsg);
+        } else {
+            log.debug("Missing source topics: {}. Elapsed time: {}ms, timeout in: {}ms", 
+                missingTopicsDetail, topicsReadyTimer.elapsedMs(), topicsReadyTimer.remainingMs());
+        }
+    }
+    
 
     static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();

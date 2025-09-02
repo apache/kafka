@@ -34,11 +34,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -90,7 +90,7 @@ public class EndToEndLatency {
         int messageSizeBytes = Integer.parseInt(args[4]);
         Optional<String> propertiesFile = (args.length > 5 && !Utils.isBlank(args[5])) ? Optional.of(args[5]) : Optional.empty();
 
-        if (!Arrays.asList("1", "all").contains(acks)) {
+        if (!List.of("1", "all").contains(acks)) {
             throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all");
         }
 
@@ -186,7 +186,7 @@ public class EndToEndLatency {
         Admin adminClient = Admin.create(adminProps);
         NewTopic newTopic = new NewTopic(topic, DEFAULT_NUM_PARTITIONS, DEFAULT_REPLICATION_FACTOR);
         try {
-            adminClient.createTopics(Collections.singleton(newTopic)).all().get();
+            adminClient.createTopics(Set.of(newTopic)).all().get();
         } catch (ExecutionException | InterruptedException e) {
             System.out.printf("Creation of topic %s failed%n", topic);
             throw new RuntimeException(e);
