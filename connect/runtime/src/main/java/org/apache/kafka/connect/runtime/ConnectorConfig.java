@@ -47,7 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -250,8 +249,8 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(VALUE_CONVERTER_VERSION_CONFIG, Type.STRING, valueConverterDefaults.version, VALUE_CONVERTER_VERSION_VALIDATOR, Importance.LOW, VALUE_CONVERTER_VERSION_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_VERSION_DISPLAY, recommender.valueConverterPluginVersionRecommender())
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, headerConverterDefaults.type, HEADER_CONVERTER_CLASS_VALIDATOR, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY, recommender.headerConverterPluginRecommender())
                 .define(HEADER_CONVERTER_VERSION_CONFIG, Type.STRING, headerConverterDefaults.version, HEADER_CONVERTER_VERSION_VALIDATOR, Importance.LOW, HEADER_CONVERTER_VERSION_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_VERSION_DISPLAY, recommender.headerConverterPluginVersionRecommender())
-                .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("transformation"), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
-                .define(PREDICATES_CONFIG, Type.LIST, Collections.emptyList(), aliasValidator("predicate"), Importance.LOW, PREDICATES_DOC, PREDICATES_GROUP, ++orderInGroup, Width.LONG, PREDICATES_DISPLAY)
+                .define(TRANSFORMS_CONFIG, Type.LIST, List.of(), aliasValidator("transformation"), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY)
+                .define(PREDICATES_CONFIG, Type.LIST, List.of(), aliasValidator("predicate"), Importance.LOW, PREDICATES_DOC, PREDICATES_GROUP, ++orderInGroup, Width.LONG, PREDICATES_DISPLAY)
                 .define(CONFIG_RELOAD_ACTION_CONFIG, Type.STRING, CONFIG_RELOAD_ACTION_RESTART,
                         in(CONFIG_RELOAD_ACTION_NONE, CONFIG_RELOAD_ACTION_RESTART), Importance.LOW,
                         CONFIG_RELOAD_ACTION_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, CONFIG_RELOAD_ACTION_DISPLAY)
@@ -303,7 +302,7 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public ConnectorConfig(Plugins plugins) {
-        this(plugins, Collections.emptyMap());
+        this(plugins, Map.of());
     }
 
     public ConnectorConfig(Plugins plugins, Map<String, String> props) {
@@ -646,7 +645,7 @@ public class ConnectorConfig extends AbstractConfig {
                 newDef.define(typeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
                         "Class for the '" + alias + "' " + aliasKind.toLowerCase(Locale.ENGLISH) + ".", group, orderInGroup++, Width.LONG,
                         baseClass.getSimpleName() + " type for " + alias,
-                        Collections.emptyList(), new ClassRecommender());
+                        List.of(), new ClassRecommender());
 
                 // Add the version configuration
                 final ConfigDef.Validator versionValidator = (name, value) -> {
@@ -664,7 +663,7 @@ public class ConnectorConfig extends AbstractConfig {
                 newDef.define(versionConfig, Type.STRING, defaultVersion, versionValidator, Importance.HIGH,
                         "Version of the '" + alias + "' " + aliasKind.toLowerCase(Locale.ENGLISH) + ".", group, orderInGroup++, Width.LONG,
                         baseClass.getSimpleName() + " version for " + alias,
-                        Collections.emptyList(), versionRecommender(typeConfig));
+                        List.of(), versionRecommender(typeConfig));
 
                 final ConfigDef configDef = populateConfigDef(typeConfig, versionConfig, plugins);
                 if (configDef == null) continue;
@@ -780,11 +779,7 @@ public class ConnectorConfig extends AbstractConfig {
 
             @Override
             public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-                List<Object> result = new ArrayList<>();
-                for (PluginDesc<T> plugin : plugins()) {
-                    result.add(plugin.pluginClass());
-                }
-                return Collections.unmodifiableList(result);
+                return plugins().stream().map(p -> (Object) p.pluginClass()).toList();
             }
 
             @Override

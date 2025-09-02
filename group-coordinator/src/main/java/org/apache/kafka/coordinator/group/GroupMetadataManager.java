@@ -833,18 +833,27 @@ public class GroupMetadataManager {
      * Gets or creates a streams group without updating the groups map.
      * The group will be materialized during the replay.
      *
+     * If there is an empty classic consumer group of the same name, it will be deleted and a new streams
+     * group will be created.
+     *
      * @param groupId           The group ID.
+     * @param records           The record list to which the group tombstones are written
+     *                          if the group is empty and is a classic group.
      *
      * @return A StreamsGroup.
      *
      * Package private for testing.
      */
     StreamsGroup getOrCreateStreamsGroup(
-        String groupId
+        String groupId,
+        List<CoordinatorRecord> records
     ) {
         Group group = groups.get(groupId);
 
         if (group == null) {
+            return new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+        } else if (maybeDeleteEmptyClassicGroup(group, records)) {
+            log.info("[GroupId {}] Converted the empty classic group to a streams group.", groupId);
             return new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
         } else {
             return castToStreamsGroup(group);
@@ -1871,7 +1880,7 @@ public class GroupMetadataManager {
         boolean isJoining = memberEpoch == 0;
         StreamsGroup group;
         if (isJoining) {
-            group = getOrCreateStreamsGroup(groupId);
+            group = getOrCreateStreamsGroup(groupId, records);
             throwIfStreamsGroupIsFull(group);
         } else {
             group = getStreamsGroupOrThrow(groupId);
@@ -6066,7 +6075,11 @@ public class GroupMetadataManager {
                 // classicGroupJoinToConsumerGroup takes the join requests to non-empty consumer groups.
                 // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
                 return classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
-            } else if (group.type() == CONSUMER || group.type() == CLASSIC) {
+            } else if (group.type() == CONSUMER || group.type() == CLASSIC || group.type() == STREAMS && group.isEmpty()) {
+                // classicGroupJoinToClassicGroup accepts:
+                // - classic groups
+                // - empty streams groups
+                // - empty consumer groups
                 return classicGroupJoinToClassicGroup(context, request, responseFuture);
             } else {
                 // Group exists but it's not a consumer group
@@ -6107,6 +6120,8 @@ public class GroupMetadataManager {
         ClassicGroup group;
         if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
             log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
+        } else if (maybeDeleteEmptyStreamsGroup(groupId, records)) {
+            log.info("[GroupId {}] Converted the empty streams group to a classic group.", groupId);
         }
         boolean isNewGroup = !groups.containsKey(groupId);
         try {
@@ -8399,6 +8414,13 @@ public class GroupMetadataManager {
     }
 
     /**
+     * @return true if the group is an empty streams group.
+     */
+    private static boolean isEmptyStreamsGroup(Group group) {
+        return group != null && group.type() == STREAMS && group.isEmpty();
+    }
+
+    /**
      * Write tombstones for the group if it's empty and is a classic group.
      *
      * @param group     The group to be deleted.
@@ -8428,6 +8450,26 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId, Long.MAX_VALUE);
         if (isEmptyConsumerGroup(group)) {
             // Add tombstones for the previous consumer group. The tombstones won't actually be
+            // replayed because its coordinator result has a non-null appendFuture.
+            createGroupTombstoneRecords(group, records);
+            removeGroup(groupId);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Delete and write tombstones for the group if it's empty and is a streams group.
+     *
+     * @param groupId The group id to be deleted.
+     * @param records The list of records to delete the group.
+     *
+     * @return true if the group is an empty streams group.
+     */
+    private boolean maybeDeleteEmptyStreamsGroup(String groupId, List<CoordinatorRecord> records) {
+        Group group = groups.get(groupId, Long.MAX_VALUE);
+        if (isEmptyStreamsGroup(group)) {
+            // Add tombstones for the previous streams group. The tombstones won't actually be
             // replayed because its coordinator result has a non-null appendFuture.
             createGroupTombstoneRecords(group, records);
             removeGroup(groupId);

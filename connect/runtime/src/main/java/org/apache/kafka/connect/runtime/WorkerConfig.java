@@ -37,7 +37,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -254,7 +253,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(HEADER_CONVERTER_VERSION, Type.STRING,
                         HEADER_CONVERTER_VERSION_DEFAULT, Importance.LOW, HEADER_CONVERTER_VERSION_DOC)
                 .define(CONFIG_PROVIDERS_CONFIG, Type.LIST,
-                        Collections.emptyList(),
+                        List.of(),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
                         Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC)
@@ -316,7 +315,7 @@ public class WorkerConfig extends AbstractConfig {
 
     private void logInternalConverterRemovalWarnings(Map<String, String> props) {
         List<String> removedProperties = new ArrayList<>();
-        for (String property : Arrays.asList("internal.key.converter", "internal.value.converter")) {
+        for (String property : List.of("internal.key.converter", "internal.value.converter")) {
             if (props.containsKey(property)) {
                 removedProperties.add(property);
             }

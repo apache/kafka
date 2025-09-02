@@ -22,11 +22,11 @@ import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
@@ -82,11 +82,11 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
                 connectorConfigs,
                 connectorTargetStates,
                 taskConfigs,
-                Collections.emptyMap(),
-                Collections.emptyMap(),
+                Map.of(),
+                Map.of(),
                 appliedConnectorConfigs,
-                Collections.emptySet(),
-                Collections.emptySet(),
+                Set.of(),
+                Set.of(),
                 configTransformer
         );
     }
