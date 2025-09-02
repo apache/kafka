@@ -4529,12 +4529,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 object PlaintextAdminIntegrationTest {
 
   def checkValidAlterConfigs(
-                              admin: Admin,
-                              test: KafkaServerTestHarness,
-                              topicResource1: ConfigResource,
-                              topicResource2: ConfigResource,
-                              maxMessageBytes: String,
-                              retentionMs: String): Unit = {
+    admin: Admin,
+    test: KafkaServerTestHarness,
+    topicResource1: ConfigResource,
+    topicResource2: ConfigResource,
+    maxMessageBytes: String,
+    retentionMs: String): Unit = {
     // Alter topics
     val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     alterConfigs.put(topicResource1, util.List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MS_CONFIG, "1000"), OpType.SET)))
@@ -4582,9 +4582,9 @@ object PlaintextAdminIntegrationTest {
   }
 
   def checkInvalidAlterConfigs(
-                                test: KafkaServerTestHarness,
-                                admin: Admin
-                              ): Unit = {
+    test: KafkaServerTestHarness,
+    admin: Admin
+  ): Unit = {
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
