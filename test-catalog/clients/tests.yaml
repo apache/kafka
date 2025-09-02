@@ -714,6 +714,7 @@ org.apache.kafka.clients.consumer.ConsumerConfigTest:
 - testRemoteAssignorConfig
 - testRemoteAssignorWithClassicGroupProtocol
 - testUnsupportedConfigsWithConsumerGroupProtocol
+- testValidateConfigPropertiesFile
 org.apache.kafka.clients.consumer.ConsumerGroupMetadataTest:
 - testAssignmentConstructor
 - testGroupIdConstructor
@@ -2818,6 +2819,7 @@ org.apache.kafka.clients.producer.ProducerConfigTest:
 - testInvalidSecurityProtocol
 - testTwoPhaseCommitIncompatibleWithTransactionTimeout
 - testUpperboundCheckOfEnableIdempotence
+- testValidateConfigPropertiesFile
 org.apache.kafka.clients.producer.ProducerRecordTest:
 - testEqualsAndHashCode
 - testInvalidRecords
