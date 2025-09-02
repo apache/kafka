@@ -65,7 +65,6 @@ trait AutoTopicCreationManager {
 
 }
 
-  time: Time
 /**
  * Thread-safe cache that stores topic creation errors with per-entry expiration.
  * - Expiration: maintained by a min-heap (priority queue) on expiration time
