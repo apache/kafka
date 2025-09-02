@@ -2576,8 +2576,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val simpleGroupId = "simple_group_id"
     val streamsGroupId = "streams_group_id"
     val testTopicName = "test_topic"
-    val testStreamsOutputTopicName = "test_streams_output_topic"
-
     consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name)
     val classicGroupConfig = new Properties(consumerConfig)
     classicGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, classicGroupId)
@@ -2612,6 +2610,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       consumerGroup.poll(JDuration.ofMillis(1000))
       shareGroup.subscribe(util.Set.of(testTopicName))
       shareGroup.poll(JDuration.ofMillis(1000))
+      streamsGroup.poll(JDuration.ofMillis(1000))
 
       val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(simpleGroupId,
         util.Map.of(topicPartition, new OffsetAndMetadata(0L)))
@@ -3181,7 +3180,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     def assertPreferredLeaderNotAvailable(
       topicPartition: TopicPartition,
       result: ElectLeadersResult
-    : Unit = {
+    ): Unit = {
       val exception = result.partitions.get.get(topicPartition).get
       assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
       assertTrue(exception.getMessage.contains(
@@ -4402,9 +4401,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     prepareTopics(List(testTopicName), testNumPartitions)
     prepareRecords(testTopicName)
 
-    val streamsConfig = new Properties()
     val streams = createStreamsGroup(
-      configOverrides = streamsConfig,
       inputTopic = testTopicName,
       streamsGroupId = streamsGroupId
     )
@@ -4461,11 +4458,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       for (i <- 1 to testNumStreamsGroup) {
         val streamsGroupId = s"stream_group_id_$i"
-        val streamsConfig = new Properties()
-        streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
         val streams = createStreamsGroup(
-          configOverrides = streamsConfig,
           inputTopic = testTopicName,
           streamsGroupId = streamsGroupId,
         )
@@ -4482,7 +4476,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // Test deletion of non-empty existing groups
       var deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
       assertFutureThrows(classOf[GroupNotEmptyException], deleteStreamsGroupResult.all())
-      assertEquals(deleteStreamsGroupResult.deletedGroups().size(),2)
+      assertEquals(2, deleteStreamsGroupResult.deletedGroups().size())
 
       // Stop and clean up the streams for the groups that are going to be deleted
       streamsList
@@ -4492,7 +4486,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         }
 
       val listTopicResult = client.listTopics()
-      assertEquals(3, listTopicResult.names().get().size())
+      assertEquals(2, listTopicResult.names().get().size())
 
       // Test deletion of emptied existing streams groups
       deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
