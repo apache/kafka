@@ -154,12 +154,12 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     shareConsumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
     shareConsumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     shareConsumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
-
+    
     streamsConsumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     streamsConsumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
     streamsConsumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     streamsConsumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
-
+    
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
     doSuperuserSetup(testInfo)
@@ -219,10 +219,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def createStreamsConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                                  valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                                  configOverrides: Properties = new Properties,
-                                  configsToRemove: List[String] = List(),
-                                  streamsRebalanceData: StreamsRebalanceData): AsyncKafkaConsumer[K, V] = {
+                                valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                                configOverrides: Properties = new Properties,
+                                configsToRemove: List[String] = List(),
+                                streamsRebalanceData: StreamsRebalanceData): AsyncKafkaConsumer[K, V] = {
     val props = new Properties
     props ++= streamsConsumerConfig
     props ++= configOverrides
@@ -284,9 +284,9 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def createAdminClient(
-                         listenerName: ListenerName = listenerName,
-                         configOverrides: Properties = new Properties
-                       ): Admin = {
+    listenerName: ListenerName = listenerName,
+    configOverrides: Properties = new Properties
+  ): Admin = {
     val props = new Properties
     props ++= adminClientConfig
     props ++= configOverrides
@@ -296,9 +296,9 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def createSuperuserAdminClient(
-                                  listenerName: ListenerName = listenerName,
-                                  configOverrides: Properties = new Properties
-                                ): Admin = {
+    listenerName: ListenerName = listenerName,
+    configOverrides: Properties = new Properties
+  ): Admin = {
     val props = new Properties
     props ++= superuserClientConfig
     props ++= configOverrides
