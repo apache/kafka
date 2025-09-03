@@ -3630,7 +3630,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(util.Map.of(broker0Resource,
       util.List.of(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "123"),
-        AlterConfigOp.OpType.SET),
+          AlterConfigOp.OpType.SET),
         new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "456"),
           AlterConfigOp.OpType.SET)
       ))).all().get()
@@ -3836,7 +3836,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val longTopicName = String.join("", Collections.nCopies(249, "x"))
     val invalidTopicName = String.join("", Collections.nCopies(250, "x"))
     val newTopics2 = util.List.of(new NewTopic(invalidTopicName, 3, 3.toShort),
-      new NewTopic(longTopicName, 3, 3.toShort))
+                         new NewTopic(longTopicName, 3, 3.toShort))
     val results = client.createTopics(newTopics2).values()
     assertTrue(results.containsKey(longTopicName))
     results.get(longTopicName).get()
