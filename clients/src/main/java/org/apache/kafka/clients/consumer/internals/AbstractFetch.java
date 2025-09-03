@@ -174,6 +174,8 @@ public abstract class AbstractFetch implements Closeable {
             final Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
             final FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
 
+            boolean needsWakeup = true;
+
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicPartition partition = entry.getKey();
@@ -220,11 +222,13 @@ public abstract class AbstractFetch implements Closeable {
                         metricAggregator,
                         fetchOffset);
                 fetchBuffer.add(completedFetch);
+                needsWakeup = false;
             }
 
             // "Wake" the fetch buffer on any response, even if it's empty, to allow the consumer to not block
             // indefinitely waiting on the fetch buffer to get data.
-            fetchBuffer.wakeup();
+            if (needsWakeup)
+                fetchBuffer.wakeup();
 
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
                 List<Node> leaderNodes = new ArrayList<>();
