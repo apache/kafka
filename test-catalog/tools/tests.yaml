@@ -179,6 +179,7 @@ org.apache.kafka.tools.ConsumerPerformanceTest:
 - testConfigWithoutTopicAndInclude
 - testDefaultClientId
 - testDetailedHeaderMatchBody
+- testMetricsRetrievedBeforeConsumerClosed
 - testNonDetailedHeaderMatchBody
 org.apache.kafka.tools.DelegationTokenCommandTest:
 - testCheckArgsInvalidArgs
