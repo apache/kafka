@@ -230,7 +230,7 @@ public class RepartitionOptimizingTest {
             .map((k, v) -> KeyValue.pair(k.toUpperCase(Locale.getDefault()), v))
             .processValues(() -> new ContextualFixedKeyProcessor<String, String, Integer>() {
                 @Override
-                public void process(FixedKeyRecord<String, String> record) {
+                public void process(final FixedKeyRecord<String, String> record) {
                     context().forward(record.withValue(record.value().length()));
                 }
             })

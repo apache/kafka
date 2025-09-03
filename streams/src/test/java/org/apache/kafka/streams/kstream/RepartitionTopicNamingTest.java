@@ -59,6 +59,7 @@ public class RepartitionTopicNamingTest {
 
     @Test
     public void shouldReuseFirstRepartitionTopicNameWhenOptimizing() {
+
         final String optimizedTopology = buildTopology(StreamsConfig.OPTIMIZE).describe().toString();
         final String unOptimizedTopology = buildTopology(StreamsConfig.NO_OPTIMIZATION).describe().toString();
 

@@ -241,7 +241,7 @@ public class StreamsGraphTest {
         mappedKeyStream.processValues(
             () -> new ContextualFixedKeyProcessor<>() {
                 @Override
-                public void process(FixedKeyRecord<String, String> record) {
+                public void process(final FixedKeyRecord<String, String> record) {
                     context().forward(record.withValue(record.value().toUpperCase(Locale.getDefault())));
                 }
             }).groupByKey().count().toStream().to("output");
