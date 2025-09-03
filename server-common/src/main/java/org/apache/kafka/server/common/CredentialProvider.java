@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.security;
+package org.apache.kafka.server.common;
 
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
