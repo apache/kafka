@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import java.util.Optional;
 
 public class ScramPublisher implements MetadataPublisher {
-    private final Logger log;
     private final int nodeId;
     private final FaultHandler faultHandler;
     private final String nodeType;
@@ -40,7 +39,6 @@ public class ScramPublisher implements MetadataPublisher {
         this.faultHandler = faultHandler;
         this.nodeType = nodeType;
         this.credentialProvider = credentialProvider;
-        this.log = new LogContext(name()).logger(ScramPublisher.class);
     }
 
     @Override
