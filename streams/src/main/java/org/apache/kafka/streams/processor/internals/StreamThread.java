@@ -1156,7 +1156,9 @@ public class StreamThread extends Thread implements ProcessingThread {
                             time,
                             streamsRebalanceData.get(),
                             this,
-                            taskManager
+                            taskManager,
+                            streamsMetrics,
+                            getName()
                         )
                     );
                 } else {
@@ -1167,7 +1169,9 @@ public class StreamThread extends Thread implements ProcessingThread {
                             time,
                             streamsRebalanceData.get(),
                             this,
-                            taskManager
+                            taskManager,
+                            streamsMetrics,
+                            getName()
                         )
                     );
                 }
