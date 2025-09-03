@@ -178,7 +178,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     //null can create default quota
     val userDefaultEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> Option.empty[String].orNull).asJava)
     client.alterClientQuotas(util.List.of(new ClientQuotaAlteration(userDefaultEntity, util.Set.of(
-            new ClientQuotaAlteration.Op("consumer_byte_rate", 100D))))).all().get()
+      new ClientQuotaAlteration.Op("consumer_byte_rate", 100D))))).all().get()
     val clientDefaultEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> Option.empty[String].orNull).asJava)
     client.alterClientQuotas(util.List.of(new ClientQuotaAlteration(clientDefaultEntity, util.Set.of(
       new ClientQuotaAlteration.Op("producer_byte_rate", 100D))))).all().get()
@@ -528,7 +528,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertEquals(3, client.listTransactions().all().get().size())
     assertEquals(2, client.listTransactions(new ListTransactionsOptions()
-        .filterStates(util.List.of(TransactionState.COMPLETE_COMMIT))).all().get().size())
+      .filterStates(util.List.of(TransactionState.COMPLETE_COMMIT))).all().get().size())
     assertEquals(1, client.listTransactions(new ListTransactionsOptions()
       .filterStates(util.List.of(TransactionState.COMPLETE_ABORT))).all().get().size())
     assertEquals(1, client.listTransactions(new ListTransactionsOptions()
@@ -767,8 +767,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * describe should not auto create topics
-    */
+   * describe should not auto create topics
+   */
   @Test
   def testDescribeNonExistingTopic(): Unit = {
     client = createAdminClient
@@ -1273,7 +1273,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         () => s"$desc: Expect InvalidPartitionsException when #brokers != replication factor")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       exceptionMsgStr = "The manual partition assignment includes a partition with 2 replica(s), but this is not " +
-          "consistent with previous partitions, which have 1 replica(s)."
+        "consistent with previous partitions, which have 1 replica(s)."
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
 
@@ -1314,7 +1314,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         () => s"$desc: Expect InvalidReplicaAssignmentException when assignments have differently sized inner lists")
       assertTrue(e.getCause.isInstanceOf[InvalidReplicaAssignmentException], desc)
       exceptionMsgStr = "The manual partition assignment includes a partition with 2 replica(s), but this is not " +
-          "consistent with previous partitions, which have 1 replica(s)."
+        "consistent with previous partitions, which have 1 replica(s)."
       assertEquals(exceptionMsgStr, e.getCause.getMessage, desc)
       assertEquals(3, numPartitions(topic1, expectedNumPartitionsOpt = Some(3)), desc)
 
@@ -1430,7 +1430,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       } catch {
         case e: ExecutionException if e.getCause.isInstanceOf[LeaderNotAvailableException] ||
           e.getCause.isInstanceOf[NotLeaderOrFollowerException] => false
-        }
+      }
     }, s"Expected low watermark of the partition to be 5 but got ${lowWatermark.getOrElse("no response within the timeout")}")
   }
 
@@ -1462,7 +1462,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     def waitForFollowerLog(expectedStartOffset: Long, expectedEndOffset: Long): Unit = {
       TestUtils.waitUntilTrue(() => brokers(followerIndex).replicaManager.localLog(topicPartition).isDefined,
-                              "Expected follower to create replica for partition")
+        "Expected follower to create replica for partition")
 
       // wait until the follower discovers that log start offset moved beyond its HW
       TestUtils.waitUntilTrue(() => {
@@ -1750,9 +1750,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
-    * since they can be done within the timeout.  New calls should receive exceptions.
-    */
+   * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
+   * since they can be done within the timeout.  New calls should receive exceptions.
+   */
   @Test
   def testDelayedClose(): Unit = {
     client = createAdminClient
@@ -1767,9 +1767,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
-    * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
-    */
+   * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
+   * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
+   */
   @Test
   def testForceClose(): Unit = {
     val config = createConfig
@@ -1784,9 +1784,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
-    * even when the default request timeout is shorter.
-    */
+   * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
+   * even when the default request timeout is shorter.
+   */
   @Test
   def testMinimumRequestTimeouts(): Unit = {
     val config = createConfig
@@ -1802,8 +1802,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * Test injecting timeouts for calls that are in flight.
-    */
+   * Test injecting timeouts for calls that are in flight.
+   */
   @Test
   def testCallInFlightTimeouts(): Unit = {
     val config = createConfig
@@ -1812,7 +1812,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
     client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
-        new CreateTopicsOptions().validateOnly(true)).all()
+      new CreateTopicsOptions().validateOnly(true)).all()
     assertFutureThrows(classOf[TimeoutException], future)
     val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1.toShort)).asJava,
       new CreateTopicsOptions().validateOnly(true)).all()
@@ -2576,7 +2576,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val simpleGroupId = "simple_group_id"
     val streamsGroupId = "streams_group_id"
     val testTopicName = "test_topic"
-    val testStreamsOutputTopicName = "test_streams_output_topic"
+
+    val config = createConfig
+    client = Admin.create(config)
 
     consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name)
     val classicGroupConfig = new Properties(consumerConfig)
@@ -2592,26 +2594,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     shareGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, shareGroupId)
     val shareGroup = createShareConsumer(configOverrides = shareGroupConfig)
 
-    val streamsConfig = new Properties()
-    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-
     val streamsGroup = createStreamsGroup(
-      configOverrides = streamsConfig ,
-      inputTopic = testTopicName ,
-      outputTopic = testStreamsOutputTopicName ,
+      inputTopic = testTopicName,
       streamsGroupId = streamsGroupId
     )
-    streamsGroup.poll(JDuration.ofMillis(500L))
 
-    val config = createConfig
-    client = Admin.create(config)
     try {
-      //      client.createTopics(util.Set.of(
-      //        new NewTopic(testTopicName, 1, 1.toShort),
-      //        new NewTopic(testStreamsOutputTopicName, 1, 1.toShort)
-      //      )).all().get()
-      //
-      //      waitForTopics(client, List(testTopicName), List())
+      client.createTopics(util.Set.of(
+        new NewTopic(testTopicName, 1, 1.toShort)
+      )).all().get()
+      waitForTopics(client, List(testTopicName), List())
       val topicPartition = new TopicPartition(testTopicName, 0)
 
       classicGroup.subscribe(util.Set.of(testTopicName))
@@ -2620,6 +2612,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       consumerGroup.poll(JDuration.ofMillis(1000))
       shareGroup.subscribe(util.Set.of(testTopicName))
       shareGroup.poll(JDuration.ofMillis(1000))
+      streamsGroup.poll(JDuration.ofMillis(1000))
 
       val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(simpleGroupId,
         util.Map.of(topicPartition, new OffsetAndMetadata(0L)))
@@ -2676,8 +2669,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Utils.closeQuietly(classicGroup, "classicGroup")
       Utils.closeQuietly(consumerGroup, "consumerGroup")
       Utils.closeQuietly(shareGroup, "shareGroup")
-      Utils.closeQuietly(client, "adminClient")
       Utils.closeQuietly(streamsGroup, "streamsGroup")
+      Utils.closeQuietly(client, "adminClient")
     }
   }
 
@@ -3148,9 +3141,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 1)
 
     def assertUnknownTopicOrPartition(
-      topicPartition: TopicPartition,
-      result: ElectLeadersResult
-    ): Unit = {
+                                       topicPartition: TopicPartition,
+                                       result: ElectLeadersResult
+                                     ): Unit = {
       val exception = result.partitions.get.get(topicPartition).get
       assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
       assertEquals(s"No such topic as ${topicPartition.topic()}", exception.getMessage)
@@ -3187,9 +3180,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     def assertPreferredLeaderNotAvailable(
-      topicPartition: TopicPartition,
-      result: ElectLeadersResult
-    ): Unit = {
+                                           topicPartition: TopicPartition,
+                                           result: ElectLeadersResult
+                                         ): Unit = {
       val exception = result.partitions.get.get(topicPartition).get
       assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
       assertTrue(exception.getMessage.contains(
@@ -3637,7 +3630,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(util.Map.of(broker0Resource,
       util.List.of(new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "123"),
-          AlterConfigOp.OpType.SET),
+        AlterConfigOp.OpType.SET),
         new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, "456"),
           AlterConfigOp.OpType.SET)
       ))).all().get()
@@ -3843,7 +3836,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val longTopicName = String.join("", Collections.nCopies(249, "x"))
     val invalidTopicName = String.join("", Collections.nCopies(250, "x"))
     val newTopics2 = util.List.of(new NewTopic(invalidTopicName, 3, 3.toShort),
-                         new NewTopic(longTopicName, 3, 3.toShort))
+      new NewTopic(longTopicName, 3, 3.toShort))
     val results = client.createTopics(newTopics2).values()
     assertTrue(results.containsKey(longTopicName))
     results.get(longTopicName).get()
@@ -3967,12 +3960,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   /**
-    * 1. Assume kafka logger == TRACE
-    * 2. Change kafka.server.ControllerServer logger to INFO
-    * 3. Unset kafka.server.ControllerServer via AlterConfigOp.OpType.DELETE (resets it to the kafka logger - TRACE)
-    * 4. Change kafka logger to ERROR
-    * 5. Ensure the kafka.server.ControllerServer logger's level is ERROR (the current kafka logger level)
-    */
+   * 1. Assume kafka logger == TRACE
+   * 2. Change kafka.server.ControllerServer logger to INFO
+   * 3. Unset kafka.server.ControllerServer via AlterConfigOp.OpType.DELETE (resets it to the kafka logger - TRACE)
+   * 4. Change kafka logger to ERROR
+   * 5. Ensure the kafka.server.ControllerServer logger's level is ERROR (the current kafka logger level)
+   */
   @Test
   def testIncrementalAlterConfigsForLog4jLogLevelsCanResetLoggerToCurrentRoot(): Unit = {
     client = createAdminClient
@@ -4402,28 +4395,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testDescribeStreamsGroups(): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"
-    val testOutputTopicName = "test_output_topic"
     val testNumPartitions = 1
 
     val config = createConfig
     client = Admin.create(config)
 
-    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareTopics(List(testTopicName), testNumPartitions)
     prepareRecords(testTopicName)
 
-    val streamsConfig = new Properties()
-    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     val streams = createStreamsGroup(
-      configOverrides = streamsConfig,
       inputTopic = testTopicName,
-      outputTopic = testOutputTopicName,
       streamsGroupId = streamsGroupId
     )
     streams.poll(JDuration.ofMillis(500L))
 
     try {
       TestUtils.waitUntilTrue(() => {
-        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
+        val firstGroup = client.listGroups().all().get().stream()
+          .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
         firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
       }, "Stream group not stable yet")
 
@@ -4455,7 +4444,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @Test
   def testDeleteStreamsGroups(): Unit = {
     val testTopicName = "test_topic"
-    val testOutputTopicName = "test_output_topic"
     val testNumPartitions = 3
     val testNumStreamsGroup = 3
 
@@ -4465,7 +4453,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val config = createConfig
     client = Admin.create(config)
 
-    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareTopics(List(testTopicName), testNumPartitions)
     prepareRecords(testTopicName)
 
     val streamsList = scala.collection.mutable.ListBuffer[(String, AsyncKafkaConsumer[_,_])]()
@@ -4473,13 +4461,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     try {
       for (i <- 1 to testNumStreamsGroup) {
         val streamsGroupId = s"stream_group_id_$i"
-        val streamsConfig = new Properties()
-        streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
         val streams = createStreamsGroup(
-          configOverrides = streamsConfig,
           inputTopic = testTopicName,
-          outputTopic = testOutputTopicName,
           streamsGroupId = streamsGroupId,
         )
         streams.poll(JDuration.ofMillis(500L))
@@ -4495,7 +4479,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // Test deletion of non-empty existing groups
       var deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
       assertFutureThrows(classOf[GroupNotEmptyException], deleteStreamsGroupResult.all())
-      assertEquals(deleteStreamsGroupResult.deletedGroups().size(),2)
+      assertEquals(2, deleteStreamsGroupResult.deletedGroups().size())
 
       // Stop and clean up the streams for the groups that are going to be deleted
       streamsList
@@ -4505,7 +4489,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         }
 
       val listTopicResult = client.listTopics()
-      assertEquals(3, listTopicResult.names().get().size())
+      assertEquals(2, listTopicResult.names().get().size())
 
       // Test deletion of emptied existing streams groups
       deleteStreamsGroupResult = client.deleteStreamsGroups(targetDeletedGroups)
@@ -4538,18 +4522,18 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
+
   @Test
   def testListStreamsGroupOffsets(): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"
-    val testOutputTopicName = "test_output_topic"
     val testNumPartitions = 3
 
     val config = createConfig
     client = Admin.create(config)
     val producer = createProducer(configOverrides = new Properties())
 
-    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareTopics(List(testTopicName), testNumPartitions)
     prepareRecords(testTopicName)
 
     // Producer sends messages
@@ -4562,13 +4546,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
-    val streamsConfig = new Properties()
-    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfig.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000)
     val streams = createStreamsGroup(
-      configOverrides = streamsConfig,
       inputTopic = testTopicName,
-      outputTopic = testOutputTopicName,
       streamsGroupId = streamsGroupId,
     )
 
@@ -4609,14 +4588,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testDeleteStreamsGroupOffsets(): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"
-    val testOutputTopicName = "test_output_topic"
     val testNumPartitions = 3
 
     val config = createConfig
     client = Admin.create(config)
     val producer = createProducer(configOverrides = new Properties())
 
-    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareTopics(List(testTopicName), testNumPartitions)
     prepareRecords(testTopicName)
     // Producer sends messages
     for (i <- 1 to 20) {
@@ -4628,13 +4606,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
-    val streamsConfig = new Properties()
-    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfig.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000)
     val streams = createStreamsGroup(
-      configOverrides = streamsConfig,
       inputTopic = testTopicName,
-      outputTopic = testOutputTopicName,
       streamsGroupId = streamsGroupId,
     )
 
@@ -4649,7 +4622,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       // List streams group offsets
       TestUtils.waitUntilTrue(() => {
-         val allTopicPartitions = client.listStreamsGroupOffsets(
+        val allTopicPartitions = client.listStreamsGroupOffsets(
           util.Map.of(streamsGroupId, new ListStreamsGroupOffsetsSpec())
         ).partitionsToOffsetAndMetadata(streamsGroupId).get()
         allTopicPartitions!=null && allTopicPartitions.size() == testNumPartitions
@@ -4676,12 +4649,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(testNumPartitions-1, allTopicPartitions.size())
 
       // Verify non-existing topic partition couldn't be deleted
-
       val deleteStreamsGroupOffsetsResultWithFakeTopic = client.deleteStreamsGroupOffsets(streamsGroupId, util.Set.of(new TopicPartition("mock-topic", 1)))
       assertFutureThrows(classOf[UnknownTopicOrPartitionException], deleteStreamsGroupOffsetsResultWithFakeTopic.all())
       val deleteStreamsGroupOffsetsResultWithFakePartition = client.deleteStreamsGroupOffsets(streamsGroupId, util.Set.of(new TopicPartition(testTopicName, testNumPartitions)))
       assertFutureThrows(classOf[UnknownTopicOrPartitionException], deleteStreamsGroupOffsetsResultWithFakePartition.all())
-
     } finally {
       Utils.closeQuietly(streams, "streams")
       Utils.closeQuietly(client, "adminClient")
@@ -4693,14 +4664,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testAlterStreamsGroupOffsets(): Unit = {
     val streamsGroupId = "stream_group_id"
     val testTopicName = "test_topic"
-    val testOutputTopicName = "test_output_topic"
     val testNumPartitions = 3
 
     val config = createConfig
     client = Admin.create(config)
     val producer = createProducer(configOverrides = new Properties())
 
-    prepareTopics(List(testTopicName, testOutputTopicName), testNumPartitions)
+    prepareTopics(List(testTopicName), testNumPartitions)
     prepareRecords(testTopicName)
 
     // Producer sends messages
@@ -4713,13 +4683,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       }, "Fail to produce record to topic")
     }
 
-    val streamsConfig = new Properties()
-    streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfig.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000)
     val streams = createStreamsGroup(
-      configOverrides = streamsConfig,
       inputTopic = testTopicName,
-      outputTopic = testOutputTopicName,
       streamsGroupId = streamsGroupId,
     )
 
@@ -4775,12 +4740,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 object PlaintextAdminIntegrationTest {
 
   def checkValidAlterConfigs(
-    admin: Admin,
-    test: KafkaServerTestHarness,
-    topicResource1: ConfigResource,
-    topicResource2: ConfigResource,
-    maxMessageBytes: String,
-    retentionMs: String): Unit = {
+                              admin: Admin,
+                              test: KafkaServerTestHarness,
+                              topicResource1: ConfigResource,
+                              topicResource2: ConfigResource,
+                              maxMessageBytes: String,
+                              retentionMs: String): Unit = {
     // Alter topics
     val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     alterConfigs.put(topicResource1, util.List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MS_CONFIG, "1000"), OpType.SET)))
@@ -4828,9 +4793,9 @@ object PlaintextAdminIntegrationTest {
   }
 
   def checkInvalidAlterConfigs(
-    test: KafkaServerTestHarness,
-    admin: Admin
-  ): Unit = {
+                                test: KafkaServerTestHarness,
+                                admin: Admin
+                              ): Unit = {
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)

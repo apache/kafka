@@ -36,7 +36,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.MetadataLogConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
-
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -59,7 +58,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val superuserClientConfig = new Properties
   val serverConfig = new Properties
   val controllerConfig = new Properties
-  var streamsGroupConfig = new Properties
 
   private val consumers = mutable.Buffer[Consumer[_, _]]()
   private val shareConsumers = mutable.Buffer[ShareConsumer[_, _]]()
@@ -242,7 +240,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   def createStreamsGroup[K, V](configOverrides: Properties = new Properties,
                                configsToRemove: List[String] = List(),
                                inputTopic: String,
-                               outputTopic: String,
                                streamsGroupId: String): AsyncKafkaConsumer[K, V] = {
     val props = new Properties()
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
@@ -261,7 +258,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
           util.Set.of(inputTopic),
           util.Set.of(),
           util.Map.of(),
-          util.Map.of(outputTopic + "-store-changelog", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.empty(), util.Map.of())),
+          util.Map.of(inputTopic + "-store-changelog", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.empty(), util.Map.of())),
           util.Set.of()
         )),
       Map.empty[String, String].asJava
@@ -273,7 +270,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       configOverrides = props,
       streamsRebalanceData = streamsRebalanceData
     )
-    consumer.subscribe(util.Set.of(inputTopic, outputTopic),
+    consumer.subscribe(util.Set.of(inputTopic),
       new StreamsRebalanceListener {
         override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Optional[Exception] =
           Optional.empty()
@@ -283,7 +280,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
         override def onAllTasksLost(): Optional[Exception] =
           Optional.empty()
       })
-
     consumer
   }
 
