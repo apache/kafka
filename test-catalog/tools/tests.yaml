@@ -195,11 +195,15 @@ org.apache.kafka.tools.DeleteRecordsCommandTest:
 - testWrongVersion
 org.apache.kafka.tools.EndToEndLatencyTest:
 - shouldFailWhenConsumerRecordsIsEmpty
-- shouldFailWhenProducerAcksAreNotSynchronised
 - shouldFailWhenReceivedMoreThanOneRecord
-- shouldFailWhenSentIsNotEqualToReceived
-- shouldFailWhenSuppliedUnexpectedArgs
+- shouldFailWhenSentHeaderKeyIsNotEqualToReceived
+- shouldFailWhenSentHeaderValueIsNotEqualToReceived
+- shouldFailWhenSentRecordIsNotEqualToReceived
+- shouldFailWhenSentRecordKeyIsNotEqualToReceived
 - shouldPassInValidation
+- shouldPassWithNamedArgs
+- testConvertLegacyArgs
+- testInvalidArgs
 org.apache.kafka.tools.FeatureCommandTest:
 - testDescribeWithKRaft
 - testDescribeWithKRaftAndBootstrapControllers

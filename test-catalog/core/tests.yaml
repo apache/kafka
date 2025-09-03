@@ -2336,6 +2336,7 @@ kafka.server.KafkaConfigTest:
 - testListenerDefaults
 - testListenerNameMissingFromListenerSecurityProtocolMap
 - testListenerNamesWithAdvertisedListenerUnset
+- testLogBrokerHeartbeatIntervalMsShouldBeLowerThanHalfOfBrokerSessionTimeoutMs
 - testLogRetentionTimeBothMinutesAndHoursProvided
 - testLogRetentionTimeBothMinutesAndMsProvided
 - testLogRetentionTimeHoursProvided

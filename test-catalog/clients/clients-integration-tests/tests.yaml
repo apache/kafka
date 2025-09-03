@@ -49,6 +49,10 @@ org.apache.kafka.clients.admin.DescribeAuthorizedOperationsTest:
 - testClusterAuthorizedOperations
 - testConsumerGroupAuthorizedOperations
 - testTopicAuthorizedOperations
+org.apache.kafka.clients.admin.DescribeProducersWithBrokerIdTest:
+- testDescribeProducersDefaultRoutesToLeader
+- testDescribeProducersFromFollower
+- testDescribeProducersWithInvalidBrokerId
 org.apache.kafka.clients.admin.ListOffsetsIntegrationTest:
 - testListMaxTimestampWithEmptyLog
 - testThreeCompressedRecordsInOneBatch
