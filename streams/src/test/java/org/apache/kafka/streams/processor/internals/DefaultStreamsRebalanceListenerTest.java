@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
@@ -28,8 +23,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.RebalanceMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,10 +39,19 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import org.mockito.InOrder;
 import org.mockito.MockedStatic;
+import org.slf4j.LoggerFactory;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -58,7 +60,6 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import org.slf4j.LoggerFactory;
 
 
 public class DefaultStreamsRebalanceListenerTest {

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
