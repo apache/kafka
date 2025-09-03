@@ -1991,6 +1991,7 @@ org.apache.kafka.clients.consumer.internals.HeartbeatTest:
 - testShouldNotHeartbeat
 - testTimeToNextHeartbeat
 org.apache.kafka.clients.consumer.internals.KafkaConsumerMetricsTest:
+- checkMetricsAfterCreation
 - shouldRecordCommitSyncTime
 - shouldRecordCommittedTime
 - shouldRemoveMetricsOnClose
