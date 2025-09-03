@@ -29,6 +29,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.utils.LogCaptureAppender
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -40,11 +41,13 @@ import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfi
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.CleanerConfig
+import org.apache.logging.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
 
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 class KafkaConfigTest {
 
@@ -1898,5 +1901,20 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "controller")
     val message = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage
     assertEquals("requirement failed: controller.listener.names must contain at least one value appearing in the 'listeners' configuration when running the KRaft controller role", message)
+  }
+
+  @Test
+  def testLogBrokerHeartbeatIntervalMsShouldBeLowerThanHalfOfBrokerSessionTimeoutMs(): Unit = {
+    val props = createDefaultConfig()
+    Using.resource(LogCaptureAppender.createAndRegister) { appender =>
+      appender.setClassLogger(KafkaConfig.getClass, Level.ERROR)
+      props.setProperty(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, "4500")
+      props.setProperty(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG, "8999")
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.contains("broker.heartbeat.interval.ms (4500 ms) must be less than or equal to half of the broker.session.timeout.ms (8999 ms). " +
+        "The broker.session.timeout.ms is configured on controller. The broker.heartbeat.interval.ms is configured on broker. " +
+        "If a broker doesn't send heartbeat request within broker.session.timeout.ms, it loses broker lease. " +
+        "Please increase broker.session.timeout.ms or decrease broker.heartbeat.interval.ms."))
+    }
   }
 }
