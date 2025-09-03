@@ -128,7 +128,7 @@ public class ClientTelemetryTest {
         List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
                 "--alter", "--entity-type", "client-metrics", "--entity-name", "test", "--add-config", "interval.ms=bbb");
         try (Admin client = clusterInstance.admin()) {
-            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(Collections.singleton(alterOpts)));
+            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(Set.of(alterOpts)));
 
             Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts));
             assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
