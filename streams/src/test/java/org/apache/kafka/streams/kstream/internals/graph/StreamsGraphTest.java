@@ -36,6 +36,8 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -127,7 +129,7 @@ public class StreamsGraphTest {
         initializer = () -> "";
         aggregator = (aggKey, value, aggregate) -> aggregate + value.length();
         final ProcessorSupplier<String, String, String, String> processorSupplier =
-            () -> new Processor<String, String, String, String>() {
+            () -> new Processor<>() {
                 private ProcessorContext<String, String> context;
 
                 @Override
@@ -186,13 +188,12 @@ public class StreamsGraphTest {
 
     @Test
     public void shouldNotOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChange() {
-
         final Topology attemptedOptimize = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.OPTIMIZE);
         final Topology noOptimization = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.NO_OPTIMIZATION);
 
         assertEquals(attemptedOptimize.describe().toString(), noOptimization.describe().toString());
-        assertEquals(2, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
-        assertEquals(2, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
+        assertEquals(3, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
+        assertEquals(3, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
 
     @Test
@@ -228,7 +229,6 @@ public class StreamsGraphTest {
     }
 
     private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig) {
-
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties properties = new Properties();
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizeConfig);
@@ -238,9 +238,15 @@ public class StreamsGraphTest {
 
         mappedKeyStream.mapValues(v -> v.toUpperCase(Locale.getDefault())).groupByKey().count().toStream().to("output");
         mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(5000))).count().toStream().to("windowed-output");
+        mappedKeyStream.processValues(
+            () -> new ContextualFixedKeyProcessor<>() {
+                @Override
+                public void process(FixedKeyRecord<String, String> record) {
+                    context().forward(record.withValue(record.value().toUpperCase(Locale.getDefault())));
+                }
+            }).groupByKey().count().toStream().to("output");
 
         return builder.build(properties);
-
     }
 
     private Topology getTopologyWithRepartitionOperation(final String optimizeConfig) {
@@ -386,20 +392,20 @@ public class StreamsGraphTest {
             "    Source: KSTREAM-SOURCE-0000000000 (topics: [retryTopic])\n" +
             "      --> KSTREAM-PROCESSOR-0000000001\n" +
             "    Processor: KSTREAM-PROCESSOR-0000000001 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000005\n" +
+            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter\n" +
             "      <-- KSTREAM-SOURCE-0000000000\n" +
-            "    Processor: KSTREAM-FILTER-0000000005 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000004\n" +
+            "    Processor: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter (stores: [])\n" +
+            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-sink\n" +
             "      <-- KSTREAM-PROCESSOR-0000000001\n" +
-            "    Sink: KSTREAM-SINK-0000000004 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
-            "      <-- KSTREAM-FILTER-0000000005\n" +
+            "    Sink: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-sink (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
+            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter\n" +
             "\n" +
             "  Sub-topology: 1\n" +
-            "    Source: KSTREAM-SOURCE-0000000006 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
+            "    Source: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-source (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
             "      --> KSTREAM-AGGREGATE-0000000003\n" +
             "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
             "      --> KTABLE-SUPPRESS-0000000007\n" +
-            "      <-- KSTREAM-SOURCE-0000000006\n" +
+            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-source\n" +
             "    Source: KSTREAM-SOURCE-0000000019 (topics: [internal-topic-command])\n" +
             "      --> KSTREAM-PEEK-0000000020\n" +
             "    Processor: KTABLE-SUPPRESS-0000000007 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000008])\n" +
