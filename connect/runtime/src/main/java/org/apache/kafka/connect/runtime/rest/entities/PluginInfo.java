@@ -33,13 +33,6 @@ public record PluginInfo(
         this(plugin.className(), plugin.type(), plugin.version());
     }
 
-    // Override accessor for `type` to serialize as string
-    @Override
-    @JsonProperty("type")
-    public PluginType type() {
-        return type;
-    }
-
     public static final class NoVersionFilter {
         // Used by Jackson to filter out undefined versions
         @Override
