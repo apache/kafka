@@ -553,14 +553,19 @@ public class PlaintextConsumerTest {
 
             // commit sync and verify onCommit is called
             var commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue();
-            consumer.commitSync(Map.of(TP, new OffsetAndMetadata(2L)));
-            assertEquals(2, consumer.committed(Set.of(TP)).get(TP).offset());
+            consumer.commitSync(Map.of(TP, new OffsetAndMetadata(2L, "metadata")));
+            OffsetAndMetadata metadata = consumer.committed(Set.of(TP)).get(TP);
+            assertEquals(2, metadata.offset());
+            assertEquals("metadata", metadata.metadata());
             assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue());
 
             // commit async and verify onCommit is called
-            var offsetsToCommit = Map.of(TP, new OffsetAndMetadata(5L));
+            var offsetsToCommit = Map.of(TP, new OffsetAndMetadata(5L, null));
             sendAndAwaitAsyncCommit(consumer, Optional.of(offsetsToCommit));
-            assertEquals(5, consumer.committed(Set.of(TP)).get(TP).offset());
+            metadata = consumer.committed(Set.of(TP)).get(TP);
+            assertEquals(5, metadata.offset());
+            // null metadata will be converted to an empty string
+            assertEquals("", metadata.metadata());
             assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue());
         }
         // cleanup
