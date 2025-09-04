@@ -140,15 +140,19 @@ public class SmokeTestDriverIntegrationTest {
 
 
         final Properties props = new Properties();
+        final String appId = safeUniqueTestName(testInfo);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, safeUniqueTestName(testInfo));
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
-        // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
-        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
-        props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500);
         if (streamsProtocolEnabled) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+            // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
+            CLUSTER.setGroupSessionTimeout(appId, 10000);
+            CLUSTER.setGroupHeartbeatTimeout(appId, 1000);
+        } else {
+            // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
+            props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
         }
 
         // cycle out Streams instances as long as the test is running.
