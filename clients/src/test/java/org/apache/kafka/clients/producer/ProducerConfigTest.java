@@ -26,14 +26,18 @@ import org.apache.kafka.common.serialization.StringSerializer;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ProducerConfigTest {
 
@@ -167,5 +171,27 @@ public class ProducerConfigTest {
         configs.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60000);
         configs.put(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG, false);
         assertDoesNotThrow(() -> new ProducerConfig(configs));
+    }
+
+    /**
+     * Validates config/producer.properties file to avoid getting out of sync with ProducerConfig.
+     */
+    @Test
+    public void testValidateConfigPropertiesFile() {
+        Properties props = new Properties();
+
+        try (InputStream inputStream = new FileInputStream(System.getProperty("user.dir") + "/../config/producer.properties")) {
+            props.load(inputStream);
+        } catch (Exception e) {
+            fail("Failed to load config/producer.properties file: " + e.getMessage());
+        }
+
+        ProducerConfig config = new ProducerConfig(props);
+
+        for (String key : config.originals().keySet()) {
+            if (!ProducerConfig.configDef().configKeys().containsKey(key)) {
+                fail("Invalid configuration key: " + key);
+            }
+        }
     }
 }

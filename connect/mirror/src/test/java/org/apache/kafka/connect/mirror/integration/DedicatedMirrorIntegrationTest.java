@@ -142,7 +142,7 @@ public class DedicatedMirrorIntegrationTest {
             final String ba = b + "->" + a;
             final String testTopicPrefix = "test-topic-";
 
-            Map<String, String> mmProps = new HashMap<String, String>() {{
+            Map<String, String> mmProps = new HashMap<>() {{
                     put("dedicated.mode.enable.internal.rest", "false");
                     put("listeners", "http://localhost:0");
                     // Refresh topics very frequently to quickly pick up on topics that are created
@@ -204,7 +204,7 @@ public class DedicatedMirrorIntegrationTest {
             final String ab = a + "->" + b;
             final String testTopicPrefix = "test-topic-";
 
-            Map<String, String> mmProps = new HashMap<String, String>() {{
+            Map<String, String> mmProps = new HashMap<>() {{
                     put("dedicated.mode.enable.internal.rest", "false");
                     put("listeners", "http://localhost:0");
                     // Refresh topics very frequently to quickly pick up on topics that are created
@@ -288,7 +288,7 @@ public class DedicatedMirrorIntegrationTest {
             final String ba = b + "->" + a;
             final String testTopicPrefix = "test-topic-";
 
-            Map<String, String> mmProps = new HashMap<String, String>() {{
+            Map<String, String> mmProps = new HashMap<>() {{
                     put("dedicated.mode.enable.internal.rest", "true");
                     put("listeners", "http://localhost:0");
                     // Refresh topics very frequently to quickly pick up on topics that are created
