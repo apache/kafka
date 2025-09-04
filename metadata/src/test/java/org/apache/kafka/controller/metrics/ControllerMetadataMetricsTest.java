@@ -160,6 +160,7 @@ public class ControllerMetadataMetricsTest {
         );
     }
 
+    @SuppressWarnings("unchecked") // suppress warning about Gauge typecast
     @Test
     public void testBrokerRegistrationStateMetrics() {
         MetricsRegistry registry = new MetricsRegistry();
