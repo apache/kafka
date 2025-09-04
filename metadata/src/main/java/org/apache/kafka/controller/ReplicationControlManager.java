@@ -50,6 +50,7 @@ import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.CreatePartitionsRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -1149,7 +1150,7 @@ public class ReplicationControlManager {
      * @param defaultNumPartitions default number of partitions to assign if unspecified.
      * @throws PolicyViolationException if total number of partitions exceeds {@value MAX_PARTITIONS_PER_BATCH}.
      */
-    static void validateTotalNumberOfPartitions(CreateTopicsRequestData request, int defaultNumPartitions) {
+    public static void validateTotalNumberOfPartitions(CreateTopicsRequestData request, int defaultNumPartitions) {
         int totalPartitions = 0;
         for (CreatableTopic topic: request.topics()) {
             if (topic.assignments().isEmpty()) {
@@ -1167,6 +1168,23 @@ public class ReplicationControlManager {
             throw new PolicyViolationException("Excessively large number of partitions per request.");
         }
     }
+
+    public static void validateTotalNumberOfPartitions(CreatePartitionsRequestData request) {
+        int totalPartitions = 0;
+        for (CreatePartitionsTopic topic: request.topics()) {
+            if (topic.assignments() == null || topic.assignments().isEmpty()) {
+                if (topic.count() > 0) {
+                    totalPartitions += topic.count();
+                }
+            } else {
+                totalPartitions += topic.assignments().size();
+            }
+        }
+        if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
+            throw new PolicyViolationException("Excessively large number of partitions per request.");
+        }
+    }
+
 
     /**
      * Validate the partition information included in the alter partition request.
