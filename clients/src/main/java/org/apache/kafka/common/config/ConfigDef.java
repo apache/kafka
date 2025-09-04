@@ -1030,6 +1030,7 @@ public class ConfigDef {
             return new ValidList(List.of(validStrings), isEmptyAllowed, false);
         }
 
+        @Override
         public void ensureValid(final String name, final Object value) {
             if (value == null) {
                 if (isNullAllowed)
