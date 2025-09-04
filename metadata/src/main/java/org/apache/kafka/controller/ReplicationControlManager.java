@@ -1215,7 +1215,23 @@ public class ReplicationControlManager {
             } else {
                 totalPartitions += topic.assignments().size();
             }
+        }
 
+        if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
+            throw new PolicyViolationException("Excessively large number of partitions per request.");
+        }
+    }
+
+    static void validateTotalNumberOfPartitions(List<CreatePartitionsTopic> topics) {
+        int totalPartitions = 0;
+        for (CreatePartitionsTopic topic: topics) {
+            if (topic.assignments() == null || topic.assignments().isEmpty()) {
+                if (topic.count() > 0) {
+                    totalPartitions += topic.count();
+                }
+            } else {
+                totalPartitions += topic.assignments().size();
+            }
         }
         if (totalPartitions > MAX_PARTITIONS_PER_BATCH) {
             throw new PolicyViolationException("Excessively large number of partitions per request.");
@@ -1813,6 +1829,9 @@ public class ReplicationControlManager {
     ) {
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         List<CreatePartitionsTopicResult> results = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+
+        validateTotalNumberOfPartitions(topics);
+
         for (CreatePartitionsTopic topic : topics) {
             ApiError apiError = ApiError.NONE;
             try {
