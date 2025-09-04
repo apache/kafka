@@ -1784,10 +1784,15 @@ class KafkaConfigTest {
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "consumer")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
+
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
-    var config = KafkaConfig.fromProps(props)
+    val config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
+
+    // Including "share" should be rejected.
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,streams")
     val config2 = KafkaConfig.fromProps(props)
