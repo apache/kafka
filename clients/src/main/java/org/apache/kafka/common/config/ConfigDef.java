@@ -1042,17 +1042,27 @@ public class ConfigDef {
             @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
             if (!isEmptyAllowed && values.isEmpty()) {
-                String validString = this.validString.validStrings.isEmpty() ? "any non-empty value" : this.validString.toString();
-                throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validString);
+                String validValues = validString.validStrings.isEmpty() ? "any non-empty value" : validString.toString();
+                throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validValues);
             }
-            if (Set.copyOf(values).size() != values.size()) {
+
+            if (values.size() > 1 && Set.copyOf(values).size() != values.size()) {
                 throw new ConfigException("Configuration '" + name + "' values must not be duplicated.");
             }
-            if (validString.validStrings.isEmpty()) {
-                return;
-            }
+
+            validateIndividualValues(name, values);
+        }
+
+        private void validateIndividualValues(String name, List<String> values) {
+            boolean hasValidStrings = !validString.validStrings.isEmpty();
+
             for (String string : values) {
-                validString.ensureValid(name, string);
+                if (string.isEmpty()) {
+                    throw new ConfigException("Configuration '" + name + "' values must not be empty.");
+                }
+                if (hasValidStrings) {
+                    validString.ensureValid(name, string);
+                }
             }
         }
 

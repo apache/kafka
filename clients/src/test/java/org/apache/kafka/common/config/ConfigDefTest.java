@@ -766,22 +766,28 @@ public class ConfigDefTest {
         assertDoesNotThrow(() -> allowAnyNonDuplicateValues.ensureValid("test.config", null));
         ConfigException exception1 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValues.ensureValid("test.config", List.of("a", "a")));
         assertEquals("Configuration 'test.config' values must not be duplicated.", exception1.getMessage());
+        ConfigException exception2 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValues.ensureValid("test.config", List.of("")));
+        assertEquals("Configuration 'test.config' values must not be empty.", exception2.getMessage());
         
         ConfigDef.ValidList allowAnyNonDuplicateValuesAndNull = ConfigDef.ValidList.anyNonDuplicateValues(false, true);
         assertDoesNotThrow(() -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", List.of("a", "b", "c")));
         assertDoesNotThrow(() -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", null));
-        ConfigException exception2 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", List.of()));
-        assertEquals("Configuration 'test.config' must not be empty. Valid values include: any non-empty value", exception2.getMessage());
-        ConfigException exception3 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", List.of("a", "a")));
-        assertEquals("Configuration 'test.config' values must not be duplicated.", exception3.getMessage());
+        ConfigException exception3 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", List.of()));
+        assertEquals("Configuration 'test.config' must not be empty. Valid values include: any non-empty value", exception3.getMessage());
+        ConfigException exception4 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", List.of("a", "a")));
+        assertEquals("Configuration 'test.config' values must not be duplicated.", exception4.getMessage());
+        ConfigException exception5 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndNull.ensureValid("test.config", List.of("")));
+        assertEquals("Configuration 'test.config' values must not be empty.", exception5.getMessage());
 
         ConfigDef.ValidList allowAnyNonDuplicateValuesAndEmptyList = ConfigDef.ValidList.anyNonDuplicateValues(true, false);
         assertDoesNotThrow(() -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", List.of("a", "b", "c")));
         assertDoesNotThrow(() -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", List.of()));
-        ConfigException exception4 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", null));
-        assertEquals("Configuration 'test.config' values must not be null.", exception4.getMessage());
-        ConfigException exception5 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", List.of("a", "a")));
-        assertEquals("Configuration 'test.config' values must not be duplicated.", exception5.getMessage());
+        ConfigException exception6 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", null));
+        assertEquals("Configuration 'test.config' values must not be null.", exception6.getMessage());
+        ConfigException exception7 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", List.of("a", "a")));
+        assertEquals("Configuration 'test.config' values must not be duplicated.", exception7.getMessage());
+        ConfigException exception8 = assertThrows(ConfigException.class, () -> allowAnyNonDuplicateValuesAndEmptyList.ensureValid("test.config", List.of("")));
+        assertEquals("Configuration 'test.config' values must not be empty.", exception8.getMessage());
     }
 
     @Test
