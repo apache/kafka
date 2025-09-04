@@ -126,7 +126,7 @@ private[server] class ExpiringErrorCache(maxSize: Int, time: Time) {
     }
   }
 
-  private[server] def cleanupExpired(currentTimeMs: Long): Unit = {
+  private def cleanupExpired(currentTimeMs: Long): Unit = {
     lock.lock()
     try {
       while (!expiryQueue.isEmpty && expiryQueue.peek().expirationTimeMs <= currentTimeMs) {
