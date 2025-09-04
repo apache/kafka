@@ -3150,7 +3150,7 @@ public class KafkaAdminClient extends AdminClient {
 
                     if (!pendingPartitions.isEmpty() && !directoryFailures.isEmpty()) {
                         List<String> errorAtDir = new ArrayList<>();
-                        directoryFailures.forEach((k, v) -> errorAtDir.add(v.getClass().getName() + "at" + k));
+                        directoryFailures.forEach((k, v) -> errorAtDir.add(v.getClass().getName() + " at " + k));
                         Throwable error = new IllegalStateException("The error " + String.join(", ", errorAtDir) + " in the response from broker " + brokerId + " is illegal");
                         for (TopicPartition tp: pendingPartitions) {
                             KafkaFutureImpl<ReplicaLogDirInfo> future = futures.get(new TopicPartitionReplica(tp.topic(), tp.partition(), brokerId));

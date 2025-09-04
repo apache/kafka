@@ -2562,7 +2562,8 @@ public class KafkaAdminClientTest {
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
 
             assertNotNull(values.get(successfulTpr).get());
-            assertThrows(Exception.class, () -> values.get(failedTpr).get());
+            Throwable e = assertFutureThrows(IllegalStateException.class, values.get(failedTpr));
+            assertTrue(e.getMessage().equals("The error org.apache.kafka.common.errors.LogDirNotFoundException at " + broker1log1 + " in the response from broker " + brokerId + " is illegal"));
         }
     }
 
