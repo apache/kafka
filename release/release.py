@@ -200,12 +200,113 @@ release_version_parts = get_release_version_parts(release_version)
 dev_branch = '.'.join(release_version_parts[:2])
 docs_release_version = docs_version(release_version)
 
+def command_docs_to_website(dry_run=True):
+    """
+    Copies the built documentation from the release work directory to the Kafka website repo.
+    Uses the artifacts that were already built during the release process.
+    Assumes the Kafka website repo is on the same level as the Kafka repo and is named kafka-site.
+
+    Args:
+        dry_run (bool): If True, only prints what would happen without making changes
+    """
+    def log_action(action, cmd="", cwd=""):
+        if cmd and cwd:
+            print(f"Would execute: '{cmd}' in directory '{cwd}'")
+        else:
+            print(f"Would {action}")
+
+    # Define paths
+    work_dir = os.path.join(repo_dir, ".release_work_dir")
+    kafka_site_path = os.path.join(repo_dir, "..", "kafka-site")
+
+    # Verify directories exist
+    if not os.path.exists(work_dir):
+        fail("Release work directory not found. Have you run the release process first?")
+    if not os.path.exists(kafka_site_path) or not os.path.exists(os.path.join(kafka_site_path, "powered-by.html")):
+        fail(f"{kafka_site_path} doesn't exist or does not appear to be the kafka-site repository")
+
+    # Find the artifacts directory
+    artifact_dirs = [d for d in os.listdir(work_dir) if d.startswith('kafka-') and os.path.isdir(os.path.join(work_dir, d))]
+    if not artifact_dirs:
+        fail("No release artifact directory found in .release_work_dir")
+    artifacts_dir = os.path.join(work_dir, artifact_dirs[0])
+    print(f"\nFound artifacts directory: {artifacts_dir}")
+
+    # Create target directory in kafka-site
+    versioned_docs_path = os.path.join(kafka_site_path, docs_version(project_version))
+    if not os.path.exists(versioned_docs_path):
+        if dry_run:
+            log_action(f"create directory: {versioned_docs_path}")
+        else:
+            os.makedirs(versioned_docs_path, mode=0o755)
+
+    # Find the site-docs archive
+    site_docs_archive = None
+    for file in os.listdir(artifacts_dir):
+        if file.endswith('-site-docs.tgz'):
+            site_docs_archive = os.path.join(artifacts_dir, file)
+            break
+
+    if not site_docs_archive:
+        fail("site-docs archive not found in artifacts directory")
+    print(f"Found site-docs archive: {site_docs_archive}")
+
+    # Extract site-docs
+    print(f"\nDocumentation extraction:")
+    if dry_run:
+        log_action(
+            f"extract {site_docs_archive} to {versioned_docs_path}",
+            f"tar xf {site_docs_archive} --strip-components 1",
+            versioned_docs_path
+        )
+    else:
+        cmd(
+            "Extracting site-docs",
+            f"tar xf {site_docs_archive} --strip-components 1",
+            cwd=versioned_docs_path
+        )
+
+    # Copy JavaDocs
+    javadoc_dir = os.path.join(artifacts_dir, "javadoc")
+    if os.path.exists(javadoc_dir):
+        print(f"\nJavadoc copying:")
+        if dry_run:
+            log_action(
+                f"copy {javadoc_dir} to {versioned_docs_path}",
+                f"cp -R {javadoc_dir} {versioned_docs_path}"
+            )
+        else:
+            cmd(
+                "Copying javadocs",
+                f"cp -R {javadoc_dir} {versioned_docs_path}"
+            )
+    else:
+        fail(f"JavaDocs not found at {javadoc_dir}")
+
+    print(f"""
+{'[DRY RUN] ' if dry_run else ''}Summary of operations:
+1. Target directory: {versioned_docs_path}
+2. Site-docs source: {site_docs_archive}
+3. JavaDocs source: {javadoc_dir}
+
+Next steps would be:
+1. cd {kafka_site_path}
+2. git add {docs_version(project_version)}
+3. git commit -m "Add documentation for version {release_version}"
+4. git push origin master
+""")
+
+    sys.exit(0)
+
 # Dispatch to subcommand
 subcommand = sys.argv[1] if len(sys.argv) > 1 else None
+dryrun = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] == 'dry-run' else False
 if subcommand == 'stage-docs':
     command_stage_docs()
 elif subcommand == 'release-email':
     command_release_announcement_email()
+elif subcommand == 'docs-to-website':
+    command_docs_to_website(dry_run=dryrun)
 elif not (subcommand is None or subcommand == 'stage'):
     fail(f"Unknown subcommand: {subcommand}")
 # else -> default subcommand stage
