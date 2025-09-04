@@ -357,11 +357,6 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
             } else if (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)) {
                 throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
                     " If you are trying to deserialize plain JSON data, set schemas.enable=false in your converter configuration.");
-            } else {
-                ObjectNode envelope = JSON_NODE_FACTORY.objectNode();
-                envelope.set(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME, jsonValue.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-                envelope.set(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME, jsonValue);
-                jsonValue = envelope;
             }
         } else {
             // The deserialized data should either be an envelope object containing the schema and the payload or the schema
