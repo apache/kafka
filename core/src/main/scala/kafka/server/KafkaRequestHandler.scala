@@ -216,7 +216,7 @@ class KafkaRequestHandlerPool(
   /* Per-pool idle meter (broker-only or controller-only) */
   private val perPoolIdleMeterName = if (nodeName == "controller") "ControllerRequestHandlerAvgIdlePercent" else "BrokerRequestHandlerAvgIdlePercent"
   private val perPoolIdleMeter = metricsGroup.newMeter(perPoolIdleMeterName, "percent", TimeUnit.NANOSECONDS)
-  /* Aggregate meter */
+  /* Aggregate meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = metricsGroup.newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
 
   this.logIdent = s"[data-plane Kafka Request Handler on ${nodeName.capitalize} $brokerId] "
