@@ -40,6 +40,7 @@ public record PluginInfo(
             return PluginDesc.UNDEFINED_VERSION.equals(obj);
         }
 
+        // Dummy hashCode method to not fail compilation because of equals() method
         @Override
         public int hashCode() {
             return super.hashCode();
