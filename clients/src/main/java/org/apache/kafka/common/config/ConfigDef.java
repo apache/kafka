@@ -1030,7 +1030,6 @@ public class ConfigDef {
             return new ValidList(List.of(validStrings), isEmptyAllowed, false);
         }
 
-        @Override
         public void ensureValid(final String name, final Object value) {
             if (value == null) {
                 if (isNullAllowed)
@@ -1042,8 +1041,8 @@ public class ConfigDef {
             @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
             if (!isEmptyAllowed && values.isEmpty()) {
-                String validValues = validString.validStrings.isEmpty() ? "any non-empty value" : validString.toString();
-                throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validValues);
+                String validString = this.validString.validStrings.isEmpty() ? "any non-empty value" : this.validString.toString();
+                throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validString);
             }
 
             if (values.size() > 1 && Set.copyOf(values).size() != values.size()) {
