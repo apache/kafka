@@ -650,7 +650,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
         if (commandConfigFile != null) {
             try {
-                consumerProps.putAll(Utils.loadProps(res.getString(commandConfigFile)));
+                consumerProps.putAll(Utils.loadProps(commandConfigFile));
             } catch (IOException e) {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
