@@ -2529,7 +2529,7 @@ public class KafkaAdminClientTest {
                     prepareDescribeLogDirsResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, broker1log0),
                     env.cluster().nodeById(tpr.brokerId()));
 
-            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(singletonList(tpr));
+            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(List.of(tpr));
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
 
             assertFutureThrows(ClusterAuthorizationException.class, values.get(tpr));
@@ -2555,10 +2555,10 @@ public class KafkaAdminClientTest {
             DescribeLogDirsResponseData.DescribeLogDirsResult failedResult = new DescribeLogDirsResponseData.DescribeLogDirsResult()
                     .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
                     .setLogDir(broker1log1);
-            DescribeLogDirsResponse response = new DescribeLogDirsResponse(new DescribeLogDirsResponseData().setResults(asList(successfulResult, failedResult)));
+            DescribeLogDirsResponse response = new DescribeLogDirsResponse(new DescribeLogDirsResponseData().setResults(List.of(successfulResult, failedResult)));
             env.kafkaClient().prepareResponseFrom(response, env.cluster().nodeById(successfulTpr.brokerId()));
 
-            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(successfulTpr, failedTpr));
+            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(List.of(successfulTpr, failedTpr));
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
 
             assertNotNull(values.get(successfulTpr).get());
