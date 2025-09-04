@@ -277,7 +277,7 @@ public final class MirrorMakerConfig extends AbstractConfig {
         return transformed;
     }
 
-    protected static ConfigDef config() {
+    private static ConfigDef config() {
         ConfigDef result = new ConfigDef()
                 .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC)
                 .define(ENABLE_INTERNAL_REST_CONFIG, Type.BOOLEAN, false, Importance.HIGH, ENABLE_INTERNAL_REST_DOC)

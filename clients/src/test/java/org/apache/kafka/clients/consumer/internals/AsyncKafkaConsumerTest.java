@@ -2015,12 +2015,12 @@ public class AsyncKafkaConsumerTest {
                 mock(ConsumerRebalanceListenerInvoker.class),
                 mock(SubscriptionState.class));
         Metrics metrics = consumer.metricsRegistry();
-        AsyncConsumerMetrics kafkaConsumerMetrics = consumer.kafkaConsumerMetrics();
+        AsyncConsumerMetrics asyncConsumerMetrics = consumer.asyncConsumerMetrics();
 
         ConsumerRebalanceListenerCallbackNeededEvent event = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, Collections.emptySortedSet());
         event.setEnqueuedMs(time.milliseconds());
         backgroundEventQueue.add(event);
-        kafkaConsumerMetrics.recordBackgroundEventQueueSize(1);
+        asyncConsumerMetrics.recordBackgroundEventQueueSize(1);
 
         time.sleep(10);
         consumer.processBackgroundEvents();
