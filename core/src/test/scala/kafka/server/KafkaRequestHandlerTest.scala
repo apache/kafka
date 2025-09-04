@@ -50,6 +50,7 @@ class KafkaRequestHandlerTest {
   val topic2 = "topic2"
   val brokerTopicMetrics: BrokerTopicMetrics = brokerTopicStats.topicStats(topic)
   val allTopicMetrics: BrokerTopicMetrics = brokerTopicStats.allTopicsStats
+  KafkaRequestHandlerPool.sharedAggregateTotalThreads.set(1)
 
   @Test
   def testCallbackTiming(): Unit = {
@@ -59,7 +60,7 @@ class KafkaRequestHandlerTest {
     val requestChannel = new RequestChannel(10, time, metrics)
     val apiHandler = mock(classOf[ApiRequestHandler])
     try {
-      val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+      val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker", mock(classOf[Meter]))
 
       val request = makeRequest(time, metrics)
       requestChannel.sendRequest(request)
@@ -95,7 +96,7 @@ class KafkaRequestHandlerTest {
     val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
     val requestChannel = new RequestChannel(10, time, metrics)
-    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker", mock(classOf[Meter]))
 
     var handledCount = 0
     var tryCompleteActionCount = 0
@@ -131,7 +132,7 @@ class KafkaRequestHandlerTest {
     val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
     val requestChannel = new RequestChannel(10, time, metrics)
-    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker", mock(classOf[Meter]))
 
     val originalRequestLocal = mock(classOf[RequestLocal])
 
@@ -165,7 +166,7 @@ class KafkaRequestHandlerTest {
     val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
     val requestChannel = new RequestChannel(10, time, metrics)
-    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker", mock(classOf[Meter]))
 
     val originalRequestLocal = mock(classOf[RequestLocal])
     when(originalRequestLocal.bufferSupplier).thenReturn(BufferSupplier.create())
@@ -697,5 +698,73 @@ class KafkaRequestHandlerTest {
 
     // cleanup
     brokerTopicStats.close()
+  }
+
+  @Test
+  def testGlobalSharedThreadCounter(): Unit = {
+    val time = Time.SYSTEM
+    val metricsBroker = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
+    val metricsController = new RequestChannelMetrics(java.util.Set.of[ApiKeys])
+    val requestChannelBroker = new RequestChannel(10, time, metricsBroker)
+    val requestChannelController = new RequestChannel(10, time, metricsController)
+    val apiHandler = mock(classOf[ApiRequestHandler])
+
+    // Reset global shared counter for test
+    KafkaRequestHandlerPool.sharedAggregateTotalThreads.set(0)
+    
+    // Create broker pool with 4 threads
+    val brokerPool = new KafkaRequestHandlerPool(
+      0,
+      requestChannelBroker,
+      apiHandler,
+      time,
+      4,
+      "RequestHandlerAvgIdlePercent",
+      "broker"
+    )
+
+    // Verify global counter is updated
+    assertEquals(4, KafkaRequestHandlerPool.sharedAggregateTotalThreads.get, "global counter should be 4 after broker pool")
+
+    // Create controller pool with 4 threads
+    val controllerPool = new KafkaRequestHandlerPool(
+      0,
+      requestChannelController,
+      apiHandler,
+      time,
+      4,
+      "RequestHandlerAvgIdlePercent",
+      "controller"
+    )
+
+    // Verify global counter is updated to sum of both pools
+    assertEquals(8, KafkaRequestHandlerPool.sharedAggregateTotalThreads.get, "global counter should be 8 after both pools")
+
+    try {
+      // Get the aggregate meter from broker pool using reflection
+      val aggregateMeterField = classOf[KafkaRequestHandlerPool].getDeclaredField("aggregateIdleMeter")
+      aggregateMeterField.setAccessible(true)
+      val brokerAggregateMeter = aggregateMeterField.get(brokerPool).asInstanceOf[Meter]
+      
+      // Wait for idle measurements to accumulate
+      val deadline = System.currentTimeMillis() + 8000
+      var value = 0.0
+      while (System.currentTimeMillis() < deadline && value == 0.0) {
+        Thread.sleep(200)
+        value = brokerAggregateMeter.oneMinuteRate()
+      }
+      // Verify that the aggregate meter shows reasonable idle percentage
+      // Since both pools are hitting the same global counter (8 threads), the rate should be normalized
+      assertTrue(value >= 0.0 && value <= 1.05, s"aggregate idle percent should be within [0,1], got $value")
+      
+    } finally {
+      controllerPool.shutdown()
+      brokerPool.shutdown()
+      metricsBroker.close()
+      metricsController.close()
+      
+      // Verify global counter is reset after shutdown
+      assertEquals(0, KafkaRequestHandlerPool.sharedAggregateTotalThreads.get, "global counter should be 0 after shutdown")
+    }
   }
 }
