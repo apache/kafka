@@ -53,7 +53,7 @@ trait AutoTopicCreationManager {
   def createStreamsInternalTopics(
     topics: Map[String, CreatableTopic],
     requestContext: RequestContext,
-    expirationTimeMs: Long
+    timeoutMs: Long
   ): Unit
 
   def getStreamsInternalTopicCreationErrors(
@@ -70,7 +70,7 @@ trait AutoTopicCreationManager {
  * - Expiration: maintained by a min-heap (priority queue) on expiration time
  * - Capacity: enforced by insertion-order removal (keeps the most recently inserted entries)
  */
-class ExpiringErrorCache(maxSize: Int) {
+private[server] class ExpiringErrorCache(maxSize: Int, time: Time) {
 
   private case class Entry(topicName: String, errorMessage: String, expirationTimeMs: Long)
 
@@ -80,7 +80,7 @@ class ExpiringErrorCache(maxSize: Int) {
   })
   private val lock = new ReentrantLock()
 
-  def put(topicName: String, errorMessage: String, expirationTimeMs: Long): Unit = {
+  def put(topicName: String, errorMessage: String, ttlMs: Long): Unit = {
     lock.lock()
     try {
       val existing = byTopic.get(topicName)
@@ -89,6 +89,7 @@ class ExpiringErrorCache(maxSize: Int) {
         expiryQueue.remove(existing)
       }
 
+      val expirationTimeMs = time.milliseconds() + ttlMs
       val entry = Entry(topicName, errorMessage, expirationTimeMs)
       byTopic.put(topicName, entry)
       expiryQueue.add(entry)
@@ -125,7 +126,7 @@ class ExpiringErrorCache(maxSize: Int) {
     }
   }
 
-  def cleanupExpired(currentTimeMs: Long): Unit = {
+  private[server] def cleanupExpired(currentTimeMs: Long): Unit = {
     lock.lock()
     try {
       while (!expiryQueue.isEmpty && expiryQueue.peek().expirationTimeMs <= currentTimeMs) {
@@ -140,7 +141,7 @@ class ExpiringErrorCache(maxSize: Int) {
     }
   }
 
-  def clear(): Unit = {
+  private[server] def clear(): Unit = {
     lock.lock()
     try {
       byTopic.clear()
@@ -159,13 +160,13 @@ class DefaultAutoTopicCreationManager(
   txnCoordinator: TransactionCoordinator,
   shareCoordinator: ShareCoordinator,
   time: Time,
-  cacheCapacity: Int = 1000
+  topicErrorCacheCapacity: Int = 1000
 ) extends AutoTopicCreationManager with Logging {
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
 
   // Hardcoded default capacity; can be overridden in tests via constructor param
-  private val topicCreationErrorCache = new ExpiringErrorCache(cacheCapacity)
+  private val topicCreationErrorCache = new ExpiringErrorCache(topicErrorCacheCapacity, time)
 
   /**
    * Initiate auto topic creation for the given topics.
@@ -196,10 +197,10 @@ class DefaultAutoTopicCreationManager(
   override def createStreamsInternalTopics(
     topics: Map[String, CreatableTopic],
     requestContext: RequestContext,
-    expirationTimeMs: Long
+    timeoutMs: Long
   ): Unit = {
     if (topics.nonEmpty) {
-      sendCreateTopicRequestWithErrorCaching(topics, Some(requestContext), expirationTimeMs)
+      sendCreateTopicRequestWithErrorCaching(topics, Some(requestContext), timeoutMs)
     }
   }
 
@@ -232,11 +233,9 @@ class DefaultAutoTopicCreationManager(
       override def onComplete(response: ClientResponse): Unit = {
         clearInflightRequests(creatableTopics)
         if (response.authenticationException() != null) {
-          val authException = response.authenticationException()
-          warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception: ${authException.getMessage}")
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception")
         } else if (response.versionMismatch() != null) {
-          val versionException = response.versionMismatch()
-          warn(s"Auto topic creation failed for ${creatableTopics.keys} with version mismatch exception: ${versionException.getMessage}")
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
         } else {
           if (response.hasResponse) {
             response.responseBody() match {
@@ -380,7 +379,7 @@ class DefaultAutoTopicCreationManager(
   private def sendCreateTopicRequestWithErrorCaching(
     creatableTopics: Map[String, CreatableTopic],
     requestContext: Option[RequestContext],
-    expirationTimeMs: Long
+    timeoutMs: Long
   ): Seq[MetadataResponseTopic] = {
     val topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size)
     topicsToCreate.addAll(creatableTopics.values.asJavaCollection)
@@ -395,7 +394,7 @@ class DefaultAutoTopicCreationManager(
       override def onTimeout(): Unit = {
         clearInflightRequests(creatableTopics)
         debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
-        cacheTopicCreationErrors(creatableTopics.keys.toSet, "Auto topic creation timed out.", expirationTimeMs)
+        cacheTopicCreationErrors(creatableTopics.keys.toSet, "Auto topic creation timed out.", timeoutMs)
       }
 
       override def onComplete(response: ClientResponse): Unit = {
@@ -403,15 +402,15 @@ class DefaultAutoTopicCreationManager(
         if (response.authenticationException() != null) {
           val authException = response.authenticationException()
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception: ${authException.getMessage}")
-          cacheTopicCreationErrors(creatableTopics.keys.toSet, authException.getMessage, expirationTimeMs)
+          cacheTopicCreationErrors(creatableTopics.keys.toSet, authException.getMessage, timeoutMs)
         } else if (response.versionMismatch() != null) {
           val versionException = response.versionMismatch()
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with version mismatch exception: ${versionException.getMessage}")
-          cacheTopicCreationErrors(creatableTopics.keys.toSet, versionException.getMessage, expirationTimeMs)
+          cacheTopicCreationErrors(creatableTopics.keys.toSet, versionException.getMessage, timeoutMs)
         } else {
           response.responseBody() match {
             case createTopicsResponse: CreateTopicsResponse =>
-              cacheTopicCreationErrorsFromResponse(createTopicsResponse, expirationTimeMs)
+              cacheTopicCreationErrorsFromResponse(createTopicsResponse, timeoutMs)
             case _ =>
               debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
           }
@@ -452,19 +451,19 @@ class DefaultAutoTopicCreationManager(
     creatableTopicResponses
   }
 
-  private def cacheTopicCreationErrors(topicNames: Set[String], errorMessage: String, expirationTimeMs: Long): Unit = {
+  private def cacheTopicCreationErrors(topicNames: Set[String], errorMessage: String, ttlMs: Long): Unit = {
     topicNames.foreach { topicName =>
-      topicCreationErrorCache.put(topicName, errorMessage, expirationTimeMs)
+      topicCreationErrorCache.put(topicName, errorMessage, ttlMs)
     }
   }
 
-  private def cacheTopicCreationErrorsFromResponse(response: CreateTopicsResponse, expirationTimeMs: Long): Unit = {
+  private def cacheTopicCreationErrorsFromResponse(response: CreateTopicsResponse, ttlMs: Long): Unit = {
     response.data().topics().forEach { topicResult =>
       if (topicResult.errorCode() != Errors.NONE.code()) {
         val errorMessage = Option(topicResult.errorMessage())
           .filter(_.nonEmpty)
           .getOrElse(Errors.forCode(topicResult.errorCode()).message())
-        topicCreationErrorCache.put(topicResult.name(), errorMessage, expirationTimeMs)
+        topicCreationErrorCache.put(topicResult.name(), errorMessage, ttlMs)
         debug(s"Cached topic creation error for ${topicResult.name()}: $errorMessage")
       }
     }

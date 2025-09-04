@@ -2888,13 +2888,13 @@ class KafkaApis(val requestChannel: RequestChannel,
                 )
               }
             } else {
-              // Compute group-specific expiration time for freshly cached errors
-              val sessionTimeoutMs = Option(groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId).orElse(null))
-                .map(_.streamsSessionTimeoutMs().toLong)
-                .getOrElse(config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs().toLong)
-              val expirationTimeMs = time.milliseconds() + sessionTimeoutMs
+              // Compute group-specific timeout for caching errors (2 * heartbeat interval)
+              val heartbeatIntervalMs = Option(groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId).orElse(null))
+                .map(_.streamsHeartbeatIntervalMs().toLong)
+                .getOrElse(config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs().toLong)
+              val timeoutMs = heartbeatIntervalMs * 2
 
-              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, expirationTimeMs)
+              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, timeoutMs)
               
               // Check for cached topic creation errors only if there's already a MISSING_INTERNAL_TOPICS status
               val hasMissingInternalTopicsStatus = responseData.status() != null && 
@@ -2908,8 +2908,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                     responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
                   val creationErrorDetails = cachedErrors.map { case (topic, error) => s"$topic ($error)" }.mkString(", ")
                   if (missingInternalTopicStatus.isPresent) {
+                    val existingDetail = Option(missingInternalTopicStatus.get().statusDetail()).getOrElse("")
                     missingInternalTopicStatus.get().setStatusDetail(
-                      missingInternalTopicStatus.get().statusDetail() + s"; Creation failed: $creationErrorDetails."
+                      existingDetail + s"; Creation failed: $creationErrorDetails."
                     )
                   }
                 }

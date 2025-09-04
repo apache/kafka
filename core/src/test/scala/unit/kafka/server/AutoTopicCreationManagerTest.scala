@@ -122,7 +122,7 @@ class AutoTopicCreationManagerTest {
       transactionCoordinator,
       shareCoordinator,
       mockTime,
-      cacheCapacity = testCacheCapacity)
+      topicErrorCacheCapacity = testCacheCapacity)
 
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
     topicsCollection.add(getNewTopic(topicName, numPartitions, replicationFactor))
@@ -240,9 +240,9 @@ class AutoTopicCreationManagerTest {
       transactionCoordinator,
       shareCoordinator,
       mockTime,
-      cacheCapacity = testCacheCapacity)
+      topicErrorCacheCapacity = testCacheCapacity)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
@@ -278,9 +278,9 @@ class AutoTopicCreationManagerTest {
       transactionCoordinator,
       shareCoordinator,
       mockTime,
-      cacheCapacity = testCacheCapacity)
+      topicErrorCacheCapacity = testCacheCapacity)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
 
     Mockito.verify(brokerToController, never()).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
@@ -301,9 +301,9 @@ class AutoTopicCreationManagerTest {
       transactionCoordinator,
       shareCoordinator,
       mockTime,
-      cacheCapacity = testCacheCapacity)
+      topicErrorCacheCapacity = testCacheCapacity)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
@@ -334,7 +334,7 @@ class AutoTopicCreationManagerTest {
       transactionCoordinator,
       shareCoordinator,
       mockTime,
-      cacheCapacity = testCacheCapacity)
+      topicErrorCacheCapacity = testCacheCapacity)
 
     val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
       .setApiKey(ApiKeys.CREATE_TOPICS.id)
@@ -387,7 +387,7 @@ class AutoTopicCreationManagerTest {
     )
     val requestContext = initializeRequestContextWithUserPrincipal()
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     Mockito.verify(brokerToController).sendRequest(
@@ -432,7 +432,7 @@ class AutoTopicCreationManagerTest {
       "failed-topic" -> new CreatableTopic().setName("failed-topic").setNumPartitions(1).setReplicationFactor(1)
     )
     val requestContext = initializeRequestContextWithUserPrincipal()
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     Mockito.verify(brokerToController).sendRequest(
@@ -484,7 +484,7 @@ class AutoTopicCreationManagerTest {
     )
     val requestContext = initializeRequestContextWithUserPrincipal()
     val shortTtlMs = 1000L // Use 1 second TTL for faster testing
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + shortTtlMs)
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, shortTtlMs)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     Mockito.verify(brokerToController).sendRequest(
@@ -555,7 +555,7 @@ class AutoTopicCreationManagerTest {
         topicName -> new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)
       )
       
-      autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, mockTime.milliseconds() + config.groupCoordinatorConfig.streamsGroupSessionTimeoutMs())
+      autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs() * 2)
       
       val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
       Mockito.verify(brokerToController, Mockito.atLeastOnce()).sendRequest(
