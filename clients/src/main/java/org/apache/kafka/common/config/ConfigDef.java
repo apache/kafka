@@ -1046,7 +1046,7 @@ public class ConfigDef {
                 throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validString);
             }
 
-            if (values.size() > 1 && Set.copyOf(values).size() != values.size()) {
+            if (Set.copyOf(values).size() != values.size()) {
                 throw new ConfigException("Configuration '" + name + "' values must not be duplicated.");
             }
 
