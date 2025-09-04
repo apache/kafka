@@ -75,7 +75,7 @@ public class StreamsBuilder {
     public StreamsBuilder() {
         topology = new Topology();
         internalTopologyBuilder = topology.internalTopologyBuilder;
-        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder, true);
+        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder, false);
     }
 
     /**
@@ -92,7 +92,7 @@ public class StreamsBuilder {
             TopologyConfig.InternalConfig.getBoolean(
                 topologyConfigs.originals(),
                 TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX,
-                true
+                false
             )
         );
     }

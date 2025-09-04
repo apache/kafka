@@ -30,6 +30,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -224,7 +225,10 @@ public class RepartitionOptimizingTest {
 
     @Test
     public void shouldNotPushRepartitionAcrossValueChangingOperation() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        streamsConfiguration.setProperty(TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX, "true");
+
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(streamsConfiguration)));
 
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()).withName("sourceStream"))
             .map((k, v) -> KeyValue.pair(k.toUpperCase(Locale.getDefault()), v))
@@ -239,7 +243,6 @@ public class RepartitionOptimizingTest {
             .toStream()
             .to(AGGREGATION_TOPIC);
 
-        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final Topology topology = builder.build(streamsConfiguration);
 
         topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);
