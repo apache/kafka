@@ -560,11 +560,12 @@ public class PlaintextConsumerTest {
             assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue());
 
             // commit async and verify onCommit is called
-            var offsetsToCommit = Map.of(TP, new OffsetAndMetadata(5L, "metadata"));
+            var offsetsToCommit = Map.of(TP, new OffsetAndMetadata(5L, null));
             sendAndAwaitAsyncCommit(consumer, Optional.of(offsetsToCommit));
             metadata = consumer.committed(Set.of(TP)).get(TP);
             assertEquals(5, metadata.offset());
-            assertEquals("metadata", metadata.metadata());
+            // null metadata will be converted to an empty string
+            assertEquals("", metadata.metadata());
             assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue());
         }
         // cleanup

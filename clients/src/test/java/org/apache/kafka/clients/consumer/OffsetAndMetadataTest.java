@@ -72,4 +72,12 @@ public class OffsetAndMetadataTest {
         assertEquals(metadataWithNullEpoch, metadataWithNegativeEpoch);
         assertEquals(metadataWithNullEpoch.hashCode(), metadataWithNegativeEpoch.hashCode());
     }
+
+    @Test
+    public void testEqualsWithNullAndEmptyMetadata() {
+        OffsetAndMetadata metadataWithNullMetadata = new OffsetAndMetadata(100L, Optional.of(1), null);
+        OffsetAndMetadata metadataWithEmptyMetadata = new OffsetAndMetadata(100L, Optional.of(1), "");
+        assertEquals(metadataWithNullMetadata, metadataWithEmptyMetadata);
+        assertEquals(metadataWithNullMetadata.hashCode(), metadataWithEmptyMetadata.hashCode());
+    }
 }
