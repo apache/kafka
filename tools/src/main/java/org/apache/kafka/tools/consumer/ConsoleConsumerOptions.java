@@ -87,11 +87,21 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                 .describedAs("consume offset")
                 .ofType(String.class)
                 .defaultsTo("latest");
-        OptionSpec<String> consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
+        OptionSpec<String> consumerPropertyOpt = parser.accepts("consumer-property", "(DEPRECATED) A mechanism to pass user-defined properties in the form key=value to the consumer." +
+                        "This option will be removed in a future version. Use --command-property instead.")
                 .withRequiredArg()
                 .describedAs("consumer_prop")
                 .ofType(String.class);
-        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file. Note that " + consumerPropertyOpt + " takes precedence over this config.")
+        OptionSpec<String> commandPropertyOpt = parser.accepts("command-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
+                .withRequiredArg()
+                .describedAs("consumer_prop")
+                .ofType(String.class);
+        OptionSpec<String> consumerConfigOpt = parser.accepts("consumer.config", "(DEPRECATED) Consumer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config." +
+                        "This option will be removed in a future version. Use --command-config instead.")
+                .withRequiredArg()
+                .describedAs("config file")
+                .ofType(String.class);
+        OptionSpec<String> commandConfigOpt = parser.accepts("command-config", "Consumer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
@@ -170,11 +180,25 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from Kafka topics and outputs it to standard output.");
 
         checkRequiredArgs();
+        if (options.has(consumerPropertyOpt) && options.has(commandPropertyOpt)) {
+            CommandLineUtils.printUsageAndExit(parser, "Options --consumer-property and --command-property cannot be specified together.");
+        }
+        if (options.has(consumerConfigOpt) && options.has(commandConfigOpt)) {
+            CommandLineUtils.printUsageAndExit(parser, "Options --consumer.config and --command-config cannot be specified together.");
+        }
 
-        Properties consumerPropsFromFile = options.has(consumerConfigOpt)
-                ? Utils.loadProps(options.valueOf(consumerConfigOpt))
+        if (options.has(consumerPropertyOpt)) {
+            System.out.println("Option --consumer-property is deprecated and will be removed in a future version. Use --command-property instead.");
+            commandPropertyOpt = consumerPropertyOpt;
+        }
+        if (options.has(consumerConfigOpt)) {
+            System.out.println("Option --consumer.config is deprecated and will be removed in a future version. Use --command-config instead.");
+            commandConfigOpt = consumerConfigOpt;
+        }
+        Properties consumerPropsFromFile = options.has(commandConfigOpt)
+                ? Utils.loadProps(options.valueOf(commandConfigOpt))
                 : new Properties();
-        Properties extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt));
+        Properties extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(commandPropertyOpt));
         Set<String> groupIdsProvided = checkConsumerGroup(consumerPropsFromFile, extraConsumerProps);
         consumerProps = buildConsumerProps(consumerPropsFromFile, extraConsumerProps, groupIdsProvided);
         offset = parseOffset();

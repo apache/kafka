@@ -34,6 +34,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -57,10 +58,15 @@ public class ConsoleProducerTest {
         "--bootstrap-server", "localhost:1002",
         "--topic", "t3",
     };
-    private static final String[] CLIENT_ID_OVERRIDE = new String[]{
+    private static final String[] CLIENT_ID_OVERRIDE_DEPRECATED = new String[]{
         "--bootstrap-server", "localhost:1001",
         "--topic", "t3",
         "--producer-property", "client.id=producer-1"
+    };
+    private static final String[] CLIENT_ID_OVERRIDE = new String[]{
+        "--bootstrap-server", "localhost:1001",
+        "--topic", "t3",
+        "--command-property", "client.id=producer-1"
     };
     private static final String[] BATCH_SIZE_OVERRIDDEN_BY_MAX_PARTITION_MEMORY_BYTES_VALUE = new String[]{
         "--bootstrap-server", "localhost:1002",
@@ -151,8 +157,8 @@ public class ConsoleProducerTest {
     }
 
     @Test
-    public void testClientIdOverride() throws IOException {
-        ConsoleProducerOptions opts = new ConsoleProducerOptions(CLIENT_ID_OVERRIDE);
+    public void testClientIdOverrideDeprecated() throws IOException {
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(CLIENT_ID_OVERRIDE_DEPRECATED);
         ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
 
         assertEquals("producer-1", producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG));
@@ -220,6 +226,107 @@ public class ConsoleProducerTest {
 
         assertEquals(1, reader.configureCount());
         assertEquals(1, reader.closeCount());
+    }
+
+    @Test
+    public void shouldExitOnBothProducerPropertyAndCommandProperty() {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--producer-property", "acks=all",
+            "--command-property", "batch.size=16384"
+        };
+
+        try {
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(args));
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void shouldExitOnBothProducerConfigAndCommandConfig() throws IOException {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+
+        Map<String, String> configs = new HashMap<>();
+        configs.put("acks", "all");
+        File propsFile = ToolsTestUtils.tempPropertiesFile(configs);
+
+        Map<String, String> configs2 = new HashMap<>();
+        configs2.put("batch.size", "16384");
+        File propsFile2 = ToolsTestUtils.tempPropertiesFile(configs2);
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--producer.config", propsFile.getAbsolutePath(),
+            "--command-config", propsFile2.getAbsolutePath()
+        };
+
+        try {
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(args));
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void testClientIdOverrideUsingCommandProperty() throws IOException {
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(CLIENT_ID_OVERRIDE);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        assertEquals("producer-1", producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG));
+    }
+
+    @Test
+    public void testProducerConfigFromFileUsingCommandConfig() throws IOException {
+        Map<String, String> configs = new HashMap<>();
+        configs.put("acks", "all");
+        configs.put("batch.size", "32768");
+        File propsFile = ToolsTestUtils.tempPropertiesFile(configs);
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-config", propsFile.getAbsolutePath()
+        };
+
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        // "all" gets converted to "-1" internally by ProducerConfig
+        assertEquals("-1", producerConfig.getString(ProducerConfig.ACKS_CONFIG));
+        assertEquals(32768, producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
+    }
+
+    @Test
+    public void testCommandPropertyOverridesConfig() throws IOException {
+        Map<String, String> configs = new HashMap<>();
+        configs.put("acks", "1");
+        configs.put("batch.size", "16384");
+        File propsFile = ToolsTestUtils.tempPropertiesFile(configs);
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-config", propsFile.getAbsolutePath(),
+            "--command-property", "acks=all"
+        };
+
+        ConsoleProducerOptions opts = new ConsoleProducerOptions(args);
+        ProducerConfig producerConfig = new ProducerConfig(opts.producerProps());
+
+        // Command property should override the config file value
+        // "all" gets converted to "-1" internally by ProducerConfig
+        assertEquals("-1", producerConfig.getString(ProducerConfig.ACKS_CONFIG));
+        // Config file value should still be present
+        assertEquals(16384, producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
     }
 
     public static class TestRecordReader implements RecordReader {
