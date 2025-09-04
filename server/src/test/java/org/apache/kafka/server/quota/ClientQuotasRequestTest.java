@@ -479,6 +479,7 @@ public class ClientQuotasRequestTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void testMatchEntities(ClientQuotaFilter filter, int expectedMatchSize, Predicate<ClientQuotaEntity> partition)
         throws InterruptedException {
         TestUtils.retryOnExceptionWithTimeout(5000L, () -> {

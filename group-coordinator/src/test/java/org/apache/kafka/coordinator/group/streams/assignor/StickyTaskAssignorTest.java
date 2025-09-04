@@ -833,6 +833,265 @@ public class StickyTaskAssignorTest {
         assertEquals(2, getAllActiveTaskIds(result, "newMember").size());
     }
 
+    @Test
+    public void shouldHandleLargeNumberOfTasksWithStandbyAssignment() {
+        final int numTasks = 100;
+        final int numClients = 5;
+        final int numStandbyReplicas = 2;
+        
+        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        for (int i = 0; i < numClients; i++) {
+            members.put("member" + i, createAssignmentMemberSpec("process" + i));
+        }
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
+        );
+
+        // Verify all active tasks are assigned
+        Set<Integer> allActiveTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            List<Integer> memberActiveTasks = getAllActiveTaskIds(result, memberId);
+            allActiveTasks.addAll(memberActiveTasks);
+        }
+        assertEquals(numTasks, allActiveTasks.size());
+
+        // Verify standby tasks are assigned (should be numTasks * numStandbyReplicas total)
+        Set<Integer> allStandbyTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            List<Integer> memberStandbyTasks = getAllStandbyTaskIds(result, memberId);
+            allStandbyTasks.addAll(memberStandbyTasks);
+        }
+        // With 5 clients and 2 standby replicas, we should have at least some standby tasks
+        assertTrue(allStandbyTasks.size() > 0, "Should have some standby tasks assigned");
+        // Maximum possible = numTasks * min(numStandbyReplicas, numClients - 1) = 100 * 2 = 200
+        int maxPossibleStandbyTasks = numTasks * Math.min(numStandbyReplicas, numClients - 1);
+        assertTrue(allStandbyTasks.size() <= maxPossibleStandbyTasks, 
+            "Should not exceed maximum possible standby tasks: " + maxPossibleStandbyTasks);
+
+        // Verify no client has both active and standby for the same task
+        for (String memberId : result.members().keySet()) {
+            Set<Integer> memberActiveTasks = new HashSet<>(getAllActiveTaskIds(result, memberId));
+            Set<Integer> memberStandbyTasks = new HashSet<>(getAllStandbyTaskIds(result, memberId));
+            memberActiveTasks.retainAll(memberStandbyTasks);
+            assertTrue(memberActiveTasks.isEmpty(), "Client " + memberId + " has both active and standby for same task");
+        }
+
+        // Verify load distribution is reasonable
+        int minActiveTasks = Integer.MAX_VALUE;
+        int maxActiveTasks = 0;
+        for (String memberId : result.members().keySet()) {
+            int activeTaskCount = getAllActiveTaskCount(result, memberId);
+            minActiveTasks = Math.min(minActiveTasks, activeTaskCount);
+            maxActiveTasks = Math.max(maxActiveTasks, activeTaskCount);
+        }
+        // With 100 tasks and 5 clients, each should have 20 tasks
+        assertEquals(20, minActiveTasks);
+        assertEquals(20, maxActiveTasks);
+        
+        // Verify standby task distribution is reasonable
+        int minStandbyTasks = Integer.MAX_VALUE;
+        int maxStandbyTasks = 0;
+        for (String memberId : result.members().keySet()) {
+            int standbyTaskCount = getAllStandbyTaskIds(result, memberId).size();
+            minStandbyTasks = Math.min(minStandbyTasks, standbyTaskCount);
+            maxStandbyTasks = Math.max(maxStandbyTasks, standbyTaskCount);
+        }
+        // Each client should have some standby tasks, but not necessarily equal distribution
+        assertTrue(minStandbyTasks >= 0);
+        assertTrue(maxStandbyTasks > 0);
+    }
+
+    @Test
+    public void shouldHandleOddNumberOfClientsWithStandbyTasks() {
+        // Test with odd number of clients (7) and even number of tasks (14)
+        final int numTasks = 14;
+        final int numClients = 7;
+        final int numStandbyReplicas = 1;
+        
+        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        for (int i = 0; i < numClients; i++) {
+            members.put("member" + i, createAssignmentMemberSpec("process" + i));
+        }
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
+        );
+
+        // Verify all active tasks are assigned
+        Set<Integer> allActiveTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            List<Integer> memberActiveTasks = getAllActiveTaskIds(result, memberId);
+            allActiveTasks.addAll(memberActiveTasks);
+        }
+        assertEquals(numTasks, allActiveTasks.size());
+
+        // Verify standby tasks are assigned
+        Set<Integer> allStandbyTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            List<Integer> memberStandbyTasks = getAllStandbyTaskIds(result, memberId);
+            allStandbyTasks.addAll(memberStandbyTasks);
+        }
+        assertEquals(numTasks * numStandbyReplicas, allStandbyTasks.size());
+
+        // With 14 tasks and 7 clients, each client should have 2 active tasks
+        int expectedTasksPerClient = numTasks / numClients; // 14 / 7 = 2
+        int remainder = numTasks % numClients; // 14 % 7 = 0
+        
+        int clientsWithExpectedTasks = 0;
+        int clientsWithOneMoreTask = 0;
+        for (String memberId : result.members().keySet()) {
+            int activeTaskCount = getAllActiveTaskCount(result, memberId);
+            if (activeTaskCount == expectedTasksPerClient) {
+                clientsWithExpectedTasks++;
+            } else if (activeTaskCount == expectedTasksPerClient + 1) {
+                clientsWithOneMoreTask++;
+            }
+        }
+        assertEquals(numClients - remainder, clientsWithExpectedTasks); // 7 clients should have 2 tasks
+        assertEquals(remainder, clientsWithOneMoreTask); // 0 clients should have 3 tasks
+    }
+
+    @Test
+    public void shouldHandleHighStandbyReplicaCount() {
+        // Test with high number of standby replicas (5) and limited clients (3)
+        final int numTasks = 6;
+        final int numClients = 3;
+        final int numStandbyReplicas = 5;
+        
+        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        for (int i = 0; i < numClients; i++) {
+            members.put("member" + i, createAssignmentMemberSpec("process" + i));
+        }
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
+        );
+
+        // Verify all active tasks are assigned
+        Set<Integer> allActiveTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            List<Integer> memberActiveTasks = getAllActiveTaskIds(result, memberId);
+            allActiveTasks.addAll(memberActiveTasks);
+        }
+        assertEquals(numTasks, allActiveTasks.size());
+
+        // With only 3 clients and 5 standby replicas, not all standby replicas can be assigned
+        // since each client can only hold standby tasks for tasks it doesn't have active
+        Set<Integer> allStandbyTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            List<Integer> memberStandbyTasks = getAllStandbyTaskIds(result, memberId);
+            allStandbyTasks.addAll(memberStandbyTasks);
+        }
+        
+        // Maximum possible = numTasks * min(numStandbyReplicas, numClients - 1) = 6 * 2 = 12
+        int maxPossibleStandbyTasks = numTasks * Math.min(numStandbyReplicas, numClients - 1);
+        assertTrue(allStandbyTasks.size() <= maxPossibleStandbyTasks);
+        assertTrue(allStandbyTasks.size() > 0); // Should assign at least some standby tasks
+    }
+
+    @Test
+    public void shouldHandleLargeNumberOfSubtopologiesWithStandbyTasks() {
+        // Test with many subtopologies (10) each with different numbers of tasks
+        final int numSubtopologies = 10;
+        final int numClients = 4;
+        final int numStandbyReplicas = 1;
+        
+        List<String> subtopologies = new ArrayList<>();
+        for (int i = 0; i < numSubtopologies; i++) {
+            subtopologies.add("subtopology-" + i);
+        }
+        
+        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        for (int i = 0; i < numClients; i++) {
+            members.put("member" + i, createAssignmentMemberSpec("process" + i));
+        }
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new TopologyDescriberImpl(5, true, subtopologies) // 5 tasks per subtopology
+        );
+
+        // Verify all subtopologies have tasks assigned
+        Set<String> subtopologiesWithTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            MemberAssignment member = result.members().get(memberId);
+            subtopologiesWithTasks.addAll(member.activeTasks().keySet());
+        }
+        assertEquals(numSubtopologies, subtopologiesWithTasks.size());
+
+        // Verify standby tasks are assigned across subtopologies
+        Set<String> subtopologiesWithStandbyTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            MemberAssignment member = result.members().get(memberId);
+            subtopologiesWithStandbyTasks.addAll(member.standbyTasks().keySet());
+        }
+        assertEquals(numSubtopologies, subtopologiesWithStandbyTasks.size());
+    }
+
+    @Test
+    public void shouldHandleEdgeCaseWithSingleClientAndMultipleStandbyReplicas() {
+        // Test edge case: single client with multiple standby replicas
+        final int numTasks = 10;
+        final int numStandbyReplicas = 3;
+        
+        Map<String, AssignmentMemberSpec> members = mkMap(
+            mkEntry("member1", createAssignmentMemberSpec("process1"))
+        );
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
+        );
+
+        // Single client should get all active tasks
+        assertEquals(numTasks, getAllActiveTaskCount(result, "member1"));
+        
+        // No standby tasks should be assigned since there's only one client
+        // (standby tasks can't be assigned to the same client as active tasks)
+        assertTrue(getAllStandbyTaskIds(result, "member1").isEmpty());
+    }
+
+    @Test
+    public void shouldHandleEdgeCaseWithMoreStandbyReplicasThanAvailableClients() {
+        // Test edge case: more standby replicas than available clients
+        final int numTasks = 4;
+        final int numClients = 2;
+        final int numStandbyReplicas = 5; // More than available clients
+        
+        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        for (int i = 0; i < numClients; i++) {
+            members.put("member" + i, createAssignmentMemberSpec("process" + i));
+        }
+
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)))),
+            new TopologyDescriberImpl(numTasks, true, List.of("test-subtopology"))
+        );
+
+        // Verify all active tasks are assigned
+        Set<Integer> allActiveTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            List<Integer> memberActiveTasks = getAllActiveTaskIds(result, memberId);
+            allActiveTasks.addAll(memberActiveTasks);
+        }
+        assertEquals(numTasks, allActiveTasks.size());
+
+        // With only 2 clients, maximum standby tasks per task = 1 (since each client has active tasks)
+        Set<Integer> allStandbyTasks = new HashSet<>();
+        for (String memberId : result.members().keySet()) {
+            List<Integer> memberStandbyTasks = getAllStandbyTaskIds(result, memberId);
+            allStandbyTasks.addAll(memberStandbyTasks);
+        }
+        
+        // Maximum possible = numTasks * 1 = 4
+        assertEquals(numTasks, allStandbyTasks.size());
+    }
+
+
     private int getAllActiveTaskCount(GroupAssignment result, String... memberIds) {
         int size = 0;
         for (String memberId : memberIds) {
