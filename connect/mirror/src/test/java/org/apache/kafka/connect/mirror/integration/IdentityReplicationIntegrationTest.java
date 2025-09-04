@@ -21,7 +21,7 @@ import org.apache.kafka.connect.mirror.IdentityReplicationPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
-import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Tests MM2 replication and failover logic for {@link IdentityReplicationPolicy}.
@@ -36,10 +36,10 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
     @BeforeEach
     public void startClusters() throws Exception {
         replicateBackupToPrimary = false;
-        super.startClusters(new HashMap<String, String>() {{
-                put("replication.policy.class", IdentityReplicationPolicy.class.getName());
-                put("topics", "test-topic-.*");
-            }});
+        super.startClusters(Map.of(
+                "replication.policy.class", IdentityReplicationPolicy.class.getName(),
+                "topics", "test-topic-.*"
+        ));
     }
 
     /*

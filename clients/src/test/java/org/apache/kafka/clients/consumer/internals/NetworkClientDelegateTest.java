@@ -40,6 +40,8 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -53,7 +55,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -246,10 +247,11 @@ public class NetworkClientDelegateTest {
         assertEquals(authException, ((ErrorEvent) event).error());
     }
 
-    @Test
-    public void testRecordUnsentRequestsQueueTime() throws Exception {
+    @ParameterizedTest
+    @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")
+    public void testRecordUnsentRequestsQueueTime(String groupName) throws Exception {
         try (Metrics metrics = new Metrics();
-             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+             AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
              NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(false, asyncConsumerMetrics)) {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             networkClientDelegate.add(unsentRequest);
@@ -261,19 +263,19 @@ public class NetworkClientDelegateTest {
             assertEquals(
                 0,
                 (double) metrics.metric(
-                    metrics.metricName("unsent-requests-queue-size", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("unsent-requests-queue-size", groupName)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("unsent-requests-queue-time-avg", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("unsent-requests-queue-time-avg", groupName)
                 ).metricValue()
             );
             assertEquals(
                 10,
                 (double) metrics.metric(
-                    metrics.metricName("unsent-requests-queue-time-max", CONSUMER_METRIC_GROUP)
+                    metrics.metricName("unsent-requests-queue-time-max", groupName)
                 ).metricValue()
             );
         }
