@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.metadata.publisher;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
@@ -24,12 +23,9 @@ import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.common.DelegationTokenManager;
 import org.apache.kafka.server.fault.FaultHandler;
 
-import org.slf4j.Logger;
-
 import java.util.Optional;
 
 public class DelegationTokenPublisher implements MetadataPublisher {
-    private final Logger log;
     private final int nodeId;
     private final FaultHandler faultHandler;
     private final String nodeType;
@@ -41,7 +37,6 @@ public class DelegationTokenPublisher implements MetadataPublisher {
         this.faultHandler = faultHandler;
         this.nodeType = nodeType;
         this.tokenManager = tokenManager;
-        this.log = new LogContext(name()).logger(DelegationTokenPublisher.class);
     }
 
     @Override
