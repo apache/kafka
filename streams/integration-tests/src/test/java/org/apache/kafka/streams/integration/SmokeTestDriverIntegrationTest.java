@@ -139,7 +139,6 @@ public class SmokeTestDriverIntegrationTest {
         final Properties props = new Properties();
         final String appId = safeUniqueTestName(testInfo);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, safeUniqueTestName(testInfo));
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         if (streamsProtocolEnabled) {
