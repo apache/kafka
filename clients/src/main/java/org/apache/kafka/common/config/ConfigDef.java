@@ -1040,7 +1040,7 @@ public class ConfigDef {
             }
 
             @SuppressWarnings("unchecked")
-            List<String> values = (List<String>) value;
+            List<Object> values = (List<Object>) value;
             if (!isEmptyAllowed && values.isEmpty()) {
                 String validString = this.validString.validStrings.isEmpty() ? "any non-empty value" : this.validString.toString();
                 throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validString);
@@ -1053,15 +1053,18 @@ public class ConfigDef {
             validateIndividualValues(name, values);
         }
 
-        private void validateIndividualValues(String name, List<String> values) {
+        private void validateIndividualValues(String name, List<Object> values) {
             boolean hasValidStrings = !validString.validStrings.isEmpty();
 
-            for (String string : values) {
-                if (string.isEmpty()) {
-                    throw new ConfigException("Configuration '" + name + "' values must not be empty.");
-                }
-                if (hasValidStrings) {
-                    validString.ensureValid(name, string);
+            for (Object value : values) {
+                if (value instanceof String) {
+                    String string = (String) value;
+                    if (string.isEmpty()) {
+                        throw new ConfigException("Configuration '" + name + "' values must not be empty.");
+                    }
+                    if (hasValidStrings) {
+                        validString.ensureValid(name, value);
+                    }
                 }
             }
         }
