@@ -766,6 +766,7 @@ public class CommitRequestManagerTest {
 
         // Complete request with a response
         long expectedOffset = 100;
+        String expectedMetadata = "metadata";
         NetworkClientDelegate.UnsentRequest req = result.unsentRequests.get(0);
         OffsetFetchResponseData.OffsetFetchResponseGroup groupResponse = new OffsetFetchResponseData.OffsetFetchResponseGroup()
             .setGroupId(DEFAULT_GROUP_ID)
@@ -777,6 +778,7 @@ public class CommitRequestManagerTest {
                             .setPartitionIndex(tp.partition())
                             .setCommittedOffset(expectedOffset)
                             .setCommittedLeaderEpoch(1)
+                            .setMetadata(expectedMetadata)
                     ))
             ));
         req.handler().onComplete(buildOffsetFetchClientResponse(req, groupResponse, false));
@@ -794,6 +796,7 @@ public class CommitRequestManagerTest {
         assertEquals(1, offsetsAndMetadata.size());
         assertTrue(offsetsAndMetadata.containsKey(tp));
         assertEquals(expectedOffset, offsetsAndMetadata.get(tp).offset());
+        assertEquals(expectedMetadata, offsetsAndMetadata.get(tp).metadata());
         assertEquals(0, commitManager.pendingRequests.inflightOffsetFetches.size(), "Inflight " +
             "request should be removed from the queue when a response is received.");
     }
