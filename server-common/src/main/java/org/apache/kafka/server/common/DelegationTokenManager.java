@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server;
+package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.scram.ScramCredential;
@@ -23,7 +23,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
-import org.apache.kafka.server.config.DelegationTokenManagerConfigs;
+import org.apache.kafka.server.common.config.DelegationTokenManagerConfigs;
 
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;

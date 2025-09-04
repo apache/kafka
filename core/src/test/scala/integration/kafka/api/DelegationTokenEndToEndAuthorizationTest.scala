@@ -32,7 +32,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import scala.jdk.CollectionConverters._
-import org.apache.kafka.server.config.DelegationTokenManagerConfigs
+import org.apache.kafka.server.common.config.DelegationTokenManagerConfigs
 
 class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 

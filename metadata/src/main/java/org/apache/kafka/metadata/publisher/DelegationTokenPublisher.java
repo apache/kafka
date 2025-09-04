@@ -1,0 +1,93 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.metadata.publisher;
+
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.loader.LoaderManifest;
+import org.apache.kafka.image.publisher.MetadataPublisher;
+import org.apache.kafka.server.common.DelegationTokenManager;
+import org.apache.kafka.server.fault.FaultHandler;
+
+import org.slf4j.Logger;
+
+import java.util.Optional;
+
+public class DelegationTokenPublisher implements MetadataPublisher {
+    private final Logger log;
+    private final int nodeId;
+    private final FaultHandler faultHandler;
+    private final String nodeType;
+    private final DelegationTokenManager tokenManager;
+    private boolean firstPublish = true;
+
+    public DelegationTokenPublisher(int nodeId, FaultHandler faultHandler, String nodeType, DelegationTokenManager tokenManager) {
+        this.nodeId = nodeId;
+        this.faultHandler = faultHandler;
+        this.nodeType = nodeType;
+        this.tokenManager = tokenManager;
+        this.log = new LogContext(name()).logger(DelegationTokenPublisher.class);
+    }
+
+    @Override
+    public final String name() {
+        return "DelegationTokenPublisher " + nodeType + " id=" + nodeId;
+    }
+
+    @Override
+    public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
+        onMetadataUpdate(delta, newImage);
+    }
+
+    public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
+        String deltaName = firstPublish 
+            ? "initial MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset()
+            : "update MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
+        try {
+            if (firstPublish) {
+                // Initialize the tokenCache with the Image
+                Optional.ofNullable(newImage.delegationTokens()).ifPresent(delegationTokenImage -> {
+                    delegationTokenImage.tokens().forEach((tokenId, delegationTokenData) -> {
+                        try {
+                            tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.tokenInformation()));
+                        } catch (Exception e) {
+                            faultHandler.handleFault("Error updating delegation token during initialization", e);
+                        }
+                    });
+                });
+                firstPublish = false;
+            }
+            // Apply changes to DelegationTokens.
+            Optional.ofNullable(delta.delegationTokenDelta()).ifPresent(delegationTokenDelta -> {
+                delegationTokenDelta.changes().forEach((tokenId, delegationTokenData) -> {
+                    try {
+                        if (delegationTokenData.isPresent()) {
+                            tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.get().tokenInformation()));
+                        } else {
+                            tokenManager.removeToken(tokenId);
+                        }
+                    } catch (Exception e) {
+                        faultHandler.handleFault("Error updating delegation token for tokenId: " + tokenId, e);
+                    }
+                });
+            });
+        } catch (Throwable t) {
+            faultHandler.handleFault("Uncaught exception while publishing DelegationToken changes from " + deltaName, t);
+        }
+    }
+}

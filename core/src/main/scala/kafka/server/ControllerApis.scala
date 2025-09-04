@@ -56,6 +56,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.RaftManager
 import org.apache.kafka.server.{ApiVersionManager, DelegationTokenManager, ProcessRole}
+import org.apache.kafka.server.common.DelegationTokenManager
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
 import org.apache.kafka.server.quota.ControllerMutationQuota
