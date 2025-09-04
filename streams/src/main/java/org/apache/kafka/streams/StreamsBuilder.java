@@ -89,10 +89,10 @@ public class StreamsBuilder {
         internalTopologyBuilder = topology.internalTopologyBuilder;
         internalStreamsBuilder = new InternalStreamsBuilder(
             internalTopologyBuilder,
-            !TopologyConfig.InternalConfig.getBoolean(
+            TopologyConfig.InternalConfig.getBoolean(
                 topologyConfigs.originals(),
-                TopologyConfig.InternalConfig.DISABLE_PROCESS_PROCESSVALUE_FIX,
-                false
+                TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX,
+                true
             )
         );
     }

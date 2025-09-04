@@ -90,7 +90,7 @@ public final class TopologyConfig extends AbstractConfig {
 
     public static class InternalConfig {
         // Cf https://issues.apache.org/jira/browse/KAFKA-19668
-        public static final String DISABLE_PROCESS_PROCESSVALUE_FIX = "__disable.process.processValue.fix__";
+        public static final String ENABLE_PROCESS_PROCESSVALUE_FIX = "__enable.process.processValue.fix__";
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
