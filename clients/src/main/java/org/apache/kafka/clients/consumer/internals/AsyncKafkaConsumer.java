@@ -1811,7 +1811,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // use of a shorter, dedicated "pollTimer" here which updates "timer" so that calling method (poll) will
         // correctly handle the overall timeout.
         try {
-            fetchBuffer.awaitNotEmpty(pollTimer);
+            fetchBuffer.awaitWakeup(pollTimer);
         } catch (InterruptException e) {
             log.trace("Interrupt during fetch", e);
             throw e;

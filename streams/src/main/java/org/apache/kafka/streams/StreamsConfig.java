@@ -78,6 +78,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.ListSize.atMostOfSize;
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.parseType;
@@ -901,6 +902,8 @@ public class StreamsConfig extends AbstractConfig {
                     APPLICATION_ID_DOC)
             .define(BOOTSTRAP_SERVERS_CONFIG, // required with no default value
                     Type.LIST,
+                    NO_DEFAULT_VALUE,
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
             .define(NUM_STANDBY_REPLICAS_CONFIG,
@@ -1099,7 +1102,8 @@ public class StreamsConfig extends AbstractConfig {
             .define(CONFIG_PROVIDERS_CONFIG,
                     Type.LIST,
                     List.of(),
-                    Importance.LOW, 
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                    Importance.LOW,
                     CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,
                     Type.BOOLEAN,
@@ -1175,6 +1179,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(METRIC_REPORTER_CLASSES_CONFIG,
                     Type.LIST,
                     JmxReporter.class.getName(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_RECORDING_LEVEL_CONFIG,
