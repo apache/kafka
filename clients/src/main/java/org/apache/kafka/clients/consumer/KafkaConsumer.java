@@ -29,6 +29,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1776,9 +1777,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This close operation will attempt all shutdown steps even if one of them fails.
      * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
-     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
-     *                                                           before or while this function is called
-     * @throws org.apache.kafka.common.KafkaException            for any other error during close
+     * @throws WakeupException    if {@link #wakeup()} is called before or while this function is called
+     * @throws InterruptException if the calling thread is interrupted before or while this function is called
+     * @throws KafkaException     for any other error during close
+     *                            (e.g., errors thrown from rebalance callbacks or commit callbacks from previous asynchronous commits)
      */
     @Override
     public void close() {
@@ -1808,9 +1810,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
-     * @throws IllegalArgumentException               If the {@code timeout} is negative.
-     * @throws InterruptException                     If the thread is interrupted before or while this function is called
-     * @throws org.apache.kafka.common.KafkaException for any other error during close
+     * @throws IllegalArgumentException If the {@code timeout} is negative.
+     * @throws WakeupException          if {@link #wakeup()} is called before or while this function is called
+     * @throws InterruptException       if the calling thread is interrupted before or while this function is called
+     * @throws KafkaException           for any other error during close
+     *                                  (e.g., errors thrown from rebalance callbacks or commit callbacks from previous asynchronous commits)
      */
     @Deprecated(since = "4.1")
     @Override
@@ -1843,6 +1847,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
      * @param option see {@link CloseOptions}; cannot be {@code null}
+     * @throws IllegalArgumentException If the {@code option} timeout is negative
+     * @throws WakeupException          if {@link #wakeup()} is called before or while this function is called
+     * @throws InterruptException       if the calling thread is interrupted before or while this function is called
+     * @throws KafkaException           for any other error during close
+     *                                  (e.g., errors thrown from rebalance callbacks or commit callbacks from previous asynchronous commits)
      */
     @Override
     public void close(CloseOptions option) {
