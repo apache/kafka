@@ -936,6 +936,8 @@ org.apache.kafka.clients.consumer.MockShareConsumerTest:
 org.apache.kafka.clients.consumer.OffsetAndMetadataTest:
 - testDeserializationCompatibilityBeforeLeaderEpoch
 - testDeserializationCompatibilityWithLeaderEpoch
+- testEqualsWithNullAndEmptyMetadata
+- testEqualsWithNullAndNegativeLeaderEpoch
 - testInvalidNegativeOffset
 - testSerializationRoundtrip
 org.apache.kafka.clients.consumer.RangeAssignorTest:
@@ -2217,6 +2219,7 @@ org.apache.kafka.clients.consumer.internals.ShareConsumerImplTest:
 - testProcessBackgroundEventsTimesOut
 - testProcessBackgroundEventsWithInitialDelay
 - testProcessBackgroundEventsWithoutDelay
+- testRecordBackgroundEventQueueSize
 - testStopFindCoordinatorOnClose
 - testSubscribeGeneratesEvent
 - testSubscribeToEmptyListActsAsUnsubscribe

@@ -475,6 +475,7 @@ org.apache.kafka.tools.ShareConsumerPerformanceTest:
 - testConfigWithUnrecognizedOption
 - testDefaultClientId
 - testHeaderMatchBody
+- testMetricsRetrievedBeforeConsumerClosed
 org.apache.kafka.tools.StreamsResetterTest:
 - shouldDeleteTopic
 - shouldDetermineInternalTopicBasedOnTopicName1
@@ -762,12 +763,12 @@ org.apache.kafka.tools.consumer.group.SaslClientsWithInvalidCredentialsTest:
 - testConsumerGroupServiceWithAuthenticationSuccess
 org.apache.kafka.tools.consumer.group.ShareGroupCommandTest:
 - testAlterShareGroupAllTopicsToDatetimeSuccess
-- testAlterShareGroupFailureWithNonExistentTopic
 - testAlterShareGroupMultipleTopicsSuccess
 - testAlterShareGroupOffsetsArgsFailureWithoutResetOffsetsArgs
 - testAlterShareGroupOffsetsFailureWithNoneEmptyGroup
 - testAlterShareGroupOffsetsFailureWithoutTopic
 - testAlterShareGroupToLatestSuccess
+- testAlterShareGroupUnsubscribedTopicSuccess
 - testDeleteShareGroupOffsets
 - testDeleteShareGroupOffsetsArgsWithoutGroup
 - testDeleteShareGroupOffsetsArgsWithoutTopic

@@ -384,6 +384,15 @@ org.apache.kafka.server.util.timer.TimerTaskListTest:
 org.apache.kafka.server.util.timer.TimerTest:
 - testAlreadyExpiredTask
 - testTaskExpiration
+org.apache.kafka.server.util.timer.TimingWheelTest:
+- testAddCancelledTask
+- testAddExpiredTask
+- testAddTaskInCurrentBucket
+- testAddValidTask
+- testAdvanceClockToNextTick
+- testAdvanceClockWithOverflowWheel
+- testAdvanceClockWithinTick
+- testOverflowWheelCreation
 org.apache.kafka.timeline.BaseHashTableTest:
 - testEmptyTable
 - testExpansion
