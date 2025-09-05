@@ -1091,6 +1091,148 @@ public class StickyTaskAssignorTest {
         assertEquals(numTasks, allStandbyTasks.size());
     }
 
+    @Test
+    public void shouldReassignTasksWhenNewNodeJoinsWithExistingActiveAndStandbyAssignments() {
+        // Initial setup: Node 1 has active tasks 0,1 and standby tasks 2,3
+        // Node 2 has active tasks 2,3 and standby tasks 0,1
+        final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1",
+            mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))),
+            mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))));
+
+        final AssignmentMemberSpec memberSpec2 = createAssignmentMemberSpec("process2",
+            mkMap(mkEntry("test-subtopology", Sets.newSet(2, 3))),
+            mkMap(mkEntry("test-subtopology", Sets.newSet(0, 1))));
+
+        // Node 3 joins as new client
+        final AssignmentMemberSpec memberSpec3 = createAssignmentMemberSpec("process3");
+
+        final Map<String, AssignmentMemberSpec> members = mkMap(
+            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2), mkEntry("member3", memberSpec3));
+
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, "1"))),
+            new TopologyDescriberImpl(4, true, List.of("test-subtopology"))
+        );
+
+        // Verify all active tasks are assigned
+        final Set<Integer> allAssignedActiveTasks = new HashSet<>();
+        allAssignedActiveTasks.addAll(getAllActiveTaskIds(result, "member1"));
+        allAssignedActiveTasks.addAll(getAllActiveTaskIds(result, "member2"));
+        allAssignedActiveTasks.addAll(getAllActiveTaskIds(result, "member3"));
+        assertEquals(Sets.newSet(0, 1, 2, 3), allAssignedActiveTasks);
+
+        // Verify all standby tasks are assigned
+        final Set<Integer> allAssignedStandbyTasks = new HashSet<>();
+        allAssignedStandbyTasks.addAll(getAllStandbyTaskIds(result, "member1"));
+        allAssignedStandbyTasks.addAll(getAllStandbyTaskIds(result, "member2"));
+        allAssignedStandbyTasks.addAll(getAllStandbyTaskIds(result, "member3"));
+        assertEquals(Sets.newSet(0, 1, 2, 3), allAssignedStandbyTasks);
+
+        // Verify each member has 1-2 active tasks and at most 3 tasks total
+        assertTrue(getAllActiveTaskIds(result, "member1").size() >= 1 && getAllActiveTaskIds(result, "member1").size() <= 2);
+        assertTrue(getAllActiveTaskIds(result, "member1").size() + getAllStandbyTaskIds(result, "member1").size() <= 3);
+
+        assertTrue(getAllActiveTaskIds(result, "member2").size() >= 1 && getAllActiveTaskIds(result, "member2").size() <= 2);
+        assertTrue(getAllActiveTaskIds(result, "member2").size() + getAllStandbyTaskIds(result, "member2").size() <= 3);
+
+        assertTrue(getAllActiveTaskIds(result, "member3").size() >= 1 && getAllActiveTaskIds(result, "member3").size() <= 2);
+        assertTrue(getAllActiveTaskIds(result, "member3").size() + getAllStandbyTaskIds(result, "member3").size() <= 3);
+    }
+
+    @Test
+    public void shouldRangeAssignTasksWhenScalingUp() {
+        // Two clients, the second one is new
+        final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1",
+            Map.of("test-subtopology1", Set.of(0, 1), "test-subtopology2", Set.of(0, 1)),
+            Map.of());
+        final AssignmentMemberSpec memberSpec2 = createAssignmentMemberSpec("process2");
+        final Map<String, AssignmentMemberSpec> members = mkMap(
+            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+
+        // Two subtopologies with 2 tasks each (4 tasks total) with standby replicas enabled
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(1)))),
+            new TopologyDescriberImpl(2, true, Arrays.asList("test-subtopology1", "test-subtopology2"))
+        );
+
+        // Each client should get one task from each subtopology
+        final MemberAssignment testMember1 = result.members().get("member1");
+        assertNotNull(testMember1);
+        assertEquals(1, testMember1.activeTasks().get("test-subtopology1").size());
+        assertEquals(1, testMember1.activeTasks().get("test-subtopology2").size());
+        
+        final MemberAssignment testMember2 = result.members().get("member2");
+        assertNotNull(testMember2);
+        assertEquals(1, testMember2.activeTasks().get("test-subtopology1").size());
+        assertEquals(1, testMember2.activeTasks().get("test-subtopology2").size());
+        
+        // Verify all tasks are assigned exactly once
+        final Set<Integer> allSubtopology1Tasks = new HashSet<>();
+        allSubtopology1Tasks.addAll(testMember1.activeTasks().get("test-subtopology1"));
+        allSubtopology1Tasks.addAll(testMember2.activeTasks().get("test-subtopology1"));
+        assertEquals(Sets.newSet(0, 1), allSubtopology1Tasks);
+        
+        final Set<Integer> allSubtopology2Tasks = new HashSet<>();
+        allSubtopology2Tasks.addAll(testMember1.activeTasks().get("test-subtopology2"));
+        allSubtopology2Tasks.addAll(testMember2.activeTasks().get("test-subtopology2"));
+        assertEquals(Sets.newSet(0, 1), allSubtopology2Tasks);
+
+        // Each client should get one task from each subtopology
+        assertNotNull(testMember1);
+        assertEquals(1, testMember1.standbyTasks().get("test-subtopology1").size());
+        assertEquals(1, testMember1.standbyTasks().get("test-subtopology2").size());
+
+        assertNotNull(testMember2);
+        assertEquals(1, testMember2.standbyTasks().get("test-subtopology1").size());
+        assertEquals(1, testMember2.standbyTasks().get("test-subtopology2").size());
+    }
+
+    @Test
+    public void shouldRangeAssignTasksWhenStartingEmpty() {
+        // Two clients starting empty (no previous tasks)
+        final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1");
+        final AssignmentMemberSpec memberSpec2 = createAssignmentMemberSpec("process2");
+        final Map<String, AssignmentMemberSpec> members = mkMap(
+            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+
+        // Two subtopologies with 2 tasks each (4 tasks total) with standby replicas enabled
+        final GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, mkMap(mkEntry(NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(1)))),
+            new TopologyDescriberImpl(2, true, Arrays.asList("test-subtopology1", "test-subtopology2"))
+        );
+
+        // Each client should get one task from each subtopology
+        final MemberAssignment testMember1 = result.members().get("member1");
+        assertNotNull(testMember1);
+        assertEquals(1, testMember1.activeTasks().get("test-subtopology1").size());
+        assertEquals(1, testMember1.activeTasks().get("test-subtopology2").size());
+
+        final MemberAssignment testMember2 = result.members().get("member2");
+        assertNotNull(testMember2);
+        assertEquals(1, testMember2.activeTasks().get("test-subtopology1").size());
+        assertEquals(1, testMember2.activeTasks().get("test-subtopology2").size());
+
+        // Verify all tasks are assigned exactly once
+        final Set<Integer> allSubtopology1Tasks = new HashSet<>();
+        allSubtopology1Tasks.addAll(testMember1.activeTasks().get("test-subtopology1"));
+        allSubtopology1Tasks.addAll(testMember2.activeTasks().get("test-subtopology1"));
+        assertEquals(Sets.newSet(0, 1), allSubtopology1Tasks);
+
+        final Set<Integer> allSubtopology2Tasks = new HashSet<>();
+        allSubtopology2Tasks.addAll(testMember1.activeTasks().get("test-subtopology2"));
+        allSubtopology2Tasks.addAll(testMember2.activeTasks().get("test-subtopology2"));
+        assertEquals(Sets.newSet(0, 1), allSubtopology2Tasks);
+
+        // Each client should get one task from each subtopology
+        assertNotNull(testMember1);
+        assertEquals(1, testMember1.standbyTasks().get("test-subtopology1").size());
+        assertEquals(1, testMember1.standbyTasks().get("test-subtopology2").size());
+
+        assertNotNull(testMember2);
+        assertEquals(1, testMember2.standbyTasks().get("test-subtopology1").size());
+        assertEquals(1, testMember2.standbyTasks().get("test-subtopology2").size());
+    }
+
 
     private int getAllActiveTaskCount(GroupAssignment result, String... memberIds) {
         int size = 0;
