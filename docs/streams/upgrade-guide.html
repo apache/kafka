@@ -148,7 +148,15 @@
         <ul>
             <li><a href="https://issues.apache.org/jira/browse/KAFKA-12829">Old processor APIs</a></li>
             <li><a href="https://issues.apache.org/jira/browse/KAFKA-12823">KStream#through() in both Java and Scala</a></li>
-            <li><a href="https://issues.apache.org/jira/browse/KAFKA-16339">"transformer" methods and classes in both Java and Scala</a></li>
+            <li>
+                <a href="https://issues.apache.org/jira/browse/KAFKA-16339">"transformer" methods and classes in both Java and Scala</a>
+                <ul>
+                    <li>migrating from <code>KStreams#transformValues()</code> to <code>KStreams.processValues()</code> might not be safe
+                        due to <a href="https://issues.apache.org/jira/browse/KAFKA-19668">KAFKA-19668</a>.
+                        Please refer to the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a> for more details.
+                    </li>
+                </ul>
+            </li>
             <li><a href="https://issues.apache.org/jira/browse/KAFKA-12824">kstream.KStream#branch in both Java and Scala</a></li>
             <li><a href="https://issues.apache.org/jira/browse/KAFKA-16332">builder methods for Time/Session/Join/SlidingWindows</a></li>
             <li><a href="https://issues.apache.org/jira/browse/KAFKA-12827">KafkaStreams#setUncaughtExceptionHandler()</a></li>
@@ -231,22 +239,22 @@
     </p>
 
     <p>
-      You can now configure your topology with a <code>ProcessorWrapper</code>, which allows you to access and optionally wrap/replace
-      any processor in the topology by injecting an alternative <code>ProcessorSupplier</code> in its place. This can be used to peek
-      records and access the processor context even for DSL operators, for example to implement a logging or tracing framework, or to
-      aid in testing or debugging scenarios. You must implement the <code>ProcessorWrapper</code> interface and then pass the class
-      or class name into the configs via the new <code>StreamsConfig#PROCESSOR_WRAPPER_CLASS_CONFIG</code> config. NOTE: this config is
-      applied during the topology building phase, and therefore will not take effect unless the config is passed in when creating
-      the StreamsBuilder (DSL) or Topology(PAPI) objects. You MUST use the StreamsBuilder/Topology constructor overload that
-      accepts a TopologyConfig parameter for the <code>StreamsConfig#PROCESSOR_WRAPPER_CLASS_CONFIG</code> to be picked up.
-      See <a href="https://cwiki.apache.org/confluence/x/TZCMEw">KIP-1112</a> for more details.
+        You can now configure your topology with a <code>ProcessorWrapper</code>, which allows you to access and optionally wrap/replace
+        any processor in the topology by injecting an alternative <code>ProcessorSupplier</code> in its place. This can be used to peek
+        records and access the processor context even for DSL operators, for example to implement a logging or tracing framework, or to
+        aid in testing or debugging scenarios. You must implement the <code>ProcessorWrapper</code> interface and then pass the class
+        or class name into the configs via the new <code>StreamsConfig#PROCESSOR_WRAPPER_CLASS_CONFIG</code> config. NOTE: this config is
+        applied during the topology building phase, and therefore will not take effect unless the config is passed in when creating
+        the StreamsBuilder (DSL) or Topology(PAPI) objects. You MUST use the StreamsBuilder/Topology constructor overload that
+        accepts a TopologyConfig parameter for the <code>StreamsConfig#PROCESSOR_WRAPPER_CLASS_CONFIG</code> to be picked up.
+        See <a href="https://cwiki.apache.org/confluence/x/TZCMEw">KIP-1112</a> for more details.
     </p>
 
     <p>
         Upgraded RocksDB dependency to version 9.7.3 (from 7.9.2). This upgrade incorporates various improvements and optimizations within RocksDB. However, it also introduces some API changes.
         The <code>org.rocksdb.AccessHint</code> class, along with its associated methods, has been removed.
         Several methods related to compressed block cache configuration in the <code>BlockBasedTableConfig</code> class have been removed, including <code>blockCacheCompressedNumShardBits</code>, <code>blockCacheCompressedSize</code>, and their corresponding setters. These functionalities are now consolidated under the <code>cache</code> option, and developers should configure their compressed block cache using the <code>setCache</code> method instead.
-	The <code>NO_FILE_CLOSES</code> field has been removed from the <code>org.rocksdb.TickerTypeenum</code> as a result the <code>number-open-files</code> metrics does not work as expected. Metric <code>number-open-files</code> returns constant -1 from now on until it will officially be removed.
+        The <code>NO_FILE_CLOSES</code> field has been removed from the <code>org.rocksdb.TickerTypeenum</code> as a result the <code>number-open-files</code> metrics does not work as expected. Metric <code>number-open-files</code> returns constant -1 from now on until it will officially be removed.
         The <code>org.rocksdb.Options.setLogger()</code> method now accepts a <code>LoggerInterface</code> as a parameter instead of the previous <code>Logger</code>.
         Some data types used in RocksDB's Java API have been modified. These changes, along with the removed class, field, and new methods, are primarily relevant to users implementing custom RocksDB configurations.
         These changes are expected to be largely transparent to most Kafka Streams users. However, those employing advanced RocksDB customizations within their Streams applications, particularly through the <code>rocksdb.config.setter</code>, are advised to consult the detailed RocksDB 9.7.3 changelog to ensure a smooth transition and adapt their configurations as needed. Specifically, users leveraging the removed <code>AccessHint</code> class, the removed methods from the <code>BlockBasedTableConfig</code> class, the <code>NO_FILE_CLOSES</code> field from <code>TickerType</code>, or relying on the previous signature of <code>setLogger()</code> will need to update their implementations.
@@ -525,6 +533,11 @@
       <code>FixedKeyProcessorContext</code>, and <code>ContextualFixedKeyProcessor</code> are introduced to guard against
       disallowed key modification inside <code>processValues()</code>. Furthermore, <code>ProcessingContext</code> is
       added for a better interface hierarchy.
+      <b>CAUTION:</b> The newly added <code>KStream.processValues()</code> method introduced a regression bug
+      (<a href="https://issues.apache.org/jira/browse/KAFKA-19668">KAFKA-19668</a>).
+      If you have "merge repartition topics" optimization enabled, it is not safe to migrate from <code>transformValues()</code>
+      to <code>processValues()</code> in 3.3.0 release. The bug is only fixed with Kafka Streams 4.0.1, 4.1.1, and 4.2.0.
+      For more details, please refer to the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a>.
     </p>
 
     <p>

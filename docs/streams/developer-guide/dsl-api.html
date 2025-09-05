@@ -3456,6 +3456,25 @@ grouped
                 </ul>
                 <p>The Processor API now serves as a unified replacement for all these methods. It simplifies the API surface
                     while maintaining support for both stateless and stateful operations.</p>
+
+                <p><b>CAUTION:</b> If you are using <code>KStream.transformValues()</code> and you have the "merge repartition topics"
+                    optimization enabled, rewriting your program to <code>KStream.processValues()</code> might not be safe due to
+                    <a href="https://issues.apache.org/jira/browse/KAFKA-19668">KAFKA-19668</a>. For this case, you should not upgrade
+                    to Kafka Streams 4.0.0 or 4.1.0, but use Kafka Streams 4.0.1 instead, which contains a fix.
+                    Note, that the fix is not enabled by default for backward compatibility reasons, and you would need to
+                    enable the fix by setting config <code>__enable.process.processValue.fix__ = true</code> and pass it
+                    into <code>StreamsBuilder()</code> constructor.<\p>
+                    <pre class="line-numbers"><code class="language-java">final Properties properties = new Properties();
+properties.put(StreamsConfig.APPLICATION_ID_CONFIG, ...);
+properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ...);
+properties.put(TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX, true);
+
+final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(properties)));</code></pre>
+
+                <p>It is recommended, that you compare the output of <code>Topology.describe()</code> for the old and new topology,
+                    to verify if the rewrite to <code>processValues()</code> is correct, and that it does not introduce any incompatibilities.
+                    You should also test the upgrade in a none production environment.</p>
+
                 <h4>Migration Examples</h4>
                 <p>To migrate from the deprecated <code>transform</code>, <code>transformValues</code>, <code>flatTransform</code>, and
                     <code>flatTransformValues</code> methods to the Processor API (PAPI) in Kafka Streams, let&#39;s resume the

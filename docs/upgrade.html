@@ -62,6 +62,11 @@
             The filename for rotated <code>state-change.log</code> files has been updated from <code>stage-change.log.[date]</code> to <code>state-change.log.[date]</code> in the log4j2.yaml configuration file.
             See <a href="https://issues.apache.org/jira/browse/KAFKA-19576">KAFKA-19576</a> for details.
         </li>
+        <li>
+            Kafka Streams include a critical fix to upgrade from <code>KStreams#transformValues()</code> (remove with 4.0.0 release)
+            to <code>KStreams#processValues()</code>.
+            For more details, see the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a>.
+        </li>
     </ul>
     <h5><a id="upgrade_servers_400_notable" href="#upgrade_servers_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
@@ -341,14 +346,19 @@
                 <li><a id="upgrade_400_notable_kafka_streams" href="#upgrade_400_notable_kafka_streams"><b>Kafka Streams</b></a>
                     <ul>
                         <li>
-			    All public API, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace()</code>.
-			    See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
+                            All public API, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace()</code>.
+                            See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
                         </li>
                         <li>
-			    The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
+                            The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
                         </li>
                         <li>
-			    For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
+                            For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
+                        </li>
+                        <li>
+                            If you are using <code>KStream#transformValues()</code> which was removed with Apache Kafka 4.0.0 release,
+                            and you need to rewrite your program to use <code>KStreams#processValues()</code> instead,
+                            pay close attention to the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a>.
                         </li>
                     </ul>
                 </li>
