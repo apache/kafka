@@ -26,6 +26,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
+
 import org.junit.jupiter.api.Assertions;
 
 import java.util.Collections;
@@ -102,4 +103,3 @@ public class TooManyPartitionsIntegrationTest {
         }
     }
 }
-
