@@ -147,6 +147,7 @@ public abstract class AbstractFetch implements Closeable {
      * @param data {@link FetchSessionHandler.FetchRequestData} that represents the session data
      * @param resp {@link ClientResponse} from which the {@link FetchResponse} will be retrieved
      */
+    @SuppressWarnings("NPathComplexity")
     protected void handleFetchSuccess(final Node fetchTarget,
                                       final FetchSessionHandler.FetchRequestData data,
                                       final ClientResponse resp) {
