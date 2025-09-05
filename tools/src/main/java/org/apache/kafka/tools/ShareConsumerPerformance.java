@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
+import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -47,8 +48,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
@@ -60,6 +61,10 @@ public class ShareConsumerPerformance {
     private static final Logger LOG = LoggerFactory.getLogger(ShareConsumerPerformance.class);
 
     public static void main(String[] args) {
+        run(args, KafkaShareConsumer::new);
+    }
+
+    static void run(String[] args, Function<Properties, ShareConsumer<byte[], byte[]>> shareConsumerCreator) {
         try {
             LOG.info("Starting share consumer/consumers...");
             ShareConsumerPerfOptions options = new ShareConsumerPerfOptions(args);
@@ -69,9 +74,9 @@ public class ShareConsumerPerformance {
             if (!options.hideHeader())
                 printHeader();
 
-            List<KafkaShareConsumer<byte[], byte[]>> shareConsumers = new ArrayList<>();
+            List<ShareConsumer<byte[], byte[]>> shareConsumers = new ArrayList<>();
             for (int i = 0; i < options.threads(); i++) {
-                shareConsumers.add(new KafkaShareConsumer<>(options.props()));
+                shareConsumers.add(shareConsumerCreator.apply(options.props()));
             }
             long startMs = System.currentTimeMillis();
             consume(shareConsumers, options, totalRecordsRead, totalBytesRead, startMs);
@@ -84,7 +89,6 @@ public class ShareConsumerPerformance {
             shareConsumers.forEach(shareConsumer -> {
                 @SuppressWarnings("UnusedLocalVariable")
                 Map<TopicIdPartition, Optional<KafkaException>> ignored = shareConsumer.commitSync();
-                shareConsumer.close(Duration.ofMillis(500));
             });
 
             // Print final stats for share group.
@@ -95,6 +99,7 @@ public class ShareConsumerPerformance {
 
             shareConsumersMetrics.forEach(ToolsUtils::printMetrics);
 
+            shareConsumers.forEach(shareConsumer -> shareConsumer.close(Duration.ofMillis(500)));
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -107,11 +112,11 @@ public class ShareConsumerPerformance {
         System.out.printf("start.time, end.time, data.consumed.in.MB, MB.sec, nMsg.sec, data.consumed.in.nMsg%s%n", newFieldsInHeader);
     }
 
-    private static void consume(List<KafkaShareConsumer<byte[], byte[]>> shareConsumers,
+    private static void consume(List<ShareConsumer<byte[], byte[]>> shareConsumers,
                                 ShareConsumerPerfOptions options,
                                 AtomicLong totalRecordsRead,
                                 AtomicLong totalBytesRead,
-                                long startMs) throws ExecutionException, InterruptedException, TimeoutException {
+                                long startMs) throws ExecutionException, InterruptedException {
         long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         shareConsumers.forEach(shareConsumer -> shareConsumer.subscribe(options.topic()));
@@ -181,7 +186,7 @@ public class ShareConsumerPerformance {
         totalBytesRead.set(bytesRead.get());
     }
 
-    private static void consumeRecordsForSingleShareConsumer(KafkaShareConsumer<byte[], byte[]> shareConsumer,
+    private static void consumeRecordsForSingleShareConsumer(ShareConsumer<byte[], byte[]> shareConsumer,
                                                               AtomicLong totalRecordsRead,
                                                               AtomicLong totalBytesRead,
                                                               ShareConsumerPerfOptions options,
