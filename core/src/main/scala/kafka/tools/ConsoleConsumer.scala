@@ -238,7 +238,7 @@ object ConsoleConsumer extends Logging {
       | print.value=true|false
       | key.separator=<key.separator>
       | line.separator=<line.separator>
-      | headers.separator=<line.separator>
+      | headers.separator=<headers.separator>
       | null.literal=<null.literal>
       | key.deserializer=<key.deserializer>
       | value.deserializer=<value.deserializer>
