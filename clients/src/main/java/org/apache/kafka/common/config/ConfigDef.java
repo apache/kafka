@@ -1415,6 +1415,17 @@ public class ConfigDef {
             }
 
             /**
+             * Adds the dependents to the dependents for the final ConfigDef.ConfigKey.
+             * Once added dependents can not be removed within the builder.
+             * Dependents are unique, Adding a dependent multiple times has no effect.
+             * @param dependents the collection of dependents to add.
+             * @return this
+             */
+            public final T dependents(final String... dependents) {
+                return dependents(Arrays.asList(dependents));
+            }
+            
+            /**
              * Adds a dependent to the dependents for the final ConfigDef.ConfigKey.
              * Once added dependents can not be removed within the builder.
              * Dependents are unique, Adding a dependent multiple times has no effect.
