@@ -20,30 +20,34 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
- * The subscribed topic describer is used by the {@link TaskAssignor} to obtain topic and task metadata of the groups topology.
+ * The topology describer is used by the {@link TaskAssignor} to get topic and task metadata of the group's topology.
  */
 public interface TopologyDescriber {
 
     /**
+     * Map of topic names to topic metadata.
+     *
      * @return The list of subtopologies IDs.
      */
     List<String> subtopologies();
 
     /**
-     * The number of tasks for the given subtopology.
+     * The maximal number of input partitions among all source topics for the given subtopology.
      *
      * @param subtopologyId String identifying the subtopology.
      *
-     * @return The number of tasks corresponding to the given subtopology ID.
-     * @throws NoSuchElementException if subtopology does not exist in the topology.
+     * @throws NoSuchElementException if the subtopology ID does not exist.
+     * @throws IllegalStateException if the subtopology contains no source topics.
+     * @return The maximal number of input partitions among all source topics for the given subtopology.
      */
-    int numTasks(String subtopologyId) throws NoSuchElementException;
+    int maxNumInputPartitions(String subtopologyId) throws NoSuchElementException;
 
     /**
-     * Whether the given subtopology is stateful.
+     * Checks whether the given subtopology is associated with a changelog topic.
      *
      * @param subtopologyId String identifying the subtopology.
-     * @return true if the subtopology is stateful, false otherwise.
+     * @throws NoSuchElementException if the subtopology ID does not exist.
+     * @return true if the subtopology is associated with a changelog topic, false otherwise.
      */
     boolean isStateful(String subtopologyId);
 

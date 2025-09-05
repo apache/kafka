@@ -17,20 +17,21 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.Acknowledgements;
+import org.apache.kafka.clients.consumer.internals.NodeAcknowledgements;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.Map;
 
 public class ShareAcknowledgeSyncEvent extends CompletableApplicationEvent<Map<TopicIdPartition, Acknowledgements>> {
 
-    private final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
+    private final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap;
 
-    public ShareAcknowledgeSyncEvent(final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, final long deadlineMs) {
+    public ShareAcknowledgeSyncEvent(final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap, final long deadlineMs) {
         super(Type.SHARE_ACKNOWLEDGE_SYNC, deadlineMs);
         this.acknowledgementsMap = acknowledgementsMap;
     }
 
-    public Map<TopicIdPartition, Acknowledgements> acknowledgementsMap() {
+    public Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap() {
         return acknowledgementsMap;
     }
 

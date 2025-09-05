@@ -26,7 +26,6 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -109,7 +108,7 @@ public class UniformHomogeneousAssignmentBuilder {
      */
     public GroupAssignment build() throws PartitionAssignorException {
         if (subscribedTopicIds.isEmpty()) {
-            return new GroupAssignment(Collections.emptyMap());
+            return new GroupAssignment(Map.of());
         }
 
         // Compute the list of unassigned partitions.
@@ -153,8 +152,13 @@ public class UniformHomogeneousAssignmentBuilder {
      * This method ensures that the original assignment is not copied if it is not
      * altered.
      */
+    @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     private void maybeRevokePartitions() {
+        int memberCount = groupSpec.memberIds().size();
+        int memberIndex = -1;
         for (String memberId : groupSpec.memberIds()) {
+            memberIndex++;
+
             Map<Uuid, Set<Integer>> oldAssignment = groupSpec.memberAssignment(memberId).partitions();
             Map<Uuid, Set<Integer>> newAssignment = null;
 
@@ -165,9 +169,10 @@ public class UniformHomogeneousAssignmentBuilder {
             }
 
             int quota = minimumMemberQuota;
+            boolean quotaHasExtraPartition = false;
             if (remainingMembersToGetAnExtraPartition > 0) {
                 quota++;
-                remainingMembersToGetAnExtraPartition--;
+                quotaHasExtraPartition = true;
             }
 
             for (Map.Entry<Uuid, Set<Integer>> topicPartitions : oldAssignment.entrySet()) {
@@ -209,8 +214,22 @@ public class UniformHomogeneousAssignmentBuilder {
                 }
             }
 
+            if (quota > 0 &&
+                quotaHasExtraPartition &&
+                memberCount - memberIndex > remainingMembersToGetAnExtraPartition) {
+                // Give up the extra partition quota for another member to claim,
+                // unless this member is one of the last remainingMembersToGetAnExtraPartition
+                // members in the list and must take the extra partition.
+                quota--;
+                quotaHasExtraPartition = false;
+            }
+
             if (quota > 0) {
                 unfilledMembers.add(new MemberWithRemainingQuota(memberId, quota));
+            }
+
+            if (quotaHasExtraPartition) {
+                remainingMembersToGetAnExtraPartition--;
             }
 
             if (newAssignment == null) {
@@ -253,16 +272,6 @@ public class UniformHomogeneousAssignmentBuilder {
         }
     }
 
-    private static class MemberWithRemainingQuota {
-        final String memberId;
-        final int remainingQuota;
-
-        MemberWithRemainingQuota(
-            String memberId,
-            int remainingQuota
-        ) {
-            this.memberId = memberId;
-            this.remainingQuota = remainingQuota;
-        }
+    private record MemberWithRemainingQuota(String memberId, int remainingQuota) {
     }
 }

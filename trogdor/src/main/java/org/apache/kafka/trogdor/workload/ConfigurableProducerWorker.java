@@ -182,10 +182,8 @@ public class ConfigurableProducerWorker implements TaskWorker {
             long startTimeMs = Time.SYSTEM.milliseconds();
             try {
                 try {
-                    long sentMessages = 0;
                     while (true) {
                         sendMessage();
-                        sentMessages++;
                     }
                 } catch (Exception e) {
                     throw e;

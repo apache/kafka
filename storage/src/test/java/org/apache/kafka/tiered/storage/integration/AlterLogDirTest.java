@@ -20,8 +20,7 @@ import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -47,7 +46,7 @@ public final class AlterLogDirTest extends TieredStorageTestHarness {
         builder
                 // create topicB with 1 partition and 1 RF
                 .createTopic(topicB, partitionCount, replicationFactor, maxBatchCountPerSegment,
-                        mkMap(mkEntry(p0, Arrays.asList(broker1, broker0))), enableRemoteLogStorage)
+                        mkMap(mkEntry(p0, List.of(broker1, broker0))), enableRemoteLogStorage)
                 // send records to partition 0
                 .expectSegmentToBeOffloaded(broker1, topicB, p0, 0, new KeyValueSpec("k0", "v0"))
                 .expectSegmentToBeOffloaded(broker1, topicB, p0, 1, new KeyValueSpec("k1", "v1"))
@@ -55,7 +54,7 @@ public final class AlterLogDirTest extends TieredStorageTestHarness {
                 .produce(topicB, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"))
                 // alter dir within the replica, we only expect one replicaId
-                .alterLogDir(topicB, p0, Collections.singletonList(broker0).get(0))
+                .alterLogDir(topicB, p0, broker0)
                 // make sure the altered replica can still be elected as the leader
                 .expectLeader(topicB, p0, broker0, true)
                 // produce some more events and verify the earliest local offset

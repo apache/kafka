@@ -51,7 +51,7 @@ public class DescribeClassicGroupsResult {
      * Return a future which yields all ClassicGroupDescription objects, if all the describes succeed.
      */
     public KafkaFuture<Map<String, ClassicGroupDescription>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(
             nil -> {
                 Map<String, ClassicGroupDescription> descriptions = new HashMap<>(futures.size());
                 futures.forEach((key, future) -> {

@@ -159,7 +159,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     /**
      * Gets the base timestamp of the batch which is used to calculate the record timestamps from the deltas.
-     * 
+     *
      * @return The base timestamp
      */
     public long baseTimestamp() {
@@ -502,6 +502,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     public String toString() {
         return "RecordBatch(magic=" + magic() + ", offsets=[" + baseOffset() + ", " + lastOffset() + "], " +
                 "sequence=[" + baseSequence() + ", " + lastSequence() + "], " +
+                "partitionLeaderEpoch=" + partitionLeaderEpoch() + ", " +
                 "isTransactional=" + isTransactional() + ", isControlBatch=" + isControlBatch() + ", " +
                 "compression=" + compressionType() + ", timestampType=" + timestampType() + ", crc=" + checksum() + ")";
     }

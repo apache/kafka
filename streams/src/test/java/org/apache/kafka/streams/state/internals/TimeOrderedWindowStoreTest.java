@@ -941,10 +941,13 @@ public class TimeOrderedWindowStoreTest {
                 new byte[0],
                 new RecordHeaders(),
                 true,
-                context.offset(),
-                context.timestamp(),
-                context.partition(),
-                "")
+                context.recordContext().offset(),
+                context.recordContext().timestamp(),
+                context.recordContext().partition(),
+                "",
+                context.recordContext().sourceRawKey(),
+                context.recordContext().sourceRawValue()
+            )
         );
 
         underlyingStore.put(key, value, 1);

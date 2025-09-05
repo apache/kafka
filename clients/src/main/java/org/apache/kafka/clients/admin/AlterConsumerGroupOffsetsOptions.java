@@ -16,15 +16,10 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Map;
 
 /**
  * Options for the {@link AdminClient#alterConsumerGroupOffsets(String, Map, AlterConsumerGroupOffsetsOptions)} call.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
 public class AlterConsumerGroupOffsetsOptions extends AbstractOptions<AlterConsumerGroupOffsetsOptions> {
 }

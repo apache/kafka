@@ -45,12 +45,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ inputs.java-version }}
           gradle-cache-read-only: true
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+
       - name: Test
         timeout-minutes: 60
         id: junit-test
@@ -60,26 +65,52 @@ jobs:
           TEST_PATTERN: ${{ inputs.test-pattern }}
         run: |
           set +e
-          ./gradlew --info --build-cache --scan --continue \
+          ./.github/scripts/thread-dump.sh &
+          timeout 60m ./gradlew --info --build-cache --scan --continue \
           -PtestLoggingEvents=started,passed,skipped,failed \
-          -PignoreFailures=true -PmaxParallelForks=2 \
+          -PmaxParallelForks=2 \
           -Pkafka.cluster.test.repeat=$TEST_REPEAT \
           -PmaxTestRetries=$TEST_REPEAT -PmaxTestRetryFailures=0 \
-          -PmaxQuarantineTestRetries=$TEST_REPEAT -PmaxQuarantineTestRetryFailures=0 \
-          ${TEST_MODULE}:test ${TEST_MODULE}:quarantinedTest --tests $TEST_PATTERN
+          ${TEST_MODULE}:test --tests $TEST_PATTERN
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
-      - name: Archive JUnit reports
+
+      - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
-        id: junit-upload-artifact
+        id: archive-junit-html
         with:
-          name: junit-reports-${{ inputs.java-version }}
+          name: junit-html-reports
           path: |
-            **/build/reports/tests/test/*
+            **/build/reports/tests/*
+          compression-level: 9
           if-no-files-found: ignore
+
+      - name: Archive JUnit XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-xml
+          path: |
+            build/junit-xml/**/*.xml
+          compression-level: 9
+          if-no-files-found: ignore
+
+      - name: Archive Thread Dumps
+        id: archive-thread-dump
+        if: steps.junit-test.outputs.gradle-exitcode == '124'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-thread-dumps-${{ env.job-variation }}
+          path: |
+            thread-dumps/*
+          compression-level: 9
+          if-no-files-found: ignore
+
       - name: Parse JUnit tests
-        run: python .github/scripts/junit.py >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-          REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
-          GRADLE_EXIT_CODE: ${{ steps.junit-test.outputs.exitcode }}
+          JUNIT_REPORT_URL: ${{ steps.archive-junit-html.outputs.artifact-url }}
+          THREAD_DUMP_URL: ${{ steps.archive-thread-dump.outputs.artifact-url }}
+          GRADLE_TEST_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
+        run: |
+          python .github/scripts/junit.py \
+           --path build/junit-xml >> $GITHUB_STEP_SUMMARY

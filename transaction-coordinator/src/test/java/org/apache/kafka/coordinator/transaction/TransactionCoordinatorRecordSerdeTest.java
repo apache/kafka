@@ -18,8 +18,8 @@ package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -39,52 +39,42 @@ public class TransactionCoordinatorRecordSerdeTest {
     @Test
     public void testSerializeKey() {
         TransactionCoordinatorRecordSerde serializer = new TransactionCoordinatorRecordSerde();
-        CoordinatorRecord record = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new TransactionLogKey().setTransactionalId("txnId"),
-                        (short) 0
-                ),
-                new ApiMessageAndVersion(
-                        new TransactionLogValue(),
-                        (short) 0
-                )
+        CoordinatorRecord record = CoordinatorRecord.record(
+            new TransactionLogKey().setTransactionalId("txnId"),
+            new ApiMessageAndVersion(
+                new TransactionLogValue(),
+                (short) 0
+            )
         );
 
         assertArrayEquals(
-                MessageUtil.toVersionPrefixedBytes(record.key().version(), record.key().message()),
-                serializer.serializeKey(record)
+            MessageUtil.toCoordinatorTypePrefixedBytes(record.key()),
+            serializer.serializeKey(record)
         );
     }
 
     @Test
     public void testSerializeValue() {
         TransactionCoordinatorRecordSerde serializer = new TransactionCoordinatorRecordSerde();
-        CoordinatorRecord record = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new TransactionLogKey().setTransactionalId("txnId"),
-                        (short) 0
-                ),
-                new ApiMessageAndVersion(
-                        new TransactionLogValue(),
-                        (short) 0
-                )
+        CoordinatorRecord record = CoordinatorRecord.record(
+            new TransactionLogKey().setTransactionalId("txnId"),
+            new ApiMessageAndVersion(
+                new TransactionLogValue(),
+                (short) 0
+            )
         );
 
         assertArrayEquals(
-                MessageUtil.toVersionPrefixedBytes(record.value().version(), record.value().message()),
-                serializer.serializeValue(record)
+            MessageUtil.toVersionPrefixedBytes(record.value().version(), record.value().message()),
+            serializer.serializeValue(record)
         );
     }
 
     @Test
     public void testSerializeNullValue() {
         TransactionCoordinatorRecordSerde serializer = new TransactionCoordinatorRecordSerde();
-        CoordinatorRecord record = new CoordinatorRecord(
-                new ApiMessageAndVersion(
-                        new TransactionLogKey().setTransactionalId("txnId"),
-                        (short) 0
-                ),
-                null
+        CoordinatorRecord record = CoordinatorRecord.tombstone(
+            new TransactionLogKey().setTransactionalId("txnId")
         );
 
         assertNull(serializer.serializeValue(record));
@@ -94,15 +84,12 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testDeserialize() {
         TransactionCoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
 
-        ApiMessageAndVersion key = new ApiMessageAndVersion(
-                new TransactionLogKey().setTransactionalId("txnId"),
-                (short) 0
-        );
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
+        ApiMessage key = new TransactionLogKey().setTransactionalId("txnId");
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         ApiMessageAndVersion value = new ApiMessageAndVersion(
-                new TransactionLogValue(),
-                (short) 0
+            new TransactionLogValue(),
+            (short) 0
         );
         ByteBuffer valueBuffer = MessageUtil.toVersionPrefixedByteBuffer(value.version(), value.message());
 
@@ -115,11 +102,8 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testDeserializeWithTombstoneForValue() {
         TransactionCoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
 
-        ApiMessageAndVersion key = new ApiMessageAndVersion(
-                new TransactionLogKey().setTransactionalId("txnId"),
-                (short) 0
-        );
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
+        ApiMessage key = new TransactionLogKey().setTransactionalId("txnId");
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         CoordinatorRecord record = serde.deserialize(keyBuffer, null);
         assertEquals(key, record.key());
@@ -136,8 +120,8 @@ public class TransactionCoordinatorRecordSerdeTest {
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(64);
 
-        CoordinatorLoader.UnknownRecordTypeException ex =
-                assertThrows(CoordinatorLoader.UnknownRecordTypeException.class,
+        Deserializer.UnknownRecordTypeException ex =
+                assertThrows(Deserializer.UnknownRecordTypeException.class,
                         () -> serde.deserialize(keyBuffer, valueBuffer));
         assertEquals((short) 255, ex.unknownType());
     }
@@ -159,11 +143,8 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testDeserializeWithValueEmptyBuffer() {
         TransactionCoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
 
-        ApiMessageAndVersion key = new ApiMessageAndVersion(
-                new TransactionLogKey().setTransactionalId("txnId"),
-                (short) 0
-        );
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
+        ApiMessage key = new TransactionLogKey().setTransactionalId("txnId");
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(0);
 
@@ -196,11 +177,8 @@ public class TransactionCoordinatorRecordSerdeTest {
     public void testDeserializeWithInvalidValueBytes() {
         TransactionCoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
 
-        ApiMessageAndVersion key = new ApiMessageAndVersion(
-                new TransactionLogKey().setTransactionalId("txnId"),
-                (short) 0
-        );
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
+        ApiMessage key = new TransactionLogKey().setTransactionalId("txnId");
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(2);
         valueBuffer.putShort((short) 0);
@@ -215,26 +193,24 @@ public class TransactionCoordinatorRecordSerdeTest {
 
     @Test
     public void testDeserializeAllRecordTypes() {
-        roundTrip((short) 0, new TransactionLogKey().setTransactionalId("id"), new TransactionLogValue());
+        roundTrip(new TransactionLogKey().setTransactionalId("id"), new TransactionLogValue());
     }
 
     private void roundTrip(
-            short recordType,
-            ApiMessage key,
-            ApiMessage val
+        ApiMessage key,
+        ApiMessage val
     ) {
         TransactionCoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
 
         for (short version = val.lowestSupportedVersion(); version < val.highestSupportedVersion(); version++) {
-            ApiMessageAndVersion keyMessageAndVersion = new ApiMessageAndVersion(key, recordType);
             ApiMessageAndVersion valMessageAndVersion = new ApiMessageAndVersion(val, version);
 
             CoordinatorRecord record = serde.deserialize(
-                    MessageUtil.toVersionPrefixedByteBuffer(recordType, key),
-                    MessageUtil.toVersionPrefixedByteBuffer(version, val)
+                MessageUtil.toCoordinatorTypePrefixedByteBuffer(key),
+                MessageUtil.toVersionPrefixedByteBuffer(version, val)
             );
 
-            assertEquals(keyMessageAndVersion, record.key());
+            assertEquals(key, record.key());
             assertEquals(valMessageAndVersion, record.value());
         }
     }

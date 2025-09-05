@@ -42,6 +42,66 @@ class KafkaConfigTest {
   def tearDown(): Unit = Exit.resetExitProcedure()
 
   @Test
+  def testBrokerRequiredProperties(): Unit = {
+    val properties = new Properties()
+    assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"process.roles\" which has no default value.")
+
+    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"node.id\" which has no default value.")
+
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, -1)
+    assertBadConfigContainingMessage(properties,
+      "Invalid value -1 for configuration node.id: Value must be at least 0")
+
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
+    assertBadConfigContainingMessage(properties,
+      "If using process.roles, either controller.quorum.bootstrap.servers must contain the set of bootstrap controllers or controller.quorum.voters must contain a parseable set of controllers.")
+
+    properties.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    assertBadConfigContainingMessage(properties,
+      "requirement failed: controller.listener.names must contain at least one value when running KRaft with just the broker role")
+
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    KafkaConfig.fromProps(properties)
+  }
+
+  @Test
+  def testControllerRequiredProperties(): Unit = {
+    val properties = new Properties()
+    assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"process.roles\" which has no default value.")
+
+    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"node.id\" which has no default value.")
+
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, -1)
+    assertBadConfigContainingMessage(properties,
+      "Invalid value -1 for configuration node.id: Value must be at least 0")
+
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
+    assertBadConfigContainingMessage(properties,
+      "If using process.roles, either controller.quorum.bootstrap.servers must contain the set of bootstrap controllers or controller.quorum.voters must contain a parseable set of controllers.")
+
+    properties.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    assertBadConfigContainingMessage(properties,
+      "requirement failed: The listeners config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
+
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
+    assertBadConfigContainingMessage(properties,
+      "No security protocol defined for listener CONTROLLER")
+
+    properties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT")
+    assertBadConfigContainingMessage(properties,
+      "requirement failed: The listeners config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
+
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    KafkaConfig.fromProps(properties)
+  }
+
+  @Test
   def testGetKafkaConfigFromArgs(): Unit = {
     val propertiesFile = prepareDefaultConfig()
 
@@ -56,12 +116,12 @@ class KafkaConfigTest {
     // We should be also able to set completely new property
     val config3 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
     assertEquals(1, config3.nodeId)
-    assertEquals(util.Arrays.asList("compact"), config3.logCleanupPolicy)
+    assertEquals(util.List.of("compact"), config3.logCleanupPolicy)
 
     // We should be also able to set several properties
     val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "node.id=2")))
     assertEquals(2, config4.nodeId)
-    assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
+    assertEquals(util.List.of("compact","delete"), config4.logCleanupPolicy)
   }
 
   @Test

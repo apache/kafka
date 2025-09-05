@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
@@ -62,7 +63,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +75,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -167,6 +168,7 @@ public class RestForwardingIntegrationTest {
         followerServer = new ConnectRestServer(null, followerClient, followerConfig.originals());
         followerServer.initializeServer();
         when(followerHerder.plugins()).thenReturn(plugins);
+        doReturn(new MockConnectMetrics()).when(followerHerder).connectMetrics();
         followerServer.initializeResources(followerHerder);
 
         // Leader worker setup
@@ -174,6 +176,7 @@ public class RestForwardingIntegrationTest {
         leaderServer = new ConnectRestServer(null, leaderClient, leaderConfig.originals());
         leaderServer.initializeServer();
         when(leaderHerder.plugins()).thenReturn(plugins);
+        doReturn(new MockConnectMetrics()).when(leaderHerder).connectMetrics();
         leaderServer.initializeResources(leaderHerder);
 
         // External client setup
@@ -195,7 +198,7 @@ public class RestForwardingIntegrationTest {
                 .putConnectorConfig(any(), any(), isNull(), anyBoolean(), followerCallbackCaptor.capture());
 
         // Leader will reply
-        ConnectorInfo connectorInfo = new ConnectorInfo("blah", Collections.emptyMap(), Collections.emptyList(), ConnectorType.SOURCE);
+        ConnectorInfo connectorInfo = new ConnectorInfo("blah", Map.of(), List.of(), ConnectorType.SOURCE);
         Herder.Created<ConnectorInfo> leaderAnswer = new Herder.Created<>(true, connectorInfo);
         ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> leaderCallbackCaptor = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -211,7 +214,7 @@ public class RestForwardingIntegrationTest {
                 "\"name\": \"blah\"," +
                 "\"config\": {}" +
                 "}";
-        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8.name());
+        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8);
         entity.setContentType("application/json");
         request.setEntity(entity);
         HttpResponse httpResponse = executeRequest(followerUrl, request);

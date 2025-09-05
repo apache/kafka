@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -75,6 +77,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     public void shouldLogPuts() {
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
+        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
         store.put(key1, value1);
 
@@ -86,6 +89,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     public void shouldLogPutsWithPosition() {
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
         when(inner.getPosition()).thenReturn(POSITION);
+        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
         store.put(key1, value1);
 
@@ -97,6 +101,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     public void shouldLogRemoves() {
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
+        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
         store.remove(key1);
         store.remove(key1);

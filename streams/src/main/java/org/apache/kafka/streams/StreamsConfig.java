@@ -45,6 +45,10 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
+import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
+import org.apache.kafka.streams.kstream.SessionWindowedSerializer;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
+import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor;
@@ -64,6 +68,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -431,6 +436,12 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_39 = UpgradeFromValues.UPGRADE_FROM_39.toString();
 
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 4.0.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_40 = UpgradeFromValues.UPGRADE_FROM_40.toString();
+
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
@@ -592,6 +603,27 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal client metrics for (main, restore, and global) consumers, producers, and admin clients." +
         " The cluster must have a client metrics subscription which corresponds to a client.";
 
+    /** {@code ensure.explicit.internal.resource.naming} */
+    public static final String ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG = "ensure.explicit.internal.resource.naming";
+    static final String ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC = "Whether to enforce explicit naming for all internal resources of the topology, including internal" +
+        " topics (e.g., changelog and repartition topics) and their associated state stores." +
+        " When enabled, the application will refuse to start if any internal resource has an auto-generated name.";
+
+    /**
+     * <code>group.protocol</code>
+     */
+    public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
+    public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(
+        Locale.ROOT);
+    private static final String GROUP_PROTOCOL_DOC = "The group protocol streams should use. We currently " +
+        "support \"classic\" or \"streams\". If \"streams\" is specified, then the streams rebalance protocol will be " +
+        "used. Otherwise, the classic group protocol will be used.";
+
+    public static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG = "errors.dead.letter.queue.topic.name";
+
+    private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record to the topic with the provided name if an error occurs.\n" +
+            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.";
+
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
     private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "The output interval in milliseconds for logging summary information.\n" +
@@ -620,9 +652,9 @@ public class StreamsConfig extends AbstractConfig {
                                                               " the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker " +
                                                               " traffic and cluster state can be used for high availability. Must be at least 1." +
                                                               "Note that one warmup replica corresponds to one Stream Task. Furthermore, note that each warmup replica can only be promoted to an active task " +
-                                                              "during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the `probing.rebalance.interval.ms` config). This means " +
+                                                              "during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the <code>probing.rebalance.interval.ms</code> config). This means " +
                                                               "that the maximum rate at which active tasks can be migrated from one Kafka Streams Instance to another instance can be determined by " +
-                                                              "(`max.warmup.replicas` / `probing.rebalance.interval.ms`).";
+                                                              "(<code>max.warmup.replicas</code> / <code>probing.rebalance.interval.ms</code>).";
 
     /** {@code metadata.max.age.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -682,7 +714,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code processor.wrapper.class} */
     public static final String PROCESSOR_WRAPPER_CLASS_CONFIG = "processor.wrapper.class";
-    public static final String PROCESSOR_WRAPPER_CLASS_DOC = "A processor wrapper class or class name that implements the <code>org.apache.kafka.streams.state.ProcessorWrapper</code> interface. "
+    static final String PROCESSOR_WRAPPER_CLASS_DOC = "A processor wrapper class or class name that implements the <code>org.apache.kafka.streams.state.ProcessorWrapper</code> interface. "
         + "Must be passed in to the StreamsBuilder or Topology constructor in order to take effect";
 
     /** {@code repartition.purge.interval.ms} */
@@ -794,13 +826,11 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
-    private static final String UPGRADE_FROM_DOC = "Allows upgrading in a backward compatible way. " +
-        "This is needed when upgrading from [0.10.0, 1.1] to 2.0+, or when upgrading from [2.0, 2.3] to 2.4+. " +
-        "When upgrading from 3.3 to a newer version it is not required to specify this config. Default is `null`. " +
-        "Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" +
-        UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" +
-        UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" +
-        UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\", \"" + UPGRADE_FROM_24 + "\", \"" +
+    private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading in some cases -- see upgrade guide) in a backward compatible way. Default is <code>null</code>. " +
+        "Please refer to the Kafka Streams upgrade guide for instructions on how and when to use this config. " +
+        "Note that when upgrading from 3.5 to a newer version it is never required to specify this config, " +
+        "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config. " +
+        "Accepted values are \"" + UPGRADE_FROM_24 + "\", \"" +
         UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
         UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
         UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\", \"" +
@@ -819,13 +849,28 @@ public class StreamsConfig extends AbstractConfig {
         + CONFIG_ERROR_MSG
         + "\"NO_OPTIMIZATION\" by default.";
 
-    /** {@code windowed.inner.class.serde} */
+    /**
+     * {@code windowed.inner.class.serde}
+     *
+     * @deprecated since 4.1.0.
+     * Use {@link TimeWindowedSerializer#WINDOWED_INNER_SERIALIZER_CLASS} for {@link TimeWindowedSerializer}.
+     * Use {@link TimeWindowedDeserializer#WINDOWED_INNER_DESERIALIZER_CLASS} for {@link TimeWindowedDeserializer}.
+     * Use {@link SessionWindowedSerializer#WINDOWED_INNER_SERIALIZER_CLASS} for {@link SessionWindowedSerializer}.
+     * Use {@link SessionWindowedDeserializer#WINDOWED_INNER_DESERIALIZER_CLASS} for {@link SessionWindowedDeserializer}.
+     */
+    @Deprecated
     public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
     private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface. Note that setting this config in KafkaStreams application would result " +
         "in an error as it is meant to be used only from Plain consumer client.";
 
-    /** {@code window.size.ms} */
+    /**
+     * {@code window.size.ms}
+     *
+     * @deprecated since 4.1.0.
+     * Use {@link TimeWindowedDeserializer#WINDOW_SIZE_MS_CONFIG} for {@link TimeWindowedDeserializer}.
+     */
+    @Deprecated
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
     private static final String WINDOW_SIZE_MS_DOC = "Sets window size for the deserializer in order to calculate window end times.";
 
@@ -869,6 +914,11 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.HIGH,
                     STATE_DIR_DOC,
                     "${java.io.tmpdir}")
+            .define(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.HIGH,
+                    ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC)
 
             // MEDIUM
 
@@ -946,6 +996,11 @@ public class StreamsConfig extends AbstractConfig {
                     LogAndFailExceptionHandler.class.getName(),
                     Importance.MEDIUM,
                     DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
+            .define(ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
+                    Type.STRING,
+                    null,
+                    Importance.MEDIUM,
+                    ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -1008,6 +1063,12 @@ public class StreamsConfig extends AbstractConfig {
                         TOPOLOGY_OPTIMIZATION_CONFIGS::toString),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
+            .define(GROUP_PROTOCOL_CONFIG,
+                    Type.STRING,
+                    DEFAULT_GROUP_PROTOCOL,
+                    ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
+                    Importance.MEDIUM,
+                    GROUP_PROTOCOL_DOC)
 
             // LOW
 
@@ -1035,6 +1096,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
+            .define(CONFIG_PROVIDERS_CONFIG,
+                    Type.LIST,
+                    List.of(),
+                    Importance.LOW, 
+                    CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,
                     Type.BOOLEAN,
                     true,
@@ -1269,6 +1335,9 @@ public class StreamsConfig extends AbstractConfig {
         // This is settable in the main Streams config, but it's a private API for testing
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
 
+        // This is settable in the main Streams config, but it's a private API for testing
+        public static final String INTERNAL_CONSUMER_WRAPPER = "__internal.consumer.wrapper__";
+
         // Private API used to control the emit latency for left/outer join results (https://issues.apache.org/jira/browse/KAFKA-10847)
         public static final String EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX = "__emit.interval.ms.kstreams.outer.join.spurious.results.fix__";
 
@@ -1293,6 +1362,11 @@ public class StreamsConfig extends AbstractConfig {
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
         public static boolean processingThreadsEnabled(final Map<String, Object> configs) {
+            // note: we did disable testing "processing threads"` in SmokeTestDriverIntegrationTest due to
+            // high failure rate, and the feature being incomplete with no active work
+            //
+            // we should re-enable testing this feature in SmokeTestDriverIntegrationTest
+            // once it is complete (or maybe even earlier when we resumg working on it
             return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
         }
 
@@ -1466,6 +1540,28 @@ public class StreamsConfig extends AbstractConfig {
         }
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
         verifyClientTelemetryConfigs();
+        verifyStreamsProtocolCompatibility(doLog);
+    }
+
+    private void verifyStreamsProtocolCompatibility(final boolean doLog) {
+        if (doLog && isStreamsProtocolEnabled()) {
+            log.warn("The streams rebalance protocol is still in development and should not be used in production. "
+                + "Please set group.protocol=classic (default) in all production use cases.");
+            final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
+            final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
+            if (instanceId != null && !instanceId.isEmpty()) {
+                throw new ConfigException("Streams rebalance protocol does not support static membership. "
+                    + "Please set group.protocol=classic or remove group.instance.id from the configuration.");
+            }
+            if (getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG) != 0) {
+                log.warn("Warmup replicas are not supported yet with the streams protocol and will be ignored. "
+                    + "If you want to use warmup replicas, please set group.protocol=classic.");
+            }
+            if (getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG) != 0) {
+                log.warn("Standby replicas are configured broker-side in the streams group protocol and will be ignored. "
+                    + "Please use the admin client or kafka-configs.sh to set the streams groups's standby replicas.");
+            }
+        }
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
@@ -1587,6 +1683,8 @@ public class StreamsConfig extends AbstractConfig {
 
     private Map<String, Object> getCommonConsumerConfigs() {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
+
+        clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
 
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
@@ -1761,7 +1859,7 @@ public class StreamsConfig extends AbstractConfig {
 
             if (segmentSize < batchSize) {
                 throw new IllegalArgumentException(String.format(
-                    "Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
+                    "Specified topic segment size %d is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
                     segmentSize,
                     batchSize
                 ));
@@ -2057,6 +2155,10 @@ public class StreamsConfig extends AbstractConfig {
 
     public ProcessingExceptionHandler processingExceptionHandler() {
         return getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
+    }
+
+    protected boolean isStreamsProtocolEnabled() {
+        return getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name());
     }
 
     /**

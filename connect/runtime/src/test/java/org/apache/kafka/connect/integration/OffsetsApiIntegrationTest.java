@@ -18,7 +18,8 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
@@ -43,7 +44,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import jakarta.ws.rs.core.Response;
 
 import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
@@ -106,7 +106,7 @@ public class OffsetsApiIntegrationTest {
         }
         try {
             assertEquals(
-                    Collections.emptySet(),
+                    Set.of(),
                     remainingConnectors,
                     "Some connectors were not properly cleaned up after this test"
             );
@@ -149,11 +149,11 @@ public class OffsetsApiIntegrationTest {
     }
 
     private static EmbeddedConnectCluster defaultConnectCluster() {
-        return createOrReuseConnectWithWorkerProps(Collections.emptyMap());
+        return createOrReuseConnectWithWorkerProps(Map.of());
     }
 
     private static EmbeddedConnectCluster exactlyOnceSourceConnectCluster() {
-        Map<String, String> workerProps = Collections.singletonMap(
+        Map<String, String> workerProps = Map.of(
                 DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG,
                 "enabled"
         );
@@ -184,7 +184,7 @@ public class OffsetsApiIntegrationTest {
 
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
-            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            Collection<GroupListing> consumerGroups = admin.listGroups(ListGroupsOptions.forConsumerGroups()).all().get();
             assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }
@@ -277,7 +277,7 @@ public class OffsetsApiIntegrationTest {
                 "Source connector offsets should reflect the expected number of records produced");
 
         // Each task should produce more records
-        connectorConfigs.put(MonitorableSourceConnector.MAX_MESSAGES_PRODUCED_CONFIG, String.valueOf(2 * NUM_RECORDS_PER_PARTITION));
+        connectorConfigs.put(TestableSourceConnector.MAX_MESSAGES_PRODUCED_CONFIG, String.valueOf(2 * NUM_RECORDS_PER_PARTITION));
         connect.configureConnector(connectorName, connectorConfigs);
 
         verifyExpectedSourceConnectorOffsets(connectorName, NUM_TASKS, 2 * NUM_RECORDS_PER_PARTITION,
@@ -287,8 +287,8 @@ public class OffsetsApiIntegrationTest {
     @Test
     public void testAlterOffsetsNonExistentConnector() {
         ConnectRestException e = assertThrows(ConnectRestException.class,
-                () -> connect.alterConnectorOffsets("non-existent-connector", new ConnectorOffsets(Collections.singletonList(
-                        new ConnectorOffset(Collections.emptyMap(), Collections.emptyMap())))));
+                () -> connect.alterConnectorOffsets("non-existent-connector", new ConnectorOffsets(List.of(
+                        new ConnectorOffset(Map.of(), Map.of())))));
         assertEquals(404, e.errorCode());
     }
 
@@ -300,11 +300,10 @@ public class OffsetsApiIntegrationTest {
                 "Connector tasks did not start in time.");
 
         List<ConnectorOffset> offsets = new ArrayList<>();
-        // The MonitorableSourceConnector has a source partition per task
+        // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsets.add(
-                    new ConnectorOffset(Collections.singletonMap("task.id", connectorName + "-" + i),
-                            Collections.singletonMap("saved", 5))
+                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i), Map.of("saved", 5))
             );
         }
 
@@ -343,7 +342,7 @@ public class OffsetsApiIntegrationTest {
         alterAndVerifySinkConnectorOffsets(connectorConfigs, connect.kafka());
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
-            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            Collection<GroupListing> consumerGroups = admin.listGroups(ListGroupsOptions.forConsumerGroups()).all().get();
             assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }
@@ -402,7 +401,7 @@ public class OffsetsApiIntegrationTest {
             partition = new HashMap<>();
             partition.put(SinkUtils.KAFKA_TOPIC_KEY, topic);
             partition.put(SinkUtils.KAFKA_PARTITION_KEY, i);
-            offsetsToAlter.add(new ConnectorOffset(partition, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 5)));
+            offsetsToAlter.add(new ConnectorOffset(partition, Map.of(SinkUtils.KAFKA_OFFSET_KEY, 5)));
         }
 
         // Alter the sink connector's offsets, with retry logic (since we just stopped the connector)
@@ -415,7 +414,7 @@ public class OffsetsApiIntegrationTest {
                 "Sink connector consumer group offsets should reflect the altered offsets");
 
         // Update the connector's configs; this time expect SinkConnector::alterOffsets to return true
-        connectorConfigs.put(MonitorableSinkConnector.ALTER_OFFSETS_RESULT, "true");
+        connectorConfigs.put(TestableSinkConnector.ALTER_OFFSETS_RESULT, "true");
         connect.configureConnector(connectorName, connectorConfigs);
 
         // Alter offsets again while the connector is still in a stopped state
@@ -424,7 +423,7 @@ public class OffsetsApiIntegrationTest {
             partition = new HashMap<>();
             partition.put(SinkUtils.KAFKA_TOPIC_KEY, topic);
             partition.put(SinkUtils.KAFKA_PARTITION_KEY, i);
-            offsetsToAlter.add(new ConnectorOffset(partition, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 3)));
+            offsetsToAlter.add(new ConnectorOffset(partition, Map.of(SinkUtils.KAFKA_OFFSET_KEY, 3)));
         }
 
         response = connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter));
@@ -474,7 +473,7 @@ public class OffsetsApiIntegrationTest {
         Map<String, Object> partition = new HashMap<>();
         partition.put(SinkUtils.KAFKA_TOPIC_KEY, topic);
         partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
-        List<ConnectorOffset> offsetsToAlter = Collections.singletonList(new ConnectorOffset(partition, null));
+        List<ConnectorOffset> offsetsToAlter = List.of(new ConnectorOffset(partition, null));
 
         ConnectRestException e = assertThrows(ConnectRestException.class,
                 () -> connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter)));
@@ -598,11 +597,10 @@ public class OffsetsApiIntegrationTest {
         );
 
         List<ConnectorOffset> offsetsToAlter = new ArrayList<>();
-        // The MonitorableSourceConnector has a source partition per task
+        // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsetsToAlter.add(
-                    new ConnectorOffset(Collections.singletonMap("task.id", connectorName + "-" + i),
-                            Collections.singletonMap("saved", 5))
+                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i), Map.of("saved", 5))
             );
         }
 
@@ -614,16 +612,15 @@ public class OffsetsApiIntegrationTest {
                 "Source connector offsets should reflect the altered offsets");
 
         // Update the connector's configs; this time expect SourceConnector::alterOffsets to return true
-        connectorConfigs.put(MonitorableSourceConnector.ALTER_OFFSETS_RESULT, "true");
+        connectorConfigs.put(TestableSourceConnector.ALTER_OFFSETS_RESULT, "true");
         connect.configureConnector(connectorName, connectorConfigs);
 
         // Alter offsets again while connector is in stopped state
         offsetsToAlter = new ArrayList<>();
-        // The MonitorableSourceConnector has a source partition per task
+        // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsetsToAlter.add(
-                    new ConnectorOffset(Collections.singletonMap("task.id", connectorName + "-" + i),
-                            Collections.singletonMap("saved", 7))
+                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i), Map.of("saved", 7))
             );
         }
 
@@ -724,7 +721,7 @@ public class OffsetsApiIntegrationTest {
         resetAndVerifySinkConnectorOffsets(connectorConfigs, connect.kafka());
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
-            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            Collection<GroupListing> consumerGroups = admin.listGroups(ListGroupsOptions.forConsumerGroups()).all().get();
             assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }
@@ -908,7 +905,7 @@ public class OffsetsApiIntegrationTest {
 
     private Map<String, String> baseSinkConnectorConfigs() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        configs.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         configs.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         configs.put(TOPICS_CONFIG, topic);
         configs.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -918,11 +915,11 @@ public class OffsetsApiIntegrationTest {
 
     private Map<String, String> baseSourceConnectorConfigs() {
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
-        props.put(MonitorableSourceConnector.MESSAGES_PER_POLL_CONFIG, "3");
-        props.put(MonitorableSourceConnector.MAX_MESSAGES_PRODUCED_CONFIG, String.valueOf(NUM_RECORDS_PER_PARTITION));
+        props.put(TestableSourceConnector.MESSAGES_PER_POLL_CONFIG, "3");
+        props.put(TestableSourceConnector.MAX_MESSAGES_PRODUCED_CONFIG, String.valueOf(NUM_RECORDS_PER_PARTITION));
         props.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, "1");
@@ -1044,7 +1041,7 @@ public class OffsetsApiIntegrationTest {
      * Verify whether the actual offsets for a source connector match the expected offsets. The verification is done using the
      * <strong><em>GET /connectors/{connector}/offsets</em></strong> REST API which is repeatedly queried until the offsets match
      * or the {@link #OFFSET_READ_TIMEOUT_MS timeout} is reached. Note that this assumes that the source connector is a
-     * {@link MonitorableSourceConnector}
+     * {@link TestableSourceConnector}
      *
      * @param connectorName the name of the source connector whose offsets are to be verified
      * @param numTasks the number of tasks for the source connector
@@ -1057,7 +1054,7 @@ public class OffsetsApiIntegrationTest {
                                                       int expectedOffset, String conditionDetails) throws InterruptedException {
         waitForCondition(() -> {
             ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
-            // The MonitorableSourceConnector has a source partition per task
+            // The TestableSourceConnector has a source partition per task
             if (offsets.offsets().size() != numTasks) {
                 return false;
             }

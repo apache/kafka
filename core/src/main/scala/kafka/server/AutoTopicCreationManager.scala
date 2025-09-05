@@ -29,10 +29,12 @@ import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicConfig, CreatableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{CreateTopicsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{CreateTopicsRequest, CreateTopicsResponse, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.quota.ControllerMutationQuota
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -45,6 +47,12 @@ trait AutoTopicCreationManager {
     controllerMutationQuota: ControllerMutationQuota,
     metadataRequestContext: Option[RequestContext]
   ): Seq[MetadataResponseTopic]
+
+  def createStreamsInternalTopics(
+    topics: Map[String, CreatableTopic],
+    requestContext: RequestContext
+  ): Unit
+
 }
 
 class DefaultAutoTopicCreationManager(
@@ -52,7 +60,7 @@ class DefaultAutoTopicCreationManager(
   channelManager: NodeToControllerChannelManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
-  shareCoordinator: Option[ShareCoordinator]
+  shareCoordinator: ShareCoordinator
 ) extends AutoTopicCreationManager with Logging {
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
@@ -83,9 +91,18 @@ class DefaultAutoTopicCreationManager(
     uncreatableTopicResponses ++ creatableTopicResponses
   }
 
+  override def createStreamsInternalTopics(
+    topics: Map[String, CreatableTopic],
+    requestContext: RequestContext
+  ): Unit = {
+    if (topics.nonEmpty) {
+      sendCreateTopicRequest(topics, Some(requestContext))
+    }
+  }
+
   private def sendCreateTopicRequest(
     creatableTopics: Map[String, CreatableTopic],
-    metadataRequestContext: Option[RequestContext]
+    requestContext: Option[RequestContext]
   ): Seq[MetadataResponseTopic] = {
     val topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size)
     topicsToCreate.addAll(creatableTopics.values.asJavaCollection)
@@ -109,12 +126,25 @@ class DefaultAutoTopicCreationManager(
         } else if (response.versionMismatch() != null) {
           warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
         } else {
+          if (response.hasResponse) {
+            response.responseBody() match {
+              case createTopicsResponse: CreateTopicsResponse =>
+                createTopicsResponse.data().topics().forEach(topicResult => {
+                  val error = Errors.forCode(topicResult.errorCode)
+                  if (error != Errors.NONE) {
+                    warn(s"Auto topic creation failed for ${topicResult.name} with error '${error.name}': ${topicResult.errorMessage}")
+                  }
+                })
+              case other =>
+                warn(s"Auto topic creation request received unexpected response type: ${other.getClass.getSimpleName}")
+            }
+          }
           debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
         }
       }
     }
 
-    val request = metadataRequestContext.map { context =>
+    val request = requestContext.map { context =>
       val requestVersion =
         channelManager.controllerApiVersions.toScala match {
           case None =>
@@ -162,22 +192,19 @@ class DefaultAutoTopicCreationManager(
           .setReplicationFactor(config.groupCoordinatorConfig.offsetsTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(groupCoordinator.groupMetadataTopicConfigs))
       case TRANSACTION_STATE_TOPIC_NAME =>
+        val transactionLogConfig = new TransactionLogConfig(config)
         new CreatableTopic()
           .setName(topic)
-          .setNumPartitions(config.transactionLogConfig.transactionTopicPartitions)
-          .setReplicationFactor(config.transactionLogConfig.transactionTopicReplicationFactor)
+          .setNumPartitions(transactionLogConfig.transactionTopicPartitions)
+          .setReplicationFactor(transactionLogConfig.transactionTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(
             txnCoordinator.transactionTopicConfigs))
       case SHARE_GROUP_STATE_TOPIC_NAME =>
-        val props = shareCoordinator match {
-          case Some(coordinator) => coordinator.shareGroupStateTopicConfigs()
-          case None => new Properties()
-        }
         new CreatableTopic()
           .setName(topic)
           .setNumPartitions(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())
           .setReplicationFactor(config.shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
-          .setConfigs(convertToTopicConfigCollections(props))
+          .setConfigs(convertToTopicConfigCollections(shareCoordinator.shareGroupStateTopicConfigs()))
       case topicName =>
         new CreatableTopic()
           .setName(topicName)

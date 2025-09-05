@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
+import java.util.stream.Collectors;
 
 /**
  * Represents a chain of {@link Transformation}s to be applied to a {@link ConnectRecord} serially.
@@ -88,5 +89,9 @@ public class TransformationChain<T, R extends ConnectRecord<R>> implements AutoC
             chain.add(transformationStage.transformClass().getName());
         }
         return chain.toString();
+    }
+
+    public List<TransformationStage.StageInfo> transformationChainInfo() {
+        return transformationStages.stream().map(TransformationStage::transformationStageInfo).collect(Collectors.toList());
     }
 }

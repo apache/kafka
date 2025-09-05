@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.metrics.Sensor;
@@ -43,15 +42,16 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Set;
 
-public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
-    ProcessorSupplier<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> {
+public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
+    implements ProcessorSupplier<KRight, Change<VRight>, KLeft, SubscriptionResponseWrapper<VRight>> {
+
     private static final Logger LOG = LoggerFactory.getLogger(ForeignTableJoinProcessorSupplier.class);
     private final StoreFactory subscriptionStoreFactory;
-    private final CombinedKeySchema<KO, K> keySchema;
+    private final CombinedKeySchema<KRight, KLeft> keySchema;
     private boolean useVersionedSemantics = false;
 
     public ForeignTableJoinProcessorSupplier(final StoreFactory subscriptionStoreFactory,
-                                             final CombinedKeySchema<KO, K> keySchema) {
+                                             final CombinedKeySchema<KRight, KLeft> keySchema) {
         this.subscriptionStoreFactory = subscriptionStoreFactory;
         this.keySchema = keySchema;
     }
@@ -62,7 +62,7 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
     }
 
     @Override
-    public Processor<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> get() {
+    public Processor<KRight, Change<VRight>, KLeft, SubscriptionResponseWrapper<VRight>> get() {
         return new KTableKTableJoinProcessor();
     }
 
@@ -75,12 +75,12 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
         return useVersionedSemantics;
     }
 
-    private final class KTableKTableJoinProcessor extends ContextualProcessor<KO, Change<VO>, K, SubscriptionResponseWrapper<VO>> {
+    private final class KTableKTableJoinProcessor extends ContextualProcessor<KRight, Change<VRight>, KLeft, SubscriptionResponseWrapper<VRight>> {
         private Sensor droppedRecordsSensor;
-        private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> subscriptionStore;
+        private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<KLeft>> subscriptionStore;
 
         @Override
-        public void init(final ProcessorContext<K, SubscriptionResponseWrapper<VO>> context) {
+        public void init(final ProcessorContext<KLeft, SubscriptionResponseWrapper<VRight>> context) {
             super.init(context);
             final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
             droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
@@ -92,7 +92,7 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
         }
 
         @Override
-        public void process(final Record<KO, Change<VO>> record) {
+        public void process(final Record<KRight, Change<VRight>> record) {
             // if the key is null, we do not need to proceed aggregating
             // the record with the table
             if (record.key() == null) {
@@ -122,14 +122,14 @@ public class ForeignTableJoinProcessorSupplier<K, KO, VO> implements
             final Bytes prefixBytes = keySchema.prefixBytes(record.key());
 
             //Perform the prefixScan and propagate the results
-            try (final KeyValueIterator<Bytes, ValueAndTimestamp<SubscriptionWrapper<K>>> prefixScanResults =
+            try (final KeyValueIterator<Bytes, ValueAndTimestamp<SubscriptionWrapper<KLeft>>> prefixScanResults =
                      subscriptionStore.range(prefixBytes, Bytes.increment(prefixBytes))) {
 
                 while (prefixScanResults.hasNext()) {
-                    final KeyValue<Bytes, ValueAndTimestamp<SubscriptionWrapper<K>>> next = prefixScanResults.next();
+                    final KeyValue<Bytes, ValueAndTimestamp<SubscriptionWrapper<KLeft>>> next = prefixScanResults.next();
                     // have to check the prefix because the range end is inclusive :(
                     if (prefixEquals(next.key.get(), prefixBytes.get())) {
-                        final CombinedKey<KO, K> combinedKey = keySchema.fromBytes(next.key);
+                        final CombinedKey<KRight, KLeft> combinedKey = keySchema.fromBytes(next.key);
                         context().forward(
                             record.withKey(combinedKey.primaryKey())
                                 .withValue(new SubscriptionResponseWrapper<>(

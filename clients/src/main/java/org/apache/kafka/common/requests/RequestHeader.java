@@ -121,14 +121,21 @@ public class RequestHeader implements AbstractRequestResponse {
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {
-        short apiKey = -1;
+        short apiKeyId = -1;
         try {
             // We derive the header version from the request api version, so we read that first.
             // The request api version is part of `RequestHeaderData`, so we reset the buffer position after the read.
             int bufferStartPositionForHeader = buffer.position();
-            apiKey = buffer.getShort();
+            apiKeyId = buffer.getShort();
             short apiVersion = buffer.getShort();
-            short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
+            ApiKeys apiKey = ApiKeys.forId(apiKeyId);
+
+            // `apiKey.requestHeaderVersion` will fail if there are no valid versions - we do this check first in order to
+            // provide a more helpful message
+            if (!apiKey.hasValidVersion())
+                throw new InvalidRequestException("Unsupported api with key " + apiKeyId + " (" + apiKey.name + ") and version " + apiVersion);
+
+            short headerVersion = apiKey.requestHeaderVersion(apiVersion);
             buffer.position(bufferStartPositionForHeader);
             final RequestHeaderData headerData = new RequestHeaderData(new ByteBufferAccessor(buffer), headerVersion);
             // Due to a quirk in the protocol, client ID is marked as nullable.
@@ -144,10 +151,12 @@ public class RequestHeader implements AbstractRequestResponse {
             header.size = Math.max(buffer.position() - bufferStartPositionForHeader, 0);
             return header;
         } catch (UnsupportedVersionException e) {
-            throw new InvalidRequestException("Unknown API key " + apiKey, e);
+            throw new InvalidRequestException("Unknown API key " + apiKeyId, e);
+        } catch (InvalidRequestException e) {
+            throw e;
         } catch (Throwable ex) {
-            throw new InvalidRequestException("Error parsing request header. Our best guess of the apiKey is: " +
-                    apiKey, ex);
+            throw new InvalidRequestException("Error parsing request header. Our best guess of the apiKeyId is: " +
+                    apiKeyId, ex);
         }
     }
 

@@ -44,6 +44,6 @@ public class UpdateFeaturesResult {
      * Return a future which succeeds if all the feature updates succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

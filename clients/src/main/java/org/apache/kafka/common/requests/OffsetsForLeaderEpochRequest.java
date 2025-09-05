@@ -23,10 +23,8 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
@@ -37,12 +35,6 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
      * Sentinel replica_id value to indicate a regular consumer rather than another broker
      */
     public static final int CONSUMER_REPLICA_ID = -1;
-
-    /**
-     * Sentinel replica_id which indicates either a debug consumer or a replica which is using
-     * an old version of the protocol.
-     */
-    public static final int DEBUGGING_REPLICA_ID = -2;
 
     private final OffsetForLeaderEpochRequestData data;
 
@@ -101,8 +93,8 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         return data.replicaId();
     }
 
-    public static OffsetsForLeaderEpochRequest parse(ByteBuffer buffer, short version) {
-        return new OffsetsForLeaderEpochRequest(new OffsetForLeaderEpochRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static OffsetsForLeaderEpochRequest parse(Readable readable, short version) {
+        return new OffsetsForLeaderEpochRequest(new OffsetForLeaderEpochRequestData(readable, version), version);
     }
 
     @Override

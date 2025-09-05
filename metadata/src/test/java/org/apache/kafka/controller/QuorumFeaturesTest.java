@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -43,13 +43,13 @@ public class QuorumFeaturesTest {
     );
 
     private static final QuorumFeatures QUORUM_FEATURES = new QuorumFeatures(0, LOCAL,
-        Arrays.asList(0, 1, 2));
+        List.of(0, 1, 2));
 
     @Test
     public void testDefaultFeatureMap() {
         Map<String, VersionRange> expectedFeatures = new HashMap<>(1);
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-            MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+            MetadataVersion.MINIMUM_VERSION.featureLevel(),
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         for (Feature feature : Feature.PRODUCTION_FEATURES) {
             short maxVersion = feature.latestProduction();
@@ -67,7 +67,7 @@ public class QuorumFeaturesTest {
     public void testDefaultFeatureMapWithUnstable() {
         Map<String, VersionRange> expectedFeatures = new HashMap<>(1);
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-            MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+            MetadataVersion.MINIMUM_VERSION.featureLevel(),
             MetadataVersion.latestTesting().featureLevel()));
         for (Feature feature : Feature.PRODUCTION_FEATURES) {
             short maxVersion = feature.defaultLevel(MetadataVersion.latestTesting());

@@ -65,11 +65,13 @@ public class ConnectorStateInfo {
         private final String state;
         private final String trace;
         private final String workerId;
+        private final String version;
 
-        public AbstractState(String state, String workerId, String trace) {
+        public AbstractState(String state, String workerId, String trace, String version) {
             this.state = state;
             this.workerId = workerId;
             this.trace = trace;
+            this.version = version;
         }
 
         @JsonProperty
@@ -87,14 +89,22 @@ public class ConnectorStateInfo {
         public String trace() {
             return trace;
         }
+
+        @JsonProperty
+        @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = PluginInfo.NoVersionFilter.class)
+        public String version() {
+            return version;
+        }
     }
 
     public static class ConnectorState extends AbstractState {
+
         @JsonCreator
         public ConnectorState(@JsonProperty("state") String state,
                               @JsonProperty("worker_id") String worker,
-                              @JsonProperty("msg") String msg) {
-            super(state, worker, msg);
+                              @JsonProperty("msg") String msg,
+                              @JsonProperty("version") String version) {
+            super(state, worker, msg, version);
         }
     }
 
@@ -105,8 +115,9 @@ public class ConnectorStateInfo {
         public TaskState(@JsonProperty("id") int id,
                          @JsonProperty("state") String state,
                          @JsonProperty("worker_id") String worker,
-                         @JsonProperty("msg") String msg) {
-            super(state, worker, msg);
+                         @JsonProperty("msg") String msg,
+                         @JsonProperty("version") String version) {
+            super(state, worker, msg, version);
             this.id = id;
         }
 

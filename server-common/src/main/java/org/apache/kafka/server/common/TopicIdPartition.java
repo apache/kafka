@@ -18,45 +18,15 @@ package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.Uuid;
 
-import java.util.Objects;
-
 /**
  * Represents a partition using its unique topic Id and partition number.
+ * @param topicId Universally unique Id representing this topic partition.
+ * @param partitionId The partition Id.
  */
-public final class TopicIdPartition {
-    private final Uuid topicId;
-    private final int partitionId;
-
-    public TopicIdPartition(Uuid topicId, int partitionId) {
-        this.topicId = topicId;
-        this.partitionId = partitionId;
-    }
-
-    /**
-     * @return Universally unique Id representing this topic partition.
-     */
-    public Uuid topicId() {
-        return topicId;
-    }
-
-    /**
-     * @return The partition Id.
-     */
-    public int partitionId() {
-        return partitionId;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof TopicIdPartition other)) return false;
-        return other.topicId.equals(topicId) && other.partitionId == partitionId;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(topicId, partitionId);
-    }
-
+public record TopicIdPartition(
+    Uuid topicId,
+    int partitionId
+) {
     @Override
     public String toString() {
         return topicId + ":" + partitionId;

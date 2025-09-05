@@ -56,7 +56,7 @@ class ScramPublisher(
             userChanges.forEach {
               case (userName, change) =>
                 if (change.isPresent) {
-                  credentialProvider.updateCredential(mechanism, userName, change.get().toCredential(mechanism))
+                  credentialProvider.updateCredential(mechanism, userName, change.get().toCredential)
                 } else {
                   credentialProvider.removeCredentials(mechanism, userName)
                 }

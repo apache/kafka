@@ -35,8 +35,8 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
-import org.apache.kafka.security.authorizer.AclEntry;
 import org.apache.kafka.server.authorizer.Action;
+import org.apache.kafka.server.authorizer.AuthorizationResult;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -55,7 +55,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -89,6 +88,9 @@ public class AuthorizerBenchmark {
     private List<Action> actions = new ArrayList<>();
     private RequestContext authorizeContext;
     private RequestContext authorizeByResourceTypeContext;
+    private AclBindingFilter filter;
+    private AclOperation op;
+    private ResourceType resourceType;
 
     Random rand = new Random(System.currentTimeMillis());
     double eps = 1e-9;
@@ -96,12 +98,15 @@ public class AuthorizerBenchmark {
     @Setup(Level.Trial)
     public void setup() throws Exception {
         authorizer = new StandardAuthorizer();
+        filter = AclBindingFilter.ANY;
+        op = AclOperation.READ;
+        resourceType = ResourceType.TOPIC;
         prepareAclCache();
         // By adding `-95` to the resource name prefix, we cause the `TreeMap.from/to` call to return
         // most map entries. In such cases, we rely on the filtering based on `String.startsWith`
         // to return the matching ACLs. Using a more efficient data structure (e.g. a prefix
         // tree) should improve performance significantly.
-        actions = Collections.singletonList(new Action(AclOperation.WRITE,
+        actions = List.of(new Action(AclOperation.WRITE,
             new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix + 95, PatternType.LITERAL),
             1, true, true));
         authorizeContext = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(),
@@ -113,14 +118,14 @@ public class AuthorizerBenchmark {
     }
 
     private void prepareAclCache() {
-        Map<ResourcePattern, Set<AclEntry>> aclEntries = new HashMap<>();
+        Map<ResourcePattern, Set<AccessControlEntry>> aclEntries = new HashMap<>();
         for (int resourceId = 0; resourceId < resourceCount; resourceId++) {
             ResourcePattern resource = new ResourcePattern(
                 (resourceId % 10 == 0) ? ResourceType.GROUP : ResourceType.TOPIC,
                 resourceNamePrefix + resourceId,
                 (resourceId % 5 == 0) ? PatternType.PREFIXED : PatternType.LITERAL);
 
-            Set<AclEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
+            Set<AccessControlEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
 
             for (int aclId = 0; aclId < aclCount; aclId++) {
                 // The principal in the request context we are using
@@ -129,36 +134,31 @@ public class AuthorizerBenchmark {
                 AccessControlEntry allowAce = new AccessControlEntry(
                     principalName, "*", AclOperation.READ, AclPermissionType.ALLOW);
 
-                entries.add(new AclEntry(allowAce));
+                entries.add(new AccessControlEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
 
                 if (shouldDeny()) {
-                    // dominantly deny the resource
-                    AccessControlEntry denyAce = new AccessControlEntry(
-                        principalName, "*", AclOperation.READ, AclPermissionType.DENY);
-                    entries.add(new AclEntry(denyAce));
+                    entries.add(new AccessControlEntry(principalName, "*", AclOperation.READ, AclPermissionType.DENY));
                 }
             }
         }
 
         ResourcePattern resourcePrefix = new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix,
             PatternType.PREFIXED);
-        Set<AclEntry> entriesPrefix = aclEntries.computeIfAbsent(resourcePrefix, k -> new HashSet<>());
+        Set<AccessControlEntry> entriesPrefix = aclEntries.computeIfAbsent(resourcePrefix, k -> new HashSet<>());
         for (int hostId = 0; hostId < hostPreCount; hostId++) {
             AccessControlEntry allowAce = new AccessControlEntry(principal.toString(), "127.0.0." + hostId,
                 AclOperation.READ, AclPermissionType.ALLOW);
-            entriesPrefix.add(new AclEntry(allowAce));
+            entriesPrefix.add(new AccessControlEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
 
             if (shouldDeny()) {
-                // dominantly deny the resource
-                AccessControlEntry denyAce = new AccessControlEntry(principal.toString(), "127.0.0." + hostId,
-                    AclOperation.READ, AclPermissionType.DENY);
-                entriesPrefix.add(new AclEntry(denyAce));
+                entriesPrefix.add(new AccessControlEntry(principal.toString(), "127.0.0." + hostId,
+                        AclOperation.READ, AclPermissionType.DENY));
             }
         }
 
         ResourcePattern resourceWildcard = new ResourcePattern(ResourceType.TOPIC, ResourcePattern.WILDCARD_RESOURCE,
             PatternType.LITERAL);
-        Set<AclEntry> entriesWildcard = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
+        Set<AccessControlEntry> entriesWildcard = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
         // get dynamic entries number for wildcard acl
         for (int hostId = 0; hostId < resourceCount / 10; hostId++) {
             String hostName = "127.0.0" + hostId;
@@ -170,23 +170,22 @@ public class AuthorizerBenchmark {
 
             AccessControlEntry allowAce = new AccessControlEntry(principal.toString(), hostName,
                 AclOperation.READ, AclPermissionType.ALLOW);
-            entriesWildcard.add(new AclEntry(allowAce));
+            entriesWildcard.add(new AccessControlEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
             if (shouldDeny()) {
-                AccessControlEntry denyAce = new AccessControlEntry(principal.toString(), hostName,
-                    AclOperation.READ, AclPermissionType.DENY);
-                entriesWildcard.add(new AclEntry(denyAce));
+                entriesWildcard.add(new AccessControlEntry(principal.toString(), hostName,
+                        AclOperation.READ, AclPermissionType.DENY));
             }
         }
 
         setupAcls(aclEntries);
     }
 
-    private void setupAcls(Map<ResourcePattern, Set<AclEntry>> aclEntries) {
-        for (Map.Entry<ResourcePattern, Set<AclEntry>> entryMap : aclEntries.entrySet()) {
+    private void setupAcls(Map<ResourcePattern, Set<AccessControlEntry>> aclEntries) {
+        for (Map.Entry<ResourcePattern, Set<AccessControlEntry>> entryMap : aclEntries.entrySet()) {
             ResourcePattern resourcePattern = entryMap.getKey();
 
-            for (AclEntry aclEntry : entryMap.getValue()) {
-                StandardAcl standardAcl = StandardAcl.fromAclBinding(new AclBinding(resourcePattern, aclEntry));
+            for (AccessControlEntry accessControlEntry : entryMap.getValue()) {
+                StandardAcl standardAcl = StandardAcl.fromAclBinding(new AclBinding(resourcePattern, accessControlEntry));
                 authorizer.addAcl(Uuid.randomUuid(), standardAcl);
             }
             authorizer.completeInitialLoad();
@@ -204,17 +203,17 @@ public class AuthorizerBenchmark {
     }
 
     @Benchmark
-    public void testAclsIterator() {
-        authorizer.acls(AclBindingFilter.ANY);
+    public Iterable<AclBinding> testAclsIterator() {
+        return authorizer.acls(filter);
     }
 
     @Benchmark
-    public void testAuthorizer() {
-        authorizer.authorize(authorizeContext, actions);
+    public List<AuthorizationResult> testAuthorizer() {
+        return authorizer.authorize(authorizeContext, actions);
     }
 
     @Benchmark
-    public void testAuthorizeByResourceType() {
-        authorizer.authorizeByResourceType(authorizeByResourceTypeContext, AclOperation.READ, ResourceType.TOPIC);
+    public AuthorizationResult testAuthorizeByResourceType() {
+        return authorizer.authorizeByResourceType(authorizeByResourceTypeContext, op, resourceType);
     }
 }

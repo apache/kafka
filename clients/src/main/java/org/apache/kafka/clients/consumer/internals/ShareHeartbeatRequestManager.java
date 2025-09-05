@@ -54,6 +54,9 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     public static final String SHARE_PROTOCOL_NOT_SUPPORTED_MSG = "The cluster does not support the share group protocol. " +
         "To use share groups, the cluster must have the share group protocol enabled.";
 
+    public static final String SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG = "The cluster does not support the share group protocol " +
+        "using ShareGroupHeartbeat API version 1 or later. This version of the API was introduced in Apache Kafka v4.1.";
+
     public ShareHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
@@ -77,7 +80,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             final CoordinatorRequestManager coordinatorRequestManager,
             final ShareMembershipManager membershipManager,
             final HeartbeatState heartbeatState,
-            final AbstractHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
         super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
@@ -93,8 +96,8 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     public boolean handleSpecificFailure(Throwable exception) {
         boolean errorHandled = false;
         if (exception instanceof UnsupportedVersionException) {
-            logger.error("{} failed due to {}: {}", heartbeatRequestName(), exception.getMessage(), SHARE_PROTOCOL_NOT_SUPPORTED_MSG);
-            handleFatalFailure(new UnsupportedVersionException(SHARE_PROTOCOL_NOT_SUPPORTED_MSG, exception));
+            logger.error("{} failed due to {}: {}", heartbeatRequestName(), exception.getMessage(), SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG);
+            handleFatalFailure(new UnsupportedVersionException(SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG, exception));
             errorHandled = true;
         }
         return errorHandled;
@@ -181,6 +184,11 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     @Override
     public ShareMembershipManager membershipManager() {
         return membershipManager;
+    }
+
+    @Override
+    protected boolean shouldSendLeaveHeartbeatNow() {
+        return membershipManager().state() == MemberState.LEAVING;
     }
 
     /**

@@ -60,7 +60,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private final String name;
     private final String metricScope;
     private Sensor expiredRecordSensor;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     private final long retentionPeriod;
@@ -103,7 +103,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         // The provided context is not required to implement InternalProcessorContext,
         // If it doesn't, we can't record this metric.
         if (stateStoreContext instanceof InternalProcessorContext) {
-            this.context = (InternalProcessorContext) stateStoreContext;
+            this.context = (InternalProcessorContext<?, ?>) stateStoreContext;
             final StreamsMetricsImpl metrics = this.context.metrics();
             expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
                 threadId,

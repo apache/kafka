@@ -31,8 +31,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.coordinator.common.runtime.KafkaMetricHistogram.MAX_LATENCY_MS;
-
 public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics {
 
     /**
@@ -151,7 +149,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
         metrics.addMetric(numPartitionsActive, (Gauge<Long>) (config, now) -> numPartitionsActiveCounter.get());
         metrics.addMetric(numPartitionsFailed, (Gauge<Long>) (config, now) -> numPartitionsFailedCounter.get());
 
-        this.partitionLoadSensor = metrics.sensor("GroupPartitionLoadTime");
+        this.partitionLoadSensor = metrics.sensor(this.metricsGroup + "-PartitionLoadTime");
         this.partitionLoadSensor.add(
             metrics.metricName(
                 "partition-load-time-max",
@@ -165,7 +163,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The average time it took to load the partitions in the last 30 sec."
             ), new Avg());
 
-        this.threadIdleSensor = metrics.sensor("ThreadIdleRatio");
+        this.threadIdleSensor = metrics.sensor(this.metricsGroup + "-ThreadIdleRatio");
         this.threadIdleSensor.add(
             metrics.metricName(
                 "thread-idle-ratio-avg",
@@ -180,7 +178,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The " + suffix + " event queue time in milliseconds"
             )
         );
-        this.eventQueueTimeSensor = metrics.sensor("EventQueueTime");
+        this.eventQueueTimeSensor = metrics.sensor(this.metricsGroup + "-EventQueueTime");
         this.eventQueueTimeSensor.add(eventQueueTimeHistogram);
 
         KafkaMetricHistogram eventProcessingTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
@@ -189,7 +187,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The " + suffix + " event processing time in milliseconds"
             )
         );
-        this.eventProcessingTimeSensor = metrics.sensor("EventProcessingTime");
+        this.eventProcessingTimeSensor = metrics.sensor(this.metricsGroup + "-EventProcessingTime");
         this.eventProcessingTimeSensor.add(eventProcessingTimeHistogram);
 
         KafkaMetricHistogram eventPurgatoryTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
@@ -198,7 +196,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The " + suffix + " event purgatory time in milliseconds"
             )
         );
-        this.eventPurgatoryTimeSensor = metrics.sensor("EventPurgatoryTime");
+        this.eventPurgatoryTimeSensor = metrics.sensor(this.metricsGroup + "-EventPurgatoryTime");
         this.eventPurgatoryTimeSensor.add(eventPurgatoryTimeHistogram);
 
         KafkaMetricHistogram flushTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
@@ -207,7 +205,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The " + suffix + " flush time in milliseconds"
             )
         );
-        this.flushTimeSensor = metrics.sensor("FlushTime");
+        this.flushTimeSensor = metrics.sensor(this.metricsGroup + "-FlushTime");
         this.flushTimeSensor.add(flushTimeHistogram);
     }
 
@@ -293,7 +291,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
 
     @Override
     public void recordEventPurgatoryTime(long purgatoryTimeMs) {
-        eventPurgatoryTimeSensor.record(Math.min(MAX_LATENCY_MS, purgatoryTimeMs));
+        eventPurgatoryTimeSensor.record(purgatoryTimeMs);
     }
 
     @Override
@@ -302,7 +300,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     }
 
     @Override
-    public void recordThreadIdleTime(long idleTimeMs) {
+    public void recordThreadIdleTime(double idleTimeMs) {
         threadIdleSensor.record(idleTimeMs);
     }
 

@@ -25,6 +25,42 @@ import java.nio.ByteBuffer;
  */
 public interface Deserializer<T> {
     /**
+     * UnknownRecordTypeException is thrown when the Deserializer encounters
+     * an unknown record type.
+     */
+    class UnknownRecordTypeException extends RuntimeException {
+        private final short unknownType;
+
+        public UnknownRecordTypeException(short unknownType) {
+            super(String.format("Found an unknown record type %d", unknownType));
+            this.unknownType = unknownType;
+        }
+
+        public short unknownType() {
+            return unknownType;
+        }
+    }
+
+    class UnknownRecordVersionException extends RuntimeException {
+        private final short type;
+        private final short unknownVersion;
+
+        public UnknownRecordVersionException(short type, short unknownVersion) {
+            super(String.format("Found an unknown record version %d for %d type", unknownVersion, type));
+            this.type = type;
+            this.unknownVersion = unknownVersion;
+        }
+
+        public short type() {
+            return type;
+        }
+
+        public short unknownVersion() {
+            return unknownVersion;
+        }
+    }
+
+    /**
      * Deserializes the key and the value.
      *
      * @param key   The key or null if not present.

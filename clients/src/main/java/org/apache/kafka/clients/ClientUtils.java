@@ -257,9 +257,9 @@ public final class ClientUtils {
         }
     }
 
-    public static <T> List configuredInterceptors(AbstractConfig config,
-                                                  String interceptorClassesConfigName,
-                                                  Class<T> clazz) {
+    public static <T> List<?> configuredInterceptors(AbstractConfig config,
+                                                    String interceptorClassesConfigName,
+                                                    Class<T> clazz) {
         String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         return config.getConfiguredInstances(
                 interceptorClassesConfigName,

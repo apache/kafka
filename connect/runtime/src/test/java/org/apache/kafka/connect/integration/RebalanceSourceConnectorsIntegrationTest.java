@@ -30,15 +30,14 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -298,7 +297,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
         props.put("throughput", String.valueOf(10));
@@ -333,10 +332,10 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
             assertNotEquals(0, maxConnectors, "Found no connectors running!");
             assertNotEquals(0, maxTasks, "Found no tasks running!");
-            assertEquals(connectors.values().size(),
+            assertEquals(connectors.size(),
                     connectors.values().stream().distinct().count(),
                     "Connector assignments are not unique: " + connectors);
-            assertEquals(tasks.values().size(),
+            assertEquals(tasks.size(),
                     tasks.values().stream().distinct().count(),
                     "Task assignments are not unique: " + tasks);
             assertTrue(maxConnectors - minConnectors < 2, "Connectors are imbalanced: " + formatAssignment(connectors));
@@ -350,9 +349,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
     private static String formatAssignment(Map<String, Collection<String>> assignment) {
         StringBuilder result = new StringBuilder();
-        for (String worker : assignment.keySet().stream().sorted().collect(Collectors.toList())) {
-            result.append(String.format("\n%s=%s", worker, assignment.getOrDefault(worker,
-                    Collections.emptyList())));
+        for (String worker : assignment.keySet().stream().sorted().toList()) {
+            result.append(String.format("\n%s=%s", worker, assignment.getOrDefault(worker, List.of())));
         }
         return result.toString();
     }

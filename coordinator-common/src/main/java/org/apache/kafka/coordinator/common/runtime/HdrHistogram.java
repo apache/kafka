@@ -49,6 +49,8 @@ public final class HdrHistogram {
      */
     private final Recorder recorder;
 
+    private final long highestTrackableValue;
+
     /**
      * The latest snapshot of the internal HdrHistogram. Automatically updated by
      * {@link #latestHistogram(long)} if older than {@link #maxSnapshotAgeMs}.
@@ -69,6 +71,7 @@ public final class HdrHistogram {
     ) {
         this.maxSnapshotAgeMs = maxSnapshotAgeMs;
         recorder = new Recorder(highestTrackableValue, numberOfSignificantValueDigits);
+        this.highestTrackableValue = highestTrackableValue;
         this.timestampedHistogramSnapshot = new Timestamped<>(0, null);
     }
 
@@ -89,13 +92,12 @@ public final class HdrHistogram {
     }
 
     /**
-     * Writes to the histogram. Will throw {@link ArrayIndexOutOfBoundsException} if the histogram's
-     * highestTrackableValue is lower than the value being recorded.
+     * Writes to the histogram. Caps recording to highestTrackableValue
      *
      * @param value The value to be recorded. Cannot be negative.
      */
     public void record(long value) {
-        recorder.recordValue(value);
+        recorder.recordValue(Math.min(value, highestTrackableValue));
     }
 
     /**
@@ -131,15 +133,6 @@ public final class HdrHistogram {
      * A simple tuple of a timestamp and a value. Can be used updating a value and recording the
      * timestamp of the update in a single atomic operation.
      */
-    private static final class Timestamped<T> {
-
-        private final long timestamp;
-        private final T value;
-
-        private Timestamped(long timestamp, T value) {
-            this.timestamp = timestamp;
-            this.value = value;
-        }
-    }
+    private record Timestamped<T>(long timestamp, T value) { }
 
 }

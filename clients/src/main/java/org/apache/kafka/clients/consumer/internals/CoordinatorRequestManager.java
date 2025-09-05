@@ -56,6 +56,7 @@ public class CoordinatorRequestManager implements RequestManager {
     private final RequestState coordinatorRequestState;
     private long timeMarkedUnknownMs = -1L; // starting logging a warning only after unable to connect for a while
     private long totalDisconnectedMin = 0;
+    private boolean closing = false;
     private Node coordinator;
     // Hold the latest fatal error received. It is exposed so that managers requiring a coordinator can access it and take 
     // appropriate actions. 
@@ -81,6 +82,11 @@ public class CoordinatorRequestManager implements RequestManager {
         );
     }
 
+    @Override
+    public void signalClose() {
+        closing = true;
+    }
+
     /**
      * Poll for the FindCoordinator request.
      * If we don't need to discover a coordinator, this method will return a PollResult with Long.MAX_VALUE backoff time and an empty list.
@@ -93,7 +99,7 @@ public class CoordinatorRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (this.coordinator != null)
+        if (closing || this.coordinator != null)
             return EMPTY;
 
         if (coordinatorRequestState.canSendRequest(currentTimeMs)) {
@@ -115,7 +121,7 @@ public class CoordinatorRequestManager implements RequestManager {
         );
 
         return unsentRequest.whenComplete((clientResponse, throwable) -> {
-            clearFatalError();
+            getAndClearFatalError();
             if (clientResponse != null) {
                 FindCoordinatorResponse response = (FindCoordinatorResponse) clientResponse.responseBody();
                 onResponse(clientResponse.receivedTimeMs(), response);
@@ -169,7 +175,7 @@ public class CoordinatorRequestManager implements RequestManager {
             long durationOfOngoingDisconnectMs = Math.max(0, currentTimeMs - timeMarkedUnknownMs);
             long currDisconnectMin = durationOfOngoingDisconnectMs / COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS;
             if (currDisconnectMin > totalDisconnectedMin) {
-                log.debug("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnectMs);
+                log.warn("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnectMs);
                 totalDisconnectedMin = currDisconnectMin;
             }
         }
@@ -247,10 +253,12 @@ public class CoordinatorRequestManager implements RequestManager {
         return Optional.ofNullable(this.coordinator);
     }
     
-    private void clearFatalError() {
+    public Optional<Throwable> getAndClearFatalError() {
+        Optional<Throwable> fatalError = this.fatalError;
         this.fatalError = Optional.empty();
+        return fatalError;
     }
-    
+
     public Optional<Throwable> fatalError() {
         return fatalError;
     }

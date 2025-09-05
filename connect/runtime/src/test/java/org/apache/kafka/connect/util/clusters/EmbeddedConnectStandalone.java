@@ -18,6 +18,7 @@ package org.apache.kafka.connect.util.clusters;
 
 import org.apache.kafka.connect.cli.ConnectStandalone;
 import org.apache.kafka.connect.runtime.Connect;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.test.TestUtils;
 
@@ -30,7 +31,6 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -62,6 +62,7 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
     private final String offsetsFile;
 
     private volatile WorkerHandle connectWorker;
+    private Connect<StandaloneHerder> connect;
 
     private EmbeddedConnectStandalone(
             int numBrokers,
@@ -92,7 +93,7 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
         workerProps.putIfAbsent(PLUGIN_DISCOVERY_CONFIG, "hybrid_fail");
 
         ConnectStandalone cli = new ConnectStandalone();
-        Connect<StandaloneHerder> connect = cli.startConnect(workerProps);
+        connect = cli.startConnect(workerProps);
         connectWorker = new WorkerHandle("standalone", connect);
         cli.processExtraArgs(connect, connectorConfigFiles());
     }
@@ -107,8 +108,8 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
     @Override
     protected Set<WorkerHandle> workers() {
         return connectWorker != null
-                ? Collections.singleton(connectWorker)
-                : Collections.emptySet();
+                ? Set.of(connectWorker)
+                : Set.of();
     }
 
     public Response healthCheck() {
@@ -135,6 +136,10 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
         }
 
         return result;
+    }
+
+    public ConnectMetrics connectMetrics() {
+        return connect.herder().connectMetrics();
     }
 
     public static class Builder extends EmbeddedConnectBuilder<EmbeddedConnectStandalone, Builder> {

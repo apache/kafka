@@ -120,7 +120,7 @@ public class FutureUtils {
         Supplier<T> init,
         BiConsumer<T, T> add
     ) {
-        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]));
         return allFutures.thenApply(v -> {
             final T res = init.get();
             futures.forEach(future -> add.accept(res, future.join()));

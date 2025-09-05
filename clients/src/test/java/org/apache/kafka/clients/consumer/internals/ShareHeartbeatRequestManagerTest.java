@@ -60,6 +60,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManager.SHARE_PROTOCOL_NOT_SUPPORTED_MSG;
+import static org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManager.SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -94,7 +95,7 @@ public class ShareHeartbeatRequestManagerTest {
     private Metadata metadata;
     private ShareHeartbeatRequestManager heartbeatRequestManager;
     private ShareMembershipManager membershipManager;
-    private ShareHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
+    private HeartbeatRequestState heartbeatRequestState;
     private ShareHeartbeatRequestManager.HeartbeatState heartbeatState;
     private BackgroundEventHandler backgroundEventHandler;
     private Metrics metrics;
@@ -114,7 +115,7 @@ public class ShareHeartbeatRequestManagerTest {
         logContext = new LogContext();
         ConsumerConfig config = mock(ConsumerConfig.class);
 
-        heartbeatRequestState = spy(new ShareHeartbeatRequestManager.HeartbeatRequestState(
+        heartbeatRequestState = spy(new HeartbeatRequestState(
                 logContext,
                 time,
                 DEFAULT_HEARTBEAT_INTERVAL_MS,
@@ -137,7 +138,7 @@ public class ShareHeartbeatRequestManagerTest {
     }
 
     private void createHeartbeatRequestStateWithZeroHeartbeatInterval() {
-        heartbeatRequestState = spy(new ShareHeartbeatRequestManager.HeartbeatRequestState(logContext,
+        heartbeatRequestState = spy(new HeartbeatRequestState(logContext,
                 time,
                 0,
                 DEFAULT_RETRY_BACKOFF_MS,
@@ -439,7 +440,7 @@ public class ShareHeartbeatRequestManagerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {SHARE_PROTOCOL_NOT_SUPPORTED_MSG})
+    @ValueSource(strings = {SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG})
     public void testUnsupportedVersionGeneratedOnTheClient(String errorMsg) {
         mockResponseWithException(new UnsupportedVersionException(errorMsg), false);
 
@@ -692,11 +693,11 @@ public class ShareHeartbeatRequestManagerTest {
     private ClientResponse createHeartbeatResponseWithException(
             final NetworkClientDelegate.UnsentRequest request,
             final UnsupportedVersionException exception,
-            final boolean isFromClient
+            final boolean isFromBroker
     ) {
         ShareGroupHeartbeatResponse response = null;
-        if (!isFromClient) {
-            response = new ShareGroupHeartbeatResponse(null);
+        if (isFromBroker) {
+            response = new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code()));
         }
         return new ClientResponse(
                 new RequestHeader(ApiKeys.SHARE_GROUP_HEARTBEAT, ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
@@ -705,7 +706,7 @@ public class ShareHeartbeatRequestManagerTest {
                 time.milliseconds(),
                 time.milliseconds(),
                 false,
-                exception,
+                isFromBroker ? null : exception,
                 null,
                 response);
     }
@@ -730,7 +731,7 @@ public class ShareHeartbeatRequestManagerTest {
             final CoordinatorRequestManager coordinatorRequestManager,
             final ShareMembershipManager membershipManager,
             final ShareHeartbeatRequestManager.HeartbeatState heartbeatState,
-            final ShareHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler) {
         LogContext logContext = new LogContext();
         pollTimer = time.timer(DEFAULT_MAX_POLL_INTERVAL_MS);

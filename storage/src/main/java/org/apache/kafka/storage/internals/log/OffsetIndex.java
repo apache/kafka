@@ -30,25 +30,25 @@ import java.util.Optional;
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
  * that is it may not hold an entry for all messages in the log.
  *
- * The index is stored in a file that is pre-allocated to hold a fixed maximum number of 8-byte entries.
+ * <p>The index is stored in a file that is pre-allocated to hold a fixed maximum number of 8-byte entries.
  *
- * The index supports lookups against a memory-map of this file. These lookups are done using a simple binary search variant
+ * <p>The index supports lookups against a memory-map of this file. These lookups are done using a simple binary search variant
  * to locate the offset/location pair for the greatest offset less than or equal to the target offset.
  *
- * Index files can be opened in two ways: either as an empty, mutable index that allows appends or
+ * <p>Index files can be opened in two ways: either as an empty, mutable index that allows appends or
  * an immutable read-only index file that has previously been populated. The makeReadOnly method will turn a mutable file into an
  * immutable one and truncate off any extra bytes. This is done when the index file is rolled over.
  *
- * No attempt is made to checksum the contents of this file, in the event of a crash it is rebuilt.
+ * <p>No attempt is made to checksum the contents of this file, in the event of a crash it is rebuilt.
  *
- * The file format is a series of entries. The physical format is a 4 byte "relative" offset and a 4 byte file location for the
+ * <p>The file format is a series of entries. The physical format is a 4 byte "relative" offset and a 4 byte file location for the
  * message with that offset. The offset stored is relative to the base offset of the index file. So, for example,
  * if the base offset was 50, then the offset 55 would be stored as 5. Using relative offsets in this way let's us use
  * only 4 bytes for the offset.
  *
- * The frequency of entries is up to the user of this class.
+ * <p>The frequency of entries is up to the user of this class.
  *
- * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal
+ * <p>All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal
  * storage format.
  */
 public final class OffsetIndex extends AbstractIndex {
@@ -56,7 +56,7 @@ public final class OffsetIndex extends AbstractIndex {
     private static final int ENTRY_SIZE = 8;
 
     /* the last offset in the index */
-    private long lastOffset;
+    private volatile long lastOffset;
 
     public OffsetIndex(File file, long baseOffset) throws IOException {
         this(file, baseOffset, -1);
@@ -69,7 +69,7 @@ public final class OffsetIndex extends AbstractIndex {
     public OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
         super(file, baseOffset, maxIndexSize, writable);
 
-        lastOffset = lastEntry().offset;
+        lastOffset = lastEntry().offset();
 
         log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}",
             file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastOffset, mmap().position());
@@ -95,7 +95,7 @@ public final class OffsetIndex extends AbstractIndex {
      *         the pair (baseOffset, 0) is returned.
      */
     public OffsetPosition lookup(long targetOffset) {
-        return maybeLock(lock, () -> {
+        return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, targetOffset, IndexSearchType.KEY);
             if (slot == -1)
@@ -111,7 +111,7 @@ public final class OffsetIndex extends AbstractIndex {
      * @return The offset/position pair at that entry
      */
     public OffsetPosition entry(int n) {
-        return maybeLock(lock, () -> {
+        return inRemapReadLock(() -> {
             if (n >= entries())
                 throw new IllegalArgumentException("Attempt to fetch the " + n + "th entry from index " +
                     file().getAbsolutePath() + ", which has size " + entries());
@@ -125,9 +125,9 @@ public final class OffsetIndex extends AbstractIndex {
      * such offset.
      */
     public Optional<OffsetPosition> fetchUpperBoundOffset(OffsetPosition fetchOffset, int fetchSize) {
-        return maybeLock(lock, () -> {
+        return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
-            int slot = smallestUpperBoundSlotFor(idx, fetchOffset.position + fetchSize, IndexSearchType.VALUE);
+            int slot = smallestUpperBoundSlotFor(idx, fetchOffset.position() + fetchSize, IndexSearchType.VALUE);
             if (slot == -1)
                 return Optional.empty();
             else
@@ -141,8 +141,7 @@ public final class OffsetIndex extends AbstractIndex {
      * @throws InvalidOffsetException if provided offset is not larger than the last offset
      */
     public void append(long offset, int position) {
-        lock.lock();
-        try {
+        inLock(() -> {
             if (isFull())
                 throw new IllegalArgumentException("Attempt to append to a full index (size = " + entries() + ").");
 
@@ -157,15 +156,12 @@ public final class OffsetIndex extends AbstractIndex {
             } else
                 throw new InvalidOffsetException("Attempt to append an offset " + offset + " to position " + entries() +
                     " no larger than the last offset appended (" + lastOffset + ") to " + file().getAbsolutePath());
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     @Override
     public void truncateTo(long offset) {
-        lock.lock();
-        try {
+        inLock(() -> {
             ByteBuffer idx = mmap().duplicate();
             int slot = largestLowerBoundSlotFor(idx, offset, IndexSearchType.KEY);
 
@@ -182,9 +178,7 @@ public final class OffsetIndex extends AbstractIndex {
             else
                 newEntries = slot + 1;
             truncateToEntries(newEntries);
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     public long lastOffset() {
@@ -218,30 +212,24 @@ public final class OffsetIndex extends AbstractIndex {
      * Truncates index to a known number of entries.
      */
     private void truncateToEntries(int entries) {
-        lock.lock();
-        try {
+        inLock(() -> {
             super.truncateToEntries0(entries);
-            this.lastOffset = lastEntry().offset;
+            this.lastOffset = lastEntry().offset();
             log.debug("Truncated index {} to {} entries; position is now {} and last offset is now {}",
-                    file().getAbsolutePath(), entries, mmap().position(), lastOffset);
-        } finally {
-            lock.unlock();
-        }
+                file().getAbsolutePath(), entries, mmap().position(), lastOffset);
+        });
     }
 
     /**
      * The last entry in the index
      */
     private OffsetPosition lastEntry() {
-        lock.lock();
-        try {
+        return inRemapReadLock(() -> {
             int entries = entries();
             if (entries == 0)
                 return new OffsetPosition(baseOffset(), 0);
             else
                 return parseEntry(mmap(), entries - 1);
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 }

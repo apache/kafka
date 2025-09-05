@@ -16,14 +16,18 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Possible error codes.
@@ -39,6 +43,7 @@ import java.util.Map;
  * - {@link Errors#UNRELEASED_INSTANCE_ID}
  * - {@link Errors#GROUP_MAX_SIZE_REACHED}
  * - {@link Errors#INVALID_REGULAR_EXPRESSION}
+ * - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  */
 public class ConsumerGroupHeartbeatResponse extends AbstractResponse {
     private final ConsumerGroupHeartbeatResponseData data;
@@ -68,8 +73,21 @@ public class ConsumerGroupHeartbeatResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static ConsumerGroupHeartbeatResponse parse(ByteBuffer buffer, short version) {
+    public static ConsumerGroupHeartbeatResponse parse(Readable readable, short version) {
         return new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData(
-            new ByteBufferAccessor(buffer), version));
+            readable, version));
+    }
+
+    public static ConsumerGroupHeartbeatResponseData.Assignment createAssignment(
+        Map<Uuid, Set<Integer>> assignment
+    ) {
+        List<ConsumerGroupHeartbeatResponseData.TopicPartitions> topicPartitions = assignment.entrySet().stream()
+            .map(keyValue -> new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                .setTopicId(keyValue.getKey())
+                .setPartitions(new ArrayList<>(keyValue.getValue())))
+            .collect(Collectors.toList());
+
+        return new ConsumerGroupHeartbeatResponseData.Assignment()
+            .setTopicPartitions(topicPartitions);
     }
 }

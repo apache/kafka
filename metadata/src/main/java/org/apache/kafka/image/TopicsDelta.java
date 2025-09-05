@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
@@ -28,7 +29,7 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.immutable.ImmutableMap;
 
-import java.util.Collections;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -54,7 +55,7 @@ public final class TopicsDelta {
      */
     private final Set<Uuid> deletedTopicIds = new HashSet<>();
 
-    private final Set<Uuid> createdTopicIds = new HashSet<>();
+    private final Map<String, Uuid> createdTopics = new HashMap<>();
 
     public TopicsDelta(TopicsImage image) {
         this.image = image;
@@ -70,9 +71,9 @@ public final class TopicsDelta {
 
     public void replay(TopicRecord record) {
         TopicDelta delta = new TopicDelta(
-            new TopicImage(record.name(), record.topicId(), Collections.emptyMap()));
+            new TopicImage(record.name(), record.topicId(), Map.of()));
         changedTopics.put(record.topicId(), delta);
-        createdTopicIds.add(record.topicId());
+        createdTopics.put(record.name(), record.topicId());
     }
 
     TopicDelta getOrCreateTopicDelta(Uuid id) {
@@ -94,11 +95,48 @@ public final class TopicsDelta {
         topicDelta.replay(record);
     }
 
+    private void maybeReplayClearElrRecord(Uuid topicId) {
+        // Only apply the record if the topic is not deleted.
+        if (!deletedTopicIds.contains(topicId)) {
+            TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
+            topicDelta.replay();
+        }
+    }
+
+    // When replaying the ClearElrRecord, we need to first find the latest topic ID associated with the topic(s) because
+    // multiple topic IDs for the same topic in a TopicsDelta is possible in the event of topic deletion and recreation.
+    // Second, we should not add the topicDelta if the given topic ID has been deleted. So that we don't leak the
+    // deleted topic ID.
+    public void replay(ClearElrRecord record) {
+        if (!record.topicName().isEmpty()) {
+            Uuid topicId = null;
+            // CreatedTopics contains the latest topic IDs. It should be checked first in case the topic is deleted and
+            // created in the same batch.
+            if (createdTopics.containsKey(record.topicName())) {
+                topicId = createdTopics.get(record.topicName());
+            } else if (image.getTopic(record.topicName()) != null) {
+                topicId = image.getTopic(record.topicName()).id();
+            }
+
+            if (topicId == null) {
+                throw new RuntimeException("Unable to clear elr for topic with name " +
+                    record.topicName() + ": no such topic found.");
+            }
+
+            maybeReplayClearElrRecord(topicId);
+        } else {
+            // Update all the existing topics
+            image.topicsById().forEach((topicId, image) -> maybeReplayClearElrRecord(topicId));
+            createdTopicIds().forEach((this::maybeReplayClearElrRecord));
+        }
+    }
+
     public String replay(RemoveTopicRecord record) {
         TopicDelta topicDelta = changedTopics.remove(record.topicId());
         String topicName;
         if (topicDelta != null) {
             topicName = topicDelta.image().name();
+            createdTopics.remove(topicName);
             if (image.topicsById().containsKey(record.topicId())) {
                 deletedTopicIds.add(record.topicId());
             }
@@ -172,8 +210,8 @@ public final class TopicsDelta {
         return deletedTopicIds;
     }
 
-    public Set<Uuid> createdTopicIds() {
-        return createdTopicIds;
+    public Collection<Uuid> createdTopicIds() {
+        return createdTopics.values();
     }
 
     /**
@@ -231,7 +269,7 @@ public final class TopicsDelta {
         return "TopicsDelta(" +
             "changedTopics=" + changedTopics +
             ", deletedTopicIds=" + deletedTopicIds +
-            ", createdTopicIds=" + createdTopicIds +
+            ", createdTopics=" + createdTopics +
             ')';
     }
 }

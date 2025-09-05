@@ -55,7 +55,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     protected final Optional<KeySchema> indexKeySchema;
     private final long retentionPeriod;
 
-    protected InternalProcessorContext internalProcessorContext;
+    protected InternalProcessorContext<?, ?> internalProcessorContext;
     private Sensor expiredRecordSensor;
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     protected boolean consistencyEnabled = false;

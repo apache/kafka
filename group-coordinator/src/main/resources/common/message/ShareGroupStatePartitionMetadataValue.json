@@ -21,6 +21,8 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
+    { "name": "InitializingTopics", "versions": "0+", "type": "[]TopicPartitionsInfo",
+      "about": "The topic-partitions whose share-group state is being initialized." },
     { "name": "InitializedTopics", "versions": "0+", "type": "[]TopicPartitionsInfo",
       "about": "The topics with initialized share-group state." },
     { "name": "DeletingTopics", "versions": "0+", "type": "[]TopicInfo",

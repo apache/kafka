@@ -25,11 +25,8 @@ import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -186,12 +183,8 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     }
 
     private void checkRequiredArgs() {
-        List<Optional<String>> topicOrFilterArgs = new ArrayList<>(Arrays.asList(topicArg(), includedTopicsArg()));
-        topicOrFilterArgs.removeIf(arg -> arg.isEmpty());
-        // user need to specify value for either --topic or --include options)
-        if (topicOrFilterArgs.size() != 1) {
-            CommandLineUtils.printUsageAndExit(parser, "Exactly one of --include/--topic is required. ");
-        }
+        // user need to specify value for either --topic or --include options
+        CommandLineUtils.checkOneOfArgs(parser, options, topicOpt, includeOpt);
 
         if (partitionArg().isPresent()) {
             if (!options.has(topicOpt)) {

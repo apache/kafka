@@ -20,7 +20,6 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -29,10 +28,10 @@ import java.util.stream.Collectors;
 
 /**
  * Options for {@link Admin#listConsumerGroups()}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
+ * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
  */
-@InterfaceStability.Evolving
+@Deprecated(since = "4.1")
+@SuppressWarnings("removal")
 public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroupsOptions> {
 
     private Set<GroupState> groupStates = Collections.emptySet();

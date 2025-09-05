@@ -30,6 +30,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
@@ -41,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConsumerConfigTest {
 
@@ -255,5 +258,27 @@ public class ConsumerConfigTest {
         ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertEquals(configName + " cannot be set when " + 
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name(), exception.getMessage());
+    }
+
+    /**
+     * Validates config/consumer.properties file to avoid getting out of sync with ConsumerConfig.
+     */
+    @Test
+    public void testValidateConfigPropertiesFile() {
+        Properties props = new Properties();
+
+        try (InputStream inputStream = new FileInputStream(System.getProperty("user.dir") + "/../config/consumer.properties")) {
+            props.load(inputStream);
+        } catch (Exception e) {
+            fail("Failed to load config/consumer.properties file: " + e.getMessage());
+        }
+
+        ConsumerConfig config = new ConsumerConfig(props);
+
+        for (String key : config.originals().keySet()) {
+            if (!ConsumerConfig.configDef().configKeys().containsKey(key)) {
+                fail("Invalid configuration key: " + key);
+            }
+        }
     }
 }

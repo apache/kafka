@@ -52,7 +52,7 @@ public class ChangeLoggingKeyValueBytesStore
         if (wrapped() instanceof MemoryLRUCache) {
             ((MemoryLRUCache) wrapped()).setWhenEldestRemoved((key, value) -> {
                 // pass null to indicate removal
-                log(key, null, internalContext.timestamp());
+                log(key, null, internalContext.recordContext().timestamp());
             });
         }
     }
@@ -66,7 +66,7 @@ public class ChangeLoggingKeyValueBytesStore
     public void put(final Bytes key,
                     final byte[] value) {
         wrapped().put(key, value);
-        log(key, value, internalContext.timestamp());
+        log(key, value, internalContext.recordContext().timestamp());
     }
 
     @Override
@@ -75,7 +75,7 @@ public class ChangeLoggingKeyValueBytesStore
         final byte[] previous = wrapped().putIfAbsent(key, value);
         if (previous == null) {
             // then it was absent
-            log(key, value, internalContext.timestamp());
+            log(key, value, internalContext.recordContext().timestamp());
         }
         return previous;
     }
@@ -84,7 +84,7 @@ public class ChangeLoggingKeyValueBytesStore
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         wrapped().putAll(entries);
         for (final KeyValue<Bytes, byte[]> entry : entries) {
-            log(entry.key, entry.value, internalContext.timestamp());
+            log(entry.key, entry.value, internalContext.recordContext().timestamp());
         }
     }
 
@@ -97,7 +97,7 @@ public class ChangeLoggingKeyValueBytesStore
     @Override
     public byte[] delete(final Bytes key) {
         final byte[] oldValue = wrapped().delete(key);
-        log(key, null, internalContext.timestamp());
+        log(key, null, internalContext.recordContext().timestamp());
         return oldValue;
     }
 

@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -59,10 +61,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -174,7 +179,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
             final TestOutputTopic<String, String> rejoinOutputTopic = rejoin ? driver.createOutputTopic(REJOIN_OUTPUT, new StringDeserializer(), new StringDeserializer()) : null;
-            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
 
             // Pre-populate the RHS records. This test is all about what happens when we add/remove LHS records
             right.pipeInput("rhs1", "rhsValue1", baseTimestamp);
@@ -182,13 +187,13 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             right.pipeInput("rhs3", "rhsValue3", baseTimestamp + 2); // this unreferenced FK won't show up in any results
 
             assertThat(
-                outputTopic.readKeyValuesToMap(),
-                is(emptyMap())
+                outputTopic.readKeyValuesToList(),
+                is(emptyList())
             );
             if (rejoin) {
                 assertThat(
-                    rejoinOutputTopic.readKeyValuesToMap(),
-                    is(emptyMap())
+                    rejoinOutputTopic.readKeyValuesToList(),
+                    is(emptyList())
                 );
             }
             if (materialized) {
@@ -202,27 +207,27 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             left.pipeInput("lhs2", "lhsValue2|rhs2", baseTimestamp + 4);
 
             {
-                final Map<String, String> expected = mkMap(
-                    mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
-                    mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)")
+                final List<KeyValue<String, String>> expected = Arrays.asList(
+                    KeyValue.pair("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                    KeyValue.pair("lhs2", "(lhsValue2|rhs2,rhsValue2)")
                 );
                 assertThat(
-                    outputTopic.readKeyValuesToMap(),
+                    outputTopic.readKeyValuesToList(),
                     is(expected)
                 );
                 if (rejoin) {
                     assertThat(
-                        rejoinOutputTopic.readKeyValuesToMap(),
-                        is(mkMap(
-                            mkEntry("lhs1", "rejoin((lhsValue1|rhs1,rhsValue1),lhsValue1|rhs1)"),
-                            mkEntry("lhs2", "rejoin((lhsValue2|rhs2,rhsValue2),lhsValue2|rhs2)")
+                        rejoinOutputTopic.readKeyValuesToList(),
+                        is(asList(
+                            KeyValue.pair("lhs1", "rejoin((lhsValue1|rhs1,rhsValue1),lhsValue1|rhs1)"),
+                            KeyValue.pair("lhs2", "rejoin((lhsValue2|rhs2,rhsValue2),lhsValue2|rhs2)")
                         ))
                     );
                 }
                 if (materialized) {
                     assertThat(
                         asMap(store),
-                        is(expected)
+                        is(expected.stream().collect(Collectors.toMap(kv -> kv.key, kv -> kv.value)))
                     );
                 }
             }
@@ -231,16 +236,16 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             left.pipeInput("lhs3", "lhsValue3|rhs1", baseTimestamp + 5);
             {
                 assertThat(
-                    outputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)")
+                    outputTopic.readKeyValuesToList(),
+                    is(List.of(
+                        new KeyValue<>("lhs3", "(lhsValue3|rhs1,rhsValue1)")
                     ))
                 );
                 if (rejoin) {
                     assertThat(
-                        rejoinOutputTopic.readKeyValuesToMap(),
-                        is(mkMap(
-                            mkEntry("lhs3", "rejoin((lhsValue3|rhs1,rhsValue1),lhsValue3|rhs1)")
+                        rejoinOutputTopic.readKeyValuesToList(),
+                        is(List.of(
+                            new KeyValue<>("lhs3", "rejoin((lhsValue3|rhs1,rhsValue1),lhsValue3|rhs1)")
                         ))
                     );
                 }
@@ -255,21 +260,21 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                     );
                 }
             }
+
             // Now delete one LHS entity such that one delete is propagated down to the output.
 
-            left.pipeInput("lhs1", (String) null, baseTimestamp + 6);
+            left.pipeInput("lhs1", null, baseTimestamp + 6);
             assertThat(
-                outputTopic.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs1", null)
+                outputTopic.readKeyValuesToList(),
+                is(List.of(
+                    new KeyValue<>("lhs1", null)
                 ))
             );
             if (rejoin) {
                 assertThat(
-                    rejoinOutputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry("lhs1", null)
-                    ))
+                    rejoinOutputTopic.readKeyValuesToList(),
+                    hasItem(
+                        KeyValue.pair("lhs1", null))
                 );
             }
             if (materialized) {
@@ -281,6 +286,79 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                     ))
                 );
             }
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("testCases")
+    public void doJoinFromLeftThenUpdateFkThenRevertBack(final boolean leftJoin,
+                                                         final String optimization,
+                                                         final boolean materialized,
+                                                         final boolean rejoin,
+                                                         final boolean leftVersioned,
+                                                         final boolean rightVersioned) {
+        final Properties streamsConfig = getStreamsProperties(optimization);
+        final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final TestOutputTopic<String, String> rejoinOutputTopic = rejoin ? driver.createOutputTopic(REJOIN_OUTPUT, new StringDeserializer(), new StringDeserializer()) : null;
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
+
+            // Pre-populate the RHS records. This test is all about what happens when we add/remove LHS records
+            right.pipeInput("rhs1", "rhsValue1", baseTimestamp);
+            right.pipeInput("rhs2", "rhsValue2", baseTimestamp + 1);
+
+            assertThat(
+                outputTopic.readKeyValuesToList(),
+                is(emptyList())
+            );
+            if (rejoin) {
+                assertThat(
+                    rejoinOutputTopic.readKeyValuesToList(),
+                    is(emptyList())
+                );
+            }
+            if (materialized) {
+                assertThat(
+                    asMap(store),
+                    is(emptyMap())
+                );
+            }
+
+            left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp + 3);
+
+            {
+                final List<KeyValue<String, String>> expected = asList(
+                    KeyValue.pair("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                );
+                assertThat(
+                    outputTopic.readKeyValuesToList(),
+                    is(expected)
+                );
+            }
+
+            // Add another reference to an existing FK
+            left.pipeInput("lhs1", "lhsValue1|rhs2", baseTimestamp + 5);
+            {
+                assertThat(
+                    outputTopic.readKeyValuesToList(),
+                    is(List.of(
+                        new KeyValue<>("lhs1", "(lhsValue1|rhs2,rhsValue2)")
+                    ))
+                );
+            }
+
+            // Now revert back the foreign key to earlier reference
+
+            left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp + 6);
+            assertThat(
+                outputTopic.readKeyValuesToList(),
+                is(List.of(
+                    new KeyValue<>("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                ))
+            );
         }
     }
 
@@ -298,7 +376,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
 
             // Pre-populate the LHS records. This test is all about what happens when we add/remove RHS records
             left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp);
@@ -381,7 +459,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             }
 
             // Now delete the RHS entity such that all matching keys have deletes propagated.
-            right.pipeInput("rhs1", (String) null, baseTimestamp + 6);
+            right.pipeInput("rhs1", null, baseTimestamp + 6);
 
             assertThat(
                 outputTopic.readKeyValuesToMap(),
@@ -417,7 +495,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
 
             left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp);
 
@@ -439,7 +517,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             // Deleting a non-joining record produces an unnecessary tombstone for inner joins, because
             // it's not possible to know whether a result was previously emitted.
             // For the left join, the tombstone is necessary.
-            left.pipeInput("lhs1", (String) null, baseTimestamp + 1);
+            left.pipeInput("lhs1", null, baseTimestamp + 1);
             {
                 assertThat(
                     outputTopic.readKeyValuesToMap(),
@@ -454,7 +532,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             }
 
             // Deleting a non-existing record is idempotent
-            left.pipeInput("lhs1", (String) null, baseTimestamp + 2);
+            left.pipeInput("lhs1", null, baseTimestamp + 2);
             {
                 assertThat(
                     outputTopic.readKeyValuesToMap(),
@@ -483,10 +561,10 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
 
             // Deleting a record that never existed doesn't need to emit tombstones.
-            left.pipeInput("lhs1", (String) null, baseTimestamp);
+            left.pipeInput("lhs1", null, baseTimestamp);
             {
                 assertThat(
                     outputTopic.readKeyValuesToMap(),
@@ -516,7 +594,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
 
             left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp);
             // no output for a new inner join on a non-existent FK
@@ -623,7 +701,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
 
             // Pre-populate the RHS records. This test is all about what happens when we change LHS records foreign key reference
             // then populate update on RHS
@@ -707,7 +785,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
 
             left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp);
             {
@@ -744,11 +822,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
             final String subscriptionStoreName = driver.getAllStateStores().entrySet().stream()
                 .filter(e -> e.getKey().contains("SUBSCRIPTION-STATE-STORE"))
                 .findAny().orElseThrow(() -> new RuntimeException("couldn't find store")).getKey();
-            final KeyValueStore<Bytes, ValueAndTimestamp<String>> subscriptionStore = driver.getKeyValueStore(subscriptionStoreName);
+            final KeyValueStore<Bytes, ValueAndTimestamp<String>> subscriptionStore = driver.getTimestampedKeyValueStore(subscriptionStoreName);
             final Bytes key = subscriptionStoreKey("lhs1", "rhs1");
             left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp);
             {
@@ -786,9 +864,17 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         return key;
     }
 
-    protected static Map<String, String> asMap(final KeyValueStore<String, String> store) {
+    protected static Map<String, String> asMap(final KeyValueStore<String, ValueAndTimestamp<String>> store) {
         final HashMap<String, String> result = new HashMap<>();
-        store.all().forEachRemaining(kv -> result.put(kv.key, kv.value));
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> it = store.all()) {
+            it.forEachRemaining(kv -> result.put(kv.key, kv.value.value()));
+        }
+        return result;
+    }
+
+    protected static List<KeyValue<String, String>> makeList(final KeyValueStore<String, ValueAndTimestamp<String>> store) {
+        final List<KeyValue<String, String>> result = new LinkedList<>();
+        store.all().forEachRemaining(ele -> result.add(new KeyValue<>(ele.key, ele.value.value())));
         return result;
     }
 
@@ -921,7 +1007,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            final KeyValueStore<String, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
 
             // RHS record
             right.pipeInput("rhs1", "rhsValue1", baseTimestamp + 4);

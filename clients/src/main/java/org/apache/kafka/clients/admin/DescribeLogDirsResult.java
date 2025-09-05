@@ -18,20 +18,15 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-
 /**
  * The result of the {@link Admin#describeLogDirs(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeLogDirsResult {
     private final Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> futures;
 
@@ -53,7 +48,7 @@ public class DescribeLogDirsResult {
      * to a description of that log directory.
      */
     public KafkaFuture<Map<Integer, Map<String, LogDirDescription>>> allDescriptions() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).
             thenApply(v -> {
                 Map<Integer, Map<String, LogDirDescription>> descriptions = new HashMap<>(futures.size());
                 for (Map.Entry<Integer, KafkaFuture<Map<String, LogDirDescription>>> entry : futures.entrySet()) {

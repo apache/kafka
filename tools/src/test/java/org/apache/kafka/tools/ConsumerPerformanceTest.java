@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +34,8 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
+import java.util.Properties;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -75,7 +81,7 @@ public class ConsumerPerformanceTest {
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
 
         assertEquals("localhost:9092", config.brokerHostsAndPorts());
-        assertTrue(config.topic().contains("test"));
+        assertTrue(config.topic().get().contains("test"));
         assertEquals(10, config.numMessages());
     }
 
@@ -91,6 +97,47 @@ public class ConsumerPerformanceTest {
         String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
 
         assertTrue(err.contains("new-consumer is not a recognized option"));
+    }
+
+    @Test
+    public void testConfigWithInclude() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--include", "test.*",
+            "--messages", "10"
+        };
+
+        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
+
+        assertEquals("localhost:9092", config.brokerHostsAndPorts());
+        assertTrue(config.include().get().toString().contains("test.*"));
+        assertEquals(10, config.numMessages());
+    }
+
+    @Test
+    public void testConfigWithTopicAndInclude() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--include", "test.*",
+            "--messages", "10"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
+
+        assertTrue(err.contains("Exactly one of the following arguments is required: [topic], [include]"));
+    }
+
+    @Test
+    public void testConfigWithoutTopicAndInclude() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--messages", "10"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
+
+        assertTrue(err.contains("Exactly one of the following arguments is required: [topic], [include]"));
     }
 
     @Test
@@ -124,6 +171,21 @@ public class ConsumerPerformanceTest {
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
 
         assertEquals("perf-consumer-client", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+    }
+
+    @Test
+    public void testMetricsRetrievedBeforeConsumerClosed() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--messages", "0",
+            "--print-metrics"
+        };
+
+        Function<Properties, Consumer<byte[], byte[]>> consumerCreator = properties -> new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
+
+        String err = ToolsTestUtils.captureStandardErr(() -> ConsumerPerformance.run(args, consumerCreator));
+        assertTrue(Utils.isBlank(err), "Should be no stderr message, but was \"" + err + "\"");
     }
 
     private void testHeaderMatchContent(boolean detailed, int expectedOutputLineCount, Runnable runnable) {

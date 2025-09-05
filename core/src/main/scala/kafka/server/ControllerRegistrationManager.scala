@@ -34,6 +34,7 @@ import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion, NodeToControllerChannelManager}
 
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 /**
  * The controller registration manager handles registering this controller with the controller
@@ -87,7 +88,7 @@ class ControllerRegistrationManager(
   /**
    * The current metadata version that is in effect. Only read or written from the event queue thread.
    */
-  private var metadataVersion: MetadataVersion = MetadataVersion.MINIMUM_KRAFT_VERSION
+  private var metadataVersion: Option[MetadataVersion] = None
 
   /**
    * True if we're registered. Only read or written from the event queue thread.
@@ -172,7 +173,7 @@ class ControllerRegistrationManager(
     override def run(): Unit = {
       try {
         if (delta.featuresDelta() != null) {
-          metadataVersion = newImage.features().metadataVersion()
+          metadataVersion = newImage.features().metadataVersion().toScala
         }
         if (delta.clusterDelta() != null) {
           if (delta.clusterDelta().changedControllers().containsKey(nodeId)) {
@@ -197,12 +198,14 @@ class ControllerRegistrationManager(
   }
 
   private def maybeSendControllerRegistration(): Unit = {
+    val metadataVersion = this.metadataVersion
     if (registeredInLog) {
       debug("maybeSendControllerRegistration: controller is already registered.")
     } else if (_channelManager == null) {
-      debug("maybeSendControllerRegistration: cannot register yet because the channel manager has " +
-          "not been initialized.")
-    } else if (!metadataVersion.isControllerRegistrationSupported) {
+      debug("maybeSendControllerRegistration: cannot register yet because the channel manager has not been initialized.")
+    } else if (metadataVersion.isEmpty) {
+      info("maybeSendControllerRegistration: cannot register yet because the metadata.version is not known yet.")
+    } else if (!metadataVersion.get.isControllerRegistrationSupported) {
       info("maybeSendControllerRegistration: cannot register yet because the metadata.version is " +
           s"still $metadataVersion, which does not support KIP-919 controller registration.")
     } else if (pendingRpc) {

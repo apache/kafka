@@ -25,8 +25,8 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -36,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SSLUtilsTest {
 
-    private Map<String, Object> sslConfig;
     private String keystorePath;
     private String truststorePath;
     private Password keystorePassword;
@@ -45,7 +44,7 @@ public class SSLUtilsTest {
     @BeforeEach
     public void before() throws Exception {
         CertStores serverCertStores = new CertStores(true, "localhost");
-        sslConfig = serverCertStores.getUntrustingConfig();
+        Map<String, Object> sslConfig = serverCertStores.getUntrustingConfig();
         keystorePath = sslConfig.get("ssl.keystore.location").toString();
         truststorePath = sslConfig.get("ssl.truststore.location").toString();
         keystorePassword = (Password) sslConfig.get("ssl.keystore.password");
@@ -61,12 +60,12 @@ public class SSLUtilsTest {
         Map<String, Object> map = new HashMap<>();
         map.put("exists", "value");
 
-        assertEquals(SSLUtils.getOrDefault(map, existingKey, defaultValue), value);
-        assertEquals(SSLUtils.getOrDefault(map, missingKey, defaultValue), defaultValue);
+        assertEquals(value, SSLUtils.getOrDefault(map, existingKey, defaultValue));
+        assertEquals(defaultValue, SSLUtils.getOrDefault(map, missingKey, defaultValue));
     }
 
     @Test
-    public void testCreateServerSideSslContextFactory() throws Exception {
+    public void testCreateServerSideSslContextFactory() {
         Map<String, String> configMap = new HashMap<>();
         configMap.put("ssl.keystore.location", keystorePath);
         configMap.put("ssl.keystore.password", keystorePassword.value());
@@ -157,7 +156,7 @@ public class SSLUtilsTest {
         assertEquals(SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ssl.getKeyStoreType());
         assertEquals(SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, ssl.getTrustStoreType());
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, ssl.getProtocol());
-        assertArrayEquals(Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
+        assertArrayEquals(List.of(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
         assertEquals(SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ssl.getKeyManagerFactoryAlgorithm());
         assertEquals(SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ssl.getTrustManagerFactoryAlgorithm());
         assertFalse(ssl.getNeedClientAuth());
@@ -182,7 +181,7 @@ public class SSLUtilsTest {
         assertEquals(SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ssl.getKeyStoreType());
         assertEquals(SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, ssl.getTrustStoreType());
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, ssl.getProtocol());
-        assertArrayEquals(Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
+        assertArrayEquals(List.of(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
         assertEquals(SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ssl.getKeyManagerFactoryAlgorithm());
         assertEquals(SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ssl.getTrustManagerFactoryAlgorithm());
     }

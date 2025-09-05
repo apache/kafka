@@ -23,6 +23,9 @@ import java.io.Closeable;
 
 /**
  * Partitioner Interface
+ * <br/>
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the partitioner to register metrics. The following tags are automatically added to
+ * all metrics registered: <code>config</code> set to <code>partitioner.class</code>, and <code>class</code> set to the Partitioner class name.
  */
 public interface Partitioner extends Configurable, Closeable {
 

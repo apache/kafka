@@ -41,7 +41,7 @@ import java.util.Random;
 import static org.apache.kafka.clients.admin.ScramMechanism.SCRAM_SHA_256;
 import static org.apache.kafka.clients.admin.ScramMechanism.SCRAM_SHA_512;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 @Timeout(value = 40)
@@ -170,28 +170,22 @@ public class ScramImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(ScramImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+        image.write(writer, new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build());
         return writer.records();
     }
 
     @Test
     public void testEmptyWithInvalidIBP() {
-        ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_4_IV0).build();
+        ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder(MetadataVersion.IBP_3_4_IV0).build();
         RecordListWriter writer = new RecordListWriter();
         ScramImage.EMPTY.write(writer, imageWriterOptions);
     }
 
     @Test
     public void testImage1withInvalidIBP() {
-        ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_4_IV0).build();
+        ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder(MetadataVersion.IBP_3_4_IV0).build();
         RecordListWriter writer = new RecordListWriter();
-        try {
-            IMAGE1.write(writer, imageWriterOptions);
-            fail("expected exception writing IMAGE with SCRAM records for MetadataVersion.IBP_3_4_IV0");
-        } catch (Exception expected) {
-            // ignore, expected
-        }
+        assertThrows(Exception.class, () -> IMAGE1.write(writer, imageWriterOptions),
+            "expected exception writing IMAGE with SCRAM records for MetadataVersion.IBP_3_4_IV0");
     }
 }

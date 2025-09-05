@@ -46,7 +46,7 @@ public class MockAssignor implements TaskAssignor {
         Map<String, String[]> subtopologyToActiveMember = new HashMap<>();
 
         for (String subtopology : topologyDescriber.subtopologies()) {
-            int numberOfPartitions = topologyDescriber.numTasks(subtopology);
+            int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
             subtopologyToActiveMember.put(subtopology, new String[numberOfPartitions]);
         }
 

@@ -22,12 +22,11 @@ import org.apache.kafka.common.message.AlterClientQuotasRequestData.EntryData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.OpData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -138,7 +137,7 @@ public class AlterClientQuotasRequest extends AbstractRequest {
         return new AlterClientQuotasResponse(responseData);
     }
 
-    public static AlterClientQuotasRequest parse(ByteBuffer buffer, short version) {
-        return new AlterClientQuotasRequest(new AlterClientQuotasRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static AlterClientQuotasRequest parse(Readable readable, short version) {
+        return new AlterClientQuotasRequest(new AlterClientQuotasRequestData(readable, version), version);
     }
 }

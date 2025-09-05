@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.security;
 
+import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
-import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 
 import java.util.Collection;
-import java.util.Properties;
 
 public class CredentialProvider {
     public final DelegationTokenCache tokenCache;
@@ -34,22 +33,8 @@ public class CredentialProvider {
         ScramCredentialUtils.createCache(credentialCache, scramMechanisms);
     }
 
-    public void updateCredentials(String username, Properties config) {
-        for (ScramMechanism mechanism : ScramMechanism.values()) {
-            CredentialCache.Cache<ScramCredential> cache = credentialCache.cache(mechanism.mechanismName(), ScramCredential.class);
-            if (cache != null) {
-                String c = config.getProperty(mechanism.mechanismName());
-                if (c == null) {
-                    cache.remove(username);
-                } else {
-                    cache.put(username, ScramCredentialUtils.credentialFromString(c));
-                }
-            }
-        }
-    }
-
     public void updateCredential(
-        org.apache.kafka.clients.admin.ScramMechanism mechanism,
+        ScramMechanism mechanism,
         String name,
         ScramCredential credential
     ) {
@@ -58,7 +43,7 @@ public class CredentialProvider {
     }
 
     public void removeCredentials(
-        org.apache.kafka.clients.admin.ScramMechanism mechanism,
+        ScramMechanism mechanism,
         String name
     ) {
         CredentialCache.Cache<ScramCredential> cache = credentialCache.cache(mechanism.mechanismName(), ScramCredential.class);

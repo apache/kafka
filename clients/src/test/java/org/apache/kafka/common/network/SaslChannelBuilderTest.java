@@ -179,7 +179,7 @@ public class SaslChannelBuilderTest {
     }
 
     private Function<Short, ApiVersionsResponse> defaultApiVersionsSupplier() {
-        return version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+        return version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER);
     }
 
     private SaslChannelBuilder createChannelBuilder(SecurityProtocol securityProtocol, String saslMechanism) {

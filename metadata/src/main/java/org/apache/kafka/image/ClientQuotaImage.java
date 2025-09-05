@@ -23,7 +23,6 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.image.node.ClientQuotaImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,7 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 
 
 /**
@@ -39,27 +37,16 @@ import java.util.Objects;
  *
  * This class is thread-safe.
  */
-public final class ClientQuotaImage {
-    public static final ClientQuotaImage EMPTY = new ClientQuotaImage(Collections.emptyMap());
+public record ClientQuotaImage(Map<String, Double> quotas) {
+    public static final ClientQuotaImage EMPTY = new ClientQuotaImage(Map.of());
 
-    private final Map<String, Double> quotas;
-
-    public ClientQuotaImage(Map<String, Double> quotas) {
-        this.quotas = quotas;
-    }
-
-    Map<String, Double> quotas() {
-        return quotas;
-    }
-
-    public Map<String, Double> quotaMap() {
-        return Collections.unmodifiableMap(quotas);
+    public ClientQuotaImage {
+        quotas = Collections.unmodifiableMap(quotas);
     }
 
     public void write(
         ClientQuotaEntity entity,
-        ImageWriter writer,
-        ImageWriterOptions options
+        ImageWriter writer
     ) {
         for (Entry<String, Double> entry : quotas.entrySet()) {
             writer.write(0, new ClientQuotaRecord().
@@ -98,17 +85,6 @@ public final class ClientQuotaImage {
 
     public boolean isEmpty() {
         return quotas.isEmpty();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotaImage other)) return false;
-        return quotas.equals(other.quotas);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(quotas);
     }
 
     @Override

@@ -16,10 +16,12 @@
 {
   "apiKey": 27,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "WriteTxnMarkersRequest",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Version 1 enables flexible versions.
-  "validVersions": "0-1",
+  "validVersions": "1",
   "flexibleVersions": "1+",
   "fields": [
     { "name": "Markers", "type": "[]WritableTxnMarker", "versions": "0+",

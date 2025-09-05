@@ -129,7 +129,7 @@ class ChangeLoggingWindowBytesStore
     }
 
     void log(final Bytes key, final byte[] value) {
-        internalContext.logChange(name(), key, value, internalContext.timestamp(), wrapped().getPosition());
+        internalContext.logChange(name(), key, value, internalContext.recordContext().timestamp(), wrapped().getPosition());
     }
 
     private int maybeUpdateSeqnumForDups() {

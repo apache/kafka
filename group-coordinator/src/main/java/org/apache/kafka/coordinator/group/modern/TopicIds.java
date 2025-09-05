@@ -17,8 +17,7 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -40,7 +39,7 @@ public class TopicIds implements Set<Uuid> {
         /**
          * @return The TopicsImage used by the resolver.
          */
-        TopicsImage image();
+        CoordinatorMetadataImage image();
 
         /**
          * Converts a topic id to a topic name.
@@ -69,36 +68,26 @@ public class TopicIds implements Set<Uuid> {
     /**
      * A TopicResolver without any caching.
      */
-    public static class DefaultTopicResolver implements TopicResolver {
-        private final TopicsImage image;
-
+    public record DefaultTopicResolver(CoordinatorMetadataImage image) implements TopicResolver {
         public DefaultTopicResolver(
-            TopicsImage image
+            CoordinatorMetadataImage image
         ) {
             this.image = Objects.requireNonNull(image);
         }
 
         @Override
-        public final TopicsImage image() {
-            return image;
-        }
-
-        @Override
         public String name(Uuid id) {
-            TopicImage topic = image.getTopic(id);
-            if (topic == null) return null;
-            return topic.name();
+            return image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
         }
 
         @Override
         public Uuid id(String name) {
-            TopicImage topic = image.getTopic(name);
-            if (topic == null) return null;
-            return topic.id();
+            return image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null);
         }
 
         @Override
-        public void clear() {}
+        public void clear() {
+        }
 
         @Override
         public String toString() {
@@ -113,38 +102,30 @@ public class TopicIds implements Set<Uuid> {
      * TargetAssignmentBuilder.build() call.
      */
     public static class CachedTopicResolver implements TopicResolver {
-        private final TopicsImage image;
+        private final CoordinatorMetadataImage image;
 
         private final Map<String, Uuid> topicIds = new HashMap<>();
         private final Map<Uuid, String> topicNames = new HashMap<>();
 
         public CachedTopicResolver(
-            TopicsImage image
+            CoordinatorMetadataImage image
         ) {
             this.image = Objects.requireNonNull(image);
         }
 
         @Override
-        public final TopicsImage image() {
+        public final CoordinatorMetadataImage image() {
             return image;
         }
 
         @Override
         public String name(Uuid id) {
-            return topicNames.computeIfAbsent(id, __ -> {
-                TopicImage topic = image.getTopic(id);
-                if (topic == null) return null;
-                return topic.name();
-            });
+            return topicNames.computeIfAbsent(id, __ -> image.topicMetadata(id).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null));
         }
 
         @Override
         public Uuid id(String name) {
-            return topicIds.computeIfAbsent(name, __ -> {
-                TopicImage topic = image.getTopic(name);
-                if (topic == null) return null;
-                return topic.id();
-            });
+            return topicIds.computeIfAbsent(name, __ -> image.topicMetadata(name).map(CoordinatorMetadataImage.TopicMetadata::id).orElse(null));
         }
 
         @Override
@@ -164,7 +145,7 @@ public class TopicIds implements Set<Uuid> {
 
     public TopicIds(
         Set<String> topicNames,
-        TopicsImage image
+        CoordinatorMetadataImage image
     ) {
         this.topicNames = Objects.requireNonNull(topicNames);
         this.resolver = new DefaultTopicResolver(image);
@@ -264,7 +245,7 @@ public class TopicIds implements Set<Uuid> {
     }
 
     @Override
-    public boolean addAll(Collection c) {
+    public boolean addAll(Collection<? extends Uuid> c) {
         throw new UnsupportedOperationException();
     }
 
@@ -274,17 +255,17 @@ public class TopicIds implements Set<Uuid> {
     }
 
     @Override
-    public boolean removeAll(Collection c) {
+    public boolean removeAll(Collection<?> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public boolean retainAll(Collection c) {
+    public boolean retainAll(Collection<?> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public boolean containsAll(Collection c) {
+    public boolean containsAll(Collection<?> c) {
         for (Object o : c) {
             if (!contains(o)) return false;
         }

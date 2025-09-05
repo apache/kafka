@@ -64,13 +64,23 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     public static class Builder<K, V> implements StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> {
 
         private final String storeName;
+        private final Serde<K> keySerde;
+        private final Serde<V> valueSerde;
         private boolean loggingEnabled = true;
         private Map<String, String> logConfig = new HashMap<>();
         private final Duration grace;
         private final String topic;
 
-        public Builder(final String storeName, final Duration grace, final String topic) {
+        public Builder(
+            final String storeName,
+            final Serde<K> keySerde,
+            final Serde<V> valueSerde,
+            final Duration grace,
+            final String topic
+        ) {
             this.storeName = storeName;
+            this.keySerde = keySerde;
+            this.valueSerde = valueSerde;
             this.grace = grace;
             this.topic = topic;
         }
@@ -115,6 +125,8 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         public TimeOrderedKeyValueBuffer<K, V, V> build() {
             return new RocksDBTimeOrderedKeyValueBuffer<>(
                 new RocksDBTimeOrderedKeyValueBytesStoreSupplier(storeName).get(),
+                keySerde,
+                valueSerde,
                 grace,
                 topic,
                 loggingEnabled);
@@ -138,10 +150,14 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
 
 
     public RocksDBTimeOrderedKeyValueBuffer(final RocksDBTimeOrderedKeyValueBytesStore store,
+                                            final Serde<K> keySerde,
+                                            final Serde<V> valueSerde,
                                             final Duration gracePeriod,
                                             final String topic,
                                             final boolean loggingEnabled) {
         this.store = store;
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
         this.gracePeriod = gracePeriod.toMillis();
         minTimestamp = store.minTimestamp();
         minValid = false;

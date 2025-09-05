@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.StickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.RackConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -741,6 +742,7 @@ public abstract class AbstractStickyAssignorTest {
         assignor.assignPartitions(partitionsPerTopic, subscriptions);
     }
 
+    @Flaky("KAFKA-13514")
     @Timeout(90)
     @ParameterizedTest(name = TEST_NAME_WITH_CONSUMER_RACK)
     @ValueSource(booleans = {false, true})

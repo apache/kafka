@@ -28,8 +28,8 @@ import org.apache.kafka.streams.processor.internals.SerdeGetter;
  */
 public class WrappingNullableUtils {
 
-    @SuppressWarnings("unchecked")
-    private static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final ProcessorContext context, final boolean isKey, final String name) {
+    @SuppressWarnings({"unchecked", "resource"})
+    private static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final ProcessorContext<?, ?> context, final boolean isKey) {
         final Deserializer<T> deserializerToUse;
 
         if (specificDeserializer == null) {
@@ -41,8 +41,8 @@ public class WrappingNullableUtils {
         return deserializerToUse;
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final ProcessorContext context, final boolean isKey, final String name) {
+    @SuppressWarnings({"unchecked", "resource"})
+    private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final ProcessorContext<?, ?> context, final boolean isKey) {
         final Serializer<T> serializerToUse;
         if (specificSerializer == null) {
             serializerToUse = (Serializer<T>) (isKey ? context.keySerde().serializer() : context.valueSerde().serializer());
@@ -53,7 +53,7 @@ public class WrappingNullableUtils {
         return serializerToUse;
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings("unchecked")
     private static <T> Serde<T> prepareSerde(final Serde<T> specificSerde, final SerdeGetter getter, final boolean isKey) {
         final Serde<T> serdeToUse;
         if (specificSerde == null) {
@@ -62,25 +62,25 @@ public class WrappingNullableUtils {
             serdeToUse = specificSerde;
         }
         if (serdeToUse instanceof WrappingNullableSerde) {
-            ((WrappingNullableSerde) serdeToUse).setIfUnset(getter);
+            ((WrappingNullableSerde<?, ?, ?>) serdeToUse).setIfUnset(getter);
         }
         return serdeToUse;
     }
 
-    public static <K> Deserializer<K> prepareKeyDeserializer(final Deserializer<K> specificDeserializer, final ProcessorContext context, final String name) {
-        return prepareDeserializer(specificDeserializer, context, true, name);
+    public static <K> Deserializer<K> prepareKeyDeserializer(final Deserializer<K> specificDeserializer, final ProcessorContext<K, ?> context) {
+        return prepareDeserializer(specificDeserializer, context, true);
     }
 
-    public static <V> Deserializer<V> prepareValueDeserializer(final Deserializer<V> specificDeserializer, final ProcessorContext context, final String name) {
-        return prepareDeserializer(specificDeserializer, context, false, name);
+    public static <V> Deserializer<V> prepareValueDeserializer(final Deserializer<V> specificDeserializer, final ProcessorContext<?, V> context) {
+        return prepareDeserializer(specificDeserializer, context, false);
     }
 
-    public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final ProcessorContext context, final String name) {
-        return prepareSerializer(specificSerializer, context, true, name);
+    public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final ProcessorContext<?, ?> context) {
+        return prepareSerializer(specificSerializer, context, true);
     }
 
-    public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final ProcessorContext context, final String name) {
-        return prepareSerializer(specificSerializer, context, false, name);
+    public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final ProcessorContext<?, ?> context) {
+        return prepareSerializer(specificSerializer, context, false);
     }
 
     public static <K> Serde<K> prepareKeySerde(final Serde<K> specificSerde, final SerdeGetter getter) {
@@ -91,17 +91,15 @@ public class WrappingNullableUtils {
         return prepareSerde(specificSerde, getter, false);
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     public static <T> void initNullableSerializer(final Serializer<T> specificSerializer, final SerdeGetter getter) {
         if (specificSerializer instanceof WrappingNullableSerializer) {
-            ((WrappingNullableSerializer) specificSerializer).setIfUnset(getter);
+            ((WrappingNullableSerializer<?, ?, ?>) specificSerializer).setIfUnset(getter);
         }
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     public static <T> void initNullableDeserializer(final Deserializer<T> specificDeserializer, final SerdeGetter getter) {
         if (specificDeserializer instanceof WrappingNullableDeserializer) {
-            ((WrappingNullableDeserializer) specificDeserializer).setIfUnset(getter);
+            ((WrappingNullableDeserializer<?, ?, ?>) specificDeserializer).setIfUnset(getter);
         }
     }
 

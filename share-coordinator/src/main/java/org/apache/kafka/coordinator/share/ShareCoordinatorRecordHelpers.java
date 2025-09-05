@@ -18,23 +18,20 @@ package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.share.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.stream.Collectors;
 
 public class ShareCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareSnapshotRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(new ShareSnapshotKey()
+        return CoordinatorRecord.record(
+            new ShareSnapshotKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)
                 .setPartition(partitionId),
-                CoordinatorRecordType.SHARE_SNAPSHOT.id()),
             new ApiMessageAndVersion(new ShareSnapshotValue()
                 .setSnapshotEpoch(offsetData.snapshotEpoch())
                 .setStateEpoch(offsetData.stateEpoch())
@@ -46,18 +43,20 @@ public class ShareCoordinatorRecordHelpers {
                         .setLastOffset(batch.lastOffset())
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
-                    .collect(Collectors.toList())),
-                (short) 0)
+                    .toList())
+                .setCreateTimestamp(offsetData.createTimestamp())
+                .setWriteTimestamp(offsetData.writeTimestamp()),
+                (short) 0
+            )
         );
     }
 
-    public static CoordinatorRecord newShareSnapshotUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(new ShareUpdateKey()
+    public static CoordinatorRecord newShareUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
+        return CoordinatorRecord.record(
+            new ShareUpdateKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)
                 .setPartition(partitionId),
-                CoordinatorRecordType.SHARE_UPDATE.id()),
             new ApiMessageAndVersion(new ShareUpdateValue()
                 .setSnapshotEpoch(offsetData.snapshotEpoch())
                 .setLeaderEpoch(offsetData.leaderEpoch())
@@ -68,8 +67,19 @@ public class ShareCoordinatorRecordHelpers {
                         .setLastOffset(batch.lastOffset())
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
-                    .collect(Collectors.toList())),
-                (short) 0)
+                    .toList()),
+                (short) 0
+            )
+        );
+    }
+
+    public static CoordinatorRecord newShareStateTombstoneRecord(String groupId, Uuid topicId, int partitionId) {
+        // Always generate share snapshot type record for tombstone.
+        return CoordinatorRecord.tombstone(
+            new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId)
         );
     }
 }

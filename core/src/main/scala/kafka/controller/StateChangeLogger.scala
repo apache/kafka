@@ -42,9 +42,4 @@ class StateChangeLogger(brokerId: Int, inControllerContext: Boolean, controllerE
     logIdent = s"[$prefix id=$brokerId$epochEntry] "
   }
 
-  def withControllerEpoch(controllerEpoch: Int): StateChangeLogger =
-    new StateChangeLogger(brokerId, inControllerContext, Some(controllerEpoch))
-
-  def messageWithPrefix(message: String): String = msgWithLogIdent(message)
-
 }

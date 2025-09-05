@@ -17,8 +17,6 @@
 
 package org.apache.kafka.metadata;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,7 +40,6 @@ import java.util.Map;
  *     ↓
  * SHUTTING_DOWN
  */
-@InterfaceStability.Evolving
 public enum BrokerState {
     /**
      * The state the broker is in when it first starts up.

@@ -39,10 +39,6 @@ import java.util.Optional;
  * behind the latest in-memory state which has not yet been fully persisted to the log. This is
  * reasonable for metrics, which don't need up-to-the-millisecond update latency.
  *
- * NOTE: the ZK controller has some special rules for calculating preferredReplicaImbalanceCount
- * which we haven't implemented here. Specifically, the ZK controller considers reassigning
- * partitions to always have their preferred leader, even if they don't.
- * All other metrics should be the same, as far as is possible.
  */
 public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
     private final ControllerMetadataMetrics metrics;
@@ -97,8 +93,11 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
         if (delta.clusterDelta() != null) {
             for (Entry<Integer, Optional<BrokerRegistration>> entry :
                     delta.clusterDelta().changedBrokers().entrySet()) {
-                changes.handleBrokerChange(prevImage.cluster().brokers().get(entry.getKey()),
-                        entry.getValue().orElse(null));
+                changes.handleBrokerChange(
+                    prevImage.cluster().brokers().get(entry.getKey()),
+                    entry.getValue().orElse(null),
+                    metrics
+                );
             }
         }
         if (delta.topicsDelta() != null) {
@@ -121,20 +120,20 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
         metrics.setGlobalTopicCount(newImage.topics().topicsById().size());
         int fencedBrokers = 0;
         int activeBrokers = 0;
-        int zkBrokers = 0;
+        int controlledShutdownBrokers = 0;
         for (BrokerRegistration broker : newImage.cluster().brokers().values()) {
             if (broker.fenced()) {
                 fencedBrokers++;
             } else {
                 activeBrokers++;
             }
-            if (broker.isMigratingZkBroker()) {
-                zkBrokers++;
+            if (broker.inControlledShutdown()) {
+                controlledShutdownBrokers++;
             }
         }
         metrics.setFencedBrokerCount(fencedBrokers);
         metrics.setActiveBrokerCount(activeBrokers);
-        metrics.setMigratingZkBrokerCount(zkBrokers);
+        metrics.setControlledShutdownBrokerCount(controlledShutdownBrokers);
 
         int totalPartitions = 0;
         int offlinePartitions = 0;

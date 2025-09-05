@@ -30,14 +30,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
+public class ErrantRecordSinkConnector extends TestableSinkConnector {
 
     @Override
     public Class<? extends Task> taskClass() {
         return ErrantRecordSinkTask.class;
     }
 
-    public static class ErrantRecordSinkTask extends MonitorableSinkTask {
+    public static class ErrantRecordSinkTask extends TestableSinkTask {
         private ErrantRecordReporter reporter;
         private ExecutorService executorService;
 

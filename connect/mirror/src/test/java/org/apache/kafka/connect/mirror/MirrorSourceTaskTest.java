@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
@@ -36,9 +35,7 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -225,14 +222,14 @@ public class MirrorSourceTaskTest {
         OffsetStorageReader mockOffsetStorageReader = mock(OffsetStorageReader.class);
         when(mockSourceTaskContext.offsetStorageReader()).thenReturn(mockOffsetStorageReader);
 
-        Set<TopicPartition> topicPartitions = new HashSet<>(Arrays.asList(
+        Set<TopicPartition> topicPartitions = Set.of(
                 new TopicPartition("previouslyReplicatedTopic", 8),
                 new TopicPartition("previouslyReplicatedTopic1", 0),
                 new TopicPartition("previouslyReplicatedTopic", 1),
                 new TopicPartition("newTopicToReplicate1", 1),
                 new TopicPartition("newTopicToReplicate1", 4),
                 new TopicPartition("newTopicToReplicate2", 0)
-        ));
+        );
 
         long arbitraryCommittedOffset = 4L;
         long offsetToSeek = arbitraryCommittedOffset + 1L;
@@ -283,8 +280,6 @@ public class MirrorSourceTaskTest {
 
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
-        @SuppressWarnings("unchecked")
-        KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
         MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
 
         String sourceClusterName = "cluster1";

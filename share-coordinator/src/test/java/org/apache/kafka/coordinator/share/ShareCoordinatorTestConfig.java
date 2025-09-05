@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.config.ShareCoordinatorConfig;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,7 +29,7 @@ import java.util.Map;
 
 public class ShareCoordinatorTestConfig {
 
-    private static final List<ConfigDef> CONFIG_DEF_LIST = Collections.singletonList(
+    private static final List<ConfigDef> CONFIG_DEF_LIST = List.of(
         ShareCoordinatorConfig.CONFIG_DEF
     );
 
@@ -51,6 +50,7 @@ public class ShareCoordinatorTestConfig {
         configs.put(ShareCoordinatorConfig.APPEND_LINGER_MS_CONFIG, "10");
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_COMPRESSION_CODEC_CONFIG, String.valueOf(CompressionType.NONE.id));
         configs.put(ShareCoordinatorConfig.STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG, "30000");  // 30 seconds
+        configs.put(ShareCoordinatorConfig.COLD_PARTITION_SNAPSHOT_INTERVAL_MS_CONFIG, "10000");    // 10 seconds
         return configs;
     }
 

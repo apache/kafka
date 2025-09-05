@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.Punctuator;
 
-public class PunctuationSchedule extends Stamped<ProcessorNode> {
+public class PunctuationSchedule extends Stamped<ProcessorNode<?, ?, ?, ?>> {
 
     private final long interval;
     private final Punctuator punctuator;
@@ -27,7 +27,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     // this Cancellable will be re-pointed at the successor schedule in next()
     private final RepointableCancellable cancellable;
 
-    PunctuationSchedule(final ProcessorNode node,
+    PunctuationSchedule(final ProcessorNode<?, ?, ?, ?> node,
                         final long time,
                         final long interval,
                         final Punctuator punctuator) {
@@ -35,7 +35,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         cancellable.setSchedule(this);
     }
 
-    private PunctuationSchedule(final ProcessorNode node,
+    private PunctuationSchedule(final ProcessorNode<?, ?, ?, ?> node,
                                 final long time,
                                 final long interval,
                                 final Punctuator punctuator,
@@ -46,7 +46,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         this.cancellable = cancellable;
     }
 
-    public ProcessorNode node() {
+    public ProcessorNode<?, ?, ?, ?> node() {
         return value;
     }
 

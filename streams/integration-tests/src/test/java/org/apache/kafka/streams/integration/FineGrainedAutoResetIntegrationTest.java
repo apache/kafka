@@ -58,6 +58,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -76,7 +77,10 @@ public class FineGrainedAutoResetIntegrationTest {
     private static final String OUTPUT_TOPIC_4 = "outputTopic_4";
     private static final String OUTPUT_TOPIC_5 = "outputTopic_5";
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
+            NUM_BROKERS,
+            mkProperties(
+                    Collections.singletonMap("log.message.timestamp.after.max.ms", String.valueOf(Long.MAX_VALUE))));
 
     @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {

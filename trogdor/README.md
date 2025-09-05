@@ -6,14 +6,14 @@ Trogdor can run benchmarks and other workloads. Trogdor can also inject faults i
 
 Quickstart
 =========================================================
-First, we want to [start a single-node Kafka cluster in KRaft mode](https://github.com/apache/kafka/blob/trunk/README.md#running-a-kafka-broker-in-kraft-mode)
+First, we want to [start a single-node Kafka cluster](https://github.com/apache/kafka/blob/trunk/README.md#running-a-kafka-broker)
 
-Running Kafka in Kraft mode:
+Running Kafka:
 
 ```
 KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
-./bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties
-./bin/kafka-server-start.sh config/kraft/reconfig-server.properties  &> /tmp/kafka.log &
+./bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/server.properties
+./bin/kafka-server-start.sh config/server.properties  &> /tmp/kafka.log &
 ```
 Then, we want to run a Trogdor Agent, plus a Trogdor Coordinator.
 

@@ -62,7 +62,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -545,7 +544,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         log.debug("Removing connector configuration for connector '{}'", connector);
         try {
             Timer timer = time.timer(READ_WRITE_TOTAL_TIMEOUT_MS);
-            List<ProducerKeyValue> keyValues = Arrays.asList(
+            List<ProducerKeyValue> keyValues = List.of(
                     new ProducerKeyValue(CONNECTOR_KEY(connector), null),
                     new ProducerKeyValue(TARGET_STATE_KEY(connector), null)
             );
@@ -792,7 +791,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
 
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).configStorageTopicSettings()
-                                            : Collections.emptyMap();
+                                            : Map.of();
         NewTopic topicDescription = TopicAdmin.defineTopic(topic)
                 .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
@@ -811,7 +810,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
      * @param timer Timer bounding how long this method can block. The timer is updated before the method returns.
      */
     private void sendPrivileged(String key, byte[] value, Timer timer) throws ExecutionException, InterruptedException, TimeoutException {
-        sendPrivileged(Collections.singletonList(new ProducerKeyValue(key, value)), timer);
+        sendPrivileged(List.of(new ProducerKeyValue(key, value)), timer);
     }
 
     /**
@@ -854,14 +853,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         }
     }
 
-    private static class ProducerKeyValue {
-        final String key;
-        final byte[] value;
-
-        ProducerKeyValue(String key, byte[] value) {
-            this.key = key;
-            this.value = value;
-        }
+    private record ProducerKeyValue(String key, byte[] value) {
     }
 
     private void relinquishWritePrivileges() {
@@ -1258,7 +1250,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         } else {
             // TRACE level since there may be many of these records in the config topic
             log.trace(
-                    "Ignoring old logging level {} for namespace {} that was writen to the config topic before this worker completed startup",
+                    "Ignoring old logging level {} for namespace {} that was written to the config topic before this worker completed startup",
                     level,
                     namespace
             );

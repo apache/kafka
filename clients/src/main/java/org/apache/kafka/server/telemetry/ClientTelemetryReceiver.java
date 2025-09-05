@@ -17,14 +17,12 @@
 
 package org.apache.kafka.server.telemetry;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 /**
  * {@code ClientTelemetryReceiver} defines the behaviour for telemetry receiver on the broker side
  * which receives client telemetry metrics.
  */
-@InterfaceStability.Evolving
 public interface ClientTelemetryReceiver {
     /**
      * Called by the broker when a client reports telemetry metrics. The associated request context

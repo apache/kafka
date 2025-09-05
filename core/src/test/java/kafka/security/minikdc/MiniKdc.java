@@ -64,7 +64,6 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.text.MessageFormat;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -74,7 +73,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -138,8 +136,8 @@ public class MiniKdc {
      *                MiniKdc.
      */
     public MiniKdc(Properties config, File workDir) {
-        Set<String> requiredProperties = new HashSet<>(Arrays.asList(ORG_NAME, ORG_DOMAIN, KDC_BIND_ADDRESS, KDC_PORT,
-                INSTANCE, TRANSPORT, MAX_TICKET_LIFETIME, MAX_RENEWABLE_LIFETIME));
+        Set<String> requiredProperties = Set.of(ORG_NAME, ORG_DOMAIN, KDC_BIND_ADDRESS, KDC_PORT,
+                INSTANCE, TRANSPORT, MAX_TICKET_LIFETIME, MAX_RENEWABLE_LIFETIME);
         if (!config.keySet().containsAll(requiredProperties)) {
             throw new IllegalArgumentException("Missing required properties: " + requiredProperties);
         }
@@ -181,7 +179,7 @@ public class MiniKdc {
         config.putAll(userConfig);
         File keytabFile = new File(keytabPath).getAbsoluteFile();
 
-        start(workDir, config, keytabFile, Arrays.asList(principals));
+        start(workDir, config, keytabFile, List.of(principals));
     }
 
     /**
@@ -304,7 +302,7 @@ public class MiniKdc {
                 byte keyVersion = (byte) encryptionKey.getKeyVersion();
                 return new KeytabEntry(principalWithRealm, 1, timestamp, keyVersion, encryptionKey);
             });
-        }).collect(Collectors.toList());
+        }).toList();
         keytab.setEntries(entries);
         keytab.write(keytabFile);
     }
@@ -405,16 +403,11 @@ public class MiniKdc {
         // transport
         AbstractTransport absTransport;
         String transport = config.getProperty(TRANSPORT).trim();
-        switch (transport) {
-            case "TCP":
-                absTransport = new TcpTransport(bindAddress, port, 3, 50);
-                break;
-            case "UDP":
-                absTransport = new UdpTransport(port);
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid transport: " + transport);
-        }
+        absTransport = switch (transport) {
+            case "TCP" -> new TcpTransport(bindAddress, port, 3, 50);
+            case "UDP" -> new UdpTransport(port);
+            default -> throw new IllegalArgumentException("Invalid transport: " + transport);
+        };
         kdc.addTransports(absTransport);
         kdc.setServiceName(config.getProperty(INSTANCE));
         kdc.start();

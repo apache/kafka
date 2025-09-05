@@ -37,7 +37,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -154,19 +153,15 @@ public class WorkerConfig extends AbstractConfig {
             + "* " + SERVICE_LOAD + ": Discover plugins only by ServiceLoader. Faster startup than other modes. "
             + "Plugins which are not discoverable by ServiceLoader may not be usable.";
 
-    public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
-    protected static final String CONFIG_PROVIDERS_DOC =
-            "Comma-separated names of <code>ConfigProvider</code> classes, loaded and used "
-            + "in the order specified. Implementing the interface  "
-            + "<code>ConfigProvider</code> allows you to replace variable references in connector configurations, "
-            + "such as for externalized secrets. ";
+    public static final String CONFIG_PROVIDERS_CONFIG = AbstractConfig.CONFIG_PROVIDERS_CONFIG;
+    protected static final String CONFIG_PROVIDERS_DOC = AbstractConfig.CONFIG_PROVIDERS_DOC;
 
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
         "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
-        + "overridden by the connector. The default implementation is `All`, meaning connector configurations can override all client properties. "
-        + "The other possible policies in the framework include `None` to disallow connectors from overriding client properties, "
-        + "and `Principal` to allow connectors to override only client principals.";
+        + "overridden by the connector. The default implementation is <code>All</code>, meaning connector configurations can override all client properties. "
+        + "The other possible policies in the framework include <code>None</code> to disallow connectors from overriding client properties, "
+        + "and <code>Principal</code> to allow connectors to override only client principals.";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "All";
 
 
@@ -191,7 +186,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
     protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
             + "automatic creation of topics used by source connectors, when source connectors "
-            + "are configured with `" + TOPIC_CREATION_PREFIX + "` properties. Each task will use an "
+            + "are configured with <code>" + TOPIC_CREATION_PREFIX + "</code> properties. Each task will use an "
             + "admin client to create its topics and will not depend on the Kafka brokers "
             + "to create topics automatically.";
     protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;
@@ -258,7 +253,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(HEADER_CONVERTER_VERSION, Type.STRING,
                         HEADER_CONVERTER_VERSION_DEFAULT, Importance.LOW, HEADER_CONVERTER_VERSION_DOC)
                 .define(CONFIG_PROVIDERS_CONFIG, Type.LIST,
-                        Collections.emptyList(),
+                        List.of(),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
                         Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC)
@@ -320,7 +315,7 @@ public class WorkerConfig extends AbstractConfig {
 
     private void logInternalConverterRemovalWarnings(Map<String, String> props) {
         List<String> removedProperties = new ArrayList<>();
-        for (String property : Arrays.asList("internal.key.converter", "internal.value.converter")) {
+        for (String property : List.of("internal.key.converter", "internal.value.converter")) {
             if (props.containsKey(property)) {
                 removedProperties.add(property);
             }
@@ -329,12 +324,7 @@ public class WorkerConfig extends AbstractConfig {
         if (!removedProperties.isEmpty()) {
             log.warn(
                     "The worker has been configured with one or more internal converter properties ({}). "
-                            + "Support for these properties was deprecated in version 2.0 and removed in version 3.0, "
-                            + "and specifying them will have no effect. "
-                            + "Instead, an instance of the JsonConverter with schemas.enable "
-                            + "set to false will be used. For more information, please visit "
-                            + "https://kafka.apache.org/documentation/#upgrade and consult the upgrade notes"
-                            + "for the 3.0 release.",
+                     + "These properties have been removed since version 3.0 and an instance of the JsonConverter with schemas.enable set to false will be used instead.",
                     removedProperties);
         }
     }

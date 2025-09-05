@@ -41,7 +41,11 @@ import java.util.Map;
  * We need to clean this all up (https://issues.apache.org/jira/browse/KAFKA-17131) and mark the interface
  * deprecated afterward.
  */
-@SuppressWarnings("deprecation")
+@SuppressWarnings("deprecation") // Not deprecating the old context, since it is used by Transformers. See KAFKA-10603.
+/*
+ * When we deprecate `ProcessorContext` can also deprecate `To` class,
+ * as it is only used in the `ProcessorContext#forward` method.
+ */
 public interface ProcessorContext {
 
     /**
@@ -101,6 +105,13 @@ public interface ProcessorContext {
     /**
      * Get the state store given the store name.
      *
+     * <p>The returned state store represent one shard of the overall state, which belongs to the current task.
+     * The returned shard of the state store may only be used by the current
+     * {@link org.apache.kafka.streams.kstream.Transformer}, {@link org.apache.kafka.streams.kstream.ValueTransformer},
+     * or {@link org.apache.kafka.streams.kstream.ValueTransformerWithKey} instance.
+     * Sharing a shard across different transformers (ie, from different "sibling" tasks; same sub-topology but different
+     * partition) may lead to data corruption and/or data loss.
+     *
      * @param name The store name
      * @param <S> The type or interface of the store to return
      * @return The state store instance
@@ -110,9 +121,10 @@ public interface ProcessorContext {
     <S extends StateStore> S getStateStore(final String name);
 
     /**
-     * Schedule a periodic operation for processors. A processor may call this method during
-     * {@link org.apache.kafka.streams.kstream.ValueTransformer#init(ProcessorContext)  initialization} or
-     * {@link org.apache.kafka.streams.kstream.ValueTransformer#transform(Object)  processing} to
+     * Schedule a periodic operation for processors. A processor may call this method during a
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}'s
+     * {@link org.apache.kafka.streams.kstream.ValueTransformerWithKey#init(ProcessorContext) initialization} or
+     * {@link org.apache.kafka.streams.kstream.ValueTransformerWithKey#transform(Object, Object) processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>

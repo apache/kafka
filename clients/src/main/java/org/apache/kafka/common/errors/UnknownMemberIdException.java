@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class UnknownMemberIdException extends ApiException {
+public class UnknownMemberIdException extends ApplicationRecoverableException {
     private static final long serialVersionUID = 1L;
 
     public UnknownMemberIdException() {

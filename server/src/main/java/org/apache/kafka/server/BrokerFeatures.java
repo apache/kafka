@@ -68,7 +68,7 @@ public class BrokerFeatures {
         Map<String, SupportedVersionRange> features = new HashMap<>();
         features.put(MetadataVersion.FEATURE_NAME,
                 new SupportedVersionRange(
-                        MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+                        MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting().featureLevel()
                                 : MetadataVersion.latestProduction().featureLevel()));
         PRODUCTION_FEATURES.forEach(feature -> {

@@ -223,10 +223,10 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldPutToInnerStoreAndRecordPutMetrics() {
         final byte[] bytes = "a".getBytes();
-        doNothing().when(innerStoreMock).put(eq(Bytes.wrap(bytes)), any(), eq(context.timestamp()));
+        doNothing().when(innerStoreMock).put(eq(Bytes.wrap(bytes)), any(), eq(context.recordContext().timestamp()));
 
         store.init(context, store);
-        store.put("a", "a", context.timestamp());
+        store.put("a", "a", context.recordContext().timestamp());
 
         // it suffices to verify one put metric since all put metrics are recorded by the same sensor
         // and the sensor is tested elsewhere

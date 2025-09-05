@@ -17,13 +17,16 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class DeleteShareGroupStateResponse extends AbstractResponse {
@@ -60,9 +63,63 @@ public class DeleteShareGroupStateResponse extends AbstractResponse {
         // No op
     }
 
-    public static DeleteShareGroupStateResponse parse(ByteBuffer buffer, short version) {
+    public static DeleteShareGroupStateResponse parse(Readable readable, short version) {
         return new DeleteShareGroupStateResponse(
-                new DeleteShareGroupStateResponseData(new ByteBufferAccessor(buffer), version)
+                new DeleteShareGroupStateResponseData(readable, version)
         );
+    }
+
+    public static DeleteShareGroupStateResponseData toResponseData(Uuid topicId, int partitionId) {
+        return new DeleteShareGroupStateResponseData()
+            .setResults(List.of(
+                new DeleteShareGroupStateResponseData.DeleteStateResult()
+                    .setTopicId(topicId)
+                    .setPartitions(List.of(
+                        new DeleteShareGroupStateResponseData.PartitionResult()
+                            .setPartition(partitionId)))));
+    }
+
+    public static DeleteShareGroupStateResponseData.PartitionResult toErrorResponsePartitionResult(
+        int partitionId,
+        Errors error,
+        String errorMessage
+    ) {
+        return new DeleteShareGroupStateResponseData.PartitionResult()
+            .setPartition(partitionId)
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
+    }
+
+    public static DeleteShareGroupStateResponseData.DeleteStateResult toResponseDeleteStateResult(Uuid topicId, List<DeleteShareGroupStateResponseData.PartitionResult> partitionResults) {
+        return new DeleteShareGroupStateResponseData.DeleteStateResult()
+            .setTopicId(topicId)
+            .setPartitions(partitionResults);
+    }
+
+    public static DeleteShareGroupStateResponseData.PartitionResult toResponsePartitionResult(int partitionId) {
+        return new DeleteShareGroupStateResponseData.PartitionResult()
+            .setPartition(partitionId);
+    }
+
+    public static DeleteShareGroupStateResponseData toErrorResponseData(Uuid topicId, int partitionId, Errors error, String errorMessage) {
+        return new DeleteShareGroupStateResponseData().setResults(
+            List.of(new DeleteShareGroupStateResponseData.DeleteStateResult()
+                .setTopicId(topicId)
+                .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(partitionId)
+                    .setErrorCode(error.code())
+                    .setErrorMessage(errorMessage)))));
+    }
+
+    public static DeleteShareGroupStateResponseData toGlobalErrorResponse(DeleteShareGroupStateRequestData request, Errors error) {
+        List<DeleteShareGroupStateResponseData.DeleteStateResult> deleteStateResults = new ArrayList<>();
+        request.topics().forEach(topicData -> {
+            List<DeleteShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>();
+            topicData.partitions().forEach(partitionData -> partitionResults.add(
+                toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
+            );
+            deleteStateResults.add(toResponseDeleteStateResult(topicData.topicId(), partitionResults));
+        });
+        return new DeleteShareGroupStateResponseData().setResults(deleteStateResults);
     }
 }

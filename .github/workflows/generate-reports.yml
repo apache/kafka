@@ -36,6 +36,7 @@ jobs:
       - name: Setup Python
         uses: ./.github/actions/setup-python
       - name: Run Report
+        if : ${{ ! github.event.repository.fork }}
         env:
           DEVELOCITY_ACCESS_TOKEN: ${{ secrets.DV_API_ACCESS }}
         run: |

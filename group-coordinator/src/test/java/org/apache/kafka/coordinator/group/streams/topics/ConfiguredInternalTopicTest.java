@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -34,13 +33,13 @@ public class ConfiguredInternalTopicTest {
     @Test
     public void testConstructorWithNullName() {
         assertThrows(NullPointerException.class,
-            () -> new ConfiguredInternalTopic(null, 1, Optional.empty(), Collections.emptyMap()));
+            () -> new ConfiguredInternalTopic(null, 1, Optional.empty(), Map.of()));
     }
 
     @Test
     public void testConstructorWithInvalidName() {
         assertThrows(InvalidTopicException.class,
-            () -> new ConfiguredInternalTopic("invalid topic name", 1, Optional.empty(), Collections.emptyMap()));
+            () -> new ConfiguredInternalTopic("invalid topic name", 1, Optional.empty(), Map.of()));
     }
 
     @Test
@@ -52,7 +51,7 @@ public class ConfiguredInternalTopicTest {
     @Test
     public void testConstructorWithZeroPartitions() {
         assertThrows(IllegalArgumentException.class,
-            () -> new ConfiguredInternalTopic("test-topic", 0, Optional.empty(), Collections.emptyMap()));
+            () -> new ConfiguredInternalTopic("test-topic", 0, Optional.empty(), Map.of()));
     }
 
     @Test

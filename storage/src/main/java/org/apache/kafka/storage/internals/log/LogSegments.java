@@ -17,19 +17,19 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /**
  * This class encapsulates a thread-safe navigable map of LogSegment instances and provides the
@@ -105,8 +105,7 @@ public class LogSegments implements Closeable {
      */
     @Override
     public void close() throws IOException {
-        for (LogSegment s : values())
-            s.close();
+        Utils.closeAll(values().toArray(new LogSegment[0]));
     }
 
     /**
@@ -128,8 +127,6 @@ public class LogSegments implements Closeable {
     }
 
     /**
-     * Take care! this is an O(n) operation, where n is the number of segments.
-     *
      * This method is thread-safe.
      *
      * @return The number of segments.
@@ -143,7 +140,7 @@ public class LogSegments implements Closeable {
      * @return the base offsets of all segments
      */
     public Collection<Long> baseOffsets() {
-        return values().stream().map(LogSegment::baseOffset).collect(Collectors.toList());
+        return values().stream().map(LogSegment::baseOffset).toList();
     }
 
     /**
@@ -184,7 +181,7 @@ public class LogSegments implements Closeable {
     public Collection<LogSegment> values(long from, long to) {
         if (from == to) {
             // Handle non-segment-aligned empty sets
-            return Collections.emptyList();
+            return List.of();
         } else if (to < from) {
             throw new IllegalArgumentException("Invalid log segment range: requested segments in " + topicPartition +
                     " from offset " + from + " which is greater than limit offset " + to);
@@ -199,7 +196,7 @@ public class LogSegments implements Closeable {
     public Collection<LogSegment> nonActiveLogSegmentsFrom(long from) {
         LogSegment activeSegment = lastSegment().get();
         if (from > activeSegment.baseOffset())
-            return Collections.emptyList();
+            return List.of();
         else
             return values(from, activeSegment.baseOffset());
     }
@@ -316,7 +313,7 @@ public class LogSegments implements Closeable {
         Long higherOffset = segments.higherKey(baseOffset);
         if (higherOffset != null)
             return segments.tailMap(higherOffset, true).values();
-        return Collections.emptyList();
+        return List.of();
     }
 
     /**
@@ -336,7 +333,7 @@ public class LogSegments implements Closeable {
      * @param predicate the predicate to be used for filtering segments.
      */
     public Collection<LogSegment> filter(Predicate<LogSegment> predicate) {
-        return values().stream().filter(predicate).collect(Collectors.toList());
+        return values().stream().filter(predicate).toList();
     }
 
     /**

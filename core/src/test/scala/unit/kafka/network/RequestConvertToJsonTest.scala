@@ -24,6 +24,7 @@ import kafka.network
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.network.RequestConvertToJson
@@ -38,7 +39,7 @@ class RequestConvertToJsonTest {
 
   @Test
   def testRequestHeaderNode(): Unit = {
-    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
+    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.latestVersion)
     val req = request(alterIsrRequest)
     val header = req.header
 
@@ -52,7 +53,7 @@ class RequestConvertToJsonTest {
 
   @Test
   def testRequestDesc(): Unit = {
-    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
+    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.latestVersion)
     val req = request(alterIsrRequest)
 
     val expectedNode = new ObjectNode(JsonNodeFactory.instance)
@@ -67,7 +68,7 @@ class RequestConvertToJsonTest {
 
   @Test
   def testRequestDescMetrics(): Unit = {
-    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
+    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), ApiKeys.ALTER_PARTITION.latestVersion)
     val req = request(alterIsrRequest)
     val send = new NetworkSend(req.context.connectionId, alterIsrRequest.toSend(req.header))
     val headerLog = RequestConvertToJson.requestHeaderNode(req.header)

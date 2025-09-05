@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.GroupMetadataManager;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -42,6 +43,7 @@ import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -118,10 +120,12 @@ public class RegexResolutionBenchmark {
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void run() {
         GroupMetadataManager.refreshRegularExpressions(
+            null,
             GROUP_ID,
             LOG,
             TIME,
-            image,
+            new KRaftCoordinatorMetadataImage(image),
+            Optional.empty(),
             regexes
         );
     }
