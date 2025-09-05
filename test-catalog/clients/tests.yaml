@@ -3329,6 +3329,8 @@ org.apache.kafka.common.config.ConfigDefTest:
 - testInvalidDefaultRange
 - testInvalidDefaultString
 - testListSizeValidatorToString
+- testListValidatorAnyNonDuplicateValues
+- testListValidatorIn
 - testMissingDependentConfigs
 - testMissingRequired
 - testNames

@@ -9,8 +9,10 @@ kafka.KafkaConfigTest:
 - testCombinedRoleNodeIdValidation
 - testConnectionsMaxReauthMsDefault
 - testConnectionsMaxReauthMsExplicit
+- testControllerListenerNamesMismatch
 - testControllerRequiredProperties
 - testControllerRoleNodeIdValidation
+- testControllerSecurityProtocolMapMissing
 - testGetKafkaConfigFromArgs
 - testGetKafkaConfigFromArgsNonArgsAtTheBegging
 - testGetKafkaConfigFromArgsNonArgsAtTheEnd
@@ -1120,6 +1122,8 @@ kafka.log.LogManagerTest:
 kafka.log.UnifiedLogTest:
 - followerShouldSaveEpochInformationFromReplicatedMessagesToTheEpochCache
 - shouldApplyEpochToMessageOnAppendIfLeader
+- shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithMsRetention
+- shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithSizeRetention
 - shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete
 - shouldDeleteSizeBasedSegments
 - shouldDeleteStartOffsetBreachedSegmentsWhenPolicyDoesNotIncludeDelete
@@ -2098,13 +2102,6 @@ kafka.server.KafkaApisTest:
 - testGetAcknowledgeBatchesFromShareFetchRequest
 - testGetAcknowledgeBatchesFromShareFetchRequestError
 - testGetAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition
-- testGetReplicaInfoRequestHappyTrail
-- testGetReplicaLogInfoLogDirNotFoundError
-- testGetReplicaLogInfoMixOfSuccessAndFailure
-- testGetReplicaLogInfoRequestTooManyTopics
-- testGetReplicaLogInfoSingleTopicManyPartitionsHasMoreData
-- testGetReplicaLogInfoSingleTopicPartitionHasMoreData
-- testGetReplicaLogInfoUnknownTopic
 - testGetTelemetrySubscriptions
 - testGetTelemetrySubscriptionsWithException
 - testHandleAcknowledgementsInvalidAcknowledgementBatches
@@ -2279,7 +2276,6 @@ kafka.server.KafkaApisTest:
 - testSyncGroupProtocolTypeAndNameAreMandatorySinceV5
 - testTransactionalParametersSetCorrectly
 - testTxnOffsetCommitWithInvalidPartition
-- testUnauthorizedGetReplicaLogInfo
 - testUnauthorizedTopicMetadataRequest
 - testWriteShareGroupStateAuthorizationFailed
 - testWriteShareGroupStateSuccess

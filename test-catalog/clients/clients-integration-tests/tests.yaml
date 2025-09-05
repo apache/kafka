@@ -256,6 +256,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testAsyncConsumerSeek
 - testAsyncConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned
 - testAsyncConsumerSimpleConsumption
+- testAsyncConsumerStallBetweenPoll
 - testAsyncConsumerStaticConsumerDetectsNewPartitionCreatedAfterRestart
 - testClassicConsumerAutoOffsetReset
 - testClassicConsumerCloseLeavesGroupOnInterrupt
@@ -290,6 +291,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testClassicConsumerSeek
 - testClassicConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned
 - testClassicConsumerSimpleConsumption
+- testClassicConsumerStallBetweenPoll
 - testClassicConsumerStaticConsumerDetectsNewPartitionCreatedAfterRestart
 - testClassicConsumingWithNullGroupId
 org.apache.kafka.clients.consumer.SaslPlainPlaintextConsumerTest:
