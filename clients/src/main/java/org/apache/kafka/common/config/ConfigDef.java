@@ -1304,6 +1304,10 @@ public class ConfigDef {
             return type;
         }
 
+        /**
+         * Builder for ConfigDef.ConfigKey instances.
+         * @param <T> the class of the builder itself.
+         */
         public static class Builder<T extends Builder<?>> {
             private final String name;
             private ConfigDef.Type type;
@@ -1320,6 +1324,17 @@ public class ConfigDef {
             private boolean internalConfig;
             private String alternativeString;
 
+            /**
+             * Initializes the builder with the specified {@code name}.  Sets the following defaults:
+             * <ul>
+             *     <li>type = {@link ConfigDef.Type#STRING}</li>
+             *     <li>displayName = {@code name}</li>
+             *     <li>defaultValue = {@link #NO_DEFAULT_VALUE}</li>
+             *     <li>orderInGorup = -1</li>
+             *     <li>width = {@link ConfigDef.Width#NONE}</li>
+             * </ul>
+             * @param name the name of the ConfigKey instance.
+             */
             protected Builder(String name) {
                 this.name = name;
                 this.type = ConfigDef.Type.STRING;
@@ -1383,6 +1398,13 @@ public class ConfigDef {
                 return self();
             }
 
+            /**
+             * Adds the dependents to the dependents for the final ConfigDef.ConfigKey.
+             * Once added dependents can not be removed within the builder.
+             * Dependents are unique, Adding a dependent multiple times has no effect.
+             * @param dependents the collection of dependents to add.
+             * @return this
+             */
             public final T dependents(final Collection<String> dependents) {
                 if (this.dependents == null) {
                     this.dependents = new LinkedHashSet<>(dependents);
@@ -1392,6 +1414,13 @@ public class ConfigDef {
                 return self();
             }
 
+            /**
+             * Adds a dependent to the dependents for the final ConfigDef.ConfigKey.
+             * Once added dependents can not be removed within the builder.
+             * Dependents are unique, Adding a dependent multiple times has no effect.
+             * @param dependent the dependent to add.
+             * @return this
+             */
             public final T dependent(final String dependent) {
                 if (this.dependents == null) {
                     this.dependents = new LinkedHashSet<>();
