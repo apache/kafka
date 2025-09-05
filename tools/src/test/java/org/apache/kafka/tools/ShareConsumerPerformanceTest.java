@@ -246,7 +246,7 @@ public class ShareConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "0",
+            "--num-records", "0",
             "--print-metrics"
         };
 
