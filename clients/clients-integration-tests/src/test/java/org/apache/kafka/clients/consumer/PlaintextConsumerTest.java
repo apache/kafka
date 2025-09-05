@@ -63,6 +63,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -109,6 +110,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
@@ -1590,6 +1592,75 @@ public class PlaintextConsumerTest {
                 ("key " + i).getBytes(),
                 ("value " + i).getBytes()
             )));
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerStallBetweenPoll() throws Exception {
+        testStallBetweenPoll(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerStallBetweenPoll() throws Exception {
+        testStallBetweenPoll(GroupProtocol.CONSUMER);
+    }
+
+    /**
+     * This test is to prove that the intermittent stalling that has been experienced when using the asynchronous
+     * consumer, as filed under KAFKA-19259, have been fixed.
+     *
+     * <p/>
+     *
+     * The basic idea is to have one thread that produces a record every 500 ms. and the main thread that consumes
+     * records without pausing between polls for much more than the produce delay. In the test case filed in
+     * KAFKA-19259, the consumer sometimes pauses for up to 5-10 seconds despite records being produced every second.
+     */
+    private void testStallBetweenPoll(GroupProtocol groupProtocol) throws Exception {
+        var testTopic = "stall-test-topic";
+        var numPartitions = 6;
+        cluster.createTopic(testTopic, numPartitions, (short) BROKER_COUNT);
+
+        // The producer must produce slowly to tickle the scenario.
+        var produceDelay = 500;
+
+        var executor = Executors.newScheduledThreadPool(1);
+
+        try (var producer = cluster.producer()) {
+            // Start a thread running that produces records at a relative trickle.
+            executor.scheduleWithFixedDelay(
+                () -> producer.send(new ProducerRecord<>(testTopic, TestUtils.randomBytes(64))),
+                0,
+                produceDelay,
+                TimeUnit.MILLISECONDS
+            );
+
+            Map<String, Object> consumerConfig = Map.of(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
+
+            // Assign a tolerance for how much time is allowed to pass between Consumer.poll() calls given that there
+            // should be *at least* one record to read every second.
+            var pollDelayTolerance = 2000;
+
+            try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
+                consumer.subscribe(List.of(testTopic));
+
+                // This is here to allow the consumer time to settle the group membership/assignment.
+                awaitNonEmptyRecords(consumer, new TopicPartition(testTopic, 0));
+
+                // Keep track of the last time the poll is invoked to ensure the deltas between invocations don't
+                // exceed the delay threshold defined above.
+                var beforePoll = System.currentTimeMillis();
+                consumer.poll(Duration.ofSeconds(5));
+                consumer.poll(Duration.ofSeconds(5));
+                var afterPoll = System.currentTimeMillis();
+                var pollDelay = afterPoll - beforePoll;
+
+                if (pollDelay > pollDelayTolerance)
+                    fail("Detected a stall of " + pollDelay + " ms between Consumer.poll() invocations despite a Producer producing records every " + produceDelay + " ms");
+            } finally {
+                executor.shutdownNow();
+                // Wait for any active tasks to terminate to ensure consumer is not closed while being used from another thread
+                assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor did not terminate");
+            }
         }
     }
 
