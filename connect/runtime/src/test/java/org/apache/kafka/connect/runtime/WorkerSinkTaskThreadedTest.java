@@ -719,19 +719,8 @@ public class WorkerSinkTaskThreadedTest {
     private abstract static class TestSinkTask extends SinkTask {
     }
 
-    private static class ExpectOffsetCommitCommand {
-        final long expectedMessages;
-        final RuntimeException error;
-        final Exception consumerCommitError;
-        final long consumerCommitDelayMs;
-        final boolean invokeCallback;
-
-        private ExpectOffsetCommitCommand(long expectedMessages, RuntimeException error, Exception consumerCommitError, long consumerCommitDelayMs, boolean invokeCallback) {
-            this.expectedMessages = expectedMessages;
-            this.error = error;
-            this.consumerCommitError = consumerCommitError;
-            this.consumerCommitDelayMs = consumerCommitDelayMs;
-            this.invokeCallback = invokeCallback;
-        }
+    private record ExpectOffsetCommitCommand(long expectedMessages, RuntimeException error,
+                                             Exception consumerCommitError, long consumerCommitDelayMs,
+                                             boolean invokeCallback) {
     }
 }

@@ -30,12 +30,14 @@ def get_input(message):
         raise ValueError("This field cannot be empty")
     return value
 
-def build_docker_image_runner(command, image_type):
+def build_docker_image_runner(command, image_type, kafka_archive=None):
     temp_dir_path = tempfile.mkdtemp()
     current_dir = os.path.dirname(os.path.realpath(__file__))
     shutil.copytree(f"{current_dir}/{image_type}", f"{temp_dir_path}/{image_type}", dirs_exist_ok=True)
     shutil.copytree(f"{current_dir}/resources", f"{temp_dir_path}/{image_type}/resources", dirs_exist_ok=True)
     shutil.copy(f"{current_dir}/server.properties", f"{temp_dir_path}/{image_type}")
+    if kafka_archive:
+        shutil.copy(kafka_archive, f"{temp_dir_path}/{image_type}/kafka.tgz")
     command = command.replace("$DOCKER_FILE", f"{temp_dir_path}/{image_type}/Dockerfile")
     command = command.replace("$DOCKER_DIR", f"{temp_dir_path}/{image_type}")
     try:
