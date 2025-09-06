@@ -60,6 +60,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("resource")
 @ClusterTestDefaults(brokers = 3)
 public class TopicBasedRemoteLogMetadataManagerTest {
     private static final int SEG_SIZE = 1048576;
@@ -106,6 +107,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @ClusterTest
     public void testDoesTopicExistWithAdminClientExecutionError() throws ExecutionException, InterruptedException {
         // Create a mock Admin client that throws an ExecutionException (not UnknownTopicOrPartitionException)

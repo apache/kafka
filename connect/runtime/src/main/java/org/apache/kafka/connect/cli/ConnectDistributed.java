@@ -36,8 +36,8 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.SharedTopicAdmin;
 
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
@@ -77,7 +77,7 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedHerder, Di
 
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase,
                 plugins.newInternalConverter(true, JsonConverter.class.getName(),
-                        Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
+                        Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(config);
 
         Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore, connectorClientConfigOverridePolicy);
@@ -99,7 +99,7 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedHerder, Di
         return new DistributedHerder(config, Time.SYSTEM, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
                 restServer.advertisedUrl().toString(), restClient, connectorClientConfigOverridePolicy,
-                Collections.emptyList(), sharedAdmin);
+                List.of(), sharedAdmin);
     }
 
     @Override

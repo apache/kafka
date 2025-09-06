@@ -19,10 +19,10 @@ package org.apache.kafka.coordinator.transaction;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.server.common.TransactionVersion;
 
-import java.util.Set;
+import java.util.HashSet;
 
 /**
- * Immutable object representing the target transition of the transaction metadata
+ * Represent the target transition of the transaction metadata. The topicPartitions field is mutable.
  */
 public record TxnTransitMetadata(
         long producerId,
@@ -32,7 +32,9 @@ public record TxnTransitMetadata(
         short lastProducerEpoch,
         int txnTimeoutMs,
         TransactionState txnState,
-        Set<TopicPartition> topicPartitions,
+        // The TransactionMetadata#topicPartitions field is mutable.
+        // To avoid deep copy when assigning value from TxnTransitMetadata to TransactionMetadata, use HashSet here.
+        HashSet<TopicPartition> topicPartitions,
         long txnStartTimestamp,
         long txnLastUpdateTimestamp,
         TransactionVersion clientTransactionVersion

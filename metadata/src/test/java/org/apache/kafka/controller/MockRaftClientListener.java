@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metalog;
+package org.apache.kafka.controller;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.Batch;
@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
 
-public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessageAndVersion> {
+public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAndVersion> {
     public static final String COMMIT = "COMMIT";
     public static final String LAST_COMMITTED_OFFSET = "LAST_COMMITTED_OFFSET";
     public static final String NEW_LEADER = "NEW_LEADER";
@@ -41,7 +41,7 @@ public class MockMetaLogManagerListener implements RaftClient.Listener<ApiMessag
     private final List<String> serializedEvents = new ArrayList<>();
     private LeaderAndEpoch leaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
-    public MockMetaLogManagerListener(int nodeId) {
+    public MockRaftClientListener(int nodeId) {
         this.nodeId = nodeId;
     }
 
