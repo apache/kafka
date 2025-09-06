@@ -45,26 +45,26 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
-    final boolean repartitionRequired;
     final String userProvidedRepartitionTopicName;
 
     KGroupedStreamImpl(final String name,
                        final Set<String> subTopologySourceNodes,
                        final GroupedInternal<K, V> groupedInternal,
-                       final boolean repartitionRequired,
                        final GraphNode graphNode,
                        final InternalStreamsBuilder builder) {
         super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), subTopologySourceNodes, graphNode, builder);
-        this.repartitionRequired = repartitionRequired;
         this.userProvidedRepartitionTopicName = groupedInternal.name();
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(
             builder,
             groupedInternal,
-            repartitionRequired,
             subTopologySourceNodes,
             name,
             graphNode
         );
+    }
+
+    public boolean isRepartitionRequired() {
+        return graphNode.isRepartitionRequired();
     }
 
     @Override

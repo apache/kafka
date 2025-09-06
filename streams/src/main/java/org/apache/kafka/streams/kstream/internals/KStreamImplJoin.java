@@ -225,6 +225,7 @@ class KStreamImplJoin {
                    .withNodeName(joinMergeName);
 
         final GraphNode joinGraphNode = joinBuilder.build();
+        joinGraphNode.forbidRepartition();
 
         if (leftOuter || rightOuter) {
             joinGraphNode.addLabel(GraphNode.Label.NULL_KEY_RELAXED_JOIN);
@@ -236,7 +237,7 @@ class KStreamImplJoin {
 
         // do not have serde for joined result;
         // also for key serde we do not inherit from either since we cannot tell if these two serdes are different
-        return new KStreamImpl<>(joinMergeName, streamJoinedInternal.keySerde(), null, allSourceNodes, false, joinGraphNode, builder);
+        return new KStreamImpl<>(joinMergeName, streamJoinedInternal.keySerde(), null, allSourceNodes, joinGraphNode, builder);
     }
 
     private void assertWindowSettings(final WindowBytesStoreSupplier supplier, final JoinWindows joinWindows) {

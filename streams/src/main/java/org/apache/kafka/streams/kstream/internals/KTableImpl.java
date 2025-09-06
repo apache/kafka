@@ -516,11 +516,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             name,
             processorParameters
         );
+        toStreamNode.forbidRepartition();
 
         builder.addGraphNode(this.graphNode, toStreamNode);
 
         // we can inherit parent key and value serde
-        return new KStreamImpl<>(name, keySerde, valueSerde, subTopologySourceNodes, false, toStreamNode, builder);
+        return new KStreamImpl<>(name, keySerde, valueSerde, subTopologySourceNodes, toStreamNode, builder);
     }
 
     @Override

@@ -33,7 +33,6 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -93,8 +92,9 @@ public class AbstractStreamTest {
             final ProcessorGraphNode<K, V> processorNode = new ProcessorGraphNode<>(
                 name,
                 new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name));
+            processorNode.forbidRepartition();
             builder.addGraphNode(this.graphNode, processorNode);
-            return new KStreamImpl<>(name, null, null, subTopologySourceNodes, false, processorNode, builder);
+            return new KStreamImpl<>(name, null, null, subTopologySourceNodes, processorNode, builder);
         }
     }
 

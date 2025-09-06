@@ -33,7 +33,6 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
     private static final String BRANCH_NAME = "KSTREAM-BRANCH-";
 
     private final KStreamImpl<K, V> source;
-    private final boolean repartitionRequired;
     private final String splitterName;
     private final Map<String, KStream<K, V>> outputBranches = new HashMap<>();
 
@@ -41,9 +40,8 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
     private final List<String> childNames = new ArrayList<>();
     private final ProcessorGraphNode<K, V> splitterNode;
 
-    BranchedKStreamImpl(final KStreamImpl<K, V> source, final boolean repartitionRequired, final NamedInternal named) {
+    BranchedKStreamImpl(final KStreamImpl<K, V> source, final NamedInternal named) {
         this.source = source;
-        this.repartitionRequired = repartitionRequired;
         this.splitterName = named.orElseGenerateWithPrefix(source.builder, BRANCH_NAME);
 
         // predicates and childNames are passed by reference so when the user adds a branch they get added to
@@ -86,7 +84,7 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
         source.builder.addGraphNode(splitterNode, branchChildNode);
         final KStreamImpl<K, V> branch = new KStreamImpl<>(branchChildName, source.keySerde,
                 source.valueSerde, source.subTopologySourceNodes,
-                repartitionRequired, branchChildNode, source.builder);
+                branchChildNode, source.builder);
         process(branch, branchChildName, branchedInternal);
     }
 

@@ -25,14 +25,15 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 public abstract class GraphNode {
-
     private final Collection<GraphNode> childNodes = new LinkedHashSet<>();
     private final Collection<GraphNode> parentNodes = new LinkedHashSet<>();
 
     private final Collection<Label> labels = new LinkedList<>();
     private final String nodeName;
+    private boolean repartitionForbidden = false;
     private boolean keyChangingOperation;
     private boolean valueChangingOperation;
     private boolean mergeNode;
@@ -93,6 +94,23 @@ public abstract class GraphNode {
         return nodeName;
     }
 
+    public boolean canDetermineRepartition() {
+        return keyChangingOperation || repartitionForbidden;
+    }
+
+    public boolean isRepartitionRequired() {
+        final GraphNode find = findParentNodeMatching(GraphNode::canDetermineRepartition);
+        if (find == null) {
+            return false;
+        }
+
+        if (find.repartitionForbidden) {
+            return false;
+        }
+
+        return find.keyChangingOperation;
+    }
+
     public boolean isKeyChangingOperation() {
         return keyChangingOperation;
     }
@@ -103,6 +121,10 @@ public abstract class GraphNode {
 
     public boolean isMergeNode() {
         return mergeNode;
+    }
+
+    public void forbidRepartition() {
+        repartitionForbidden = true;
     }
 
     public void setMergeNode(final boolean mergeNode) {
@@ -141,6 +163,21 @@ public abstract class GraphNode {
 
     public void setOutputVersioned(final boolean outputVersioned) {
         this.outputVersioned = Optional.of(outputVersioned);
+    }
+
+    public GraphNode findParentNodeMatching(final Predicate<GraphNode> parentNodePredicate) {
+        if (parentNodePredicate.test(this)) {
+            return this;
+        }
+        GraphNode foundParentNode = null;
+
+        for (final GraphNode parentNode : this.parentNodes()) {
+            if (parentNodePredicate.test(parentNode)) {
+                return parentNode;
+            }
+            foundParentNode = parentNode.findParentNodeMatching(parentNodePredicate);
+        }
+        return foundParentNode;
     }
 
     @Override

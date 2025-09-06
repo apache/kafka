@@ -36,7 +36,6 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final InternalStreamsBuilder builder;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private final boolean repartitionRequired;
     private final String userProvidedRepartitionTopicName;
     private final Set<String> subTopologySourceNodes;
     private final String name;
@@ -51,7 +50,6 @@ class GroupedStreamAggregateBuilder<K, V> {
 
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
                                   final GroupedInternal<K, V> groupedInternal,
-                                  final boolean repartitionRequired,
                                   final Set<String> subTopologySourceNodes,
                                   final String name,
                                   final GraphNode graphNode) {
@@ -59,7 +57,6 @@ class GroupedStreamAggregateBuilder<K, V> {
         this.builder = builder;
         this.keySerde = groupedInternal.keySerde();
         this.valueSerde = groupedInternal.valueSerde();
-        this.repartitionRequired = repartitionRequired;
         this.subTopologySourceNodes = subTopologySourceNodes;
         this.name = name;
         this.graphNode = graphNode;
@@ -124,7 +121,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         String sourceName = this.name;
         GraphNode parentNode = graphNode;
 
-        if (repartitionRequired) {
+        if (graphNode.isRepartitionRequired()) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
             final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeName;

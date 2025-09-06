@@ -127,19 +127,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     private static final String REPARTITION_NAME = "KSTREAM-REPARTITION-";
 
-    private final boolean repartitionRequired;
-
     private OptimizableRepartitionNode<K, V> repartitionNode;
 
     KStreamImpl(final String name,
                 final Serde<K> keySerde,
                 final Serde<V> valueSerde,
                 final Set<String> subTopologySourceNodes,
-                final boolean repartitionRequired,
                 final GraphNode graphNode,
                 final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
-        this.repartitionRequired = repartitionRequired;
+    }
+
+    private boolean isRepartitionRequired() {
+        return graphNode.isRepartitionRequired();
     }
 
     @Override
@@ -166,7 +166,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             valueSerde,
             subTopologySourceNodes,
-            repartitionRequired,
             filterProcessorNode,
             builder);
     }
@@ -195,7 +194,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             valueSerde,
             subTopologySourceNodes,
-            repartitionRequired,
             filterNotProcessorNode,
             builder);
     }
@@ -222,7 +220,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             null,
             valueSerde,
             subTopologySourceNodes,
-            true,
             selectKeyProcessorNode,
             builder);
     }
@@ -274,7 +271,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             null,
             subTopologySourceNodes,
-            repartitionRequired,
             mapValuesProcessorNode,
             builder);
     }
@@ -305,7 +301,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             null,
             null,
             subTopologySourceNodes,
-            true,
             mapProcessorNode,
             builder);
     }
@@ -331,7 +326,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         builder.addGraphNode(graphNode, flatMapNode);
 
         // key and value serde cannot be preserved
-        return new KStreamImpl<>(name, null, null, subTopologySourceNodes, true, flatMapNode, builder);
+        return new KStreamImpl<>(name, null, null, subTopologySourceNodes, flatMapNode, builder);
     }
 
     @Override
@@ -371,7 +366,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             null,
             subTopologySourceNodes,
-            repartitionRequired,
             flatMapValuesNode,
             builder);
     }
@@ -434,20 +428,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             valueSerde,
             subTopologySourceNodes,
-            repartitionRequired,
             peekNode,
             builder);
     }
 
     @Override
     public BranchedKStream<K, V> split() {
-        return new BranchedKStreamImpl<>(this, repartitionRequired, NamedInternal.empty());
+        return new BranchedKStreamImpl<>(this, NamedInternal.empty());
     }
 
     @Override
     public BranchedKStream<K, V> split(final Named named) {
         Objects.requireNonNull(named, "named cannot be null");
-        return new BranchedKStreamImpl<>(this, repartitionRequired, new NamedInternal(named));
+        return new BranchedKStreamImpl<>(this, new NamedInternal(named));
     }
 
     @Override
@@ -468,7 +461,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(named, "named cannot be null");
 
         final KStreamImpl<K, V> streamImpl = (KStreamImpl<K, V>) otherStream;
-        final boolean requireRepartitioning = streamImpl.repartitionRequired || repartitionRequired;
         final String name = named.orElseGenerateWithPrefix(builder, MERGE_NAME);
         final Set<String> allSubTopologySourceNodes = new HashSet<>();
         allSubTopologySourceNodes.addAll(subTopologySourceNodes);
@@ -488,7 +480,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             null,
             null,
             allSubTopologySourceNodes,
-            requireRepartitioning,
             mergeNode,
             builder);
     }
@@ -531,6 +522,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         final UnoptimizableRepartitionNode<K, V> unoptimizableRepartitionNode = unoptimizableRepartitionNodeBuilder.build();
+        unoptimizableRepartitionNode.forbidRepartition();
 
         builder.addGraphNode(graphNode, unoptimizableRepartitionNode);
 
@@ -542,7 +534,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             valueSerde,
             Collections.unmodifiableSet(sourceNodes),
-            false,
             unoptimizableRepartitionNode,
             builder
         );
@@ -627,7 +618,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final Set<String> subTopologySourceNodes;
         final GraphNode tableParentNode;
 
-        if (repartitionRequired) {
+        if (isRepartitionRequired()) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
             final String sourceName = createRepartitionedSource(
                 builder,
@@ -684,7 +675,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             name,
             subTopologySourceNodes,
             groupedInternal,
-            repartitionRequired,
             graphNode,
             builder);
     }
@@ -710,7 +700,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             selectKeyMapNode.nodeName(),
             subTopologySourceNodes,
             groupedInternal,
-            true,
             selectKeyMapNode,
             builder);
     }
@@ -895,7 +884,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final StreamJoinedInternal<K, V, VRight> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined, builder);
         final NamedInternal name = new NamedInternal(streamJoinedInternal.name());
-        if (joinThis.repartitionRequired) {
+        if (joinThis.isRepartitionRequired()) {
             final String joinThisName = joinThis.name;
             final String leftJoinRepartitionTopicName = name.suffixWithOrElseGet("-left", joinThisName);
 
@@ -906,7 +895,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 name.name() != null);
         }
 
-        if (joinOther.repartitionRequired) {
+        if (joinOther.isRepartitionRequired()) {
             final String joinOtherName = joinOther.name;
             final String rightJoinRepartitionTopicName = name.suffixWithOrElseGet("-right", joinOtherName);
 
@@ -953,6 +942,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         if (repartitionNode == null || !name.equals(repartitionName)) {
             repartitionNode = optimizableRepartitionNodeBuilder.build();
+            repartitionNode.forbidRepartition();
             builder.addGraphNode(graphNode, repartitionNode);
         }
 
@@ -961,7 +951,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionKeySerde,
             repartitionValueSerde,
             Collections.singleton(repartitionedSourceName),
-            false,
             repartitionNode,
             builder);
     }
@@ -1058,7 +1047,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final JoinedInternal<K, V, TableValue> joinedInternal = new JoinedInternal<>(joined);
         final String name = joinedInternal.name();
 
-        if (repartitionRequired) {
+        if (isRepartitionRequired()) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
                     joinedInternal.keySerde(),
@@ -1099,7 +1088,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final JoinedInternal<K, V, VTable> joinedInternal = new JoinedInternal<>(joined);
         final String name = joinedInternal.name();
 
-        if (repartitionRequired) {
+        if (isRepartitionRequired()) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
                     joinedInternal.keySerde(),
@@ -1160,6 +1149,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             this.name,
             joinedInternal.gracePeriod()
         );
+        streamTableJoinNode.forbidRepartition();
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
         if (leftJoin) {
@@ -1172,7 +1162,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             joinedInternal.keySerde() != null ? joinedInternal.keySerde() : keySerde,
             null,
             allSourceNodes,
-            false,
             streamTableJoinNode,
             builder);
     }
@@ -1272,7 +1261,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             null,
             subTopologySourceNodes,
-            repartitionRequired,
             streamTableJoinNode,
             builder);
     }
@@ -1321,7 +1309,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             null,
             null,
             subTopologySourceNodes,
-            true,
             processNode,
             builder);
     }
@@ -1368,7 +1355,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             keySerde,
             null,
             subTopologySourceNodes,
-            repartitionRequired,
             processNode,
             builder);
     }
