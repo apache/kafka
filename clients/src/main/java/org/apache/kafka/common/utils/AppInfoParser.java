@@ -86,9 +86,7 @@ public class AppInfoParser {
                 server.unregisterMBean(name);
 
             unregisterMetrics(metrics, null);
-            if (!metrics.config().tags().containsKey("client-id")) {
-                unregisterMetrics(metrics, id);
-            }
+            unregisterMetrics(metrics, id);
         } catch (JMException e) {
             log.warn("Error unregistering AppInfo mbean", e);
         } finally {
