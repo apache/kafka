@@ -60,8 +60,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kafka_url = f"https://archive.apache.org/dist/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    new_dir = os.path.join(
-        current_dir, f'docker_official_images', args.kafka_version)
+    new_dir = os.path.join(current_dir, 'docker_official_images')
     if os.path.exists(new_dir):
         shutil.rmtree(new_dir)
     os.makedirs(new_dir)

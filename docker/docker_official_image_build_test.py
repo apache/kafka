@@ -49,6 +49,7 @@ def build_docker_official_image(image, tag, kafka_version, image_type):
               f"{temp_dir_path}/{image_type}", dirs_exist_ok=True)
     shutil.copytree(f"{current_dir}/docker_official_images/{kafka_version}/jvm/resources",
               f"{temp_dir_path}/{image_type}/resources", dirs_exist_ok=True)
+    shutil.copy(f"{current_dir}/server.properties", f"{temp_dir_path}/{image_type}")
     command = f"docker build -f $DOCKER_FILE -t {image} $DOCKER_DIR"
     command = command.replace("$DOCKER_FILE", f"{temp_dir_path}/{image_type}/Dockerfile")
     command = command.replace("$DOCKER_DIR", f"{temp_dir_path}/{image_type}")
