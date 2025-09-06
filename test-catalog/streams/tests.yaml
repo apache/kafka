@@ -1633,9 +1633,10 @@ org.apache.kafka.streams.kstream.internals.graph.StreamsGraphTest:
 - shouldBeAbleToBuildTopologyIncrementally
 - shouldBeAbleToProcessNestedMultipleKeyChangingNodes
 - shouldNotOptimizeWhenRepartitionOperationIsDone
-- shouldNotOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChange
+- shouldNotOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChangeWithFixEnabled
 - shouldNotThrowNPEWithMergeNodes
 - shouldOptimizeSeveralMergeNodesWithCommonKeyChangingParent
+- shouldPartiallyOptimizeWithValueOrKeyChangingOperatorsAfterInitialKeyChangeWithFixDisabled
 org.apache.kafka.streams.kstream.internals.graph.TableSourceNodeTest:
 - shouldConnectStateStoreToChangelogTopic
 - shouldConnectStateStoreToInputTopicIfInputTopicIsUsedAsChangelog
@@ -2441,6 +2442,7 @@ org.apache.kafka.streams.processor.internals.RecordQueueTest:
 - testConsumedSensor
 - testTimeTracking
 org.apache.kafka.streams.processor.internals.RepartitionOptimizingTest:
+- shouldNotPushRepartitionAcrossValueChangingOperation
 - shouldSendCorrectRecords_OPTIMIZED
 - shouldSendCorrectResults_NO_OPTIMIZATION
 org.apache.kafka.streams.processor.internals.RepartitionTopicConfigTest:
