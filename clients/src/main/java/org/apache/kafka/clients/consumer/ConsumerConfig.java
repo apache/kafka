@@ -37,7 +37,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -63,9 +62,9 @@ public class ConsumerConfig extends AbstractConfig {
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
     // This is to help optimize ConsumerCoordinator#performAssignment method
     public static final List<String> ASSIGN_FROM_SUBSCRIBED_ASSIGNORS = List.of(
-            RANGE_ASSIGNOR_NAME, 
-            ROUNDROBIN_ASSIGNOR_NAME, 
-            STICKY_ASSIGNOR_NAME, 
+            RANGE_ASSIGNOR_NAME,
+            ROUNDROBIN_ASSIGNOR_NAME,
+            STICKY_ASSIGNOR_NAME,
             COOPERATIVE_STICKY_ASSIGNOR_NAME
     );
 
@@ -406,17 +405,17 @@ public class ConsumerConfig extends AbstractConfig {
      * A list of configuration keys not supported for CONSUMER protocol.
      */
     private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
-            PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
-            HEARTBEAT_INTERVAL_MS_CONFIG, 
+            PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            HEARTBEAT_INTERVAL_MS_CONFIG,
             SESSION_TIMEOUT_MS_CONFIG,
             SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
-    
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.NO_DEFAULT_VALUE,
+                                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
@@ -446,7 +445,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
                                         List.of(RangeAssignor.class, CooperativeStickyAssignor.class),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
@@ -573,7 +572,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         JmxReporter.class.getName(),
-                                        new ConfigDef.NonNullValidator(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
@@ -614,8 +613,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(MAX_POLL_RECORDS_CONFIG,
@@ -702,6 +701,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         ConfigDef.Importance.LOW,
                                         CONFIG_PROVIDERS_DOC);
     }
