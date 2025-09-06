@@ -151,14 +151,6 @@ public record EpochElection(Map<Integer, VoterState> voterStates) {
         return voterStates.size() / 2 + 1;
     }
 
-    @Override
-    public String toString() {
-        return String.format(
-            "EpochElection(voterStates=%s)",
-            voterStates
-        );
-    }
-
     private static final class VoterState {
         private final ReplicaKey replicaKey;
         private State state = State.UNRECORDED;
