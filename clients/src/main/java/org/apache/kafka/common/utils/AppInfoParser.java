@@ -68,9 +68,11 @@ public class AppInfoParser {
             }
             AppInfo mBean = new AppInfo(nowMs);
             server.registerMBean(mBean, name);
-
+            
             registerMetrics(metrics, mBean, null); // prefix will be added later by JmxReporter
-            registerMetrics(metrics, mBean, id);
+            if (!metrics.config().tags().containsKey("client-id")) {
+                registerMetrics(metrics, mBean, id);
+            }
         } catch (JMException e) {
             log.warn("Error registering AppInfo mbean", e);
         }
@@ -84,7 +86,9 @@ public class AppInfoParser {
                 server.unregisterMBean(name);
 
             unregisterMetrics(metrics, null);
-            unregisterMetrics(metrics, id);
+            if (!metrics.config().tags().containsKey("client-id")) {
+                unregisterMetrics(metrics, id);
+            }
         } catch (JMException e) {
             log.warn("Error unregistering AppInfo mbean", e);
         } finally {
