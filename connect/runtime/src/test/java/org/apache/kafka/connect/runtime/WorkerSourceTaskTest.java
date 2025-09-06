@@ -202,6 +202,7 @@ public class WorkerSourceTaskTest {
         props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("offset.storage.file.filename", "/tmp/connect.offsets");
         props.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
+        props.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         return props;
     }
 
