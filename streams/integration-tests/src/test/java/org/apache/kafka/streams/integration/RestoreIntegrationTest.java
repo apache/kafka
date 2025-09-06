@@ -573,7 +573,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(inputStream, 0);
 
         if (useNewProtocol) {
-            CLUSTER.setStandbyReplicas(appId, 1);
+            CLUSTER.setGroupStandbyReplicas(appId, 1);
         }
 
         final Properties props1 = props(stateUpdaterEnabled);
