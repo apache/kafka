@@ -27,12 +27,12 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
@@ -142,7 +142,7 @@ public class ConnectProtocol {
      * @return the collection of Connect protocol metadata
      */
     public static JoinGroupRequestProtocolCollection metadataRequest(WorkerState workerState) {
-        return new JoinGroupRequestProtocolCollection(Collections.singleton(
+        return new JoinGroupRequestProtocolCollection(Set.of(
                 new JoinGroupRequestProtocol()
                         .setName(EAGER.protocol())
                         .setMetadata(ConnectProtocol.serializeMetadata(workerState).array()))
