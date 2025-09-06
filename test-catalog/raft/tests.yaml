@@ -374,6 +374,10 @@ org.apache.kafka.raft.KafkaRaftClientTest:
 - testVoteRequestTimeout
 - testVoteResponseIgnoredAfterBecomingFollower
 - testVoterBecomeProspectiveAfterFetchTimeout
+org.apache.kafka.raft.LeaderAndEpochTest:
+- testConstructorThrowsExceptionWhenLeaderIdIsNull
+- testConstructorWithEmptyLeaderId
+- testConstructorWithValidLeaderId
 org.apache.kafka.raft.LeaderStateTest:
 - testBeginQuorumEpochTimer
 - testCheckQuorum
