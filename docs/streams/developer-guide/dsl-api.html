@@ -3130,15 +3130,20 @@ grouped
                         <code>Processor</code> (provided by a given <code>ProcessorSupplier</code>);
                     </li>
                     <li><code>KStream#processValues</code>: Process all records in a stream, one record at a time, by applying a
-                        <code>FixedKeyProcessor</code> (provided by a given <code>FixedKeyProcessorSupplier</code>);
+                        <code>FixedKeyProcessor</code> (provided by a given <code>FixedKeyProcessorSupplier</code>)
+                        [<b>CAUTION:</b> If you are deploying a new Kafka Streams application, and you are using the
+                        "merge repartition topics" optimization, you should enable the fix for
+                        <a href="https://issues.apache.org/jira/browse/KAFKA-19668">KAFKA-19668</a> to avoid compatibility
+                        issues for future upgrades to newer versions of Kafka Streams;
+                        For more details, see the <a href="#transformers-removal-and-migration-to-processors">migration guide</a> below];
                     </li>
                     <li><code>Processor</code>: A processor of key-value pair records;</li>
                     <li><code>ContextualProcessor</code>: An abstract implementation of <code>Processor</code> that manages the
-                        <code>ProcessorContext</code> instance.
+                        <code>ProcessorContext</code> instance;
                     </li>
                     <li><code>FixedKeyProcessor</code>: A processor of key-value pair records where keys are immutable;</li>
                     <li><code>ContextualFixedKeyProcessor</code>: An abstract implementation of <code>FixedKeyProcessor</code> that
-                        manages the <code>FixedKeyProcessorContext</code> instance.
+                        manages the <code>FixedKeyProcessorContext</code> instance;
                     </li>
                     <li><code>ProcessorSupplier</code>: A processor supplier that can create one or more <code>Processor</code>
                         instances; and</li>
