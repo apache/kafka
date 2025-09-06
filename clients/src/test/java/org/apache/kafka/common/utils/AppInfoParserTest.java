@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.management.ManagementFactory;
+import java.util.Map;
 
 import javax.management.JMException;
 import javax.management.MBeanServer;
@@ -70,6 +71,11 @@ public class AppInfoParserTest {
         assertNull(metrics.metric(metrics.metricName("commit-id", "app-info")));
         assertNull(metrics.metric(metrics.metricName("version", "app-info")));
         assertNull(metrics.metric(metrics.metricName("start-time-ms", "app-info")));
+        
+        Map<String, String> idTag = Map.of("client-id", METRICS_ID);
+        assertNull(metrics.metric(metrics.metricName("commit-id", "app-info", idTag)));
+        assertNull(metrics.metric(metrics.metricName("version", "app-info", idTag)));
+        assertNull(metrics.metric(metrics.metricName("start-time-ms", "app-info", idTag)));
     }
 
     private void registerAppInfo() throws JMException {
@@ -82,6 +88,12 @@ public class AppInfoParserTest {
         assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info")).metricValue());
         assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info")).metricValue());
         assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info")).metricValue());
+
+        Map<String, String> idTag = Map.of("client-id", METRICS_ID);
+        assertTrue(mBeanServer.isRegistered(expectedAppObjectName()));
+        assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info", idTag)).metricValue());
     }
 
     private void registerAppInfoMultipleTimes() throws JMException {
@@ -95,6 +107,11 @@ public class AppInfoParserTest {
         assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info")).metricValue());
         assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info")).metricValue());
         assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info")).metricValue());
+
+        Map<String, String> idTag = Map.of("client-id", METRICS_ID);
+        assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info", idTag)).metricValue());
+        assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info", idTag)).metricValue());
     }
 
     private ObjectName expectedAppObjectName() throws MalformedObjectNameException {
