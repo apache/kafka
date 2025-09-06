@@ -86,18 +86,7 @@ public class HasHeaderKeyTest {
                 Arrays.stream(headers).map(TestHeader::new).collect(Collectors.toList()));
     }
 
-    private static class TestHeader implements Header {
-
-        private final String key;
-
-        public TestHeader(String key) {
-            this.key = key;
-        }
-
-        @Override
-        public String key() {
-            return key;
-        }
+    private record TestHeader(String key) implements Header {
 
         @Override
         public Schema schema() {

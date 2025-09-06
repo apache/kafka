@@ -159,7 +159,10 @@ public class TopicConfig {
         "<a href=\"#compaction\">log compaction</a>, which retains the latest value for each key. " +
         "It is also possible to specify both policies in a comma-separated list (e.g. \"delete,compact\"). " +
         "In this case, old segments will be discarded per the retention time and size configuration, " +
-        "while retained segments will be compacted.";
+        "while retained segments will be compacted. " +
+        "An empty list means infinite retention - no cleanup policies will be applied and log segments " +
+        "will be retained indefinitely. Note that with remote storage enabled, local retention limits " +
+        "(log.local.retention.ms and log.local.retention.bytes) are still applied to local segments.";
 
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
