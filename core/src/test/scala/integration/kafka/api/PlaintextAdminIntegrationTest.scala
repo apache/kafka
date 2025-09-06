@@ -2580,6 +2580,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val config = createConfig
     client = Admin.create(config)
 
+    client.createTopics(util.Set.of(
+      new NewTopic(testTopicName, 1, 1.toShort)
+    )).all().get()
+    waitForTopics(client, List(testTopicName), List())
+    val topicPartition = new TopicPartition(testTopicName, 0)
+
     consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name)
     val classicGroupConfig = new Properties(consumerConfig)
     classicGroupConfig.put(ConsumerConfig.GROUP_ID_CONFIG, classicGroupId)
@@ -2600,12 +2606,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     )
 
     try {
-      client.createTopics(util.Set.of(
-        new NewTopic(testTopicName, 1, 1.toShort)
-      )).all().get()
-      waitForTopics(client, List(testTopicName), List())
-      val topicPartition = new TopicPartition(testTopicName, 0)
-
       classicGroup.subscribe(util.Set.of(testTopicName))
       classicGroup.poll(JDuration.ofMillis(1000))
       consumerGroup.subscribe(util.Set.of(testTopicName))
