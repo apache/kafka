@@ -108,23 +108,20 @@ public class AclCommand {
             Set<AccessControlEntry> acls = entry.getValue();
 
             AclBindingFilter filter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
-            Collection<AclBinding> existingBindings = admin.describeAcls(filter).values().get();
-            Set<AclBinding> existingBindingsSet = new HashSet<>(existingBindings);
+            Set<AclBinding> existingBindingsSet = Set.copyOf(admin.describeAcls(filter).values().get());
 
             List<AclBinding> aclBindings = new ArrayList<>();
-            List<AccessControlEntry> aclsToAdd = new ArrayList<>();
             for (AccessControlEntry acl : acls) {
                 AclBinding binding = new AclBinding(resource, acl);
                 if (existingBindingsSet.contains(binding)) {
                     System.out.println("Acl " + binding + " already exists.");
                 } else {
                     aclBindings.add(binding);
-                    aclsToAdd.add(acl);
                 }
             }
 
             if (!aclBindings.isEmpty()) {
-                System.out.println("Adding ACLs for resource `" + resource + "`: " + NL + " " + aclsToAdd.stream().map(a -> "\t" + a).collect(Collectors.joining(NL)) + NL);
+                System.out.println("Adding ACLs for resource `" + resource + "`: " + NL + " " + aclBindings.stream().map(AclBinding::entry).map(a -> "\t" + a).collect(Collectors.joining(NL)) + NL);
                 admin.createAcls(aclBindings).all().get();
             }
         }
