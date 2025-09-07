@@ -155,6 +155,7 @@ public class TestLinearWriteSpeed {
 
         MemoryRecords messageSet = MemoryRecords.withRecords(compression, recordsList.toArray(new SimpleRecord[0]));
         Writable[] writables = new Writable[numFiles];
+        LogWritable[] logs = new LogWritable[numFiles];
         KafkaScheduler scheduler = new KafkaScheduler(1);
         scheduler.startup();
 
@@ -169,7 +170,7 @@ public class TestLinearWriteSpeed {
                 logProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, Integer.toString(segmentSize));
                 logProperties.put(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, Long.toString(flushInterval));
                 LogConfig logConfig = new LogConfig(logProperties);
-                writables[i] = new LogWritable(new File(dir, "kafka-test-" + i), logConfig, scheduler, messageSet);
+                logs[i] = new LogWritable(new File(dir, "kafka-test-" + i), logConfig, scheduler, messageSet);
             } else {
                 System.err.println("Must specify what to write to with one of --log, --channel, or --mmap");
                 Exit.exit(1);
@@ -186,10 +187,17 @@ public class TestLinearWriteSpeed {
         long written = 0L;
         long totalWritten = 0L;
         long lastReport = beginTest;
+        int writeSize = 0;
 
         while (totalWritten + bufferSize < bytesToWrite) {
             long start = System.nanoTime();
-            int writeSize = writables[(int) (count % numFiles)].write();
+            if (options.has(logOpt)) {
+                messageSet = MemoryRecords.withRecords(compression, recordsList.toArray(new SimpleRecord[0]));
+                logs[(int) (count % numFiles)].messages = messageSet;
+                writeSize = logs[(int) (count % numFiles)].write();
+            } else {
+                writeSize = writables[(int) (count % numFiles)].write();
+            }
             long elapsed = System.nanoTime() - start;
             maxLatency = Math.max(elapsed, maxLatency);
             totalLatency += elapsed;
@@ -215,8 +223,14 @@ public class TestLinearWriteSpeed {
         double elapsedSecs = (System.nanoTime() - beginTest) / (1000.0 * 1000.0 * 1000.0);
         System.out.println((bytesToWrite / (1024.0 * 1024.0 * elapsedSecs)) + " MB per sec");
         scheduler.shutdown();
-        for (Writable writable : writables) {
-            writable.close();
+        if (options.has(logOpt)) {
+            for (LogWritable log : logs) {
+                log.close();
+            }
+        } else {
+            for (Writable writable : writables) {
+                writable.close();
+            }
         }
     }
 
