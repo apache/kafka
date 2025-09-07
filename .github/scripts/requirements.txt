@@ -14,4 +14,4 @@
 # limitations under the License.
 PyYAML~=6.0
 pytz==2024.2
-requests==2.32.3
+requests==2.32.4
