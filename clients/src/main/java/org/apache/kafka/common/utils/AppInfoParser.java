@@ -68,11 +68,9 @@ public class AppInfoParser {
             }
             AppInfo mBean = new AppInfo(nowMs);
             server.registerMBean(mBean, name);
-            
+
             registerMetrics(metrics, mBean, null); // prefix will be added later by JmxReporter
-            if (!metrics.config().tags().containsKey("client-id")) {
-                registerMetrics(metrics, mBean, id);
-            }
+            registerMetrics(metrics, mBean, id);
         } catch (JMException e) {
             log.warn("Error registering AppInfo mbean", e);
         }
@@ -99,11 +97,15 @@ public class AppInfoParser {
     }
 
     private static void registerMetrics(Metrics metrics, AppInfo appInfo, String clientId) {
-        if (metrics != null && clientId != null) {
+        if (metrics == null) return;
+        if (!metrics.config().tags().containsKey("client-id") && clientId != null) {
+            // Mirror Maker/Worker doesn't set client-id tag into the metrics config, so we need to set it here.
             metrics.addMetric(metricName(metrics, "version", Map.of("client-id", clientId)), (Gauge<String>) (config, now) -> appInfo.getVersion());
             metrics.addMetric(metricName(metrics, "commit-id", Map.of("client-id", clientId)), (Gauge<String>) (config, now) -> appInfo.getCommitId());
             metrics.addMetric(metricName(metrics, "start-time-ms", Map.of("client-id", clientId)), (Gauge<Long>) (config, now) -> appInfo.getStartTimeMs());
-        } else if (metrics != null) {
+        } else {
+            // Most Kafka clients (producer/consumer/admin) set the client-id tag in the metrics config.
+            // Although we don’t explicitly parse client-id here, these metrics are automatically tagged with client-id.
             metrics.addMetric(metricName(metrics, "version", Map.of()), (Gauge<String>) (config, now) -> appInfo.getVersion());
             metrics.addMetric(metricName(metrics, "commit-id", Map.of()), (Gauge<String>) (config, now) -> appInfo.getCommitId());
             metrics.addMetric(metricName(metrics, "start-time-ms", Map.of()), (Gauge<Long>) (config, now) -> appInfo.getStartTimeMs());
