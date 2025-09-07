@@ -69,11 +69,7 @@ public class GroupCoordinatorConfig {
         Group.GroupType.CLASSIC.toString(),
         Group.GroupType.CONSUMER.toString(),
         Group.GroupType.STREAMS.toString());
-    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_ALLOWED = List.of(
-        Group.GroupType.CLASSIC.toString(),
-        Group.GroupType.CONSUMER.toString(),
-        Group.GroupType.STREAMS.toString()
-    );
+    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_ALLOWED = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT;
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
         "wait for writes to accumulate before flushing them to disk. Increasing this value improves write efficiency and batch size, " +

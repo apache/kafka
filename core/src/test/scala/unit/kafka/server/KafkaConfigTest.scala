@@ -1784,7 +1784,6 @@ class KafkaConfigTest {
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "consumer")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
-
     // This is OK.
     props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
     val config = KafkaConfig.fromProps(props)
