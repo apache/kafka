@@ -660,32 +660,10 @@ public class RaftUtilTest {
         }
     }
 
-    private static class FetchRequestTestCase {
-        private final Uuid replicaDirectoryId;
-        private final short version;
-        private final short lastFetchedEpoch;
-        private final String expectedJson;
-
-        private FetchRequestTestCase(Uuid replicaDirectoryId, short version,
-                                     short lastFetchedEpoch, String expectedJson) {
-            this.replicaDirectoryId = replicaDirectoryId;
-            this.version = version;
-            this.lastFetchedEpoch = lastFetchedEpoch;
-            this.expectedJson = expectedJson;
-        }
+    private record FetchRequestTestCase(Uuid replicaDirectoryId, short version, short lastFetchedEpoch,
+                                        String expectedJson) {
     }
 
-    private static class FetchResponseTestCase {
-        private final short version;
-        private final int preferredReadReplicaId;
-        private final String expectedJson;
-
-        private FetchResponseTestCase(short version,
-                                      int preferredReadReplicaId,
-                                      String expectedJson) {
-            this.version = version;
-            this.preferredReadReplicaId = preferredReadReplicaId;
-            this.expectedJson = expectedJson;
-        }
+    private record FetchResponseTestCase(short version, int preferredReadReplicaId, String expectedJson) {
     }
 }
