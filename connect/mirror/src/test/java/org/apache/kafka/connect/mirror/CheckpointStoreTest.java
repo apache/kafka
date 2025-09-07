@@ -24,7 +24,6 @@ import org.apache.kafka.connect.util.Callback;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,8 +37,7 @@ public class CheckpointStoreTest {
 
     @Test
     public void testReadCheckpointsTopic() {
-        Set<String> consumerGroups = new HashSet<>();
-        consumerGroups.add("group1");
+        Set<String> consumerGroups = Set.of("group1");
 
         MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
@@ -70,8 +68,7 @@ public class CheckpointStoreTest {
 
     @Test
     public void testReadCheckpointsTopicError() {
-        Set<String> consumerGroups = new HashSet<>();
-        consumerGroups.add("group1");
+        Set<String> consumerGroups = Set.of("group1");
 
         MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");

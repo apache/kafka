@@ -51,7 +51,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -1026,33 +1025,7 @@ public class MockLogTest {
         }
     }
 
-    private static class OffsetRange {
-        public final long startOffset;
-        public final long endOffset;
-
-        private OffsetRange(long startOffset, long endOffset) {
-            this.startOffset = startOffset;
-            this.endOffset = endOffset;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            OffsetRange that = (OffsetRange) o;
-            return startOffset == that.startOffset &&
-                endOffset == that.endOffset;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(startOffset, endOffset);
-        }
-
-        @Override
-        public String toString() {
-            return String.format("OffsetRange(startOffset=%s, endOffset=%s)", startOffset, endOffset);
-        }
+    private record OffsetRange(long startOffset, long endOffset) {
     }
 
     private void appendAsLeader(Collection<SimpleRecord> records, int epoch) {
