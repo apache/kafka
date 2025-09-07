@@ -20,11 +20,15 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.Optional;
+import java.util.Queue;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.function.Predicate;
 
 public abstract class GraphNode {
@@ -99,7 +103,7 @@ public abstract class GraphNode {
     }
 
     public boolean isRepartitionRequired() {
-        final GraphNode find = findParentNodeMatching(GraphNode::canDetermineRepartition);
+        final GraphNode find = findNearestParentNodeMatching(GraphNode::canDetermineRepartition);
         if (find == null) {
             return false;
         }
@@ -178,6 +182,29 @@ public abstract class GraphNode {
             foundParentNode = parentNode.findParentNodeMatching(parentNodePredicate);
         }
         return foundParentNode;
+    }
+
+    private GraphNode findNearestParentNodeMatching(final Predicate<GraphNode> parentNodePredicate) {
+        if (parentNodePredicate.test(this)) {
+            return this;
+        }
+
+        final Set<GraphNode> visited = new HashSet<>();
+        final Queue<GraphNode> queue = new ArrayDeque<>(this.parentNodes());
+        visited.add(this);
+
+        while (!queue.isEmpty()) {
+            final GraphNode current = queue.poll();
+            if (!visited.add(current)) {
+                continue;
+            }
+            if (parentNodePredicate.test(current)) {
+                return current;
+            }
+            queue.addAll(current.parentNodes());
+        }
+
+        return null;
     }
 
     @Override
