@@ -1301,6 +1301,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             processNode.setValueChangingOperation(true);
         }
 
+        processNode.mustRepartition();
         builder.addGraphNode(graphNode, processNode);
 
         // cannot inherit key and value serde

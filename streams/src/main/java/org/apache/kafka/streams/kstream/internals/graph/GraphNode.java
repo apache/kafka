@@ -38,6 +38,7 @@ public abstract class GraphNode {
     private final Collection<Label> labels = new LinkedList<>();
     private final String nodeName;
     private boolean repartitionForbidden = false;
+    private boolean repartitionRequired = false;
     private boolean keyChangingOperation;
     private boolean valueChangingOperation;
     private boolean mergeNode;
@@ -99,7 +100,7 @@ public abstract class GraphNode {
     }
 
     public boolean canDetermineRepartition() {
-        return keyChangingOperation || repartitionForbidden;
+        return keyChangingOperation || repartitionForbidden || repartitionRequired;
     }
 
     public boolean isRepartitionRequired() {
@@ -112,7 +113,7 @@ public abstract class GraphNode {
             return false;
         }
 
-        return find.keyChangingOperation;
+        return find.keyChangingOperation || repartitionRequired;
     }
 
     public boolean isKeyChangingOperation() {
@@ -129,6 +130,12 @@ public abstract class GraphNode {
 
     public void forbidRepartition() {
         repartitionForbidden = true;
+        repartitionRequired = false;
+    }
+
+    public void mustRepartition() {
+        repartitionRequired = true;
+        repartitionForbidden = false;
     }
 
     public void setMergeNode(final boolean mergeNode) {
