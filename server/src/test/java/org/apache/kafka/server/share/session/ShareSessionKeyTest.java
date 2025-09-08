@@ -14,19 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
 
-import java.util.Objects;
-import java.util.OptionalInt;
+package org.apache.kafka.server.share.session;
 
-public record LeaderAndEpoch(OptionalInt leaderId, int epoch) {
-    public static final LeaderAndEpoch UNKNOWN = new LeaderAndEpoch(OptionalInt.empty(), 0);
+import org.apache.kafka.common.Uuid;
 
-    public LeaderAndEpoch {
-        Objects.requireNonNull(leaderId);
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+public class ShareSessionKeyTest {
+    @Test
+    public void testConstructorThrowsExceptionWhenGroupIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey(null, Uuid.randomUuid()));
     }
 
-    public boolean isLeader(int nodeId) {
-        return leaderId.isPresent() && leaderId.getAsInt() == nodeId;
+    @Test
+    public void testConstructorThrowsExceptionWhenMemberIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey("random", null));
+    }
+
+    @Test
+    public void testConstructorThrowsExceptionWhenBothGroupIdAndMemberIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey(null, null));
     }
 }
