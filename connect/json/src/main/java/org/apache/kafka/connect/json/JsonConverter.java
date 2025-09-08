@@ -152,8 +152,6 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
                 return switch (config.decimalFormat()) {
                     case NUMERIC -> JSON_NODE_FACTORY.numberNode(decimal);
                     case BASE64 -> JSON_NODE_FACTORY.binaryNode(Decimal.fromLogical(schema, decimal));
-                    default ->
-                        throw new DataException("Unexpected " + JsonConverterConfig.DECIMAL_FORMAT_CONFIG + ": " + config.decimalFormat());
                 };
             }
 
@@ -224,7 +222,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private JsonConverterConfig config;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
-    private Schema schema = null;     // if a schema is provided in config, this schema will be used for all messages
+    private Schema schema = null;     // if a schema is provided in config, this schema will be used for all messages for sink connector
 
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;

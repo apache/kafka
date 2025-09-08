@@ -18,7 +18,6 @@ package org.apache.kafka.server.logger;
 
 import java.util.List;
 
-
 public interface LoggingControllerMBean {
     List<String> getLoggers();
     String getLogLevel(String logger);

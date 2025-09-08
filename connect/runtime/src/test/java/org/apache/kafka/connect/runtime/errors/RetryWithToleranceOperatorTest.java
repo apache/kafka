@@ -88,6 +88,7 @@ public class RetryWithToleranceOperatorTest {
             put(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
 
             // define required properties
+            put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
             put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
             put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         }};
