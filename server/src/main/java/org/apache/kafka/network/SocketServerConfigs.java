@@ -24,8 +24,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -175,15 +173,12 @@ public class SocketServerConfigs {
     private static final Pattern URI_PARSE_REGEXP = Pattern.compile(
         "^(.*)://\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(-?[0-9]+)");
 
-    public static final Map<ListenerName, SecurityProtocol> DEFAULT_NAME_TO_SECURITY_PROTO;
-
-    static {
-        HashMap<ListenerName, SecurityProtocol> nameToSecurityProtocol = new HashMap<>();
-        for (SecurityProtocol securityProtocol : SecurityProtocol.values()) {
-            nameToSecurityProtocol.put(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
-        }
-        DEFAULT_NAME_TO_SECURITY_PROTO = Collections.unmodifiableMap(nameToSecurityProtocol);
-    }
+    public static final Map<ListenerName, SecurityProtocol> DEFAULT_NAME_TO_SECURITY_PROTO =
+        Arrays.stream(SecurityProtocol.values())
+            .collect(Collectors.toUnmodifiableMap(
+                ListenerName::forSecurityProtocol,
+                Function.identity()
+            ));
 
     public static List<Endpoint> listenerListToEndPoints(
         List<String> input,
