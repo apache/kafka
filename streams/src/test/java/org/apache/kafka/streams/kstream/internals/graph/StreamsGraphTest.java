@@ -192,8 +192,6 @@ public class StreamsGraphTest {
         final Topology attemptedOptimize = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.OPTIMIZE, false);
         final Topology noOptimization = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.NO_OPTIMIZATION, false);
 
-        System.out.println(attemptedOptimize.describe().toString());
-        System.out.println(noOptimization.describe().toString());
         assertEquals("Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
