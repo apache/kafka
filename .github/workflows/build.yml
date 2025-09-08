@@ -66,12 +66,12 @@ jobs:
     name: Load Test Catalog
     steps:
       - name: Checkout main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
 
       - name: Checkout test-catalog
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: 'test-catalog'
           persist-credentials: false
@@ -118,7 +118,7 @@ jobs:
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
           ref: ${{ github.sha }}  # this is the default, just being explicit.
@@ -192,7 +192,7 @@ jobs:
     name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' (flaky)' || '' }}${{ matrix.run-new == true && ' (new)' || '' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
           ref: ${{ needs.configure.outputs.sha }}
@@ -282,7 +282,7 @@ jobs:
       uploaded-test-catalog: ${{ steps.archive-test-catalog.outcome == 'success' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
       - name: Download Thread Dumps
@@ -334,7 +334,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout Test Catalog
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: true  # Needed to commit and push later
           ref: test-catalog
