@@ -82,7 +82,6 @@ public class AppInfoParser {
             if (server.isRegistered(name))
                 server.unregisterMBean(name);
 
-            unregisterMetrics(metrics, null);
             unregisterMetrics(metrics, id);
         } catch (JMException e) {
             log.warn("Error unregistering AppInfo mbean", e);
@@ -111,14 +110,16 @@ public class AppInfoParser {
     }
 
     private static void unregisterMetrics(Metrics metrics, String clientId) {
-        if (metrics != null && clientId != null) {
+        if (metrics == null) return;
+
+        metrics.removeMetric(metricName(metrics, "version", Map.of()));
+        metrics.removeMetric(metricName(metrics, "commit-id", Map.of()));
+        metrics.removeMetric(metricName(metrics, "start-time-ms", Map.of()));
+
+        if (clientId != null) {
             metrics.removeMetric(metricName(metrics, "version", Map.of("client-id", clientId)));
             metrics.removeMetric(metricName(metrics, "commit-id", Map.of("client-id", clientId)));
             metrics.removeMetric(metricName(metrics, "start-time-ms", Map.of("client-id", clientId)));
-        } else if (metrics != null) {
-            metrics.removeMetric(metricName(metrics, "version", Map.of()));
-            metrics.removeMetric(metricName(metrics, "commit-id", Map.of()));
-            metrics.removeMetric(metricName(metrics, "start-time-ms", Map.of()));
         }
     }
 
