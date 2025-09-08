@@ -18,12 +18,11 @@ package org.apache.kafka.metadata.publisher;
 
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.ScramDelta;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
-import org.apache.kafka.server.common.CredentialProvider;
+import org.apache.kafka.security.CredentialProvider;
 import org.apache.kafka.server.fault.FaultHandler;
-
-import java.util.Optional;
 
 public class ScramPublisher implements MetadataPublisher {
     private final int nodeId;
@@ -52,17 +51,17 @@ public class ScramPublisher implements MetadataPublisher {
         String deltaName = "MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
         try {
             // Apply changes to SCRAM credentials.
-            Optional.ofNullable(delta.scramDelta()).ifPresent(scramDelta -> {
+            ScramDelta scramDelta = delta.scramDelta();
+            if (scramDelta != null) {
                 scramDelta.changes().forEach((mechanism, userChanges) -> {
                     userChanges.forEach((userName, change) -> {
-                        if (change.isPresent()) {
+                        if (change.isPresent())
                             credentialProvider.updateCredential(mechanism, userName, change.get().toCredential());
-                        } else {
+                        else
                             credentialProvider.removeCredentials(mechanism, userName);
-                        }
                     });
                 });
-            });
+            }
         } catch (Throwable t) {
             faultHandler.handleFault("Uncaught exception while publishing SCRAM changes from " + deltaName, t);
         }
