@@ -141,6 +141,9 @@ public final class SnapshotFileReader implements AutoCloseable {
                             batch.partitionLeaderEpoch()
                         ));
                         break;
+                    case SNAPSHOT_HEADER:
+                    case SNAPSHOT_FOOTER:
+                        break;
                     default:
                         log.error("Ignoring control record with type {} at offset {}",
                             type, record.offset());
