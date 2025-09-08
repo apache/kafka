@@ -46,6 +46,7 @@ import java.util.Set;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
@@ -167,6 +168,7 @@ public class SmokeTestDriverIntegrationTest {
 
                 client.closeAsync();
                 while (!client.closed()) {
+                    assertFalse(client.error(), "The streams application seems to have crashed.");
                     Thread.sleep(100);
                 }
             }
@@ -184,6 +186,7 @@ public class SmokeTestDriverIntegrationTest {
             // then, wait for them to stop
             for (final SmokeTestClient client : clients) {
                 while (!client.closed()) {
+                    assertFalse(client.error(), "The streams application seems to have crashed.");
                     Thread.sleep(100);
                 }
             }
