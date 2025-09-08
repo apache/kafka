@@ -4070,7 +4070,6 @@ class PartitionTest extends AbstractPartitionTest {
     when(mockLog.maybeIncrementLogStartOffset(any(), any())).thenReturn(true)
 
     partition.setLog(mockLog, false)
-
     assertThrows(classOf[PolicyViolationException], () =>  partition.deleteRecordsOnLeader(1L))
   }
 }
