@@ -139,7 +139,7 @@ public class StateDirectoryTest {
         assertPermissions(stateDir);
         assertPermissions(appDir);
     }
-    
+
     private void assertPermissions(final File file) {
         final Path path = file.toPath();
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
@@ -630,7 +630,7 @@ public class StateDirectoryTest {
             new StateDirectory(
                 new StreamsConfig(
                     mkMap(
-                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ""),
+                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "mock-localhost:9092"),
                         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "")
                     )
                 ),

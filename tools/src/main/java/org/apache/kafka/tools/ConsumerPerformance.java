@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -38,11 +37,11 @@ import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import joptsimple.OptionException;
@@ -55,6 +54,10 @@ public class ConsumerPerformance {
     private static final Random RND = new Random();
 
     public static void main(String[] args) {
+        run(args, KafkaConsumer::new);
+    }
+
+    static void run(String[] args, Function<Properties, Consumer<byte[], byte[]>> consumerCreator) {
         try {
             LOG.info("Starting consumer...");
             ConsumerPerfOptions options = new ConsumerPerfOptions(args);
@@ -66,45 +69,42 @@ public class ConsumerPerformance {
             if (!options.hideHeader())
                 printHeader(options.showDetailedStats());
 
-            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(options.props());
-            long bytesRead = 0L;
-            long messagesRead = 0L;
-            long lastBytesRead = 0L;
-            long lastMessagesRead = 0L;
-            long currentTimeMs = System.currentTimeMillis();
-            long joinStartMs = currentTimeMs;
-            long startMs = currentTimeMs;
-            consume(consumer, options, totalMessagesRead, totalBytesRead, joinTimeMs,
-                bytesRead, messagesRead, lastBytesRead, lastMessagesRead,
-                joinStartMs, joinTimeMsInSingleRound);
-            long endMs = System.currentTimeMillis();
+            try (Consumer<byte[], byte[]> consumer = consumerCreator.apply(options.props())) {
+                long bytesRead = 0L;
+                long messagesRead = 0L;
+                long lastBytesRead = 0L;
+                long lastMessagesRead = 0L;
+                long currentTimeMs = System.currentTimeMillis();
+                long joinStartMs = currentTimeMs;
+                long startMs = currentTimeMs;
+                consume(consumer, options, totalMessagesRead, totalBytesRead, joinTimeMs,
+                    bytesRead, messagesRead, lastBytesRead, lastMessagesRead,
+                    joinStartMs, joinTimeMsInSingleRound);
+                long endMs = System.currentTimeMillis();
 
-            Map<MetricName, ? extends Metric> metrics = null;
-            if (options.printMetrics())
-                metrics = consumer.metrics();
-            consumer.close();
+                // print final stats
+                double elapsedSec = (endMs - startMs) / 1_000.0;
+                long fetchTimeInMs = (endMs - startMs) - joinTimeMs.get();
+                if (!options.showDetailedStats()) {
+                    double totalMbRead = (totalBytesRead.get() * 1.0) / (1024 * 1024);
+                    System.out.printf("%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f%n",
+                        options.dateFormat().format(startMs),
+                        options.dateFormat().format(endMs),
+                        totalMbRead,
+                        totalMbRead / elapsedSec,
+                        totalMessagesRead.get(),
+                        totalMessagesRead.get() / elapsedSec,
+                        joinTimeMs.get(),
+                        fetchTimeInMs,
+                        totalMbRead / (fetchTimeInMs / 1000.0),
+                        totalMessagesRead.get() / (fetchTimeInMs / 1000.0)
+                    );
+                }
 
-            // print final stats
-            double elapsedSec = (endMs - startMs) / 1_000.0;
-            long fetchTimeInMs = (endMs - startMs) - joinTimeMs.get();
-            if (!options.showDetailedStats()) {
-                double totalMbRead = (totalBytesRead.get() * 1.0) / (1024 * 1024);
-                System.out.printf("%s, %s, %.4f, %.4f, %d, %.4f, %d, %d, %.4f, %.4f%n",
-                    options.dateFormat().format(startMs),
-                    options.dateFormat().format(endMs),
-                    totalMbRead,
-                    totalMbRead / elapsedSec,
-                    totalMessagesRead.get(),
-                    totalMessagesRead.get() / elapsedSec,
-                    joinTimeMs.get(),
-                    fetchTimeInMs,
-                    totalMbRead / (fetchTimeInMs / 1000.0),
-                    totalMessagesRead.get() / (fetchTimeInMs / 1000.0)
-                );
+                if (options.printMetrics()) {
+                    ToolsUtils.printMetrics(consumer.metrics());
+                }
             }
-
-            if (metrics != null)
-                ToolsUtils.printMetrics(metrics);
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -120,7 +120,7 @@ public class ConsumerPerformance {
             System.out.printf("time, threadId, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec%s%n", newFieldsInHeader);
     }
 
-    private static void consume(KafkaConsumer<byte[], byte[]> consumer,
+    private static void consume(Consumer<byte[], byte[]> consumer,
                                 ConsumerPerfOptions options,
                                 AtomicLong totalMessagesRead,
                                 AtomicLong totalBytesRead,
