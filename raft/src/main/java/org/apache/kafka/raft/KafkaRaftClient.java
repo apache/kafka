@@ -2636,48 +2636,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void handleResponse(RaftResponse.Inbound response, long currentTimeMs) {
         // The response epoch matches the local epoch, so we can handle the response
         ApiKeys apiKey = ApiKeys.forId(response.data().apiKey());
-        final boolean handledSuccessfully;
-
-        switch (apiKey) {
-            case FETCH:
-                handledSuccessfully = handleFetchResponse(response, currentTimeMs);
-                break;
-
-            case VOTE:
-                handledSuccessfully = handleVoteResponse(response, currentTimeMs);
-                break;
-
-            case BEGIN_QUORUM_EPOCH:
-                handledSuccessfully = handleBeginQuorumEpochResponse(response, currentTimeMs);
-                break;
-
-            case END_QUORUM_EPOCH:
-                handledSuccessfully = handleEndQuorumEpochResponse(response, currentTimeMs);
-                break;
-
-            case FETCH_SNAPSHOT:
-                handledSuccessfully = handleFetchSnapshotResponse(response, currentTimeMs);
-                break;
-
-            case API_VERSIONS:
-                handledSuccessfully = handleApiVersionsResponse(response, currentTimeMs);
-                break;
-
-            case UPDATE_RAFT_VOTER:
-                handledSuccessfully = handleUpdateVoterResponse(response, currentTimeMs);
-                break;
-
-            case ADD_RAFT_VOTER:
-                handledSuccessfully = handleAddVoterResponse(response, currentTimeMs);
-                break;
-
-            case REMOVE_RAFT_VOTER:
-                handledSuccessfully = handleRemoveVoterResponse(response, currentTimeMs);
-                break;
-
-            default:
-                throw new IllegalArgumentException("Received unexpected response type: " + apiKey);
-        }
+        final boolean handledSuccessfully = switch (apiKey) {
+            case FETCH -> handleFetchResponse(response, currentTimeMs);
+            case VOTE -> handleVoteResponse(response, currentTimeMs);
+            case BEGIN_QUORUM_EPOCH -> handleBeginQuorumEpochResponse(response, currentTimeMs);
+            case END_QUORUM_EPOCH -> handleEndQuorumEpochResponse(response, currentTimeMs);
+            case FETCH_SNAPSHOT -> handleFetchSnapshotResponse(response, currentTimeMs);
+            case API_VERSIONS -> handleApiVersionsResponse(response, currentTimeMs);
+            case UPDATE_RAFT_VOTER -> handleUpdateVoterResponse(response, currentTimeMs);
+            case ADD_RAFT_VOTER -> handleAddVoterResponse(response, currentTimeMs);
+            case REMOVE_RAFT_VOTER -> handleRemoveVoterResponse(response, currentTimeMs);
+            default -> throw new IllegalArgumentException("Received unexpected response type: " + apiKey);
+        };
 
         requestManager.onResponseResult(
             response.source(),
@@ -2740,48 +2710,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void handleRequest(RaftRequest.Inbound request, long currentTimeMs) {
         ApiKeys apiKey = ApiKeys.forId(request.data().apiKey());
-        final CompletableFuture<? extends ApiMessage> responseFuture;
-
-        switch (apiKey) {
-            case FETCH:
-                responseFuture = handleFetchRequest(request, currentTimeMs);
-                break;
-
-            case VOTE:
-                responseFuture = completedFuture(handleVoteRequest(request));
-                break;
-
-            case BEGIN_QUORUM_EPOCH:
-                responseFuture = completedFuture(handleBeginQuorumEpochRequest(request, currentTimeMs));
-                break;
-
-            case END_QUORUM_EPOCH:
-                responseFuture = completedFuture(handleEndQuorumEpochRequest(request, currentTimeMs));
-                break;
-
-            case DESCRIBE_QUORUM:
-                responseFuture = completedFuture(handleDescribeQuorumRequest(request, currentTimeMs));
-                break;
-
-            case FETCH_SNAPSHOT:
-                responseFuture = completedFuture(handleFetchSnapshotRequest(request, currentTimeMs));
-                break;
-
-            case ADD_RAFT_VOTER:
-                responseFuture = handleAddVoterRequest(request, currentTimeMs);
-                break;
-
-            case REMOVE_RAFT_VOTER:
-                responseFuture = handleRemoveVoterRequest(request, currentTimeMs);
-                break;
-
-            case UPDATE_RAFT_VOTER:
-                responseFuture = handleUpdateVoterRequest(request, currentTimeMs);
-                break;
-
-            default:
-                throw new IllegalArgumentException("Unexpected request type " + apiKey);
-        }
+        final CompletableFuture<? extends ApiMessage> responseFuture = switch (apiKey) {
+            case FETCH -> handleFetchRequest(request, currentTimeMs);
+            case VOTE -> completedFuture(handleVoteRequest(request));
+            case BEGIN_QUORUM_EPOCH -> completedFuture(handleBeginQuorumEpochRequest(request, currentTimeMs));
+            case END_QUORUM_EPOCH -> completedFuture(handleEndQuorumEpochRequest(request, currentTimeMs));
+            case DESCRIBE_QUORUM -> completedFuture(handleDescribeQuorumRequest(request, currentTimeMs));
+            case FETCH_SNAPSHOT -> completedFuture(handleFetchSnapshotRequest(request, currentTimeMs));
+            case ADD_RAFT_VOTER -> handleAddVoterRequest(request, currentTimeMs);
+            case REMOVE_RAFT_VOTER -> handleRemoveVoterRequest(request, currentTimeMs);
+            case UPDATE_RAFT_VOTER -> handleUpdateVoterRequest(request, currentTimeMs);
+            default -> throw new IllegalArgumentException("Unexpected request type " + apiKey);
+        };
 
         responseFuture.whenComplete((response, exception) -> {
             ApiMessage message = response;
