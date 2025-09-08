@@ -3180,6 +3180,9 @@ grouped
                     </tr>
                     </tbody>
                 </table>
+
+                <p><b>CAUTION:</b> If you are using "merge repartition topics" optimization, it is not recommended to use <code>KStream#processValues</code> to avoid compatibility issues for future upgrades to newer versions of Kafka Streams.
+                    For more details, see the <a href="/40/documentation/streams/developer-guide/dsl-api.htm#transformers-removal-and-migration-to-processors">migration guide</a> in the Kafka Streams 4.0 docs.</p>
                 <p>The following example shows how to leverage, via the <code class="docutils literal"><span class="pre">KStream#process()</span></code> method, a custom <code class="docutils literal"><span class="pre">Processor</span></code> that sends an
                     email notification whenever a page view count reaches a predefined threshold.</p>
                 <p>First, we need to implement a custom stream processor, <code class="docutils literal"><span class="pre">PopularPageEmailAlert</span></code>, that implements the <code class="docutils literal"><span class="pre">Processor</span></code>
