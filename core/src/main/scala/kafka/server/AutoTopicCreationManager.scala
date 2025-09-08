@@ -74,7 +74,7 @@ private[server] class ExpiringErrorCache(maxSize: Int, time: Time) {
 
   private case class Entry(topicName: String, errorMessage: String, expirationTimeMs: Long)
 
-  private val byTopic = new java.util.HashMap[String, Entry]()
+  private val byTopic = new ConcurrentHashMap[String, Entry]()
   private val expiryQueue = new java.util.PriorityQueue[Entry](11, new java.util.Comparator[Entry] {
     override def compare(a: Entry, b: Entry): Int = java.lang.Long.compare(a.expirationTimeMs, b.expirationTimeMs)
   })
@@ -89,10 +89,20 @@ private[server] class ExpiringErrorCache(maxSize: Int, time: Time) {
         expiryQueue.remove(existing)
       }
 
-      val expirationTimeMs = time.milliseconds() + ttlMs
+      val currentTimeMs = time.milliseconds()
+      val expirationTimeMs = currentTimeMs + ttlMs
       val entry = Entry(topicName, errorMessage, expirationTimeMs)
       byTopic.put(topicName, entry)
       expiryQueue.add(entry)
+
+      // Clean up expired entries
+      while (!expiryQueue.isEmpty && expiryQueue.peek().expirationTimeMs <= currentTimeMs) {
+        val expired = expiryQueue.poll()
+        val current = byTopic.get(expired.topicName)
+        if (current != null && (current eq expired)) {
+          byTopic.remove(expired.topicName)
+        }
+      }
 
       // Enforce capacity by removing entries with earliest expiration time first
       while (byTopic.size() > maxSize && !expiryQueue.isEmpty) {
@@ -110,35 +120,14 @@ private[server] class ExpiringErrorCache(maxSize: Int, time: Time) {
   }
 
   def getErrorsForTopics(topicNames: Set[String], currentTimeMs: Long): Map[String, String] = {
-    lock.lock()
-    try {
-      cleanupExpired(currentTimeMs)
-      val result = mutable.Map.empty[String, String]
-      topicNames.foreach { topicName =>
-        val entry = byTopic.get(topicName)
-        if (entry != null) {
-          result.put(topicName, entry.errorMessage)
-        }
+    val result = mutable.Map.empty[String, String]
+    topicNames.foreach { topicName =>
+      val entry = byTopic.get(topicName)
+      if (entry != null && entry.expirationTimeMs > currentTimeMs) {
+        result.put(topicName, entry.errorMessage)
       }
-      result.toMap
-    } finally {
-      lock.unlock()
     }
-  }
-
-  private def cleanupExpired(currentTimeMs: Long): Unit = {
-    lock.lock()
-    try {
-      while (!expiryQueue.isEmpty && expiryQueue.peek().expirationTimeMs <= currentTimeMs) {
-        val expired = expiryQueue.poll()
-        val current = byTopic.get(expired.topicName)
-        if (current != null && (current eq expired)) {
-          byTopic.remove(expired.topicName)
-        }
-      }
-    } finally {
-      lock.unlock()
-    }
+    result.toMap
   }
 
   private[server] def clear(): Unit = {
