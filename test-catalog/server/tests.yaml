@@ -179,6 +179,13 @@ org.apache.kafka.server.quota.ClientQuotasRequestTest:
 - testDescribeClientQuotasInvalidFilterCombination
 - testDescribeClientQuotasMatchExact
 - testDescribeClientQuotasMatchPartial
+org.apache.kafka.server.quota.ClientSensorsTest:
+- testConstructorPreservesInputOrder
+- testConstructorThrowsExceptionWhenBothSensorsAreNull
+- testConstructorThrowsExceptionWhenQuotaSensorIsNull
+- testConstructorThrowsExceptionWhenThrottleTimeSensorIsNull
+- testConstructorWithEmptyMap
+- testConstructorWithValidParameters
 org.apache.kafka.server.quota.ThrottledChannelTest:
 - testThrottledChannelDelay
 org.apache.kafka.server.replica.ReplicaTest:
@@ -224,6 +231,10 @@ org.apache.kafka.server.share.session.ShareSessionCacheTest:
 - testShareGroupListenerEvents
 - testShareGroupListenerEventsMultipleGroups
 - testShareSessionCache
+org.apache.kafka.server.share.session.ShareSessionKeyTest:
+- testConstructorThrowsExceptionWhenBothGroupIdAndMemberIdIsNull
+- testConstructorThrowsExceptionWhenGroupIdIsNull
+- testConstructorThrowsExceptionWhenMemberIdIsNull
 org.apache.kafka.server.share.session.ShareSessionTest:
 - testPartitionsToLogString
 - testPartitionsToLogStringEmpty
