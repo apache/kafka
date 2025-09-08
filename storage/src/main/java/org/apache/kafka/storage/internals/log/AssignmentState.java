@@ -25,8 +25,8 @@ import java.util.List;
 public interface AssignmentState {
 
     /**
-     * The full list of replicas in this assignment.
-     * @return the list of replica ids
+     * An ordered sequence of all the broker ids that were assigned to this topic partition.
+     * @return the list of broker ids
      */
     List<Integer> replicas();
 
@@ -38,10 +38,10 @@ public interface AssignmentState {
 
     /**
      * Check whether a replica is being added to the assignment.
-     * This is only true during a reassignment.
+     * The simple assignment returns false permanently.
      *
-     * @param brokerId the replica id to check
-     * @return true if the replica is being added
+     * @param brokerId the broker id to check
+     * @return true if the broker is being added
      */
     boolean isAddingReplica(int brokerId);
 }
