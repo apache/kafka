@@ -2524,10 +2524,8 @@ public class KafkaAdminClientTest {
 
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            String broker1log0 = "/var/data/kafka0";
-            env.kafkaClient().prepareResponseFrom(
-                    prepareDescribeLogDirsResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, broker1log0),
-                    env.cluster().nodeById(tpr.brokerId()));
+            DescribeLogDirsResponse response = new DescribeLogDirsResponse(new DescribeLogDirsResponseData().setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code()));
+            env.kafkaClient().prepareResponseFrom(response, env.cluster().nodeById(tpr.brokerId()));
 
             DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(List.of(tpr));
             Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
