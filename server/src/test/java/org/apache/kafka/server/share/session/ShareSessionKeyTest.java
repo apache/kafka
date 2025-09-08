@@ -14,17 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+package org.apache.kafka.server.share.session;
 
-import java.util.Objects;
+import org.apache.kafka.common.Uuid;
 
-public record LoggerLevel(
-    @JsonProperty String level,
-    @JsonProperty("last_modified") Long lastModified
-) {
-    public LoggerLevel {
-        Objects.requireNonNull(level, "level may not be null");
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+public class ShareSessionKeyTest {
+    @Test
+    public void testConstructorThrowsExceptionWhenGroupIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey(null, Uuid.randomUuid()));
+    }
+
+    @Test
+    public void testConstructorThrowsExceptionWhenMemberIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey("random", null));
+    }
+
+    @Test
+    public void testConstructorThrowsExceptionWhenBothGroupIdAndMemberIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey(null, null));
     }
 }

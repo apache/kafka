@@ -718,7 +718,7 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("offsetFetchExceptionSupplier")
-    public void testOffsetFetchRequestTimeoutRequests(final Errors error, 
+    public void testOffsetFetchRequestTimeoutRequests(final Errors error,
                                                      final Class<? extends Exception> expectedExceptionClass) {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -917,7 +917,7 @@ public class CommitRequestManagerTest {
     @ParameterizedTest
     @MethodSource("offsetCommitExceptionSupplier")
     public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires(
-            final Errors error, 
+            final Errors error,
             final Class<? extends Exception> expectedExceptionClass) {
         CommitRequestManager commitRequestManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -1339,7 +1339,7 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, TimeoutException.class),
             Arguments.of(Errors.REQUEST_TIMED_OUT, TimeoutException.class),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, TimeoutException.class),
-            
+
             // Non-retriable errors should result in their specific exceptions
             Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, GroupAuthorizationException.class),
             Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, OffsetMetadataTooLarge.class),
@@ -1347,7 +1347,7 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, TopicAuthorizationException.class),
             Arguments.of(Errors.UNKNOWN_MEMBER_ID, CommitFailedException.class),
             Arguments.of(Errors.STALE_MEMBER_EPOCH, CommitFailedException.class),
-            
+
             // Generic errors should result in KafkaException
             Arguments.of(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class));
     }
@@ -1364,7 +1364,7 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.REQUEST_TIMED_OUT, TimeoutException.class),
             Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT, TimeoutException.class),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, TimeoutException.class),
-            
+
             // Non-retriable errors should result in their specific exceptions
             Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, GroupAuthorizationException.class),
             Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, KafkaException.class),
@@ -1375,7 +1375,7 @@ public class CommitRequestManagerTest {
             // Adding STALE_MEMBER_EPOCH as non-retriable here because it is only retried if a new
             // member epoch is received. Tested separately.
             Arguments.of(Errors.STALE_MEMBER_EPOCH, StaleMemberEpochException.class),
-            
+
             // Generic errors should result in KafkaException
             Arguments.of(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class));
     }
@@ -1487,7 +1487,7 @@ public class CommitRequestManagerTest {
 
         assertEmptyPendingRequests(commitRequestManager);
     }
-    
+
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManager) {
         assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.isEmpty());
         assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
@@ -1564,6 +1564,7 @@ public class CommitRequestManagerTest {
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {
         props.setProperty(AUTO_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(autoCommitInterval));
         props.setProperty(ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(autoCommitEnabled));
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
 
         if (autoCommitEnabled)
             props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));

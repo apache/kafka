@@ -223,7 +223,7 @@ class KafkaConfigTest {
 
     // but not duplicate names
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "HOST://localhost:9091,HOST://localhost:9091")
-    assertBadConfigContainingMessage(props, "Each listener must have a different name")
+    assertBadConfigContainingMessage(props, "Configuration 'advertised.listeners' values must not be duplicated.")
   }
 
   @Test
@@ -248,8 +248,8 @@ class KafkaConfigTest {
     assertTrue(caught.getMessage.contains("If you have two listeners on the same port then one needs to be IPv4 and the other IPv6"))
 
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,PLAINTEXT://127.0.0.1:9092")
-    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
-    assertTrue(caught.getMessage.contains("Each listener must have a different name"))
+    val exception = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+    assertTrue(exception.getMessage.contains("values must not be duplicated."))
 
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9092,SASL_SSL://127.0.0.1:9092")
     caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
@@ -301,7 +301,8 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
-    assertBadConfigContainingMessage(props, "The listeners config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
+    assertBadConfigContainingMessage(props, 
+      "Missing required configuration \"controller.listener.names\" which has no default value.")
 
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     KafkaConfig.fromProps(props)
@@ -321,7 +322,8 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
     assertFalse(isValidKafkaConfig(props))
-    assertBadConfigContainingMessage(props, "controller.listener.names must contain at least one value when running KRaft with just the broker role")
+    assertBadConfigContainingMessage(props, 
+      "Missing required configuration \"controller.listener.names\" which has no default value.")
 
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     KafkaConfig.fromProps(props)
@@ -607,7 +609,7 @@ class KafkaConfigTest {
     assertEquals(expected.securityProtocol(), actual.securityProtocol(), "Security protocol mismatch")
   }
 
-  private def listenerListToEndPoints(listenerList: String,
+  private def listenerListToEndPoints(listenerList: java.util.List[String],
                               securityProtocolMap: util.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO) =
     CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
 
@@ -621,9 +623,9 @@ class KafkaConfigTest {
 
     // configuration with no listeners
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(listenerListToEndPoints("PLAINTEXT://:9092"), conf.listeners)
+    assertEquals(listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")), conf.listeners)
     assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
-    assertEquals(conf.effectiveAdvertisedBrokerListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
+    assertEquals(conf.effectiveAdvertisedBrokerListeners, listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")))
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {
@@ -827,8 +829,8 @@ class KafkaConfigTest {
         case SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
 
         case ServerLogConfigs.NUM_PARTITIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case ServerLogConfigs.LOG_DIRS_CONFIG => // ignore string
-        case ServerLogConfigs.LOG_DIR_CONFIG => // ignore string
+        case ServerLogConfigs.LOG_DIRS_CONFIG => assertPropertyInvalid(baseProperties, name, "")
+        case ServerLogConfigs.LOG_DIR_CONFIG => assertPropertyInvalid(baseProperties, name, "")
         case ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", Records.LOG_OVERHEAD - 1)
 
         case ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
@@ -1600,6 +1602,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     assertEquals("You must set `node.id` to the same value as `broker.id`.",
       assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage())
   }
