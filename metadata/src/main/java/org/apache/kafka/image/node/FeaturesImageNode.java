@@ -57,7 +57,6 @@ public class FeaturesImageNode implements MetadataNode {
     public Collection<String> childNames() {
         ArrayList<String> childNames = new ArrayList<>();
         childNames.add(METADATA_VERSION);
-        childNames.add(ZK_MIGRATION_STATE);
         for (String featureName : image.finalizedVersions().keySet()) {
             childNames.add(FINALIZED_PREFIX + featureName);
         }

@@ -112,8 +112,9 @@ public final class FindCommandHandler implements Commands.Handler {
                 String nextPath = path.equals("/") ? path + name : path + "/" + name;
                 MetadataNode child = node.child(name);
                 if (child == null) {
-                    throw new RuntimeException("Expected " + name + " to be a valid child of " +
+                    writer.println("Expected " + name + " to be a valid child of " +
                             path + ", but it was not.");
+                    continue;
                 }
                 find(writer, nextPath, child);
             }
