@@ -2628,20 +2628,23 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val consumerGroupListing = new GroupListing(consumerGroupId, Optional.of(GroupType.CONSUMER), "consumer", Optional.of(GroupState.STABLE))
       val shareGroupListing = new GroupListing(shareGroupId, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.STABLE))
       val simpleGroupListing = new GroupListing(simpleGroupId, Optional.of(GroupType.CLASSIC), "", Optional.of(GroupState.EMPTY))
-      // Streams group could either be in STABLE or NOT_READY state
-      val streamsGroupListingStable = new GroupListing(streamsGroupId, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.STABLE))
-      val streamsGroupListingNotReady = new GroupListing(streamsGroupId, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.NOT_READY))
+      val streamsGroupListing = new GroupListing(streamsGroupId, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.STABLE))
 
       var listGroupsResult = client.listGroups()
       assertTrue(listGroupsResult.errors().get().isEmpty)
 
-      val expectedStreamListings = Set(streamsGroupListingStable, streamsGroupListingNotReady)
-      val expectedListings = Set(classicGroupListing, simpleGroupListing, consumerGroupListing, shareGroupListing)
-      val actualListings = listGroupsResult.all().get().asScala.toSet
-
-      // Check that actualListings contains all expectedListings and one of the streams listings
-      assertTrue(expectedListings.subsetOf(actualListings))
-      assertTrue(actualListings.exists(expectedStreamListings.contains))
+      TestUtils.waitUntilTrue(() => {
+        val listGroupResultScala = client.listGroups().all().get().asScala
+        val filteredStreamsGroups = listGroupResultScala.filter(_.groupId() == streamsGroupId)
+        val filteredClassicGroups = listGroupResultScala.filter(_.groupId() == classicGroupId)
+        val filteredConsumerGroups = listGroupResultScala.filter(_.groupId() == consumerGroupId)
+        val filteredShareGroups = listGroupResultScala.filter(_.groupId() == shareGroupId)
+        filteredClassicGroups.forall(_.groupState().orElse(null) == GroupState.STABLE) &&
+          filteredConsumerGroups.forall(_.groupState().orElse(null) == GroupState.STABLE) &&
+          filteredShareGroups.forall(_.groupState().orElse(null) == GroupState.STABLE) &&
+          filteredClassicGroups.forall(_.groupState().orElse(null) == GroupState.STABLE) &&
+          filteredStreamsGroups.forall(_.groupState().orElse(null) == GroupState.STABLE)
+      }, "Groups not stable yet")
 
       listGroupsResult = client.listGroups(new ListGroupsOptions().withTypes(util.Set.of(GroupType.CLASSIC)))
       assertTrue(listGroupsResult.errors().get().isEmpty)
@@ -2660,10 +2663,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       listGroupsResult = client.listGroups(new ListGroupsOptions().withTypes(util.Set.of(GroupType.STREAMS)))
       assertTrue(listGroupsResult.errors().get().isEmpty)
-      assertTrue(listGroupsResult.all().get().asScala.toSet.equals(Set(streamsGroupListingStable)) ||
-        listGroupsResult.all().get().asScala.toSet.equals(Set(streamsGroupListingNotReady)))
-      assertTrue(listGroupsResult.valid().get().asScala.toSet.equals(Set(streamsGroupListingStable)) ||
-        listGroupsResult.valid().get().asScala.toSet.equals(Set(streamsGroupListingNotReady)))
+      assertEquals(Set(streamsGroupListing), listGroupsResult.all().get().asScala.toSet)
+      assertEquals(Set(streamsGroupListing), listGroupsResult.valid().get().asScala.toSet)
 
     } finally {
       Utils.closeQuietly(classicGroup, "classicGroup")
