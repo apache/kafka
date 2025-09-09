@@ -736,12 +736,7 @@ public class QuorumState {
 
     private void memoryTransitionTo(EpochState newState) {
         if (state != null) {
-            try {
-                state.close();
-            } catch (IOException e) {
-                throw new UncheckedIOException(
-                    "Failed to transition from " + state.name() + " to " + newState.name(), e);
-            }
+            state.close();
         }
 
         EpochState from = state;

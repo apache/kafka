@@ -59,4 +59,9 @@ public interface EpochState extends Closeable {
      * User-friendly description of the state
      */
     String name();
+
+    @Override
+    default void close() {
+        // intentionally left blank
+    }
 }
