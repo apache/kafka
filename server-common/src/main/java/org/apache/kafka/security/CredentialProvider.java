@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.security;
 
+import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
-import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 
 import java.util.Collection;

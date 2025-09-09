@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.metadata.publisher;
 
-import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.ScramDelta;
@@ -56,11 +55,10 @@ public class ScramPublisher implements MetadataPublisher {
             if (scramDelta != null) {
                 scramDelta.changes().forEach((mechanism, userChanges) -> {
                     userChanges.forEach((userName, change) -> {
-                        ScramMechanism internalMechanism = ScramMechanism.forMechanismName(mechanism.mechanismName());
                         if (change.isPresent())
-                            credentialProvider.updateCredential(internalMechanism, userName, change.get().toCredential());
+                            credentialProvider.updateCredential(mechanism, userName, change.get().toCredential());
                         else
-                            credentialProvider.removeCredentials(internalMechanism, userName);
+                            credentialProvider.removeCredentials(mechanism, userName);
                     });
                 });
             }
