@@ -286,6 +286,7 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testAlterLogDirsAfterDeleteRecords
 - testAlterReplicaLogDirs
 - testAlterShareGroupOffsets
+- testAlterStreamsGroupOffsets
 - testAppendAlreadyExistsConfigsAndSubtractNotExistsConfigs
 - testAppendConfigToEmptyDefaultValue
 - testAppendConfigToExistentValue
@@ -307,6 +308,7 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testDeleteRecordsAfterCorruptRecords
 - testDeleteRecordsWithException
 - testDeleteShareGroupOffsets
+- testDeleteStreamsGroupOffsets
 - testDeleteStreamsGroups
 - testDeleteTopicsWithIds
 - testDeleteTopicsWithOptionTimeoutMs
@@ -365,6 +367,7 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testListReassignmentsDoesNotShowDeletedPartitions
 - testListReassignmentsDoesNotShowNonReassigningPartitions
 - testListShareGroupOffsets
+- testListStreamsGroupOffsets
 - testListTopicsWithOptionListInternal
 - testListTopicsWithOptionTimeoutMs
 - testListTransactions
