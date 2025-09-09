@@ -178,11 +178,10 @@ public class DefaultStreamsRebalanceListenerTest {
         final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
         when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
         createRebalanceListenerWithRebalanceData(streamsRebalanceData);
-        
+
         final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(
             new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of())
         );
-        
         assertTrue(result.isPresent());
         assertEquals(exception, result.get());
         verify(taskManager).handleAssignment(any(), any());
@@ -212,7 +211,6 @@ public class DefaultStreamsRebalanceListenerTest {
         final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
         when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
         createRebalanceListenerWithRebalanceData(streamsRebalanceData);
-        
         final Optional<Exception> result = defaultStreamsRebalanceListener.onAllTasksLost();
         assertTrue(result.isPresent());
         assertEquals(exception, result.get());

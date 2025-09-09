@@ -1516,10 +1516,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         if (streamsRebalanceListenerInvoker.isPresent()) {
 
-            if (memberEpoch > 0)
+            if (memberEpoch > 0) {
                 error = streamsRebalanceListenerInvoker.get().invokeAllTasksRevoked();
-            else
+            } else {
                 error = streamsRebalanceListenerInvoker.get().invokeAllTasksLost();
+            }
 
         } else {
 
@@ -1532,10 +1533,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
             droppedPartitions.addAll(assignedPartitions);
 
-            if (memberEpoch > 0)
+            if (memberEpoch > 0) {
                 error = rebalanceListenerInvoker.invokePartitionsRevoked(droppedPartitions);
-            else
+            } else {
                 error = rebalanceListenerInvoker.invokePartitionsLost(droppedPartitions);
+            }
 
         }
 
