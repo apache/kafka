@@ -245,6 +245,39 @@ public class InternalTopicsIntegrationTest {
     }
 
     @Test
+    public void testFailToStartWhenInternalTopicsAreMissingWithDisabledInternalTopicCreation() throws InterruptedException {
+        brokerProps.put("log." + TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+        workerProps.put(DistributedConfig.CONFIG_TOPIC_CONFIG, "non-existent-config");
+        workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "non-existent-offset");
+        workerProps.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "non-existent-status");
+        workerProps.put(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        workerProps.put(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        workerProps.put(DistributedConfig.INTERNAL_TOPIC_CREATION_ENABLE_CONFIG, "false");
+        int numWorkers = 0;
+        int numBrokers = 1;
+        connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
+                                                      .workerProps(workerProps)
+                                                      .numWorkers(numWorkers)
+                                                      .numBrokers(numBrokers)
+                                                      .brokerProps(brokerProps)
+                                                      .build();
+
+        log.info("Starting {} Kafka brokers, but no Connect workers yet", numBrokers);
+        connect.start();
+        log.info("Completed startup of {} Kafka broker. Expected Connect worker to fail", numBrokers);
+
+        log.info("Verifying the internal topics for Connect were not created");
+        connect.assertions().assertTopicsDoNotExist("non-existent-config", "non-existent-offset", "non-existent-status");
+
+        WorkerHandle worker = connect.addWorker();
+        assertFalse(connect.isHealthy(worker));
+        assertFalse(connect.allWorkersHealthy());
+        assertFalse(connect.anyWorkersHealthy());
+        connect.removeWorker(worker);
+    }
+
+    @Test
     public void testStartWhenInternalTopicsCreatedManuallyWithCompactForBrokersDefaultCleanupPolicy() throws InterruptedException {
         // Change the broker default cleanup policy to compact, which is good for Connect
         brokerProps.put("log." + TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);

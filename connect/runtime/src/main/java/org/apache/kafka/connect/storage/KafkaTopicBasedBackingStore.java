@@ -41,15 +41,15 @@ public abstract class KafkaTopicBasedBackingStore {
 
     Consumer<TopicAdmin> topicInitializer(String topic, NewTopic topicDescription, WorkerConfig config, Time time) {
         return admin -> {
-			if (config.internalTopicsCreationEnabled()) {
+            if (config.internalTopicsCreationEnabled()) {
                 log.debug("Creating Connect internal topic for {}", getTopicPurpose());
                 // Create the topic if it doesn't exist
                 Set<String> newTopics = createTopics(topicDescription, admin, config, time);
                 if (!newTopics.contains(topic)) {
                     verifyTopicConfig(topic, admin);
                 }
-			} else {
-                log.debug("Skipping creation of Connect internal topic for {} because automatic topic creation is disabled", getTopicPurpose());
+            } else {
+                log.info("Skipping creation of Connect internal topic for {} because automatic topic creation is disabled", getTopicPurpose());
                 Map<String, TopicDescription> existing = admin.describeTopics(topic);
                 if (existing.isEmpty()) {
                     throw new ConnectException("Topic '" + topic + "' does not exist and automatic topic creation is disabled.");
