@@ -14,29 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.config;
 
-/**
- * Configuration settings for quota management
- *
- * @param numQuotaSamples         The number of samples to retain in memory
- * @param quotaWindowSizeSeconds  The time span of each sample
- */
-public record ClientQuotaManagerConfig(
-    int numQuotaSamples,
-    int quotaWindowSizeSeconds
-) {
-    /**
-     * Default constructor with default values
-     */
-    public ClientQuotaManagerConfig() {
-        this(QuotaConfig.NUM_QUOTA_SAMPLES_DEFAULT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
+package org.apache.kafka.server.share.session;
+
+import org.apache.kafka.common.Uuid;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+public class ShareSessionKeyTest {
+    @Test
+    public void testConstructorThrowsExceptionWhenGroupIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey(null, Uuid.randomUuid()));
     }
 
-    /**
-     * Constructor with custom numQuotaSamples and default quotaWindowSizeSeconds
-     */
-    public ClientQuotaManagerConfig(int numQuotaSamples) {
-        this(numQuotaSamples, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT);
+    @Test
+    public void testConstructorThrowsExceptionWhenMemberIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey("random", null));
+    }
+
+    @Test
+    public void testConstructorThrowsExceptionWhenBothGroupIdAndMemberIdIsNull() {
+        assertThrows(NullPointerException.class,
+            () -> new ShareSessionKey(null, null));
     }
 }

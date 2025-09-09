@@ -712,9 +712,9 @@ public class ClientQuotasRequestTest {
                 .stream()
                 .map(configEntry -> new ClientQuotaAlteration.Op(configEntry.getKey(),
                     configEntry.getValue().orElse(null)))
-                .collect(Collectors.toList());
+                .toList();
             return new ClientQuotaAlteration(entity, ops);
-        }).collect(Collectors.toList());
+        }).toList();
 
         try (Admin admin = cluster.admin()) {
             Map<ClientQuotaEntity, KafkaFuture<Void>> result = admin.alterClientQuotas(entries,
