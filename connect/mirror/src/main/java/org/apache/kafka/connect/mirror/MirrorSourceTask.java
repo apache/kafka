@@ -16,23 +16,30 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
-import org.apache.kafka.connect.source.SourceRecord;
-import org.apache.kafka.connect.source.SourceTask;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.source.SourceTask;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -46,6 +53,7 @@ import java.util.stream.Collectors;
 public class MirrorSourceTask extends SourceTask {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceTask.class);
+    private static final Logger FT_LOG = LoggerFactory.getLogger("mm2.fault.tolerance");
 
     private KafkaConsumer<byte[], byte[]> consumer;
     private String sourceClusterAlias;
@@ -55,6 +63,13 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+    
+    // Fault tolerance enhancements
+    private Admin sourceAdmin;
+    private final ConcurrentHashMap<String, Uuid> topicIds = new ConcurrentHashMap<>();
+    private boolean failOnTruncation = true;
+    private boolean autoRecoverOnReset = true;
+    private long topicResetRetryMs = 5000L;
 
     public MirrorSourceTask() {}
 
@@ -84,6 +99,15 @@ public class MirrorSourceTask extends SourceTask {
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         initializeConsumer(taskTopicPartitions);
+
+        // Fault tolerance configuration
+        this.failOnTruncation = Boolean.parseBoolean(props.getOrDefault("mirrorsource.fail.on.truncation", "true"));
+        this.autoRecoverOnReset = Boolean.parseBoolean(props.getOrDefault("mirrorsource.auto.recover.on.reset", "true"));
+        this.topicResetRetryMs = Long.parseLong(props.getOrDefault("mirrorsource.topic.reset.retry.ms", "5000"));
+
+        // Build AdminClient for source cluster (same configs as source consumer)
+        Map<String, Object> adminProps = new HashMap<>(config.sourceConsumerConfig("replication-consumer"));
+        sourceAdmin = Admin.create(adminProps);
 
         log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
             taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
@@ -133,6 +157,7 @@ public class MirrorSourceTask extends SourceTask {
         }
         try {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+            handleTopicResetIfAny();
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);
@@ -148,6 +173,20 @@ public class MirrorSourceTask extends SourceTask {
                 log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
                 return sourceRecords;
             }
+        } catch (OffsetOutOfRangeException oore) {
+            if (!failOnTruncation) throw oore;
+            // Fail-fast with precise diagnostics
+            Map<TopicPartition, Long> earliest = consumer.beginningOffsets(consumer.assignment());
+            String msg = "TRUNCATION_DETECTED: Source offsets are out of range (likely retention purge). " +
+                         "Earliest per partition=" + earliest + ", assignment=" + consumer.assignment();
+            FT_LOG.error(msg, oore);
+            throw new ConnectException(msg, oore);
+        } catch (UnknownTopicOrPartitionException utpe) {
+            if (!autoRecoverOnReset) throw utpe;
+            FT_LOG.warn("TOPIC_RESET_SUSPECTED: {}. Will retry metadata and resubscribe in {} ms.", utpe.getMessage(), topicResetRetryMs);
+            sleep(topicResetRetryMs);
+            handleTopicResetIfAny();
+            return Collections.emptyList();
         } catch (WakeupException e) {
             return null;
         } catch (KafkaException e) {
@@ -254,5 +293,38 @@ public class MirrorSourceTask extends SourceTask {
 
     private boolean isUncommitted(Long offset) {
         return offset == null || offset < 0;
+    }
+
+    private void handleTopicResetIfAny() {
+        if (!autoRecoverOnReset) return;
+        // Describe all topics currently subscribed
+        Set<String> topics = consumer.subscription();
+        if (topics.isEmpty()) return;
+        try {
+            DescribeTopicsResult res = sourceAdmin.describeTopics(topics);
+            Map<String, TopicDescription> desc = res.all().get();
+            for (Map.Entry<String, TopicDescription> e : desc.entrySet()) {
+                String t = e.getKey();
+                Uuid current = e.getValue().topicId();
+                Uuid previous = topicIds.putIfAbsent(t, current);
+                if (previous != null && !previous.equals(current)) {
+                    FT_LOG.warn("RESET_DETECTED: Topic {} recreated (oldId={} newId={}). Seeking to beginning.", t, previous, current);
+                    // Seek to beginning for all assigned partitions of this topic
+                    Set<TopicPartition> toSeek = consumer.assignment().stream()
+                        .filter(tp -> tp.topic().equals(t))
+                        .collect(Collectors.toSet());
+                    if (!toSeek.isEmpty()) consumer.seekToBeginning(toSeek);
+                }
+            }
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException ee) {
+            // If topic truly doesn't exist yet, we'll retry on next poll
+            FT_LOG.debug("Topic describe failed; will retry: {}", ee.getMessage());
+        }
+    }
+
+    private static void sleep(long ms) {
+        try { Thread.sleep(ms); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
     }
 }
