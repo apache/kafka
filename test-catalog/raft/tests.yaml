@@ -587,8 +587,10 @@ org.apache.kafka.raft.RaftEventSimulationTest:
 - leadershipWillNotChangeDuringNetworkPartitionIfMajorityStillReachable
 org.apache.kafka.raft.RaftUtilTest:
 - testAddRaftVoterRequestAckWhenCommittedNotIgnorable
+- testAddVoterResponse
 - testErrorResponse
 - testFetchRequestV17Compatibility
+- testRemoveVoterResponse
 - testSingletonBeginQuorumEpochRequestForAllVersion
 - testSingletonBeginQuorumEpochResponseForAllVersion
 - testSingletonDescribeQuorumRequestForAllVersion
