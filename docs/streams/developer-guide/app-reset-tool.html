@@ -80,9 +80,12 @@
                                          PORT2.
 --by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
                                         current timestamp. Format: &#39;PnDTnHnMnS&#39;
---config-file &lt;String: file name&gt;     Property file containing configs to be
-                                        passed to admin clients and embedded
-                                        consumer.
+--config-file &lt;String: file name&gt;    (Deprecated) Property file containing configs to be
+                                        passed to admin clients and embedded consumer.
+                                        This option will be removed in a future version.
+                                        Use --command-config instead.
+--command-config &lt;String: file name&gt; Config properties file to be passed to admin clients
+                                        and embedded consumer.
 --dry-run                             Display the actions that would be
                                         performed without executing the reset
                                         commands.
