@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.SplittableRandom;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -120,6 +121,65 @@ public class UtilsTest {
 
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
             assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
+        }
+    }
+
+    private static final int M32 = 0x5bd1e995;
+    private static final int R32 = 24;
+
+    // Murmur2 reference implementation, compare
+    // https://github.com/apache/commons-codec/blob/6d959482247761cc6c8a8a3ebf651d8e85473964/src/main/java/org/apache/commons/codec/digest/MurmurHash2.java#L79-L121
+    private static int murmur2ReferenceImplementation(final byte[] data, final int length, final int seed) {
+
+        // Initialize the hash to a random value
+        int h = seed ^ length;
+        // Mix 4 bytes at a time into the hash
+        final int nblocks = length >> 2;
+        // body
+        for (int i = 0; i < nblocks; i++) {
+            final int index = i << 2;
+            int k = (data[index + 0] & 0xff) + ((data[index + 1] & 0xff) << 8) + ((data[index + 2] & 0xff) << 16) + ((data[index + 3] & 0xff) << 24);
+            k *= M32;
+            k ^= k >>> R32;
+            k *= M32;
+            h *= M32;
+            h ^= k;
+        }
+        // Handle the last few bytes of the input array
+        final int index = nblocks << 2;
+        switch (length - index) {
+            case 3:
+                h ^= (data[index + 2] & 0xff) << 16;
+                // falls-through
+            case 2:
+                h ^= (data[index + 1] & 0xff) << 8;
+                // falls-through
+            case 1:
+                h ^= data[index] & 0xff;
+                h *= M32;
+        }
+        // Do a few final mixes of the hash to ensure the last few
+        // bytes are well-incorporated.
+        h ^= h >>> 13;
+        h *= M32;
+        h ^= h >>> 15;
+        return h;
+    }
+
+    @Test
+    public void testMurmur2AgainstReferenceImplementation() {
+        int numTrials = 100;
+        int maxLen = 1000;
+        SplittableRandom random = new SplittableRandom(0xbd4458b165652255L);
+
+        for (int len = 0; len <= maxLen; ++len) {
+            byte[] data = new byte[len];
+            for (int i = 0; i < numTrials; ++i) {
+                random.nextBytes(data);
+                int expectedHash = murmur2ReferenceImplementation(data, len, 0x9747b28c);
+                int actualHash = Utils.murmur2(data);
+                assertEquals(expectedHash, actualHash);
+            }
         }
     }
 
