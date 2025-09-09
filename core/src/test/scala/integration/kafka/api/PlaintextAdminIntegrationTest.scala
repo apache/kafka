@@ -2642,7 +2642,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         filteredClassicGroups.forall(_.groupState().orElse(null) == GroupState.STABLE) &&
           filteredConsumerGroups.forall(_.groupState().orElse(null) == GroupState.STABLE) &&
           filteredShareGroups.forall(_.groupState().orElse(null) == GroupState.STABLE) &&
-          filteredClassicGroups.forall(_.groupState().orElse(null) == GroupState.STABLE) &&
           filteredStreamsGroups.forall(_.groupState().orElse(null) == GroupState.STABLE)
       }, "Groups not stable yet")
 
