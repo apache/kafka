@@ -214,17 +214,17 @@ public class ShareConsumerImplTest {
         final ConsumerConfig config = new ConsumerConfig(props);
 
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-          KafkaException ce = assertThrows(
-              KafkaException.class,
-              () -> newConsumer(config));
-          assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
-          assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
+            KafkaException ce = assertThrows(
+                KafkaException.class,
+                () -> newConsumer(config));
+            assertTrue(ce.getMessage().contains("Failed to construct Kafka share consumer"), "Unexpected exception message: " + ce.getMessage());
+            assertTrue(ce.getCause().getMessage().contains("Class an.invalid.class cannot be found"), "Unexpected cause: " + ce.getCause());
 
-          boolean npeLogged = appender.getEvents().stream()
-              .flatMap(event -> event.getThrowableInfo().stream())
-              .anyMatch(str -> str.contains("NullPointerException"));
+            boolean npeLogged = appender.getEvents().stream()
+                .flatMap(event -> event.getThrowableInfo().stream())
+                .anyMatch(str -> str.contains("NullPointerException"));
 
-          assertFalse(npeLogged, "Unexpected NullPointerException during consumer construction");
+            assertFalse(npeLogged, "Unexpected NullPointerException during consumer construction");
         }
     }
 
