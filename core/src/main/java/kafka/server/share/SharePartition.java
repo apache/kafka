@@ -2916,6 +2916,10 @@ public class SharePartition {
         }
     }
 
+    /**
+     * PersisterBatch class is used to record the state updates for a batch or an offset.
+     * It contains the updated in-flight state and the persister state batch to be sent to persister.
+     */
     private record PersisterBatch(
         InFlightState updatedState,
         PersisterStateBatch stateBatch
