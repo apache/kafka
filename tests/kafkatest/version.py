@@ -97,6 +97,13 @@ class KafkaVersion(LooseVersion):
     def supports_feature_command(self):
         return self >= V_3_8_0
 
+    def supports_command_config(self):
+        # According to KIP-1147, --producer.config and --consumer.config have been deprecated and will be removed in future versions
+        # For backward compatibility, we select the configuration based on node version:
+        # - For versions 4.2.0 and above, use --command-config
+        # - For older versions, continue using --producer.config or --consumer.config
+        return self >= V_4_2_0
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
@@ -223,3 +230,7 @@ LATEST_4_0 = V_4_0_0
 # 4.1.x version
 V_4_1_0 = KafkaVersion("4.1.0")
 LATEST_4_1 = V_4_1_0
+
+# 4.2.x version
+V_4_2_0 = KafkaVersion("4.2.0")
+LATEST_4_2 = V_4_2_0
