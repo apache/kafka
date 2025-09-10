@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
@@ -53,8 +54,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     private GroupAssignment doAssign(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) {
-        //active
-        final Set<TaskId> activeTasks = taskIds(topologyDescriber, true);
+        final LinkedList<TaskId> activeTasks = taskIds(topologyDescriber, true);
         assignActive(activeTasks);
 
         //standby
@@ -62,15 +62,15 @@ public class StickyTaskAssignor implements TaskAssignor {
             groupSpec.assignmentConfigs().isEmpty() ? 0
                 : Integer.parseInt(groupSpec.assignmentConfigs().get("num.standby.replicas"));
         if (numStandbyReplicas > 0) {
-            final Set<TaskId> statefulTasks = taskIds(topologyDescriber, false);
+            final LinkedList<TaskId> statefulTasks = taskIds(topologyDescriber, false);
             assignStandby(statefulTasks, numStandbyReplicas);
         }
 
         return buildGroupAssignment(groupSpec.members().keySet());
     }
 
-    private Set<TaskId> taskIds(final TopologyDescriber topologyDescriber, final boolean isActive) {
-        final Set<TaskId> ret = new HashSet<>();
+    private LinkedList<TaskId> taskIds(final TopologyDescriber topologyDescriber, final boolean isActive) {
+        final LinkedList<TaskId> ret = new LinkedList<>();
         for (final String subtopology : topologyDescriber.subtopologies()) {
             if (isActive || topologyDescriber.isStateful(subtopology)) {
                 final int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
@@ -166,7 +166,10 @@ public class StickyTaskAssignor implements TaskAssignor {
         return ret;
     }
 
-    private void assignActive(final Set<TaskId> activeTasks) {
+    private void assignActive(final LinkedList<TaskId> activeTasks) {
+
+        // Assuming our current assignment pairs same partitions (range-based), we want to sort by partition first
+        activeTasks.sort(Comparator.comparing(TaskId::partition).thenComparing(TaskId::subtopologyId));
 
         // 1. re-assigning existing active tasks to clients that previously had the same active tasks
         for (final Iterator<TaskId> it = activeTasks.iterator(); it.hasNext();) {
@@ -192,6 +195,9 @@ public class StickyTaskAssignor implements TaskAssignor {
                 it.remove();
             }
         }
+
+        // To achieve an initially range-based assignment, sort by subtopology
+        activeTasks.sort(Comparator.comparing(TaskId::subtopologyId).thenComparing(TaskId::partition));
 
         // 3. assign any remaining unassigned tasks
         final PriorityQueue<ProcessState> processByLoad = new PriorityQueue<>(Comparator.comparingDouble(ProcessState::load));
@@ -296,9 +302,13 @@ public class StickyTaskAssignor implements TaskAssignor {
         return localState.processIdToState.get(member.processId).memberToTaskCounts().get(member.memberId) < localState.tasksPerMember;
     }
 
-    private void assignStandby(final Set<TaskId> standbyTasks, final int numStandbyReplicas) {
+    private void assignStandby(final LinkedList<TaskId> standbyTasks, int numStandbyReplicas) {
         final ArrayList<StandbyToAssign> toLeastLoaded = new ArrayList<>(standbyTasks.size() * numStandbyReplicas);
-        for (final TaskId task : standbyTasks) {
+
+        // Assuming our current assignment is range-based, we want to sort by partition first.
+        standbyTasks.sort(Comparator.comparing(TaskId::partition).thenComparing(TaskId::subtopologyId).reversed());
+
+        for (TaskId task : standbyTasks) {
             for (int i = 0; i < numStandbyReplicas; i++) {
 
                 // prev active task
@@ -328,6 +338,10 @@ public class StickyTaskAssignor implements TaskAssignor {
                 break;
             }
         }
+
+        // To achieve a range-based assignment, sort by subtopology
+        toLeastLoaded.sort(Comparator.<StandbyToAssign, String>comparing(x -> x.taskId.subtopologyId())
+            .thenComparing(x -> x.taskId.partition()).reversed());
 
         final PriorityQueue<ProcessState> processByLoad = new PriorityQueue<>(Comparator.comparingDouble(ProcessState::load));
         processByLoad.addAll(localState.processIdToState.values());
