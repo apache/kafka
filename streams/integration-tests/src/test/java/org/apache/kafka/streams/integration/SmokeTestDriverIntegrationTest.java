@@ -53,9 +53,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-    public static EmbeddedKafkaCluster cluster = null;
+    private static EmbeddedKafkaCluster cluster = null;
     public TestInfo testInfo;
-    public ArrayList<SmokeTestClient> clients = new ArrayList<>();
+    private ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
     @BeforeAll
     public static void startCluster() throws IOException {
