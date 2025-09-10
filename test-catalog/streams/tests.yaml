@@ -508,6 +508,8 @@ org.apache.kafka.streams.internals.metrics.ClientMetricsTest:
 - shouldAddTopologyDescriptionMetric
 - shouldAddVersionMetric
 - shouldGetFailedStreamThreadsSensor
+org.apache.kafka.streams.internals.metrics.OpenIteratorsTest:
+- shouldCalculateOldestStartTimestampCorrectly
 org.apache.kafka.streams.internals.metrics.StreamsClientMetricsDelegatingReporterTest:
 - metricRemoval
 - shouldInitMetrics
