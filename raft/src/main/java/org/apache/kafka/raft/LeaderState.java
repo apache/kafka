@@ -192,7 +192,8 @@ public class LeaderState<T> implements EpochState {
         Set<ReplicaKey> replicaKeys = new HashSet<>();
         beginQuorumEpochTimer.update(currentTimeMs);
         for (ReplicaState state : voterStates.values()) {
-            if (beginQuorumEpochTimer.currentTimeMs() - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs) {
+            if (beginQuorumEpochTimer.currentTimeMs() - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs
+                || !state.hasAcknowledgedLeader) {
                 replicaKeys.add(state.replicaKey());
             }
         }
