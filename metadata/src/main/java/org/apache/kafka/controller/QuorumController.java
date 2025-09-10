@@ -532,7 +532,6 @@ public final class QuorumController implements Controller {
             MICROSECONDS.convert(deltaNs, NANOSECONDS));
         performanceMonitor.observeEvent(name, deltaNs);
         controllerMetrics.updateEventQueueProcessingTime(NANOSECONDS.toMillis(deltaNs));
-        controllerMetrics.updateIdleStartTime();
     }
 
     private Throwable handleEventException(
@@ -550,7 +549,6 @@ public final class QuorumController implements Controller {
         } else {
             deltaUs = OptionalLong.empty();
         }
-        controllerMetrics.updateIdleStartTime();
         EventHandlerExceptionInfo info = EventHandlerExceptionInfo.
                 fromInternal(exception, this::latestController);
         int epoch = curClaimEpoch;
@@ -575,7 +573,6 @@ public final class QuorumController implements Controller {
 
     private long updateEventStartMetricsAndGetTime(OptionalLong eventCreatedTimeNs) {
         long now = time.nanoseconds();
-        controllerMetrics.updateIdleEndTime();
         controllerMetrics.incrementOperationsStarted();
         if (eventCreatedTimeNs.isPresent()) {
             controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs.getAsLong()));
@@ -834,7 +831,6 @@ public final class QuorumController implements Controller {
 
             // Remember the latest offset and future if it is not already completed
             if (!future.isDone()) {
-                controllerMetrics.updateIdleStartTime();
                 deferredEventQueue.add(resultAndOffset.offset(), this);
             }
         }
@@ -846,7 +842,6 @@ public final class QuorumController implements Controller {
 
         @Override
         public void complete(Throwable exception) {
-            controllerMetrics.updateIdleEndTime();
             if (exception == null) {
                 handleEventEnd(this.toString(), startProcessingTimeNs.getAsLong());
                 future.complete(resultAndOffset.response());
@@ -1493,6 +1488,7 @@ public final class QuorumController implements Controller {
         this.queue = queue;
         this.time = time;
         this.controllerMetrics = controllerMetrics;
+        queue.setIdleTimeCallback(controllerMetrics::updateIdleTime);
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.deferredEventQueue = new DeferredEventQueue(logContext);
         this.resourceExists = new ConfigResourceExistenceChecker();

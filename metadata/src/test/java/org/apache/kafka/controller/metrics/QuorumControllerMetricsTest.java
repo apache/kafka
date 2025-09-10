@@ -199,22 +199,13 @@ public class QuorumControllerMetricsTest {
             // No idle time recorded yet
             assertEquals(1.0, avgIdleRatio.value());
 
-            metrics.updateIdleStartTime();
-            time.sleep(10); //initial record is ignored
-            metrics.updateIdleEndTime();
-            time.sleep(20); // wait 20ms non-idle
-            metrics.updateIdleStartTime();
-            time.sleep(20); // 20ms idle
-            metrics.updateIdleEndTime();
+            metrics.updateIdleTime(10);
+            time.sleep(40);
+            metrics.updateIdleTime(20);
             assertEquals(0.5, avgIdleRatio.value());
 
-            metrics.updateIdleStartTime();
-            time.sleep(0);
-            metrics.updateIdleEndTime();
-            time.sleep(19);
-            metrics.updateIdleStartTime();
-            time.sleep(1);
-            metrics.updateIdleEndTime();
+            time.sleep(20);
+            metrics.updateIdleTime(1);
             assertEquals(0.05, avgIdleRatio.value());
 
         } finally {

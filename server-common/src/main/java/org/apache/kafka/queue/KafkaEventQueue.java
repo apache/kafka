@@ -31,8 +31,10 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
@@ -278,21 +280,24 @@ public final class KafkaEventQueue implements EventQueue {
                         remove(toRun);
                         continue;
                     }
-                    if (awaitNs == Long.MAX_VALUE) {
-                        try {
+
+                    long startIdleNs = time.nanoseconds();
+                    try {
+                        if (awaitNs == Long.MAX_VALUE) {
                             cond.await();
-                        } catch (InterruptedException e) {
-                            log.warn("Interrupted while waiting for a new event. " +
-                                "Shutting down event queue");
-                            interrupted = true;
-                        }
-                    } else {
-                        try {
+                        } else {
                             cond.awaitNanos(awaitNs);
-                        } catch (InterruptedException e) {
-                            log.warn("Interrupted while waiting for a deferred event. " +
-                                "Shutting down event queue");
-                            interrupted = true;
+                        }
+                    } catch (InterruptedException e) {
+
+                        log.warn("Interrupted while waiting for a {} event. " +
+                                "Shutting down event queue", (awaitNs == Long.MAX_VALUE) ? "new" : "deferred");
+                        interrupted = true;
+                    } finally {
+                        if (idleTimeCallback != null) {
+                            long idleNs = Math.max(time.nanoseconds() - startIdleNs, 0);
+                            long idleMs = TimeUnit.NANOSECONDS.toMillis(idleNs);
+                            idleTimeCallback.accept(idleMs);
                         }
                     }
                 } finally {
@@ -440,6 +445,12 @@ public final class KafkaEventQueue implements EventQueue {
      */
     private boolean interrupted;
 
+    /**
+     * Optional callback for queue idle time tracking.
+     */
+    private Consumer<Long> idleTimeCallback;
+
+
     public KafkaEventQueue(
         Time time,
         LogContext logContext,
@@ -501,6 +512,10 @@ public final class KafkaEventQueue implements EventQueue {
         } finally {
             lock.unlock();
         }
+    }
+
+    public void setIdleTimeCallback(Consumer<Long> callback) {
+        this.idleTimeCallback = callback;
     }
 
     @Override

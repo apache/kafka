@@ -89,7 +89,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong newActiveControllers = new AtomicLong(0);
     private final Map<Integer, Long> brokerContactTimesMs = new ConcurrentHashMap<>();
     private final int sessionTimeoutMs;
-    private final AtomicLong idleStartTime = new AtomicLong(-1);
 
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
         if (registry.isPresent()) {
@@ -174,16 +173,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
         }));
     }
 
-    public void updateIdleStartTime() {
-        idleStartTime.compareAndExchange(-1, time.milliseconds());
-    }
-
-    public void updateIdleEndTime() {
-        long startTime = idleStartTime.getAndSet(-1);
-        if (startTime != -1) {
-            long idleDurationMs = Math.max(time.milliseconds() - startTime, 0);
-            avgIdleTimeRatio.record(METRIC_CONFIG, (double) idleDurationMs, time.milliseconds());
-        }
+    public void updateIdleTime(long idleDurationMs) {
+        avgIdleTimeRatio.record(METRIC_CONFIG, (double) idleDurationMs, time.milliseconds());
     }
 
     public void addTimeSinceLastHeartbeatMetric(int brokerId) {
