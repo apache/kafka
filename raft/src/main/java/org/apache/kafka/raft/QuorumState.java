@@ -27,8 +27,6 @@ import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.slf4j.Logger;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;

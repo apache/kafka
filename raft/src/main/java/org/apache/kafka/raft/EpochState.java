@@ -62,6 +62,7 @@ public interface EpochState extends Closeable {
 
     @Override
     default void close() {
-        // intentionally left blank
+        // Since all subclasses implement the Closeable interface while none throw any IOException,
+        // this default implementation is provided to eliminate the need for exception handling in the close operation.
     }
 }
