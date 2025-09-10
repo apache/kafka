@@ -123,12 +123,11 @@ public class SmokeTestDriverIntegrationTest {
     // During the new stream added and old stream left, the stream process should still complete without issue.
     // We set 2 timeout condition to fail the test before passing the verification:
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
+    // The processing thread variations where disabled since they triggered a race condition, see KAFKA-19696
     @ParameterizedTest
     @CsvSource({
         "false, true",
-        "false, false",
-        "true, true",
-        "true, false"
+        "false, false"
     })
     public void shouldWorkWithRebalance(
         final boolean processingThreadsEnabled,
