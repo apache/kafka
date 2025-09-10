@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.MeteredIterator;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
