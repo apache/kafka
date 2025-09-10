@@ -38,7 +38,7 @@ public class OpenIteratorsTest {
 
     @Test
     public void shouldCalculateOldestStartTimestampCorrectly() {
-        final OpenIterators openIterators = new OpenIterators(new TaskId(1, 1), "2", "3", streamsMetrics);
+        final OpenIterators openIterators = new OpenIterators(new TaskId(0, 0), "scope", "name", streamsMetrics);
 
         final MeteredIterator meteredIterator1 = () -> 5;
         final MeteredIterator meteredIterator2 = () -> 2;
