@@ -36,6 +36,7 @@ public class OpenIteratorsTest {
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldCalculateOldestStartTimestampCorrectly() {
         final OpenIterators openIterators = new OpenIterators(new TaskId(0, 0), "scope", "name", streamsMetrics);
