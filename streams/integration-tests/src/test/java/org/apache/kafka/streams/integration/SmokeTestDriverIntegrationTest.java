@@ -27,6 +27,7 @@ import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -52,22 +53,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
+    public static EmbeddedKafkaCluster cluster = null;
     public TestInfo testInfo;
+    public ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
     @BeforeAll
     public static void startCluster() throws IOException {
-        CLUSTER.start();
+        cluster = new EmbeddedKafkaCluster(3);
+        cluster.start();
     }
 
     @AfterAll
     public static void closeCluster() {
-        CLUSTER.stop();
+        cluster.stop();
+        cluster = null;
     }
 
     @BeforeEach
     public void setUp(final TestInfo testInfo) {
         this.testInfo = testInfo;
+    }
+
+    @AfterEach
+    public void shutDown(final TestInfo testInfo) {
+        // Clean up clients in case the test failed or timed out
+        for (final SmokeTestClient client : clients) {
+            if (!client.closed() && !client.error()) {
+                client.close();
+            }
+        }
     }
 
     private static class Driver extends Thread {
@@ -127,11 +141,10 @@ public class SmokeTestDriverIntegrationTest {
             throw new AssertionError("Test called halt(). code:" + statusCode + " message:" + message);
         });
         int numClientsCreated = 0;
-        final ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
-        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, SmokeTestDriver.topics());
+        IntegrationTestUtils.cleanStateBeforeTest(cluster, SmokeTestDriver.topics());
 
-        final String bootstrapServers = CLUSTER.bootstrapServers();
+        final String bootstrapServers = cluster.bootstrapServers();
         final Driver driver = new Driver(bootstrapServers, 10, 1000);
         driver.start();
         System.out.println("started driver");
@@ -145,8 +158,8 @@ public class SmokeTestDriverIntegrationTest {
         if (streamsProtocolEnabled) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
             // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
-            CLUSTER.setGroupSessionTimeout(appId, 10000);
-            CLUSTER.setGroupHeartbeatTimeout(appId, 1000);
+            cluster.setGroupSessionTimeout(appId, 10000);
+            cluster.setGroupHeartbeatTimeout(appId, 1000);
         } else {
             // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
             props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
