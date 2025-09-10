@@ -34,7 +34,6 @@ Usage:
 
 from datetime import date
 import argparse
-from distutils.dir_util import copy_tree
 import shutil
 from test.docker_sanity_test import run_tests
 from common import execute, build_docker_image_runner
@@ -49,7 +48,7 @@ def run_docker_tests(image, tag, kafka_url, image_type):
     temp_dir_path = tempfile.mkdtemp()
     try:
         current_dir = os.path.dirname(os.path.realpath(__file__))
-        copy_tree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures")
+        shutil.copytree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures", dirs_exist_ok=True)
         execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
         execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
         execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C", f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
