@@ -32,13 +32,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class SocketServerConfigsTest {
     @Test
     public void testDefaultNameToSecurityProto() {
-        Map<ListenerName, SecurityProtocol> expected = Map.of(
-                new ListenerName("PLAINTEXT"), SecurityProtocol.PLAINTEXT,
-                new ListenerName("SSL"), SecurityProtocol.SSL,
-                new ListenerName("SASL_PLAINTEXT"), SecurityProtocol.SASL_PLAINTEXT,
-                new ListenerName("SASL_SSL"), SecurityProtocol.SASL_SSL
-        );
-        assertEquals(expected, SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO);
+        assertEquals(Map.of(
+            new ListenerName("PLAINTEXT"), SecurityProtocol.PLAINTEXT,
+            new ListenerName("SSL"), SecurityProtocol.SSL,
+            new ListenerName("SASL_PLAINTEXT"), SecurityProtocol.SASL_PLAINTEXT,
+            new ListenerName("SASL_SSL"), SecurityProtocol.SASL_SSL
+        ), SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO);
     }
 
     @Test
