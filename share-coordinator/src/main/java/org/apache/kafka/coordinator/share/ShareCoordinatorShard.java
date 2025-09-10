@@ -265,7 +265,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             }
         }
 
-        offsetsManager.updateState(mapKey, offset);
+        offsetsManager.updateState(mapKey, offset, value == null);
     }
 
     private void handleShareUpdate(ShareUpdateKey key, ShareUpdateValue value) {
