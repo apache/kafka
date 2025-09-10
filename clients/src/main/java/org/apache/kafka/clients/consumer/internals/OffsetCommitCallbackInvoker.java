@@ -50,6 +50,10 @@ public class OffsetCommitCallbackInvoker {
         }
     }
 
+    public int size() {
+        return callbackQueue.size();
+    }
+
     public void enqueueUserCallbackInvocation(final OffsetCommitCallback callback,
                                               final Map<TopicPartition, OffsetAndMetadata> offsets,
                                               final Exception exception) {

@@ -301,7 +301,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     logContext,
                     metadata,
                     subscriptions,
-                    requestManagersSupplier
+                    requestManagersSupplier,
+                    backgroundEventHandler,
+                    Optional.empty()
             );
 
             this.applicationEventHandler = applicationEventHandlerFactory.build(
@@ -407,7 +409,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 logContext,
                 metadata,
                 subscriptions,
-                requestManagersSupplier
+                requestManagersSupplier,
+                backgroundEventHandler,
+                Optional.empty()
         );
 
         this.applicationEventHandler = new ApplicationEventHandler(

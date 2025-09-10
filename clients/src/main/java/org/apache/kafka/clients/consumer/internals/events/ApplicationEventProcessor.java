@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
+import org.apache.kafka.clients.consumer.internals.OffsetCommitCallbackInvoker;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
@@ -32,6 +33,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.LogContext;
 
@@ -42,6 +44,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -59,16 +62,22 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
+    private final BackgroundEventHandler backgroundEventHandler;
+    private final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
-                                     final SubscriptionState subscriptions) {
+                                     final SubscriptionState subscriptions,
+                                     final BackgroundEventHandler backgroundEventHandler,
+                                     final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
+        this.backgroundEventHandler = backgroundEventHandler;
+        this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
         this.metadataVersionSnapshot = metadata.updateVersion();
     }
 
@@ -76,6 +85,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
+            case COMPOSITE_POLL:
+                process((CompositePollEvent) event);
+                return;
+
             case COMMIT_ASYNC:
                 process((AsyncCommitEvent) event);
                 return;
@@ -217,35 +230,81 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
     }
 
-    private void process(final PollEvent event) {
-        // Trigger a reconciliation that can safely commit offsets if needed to rebalance,
-        // as we're processing before any new fetching starts in the app thread
-        requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
-            consumerMembershipManager.maybeReconcile(true));
-        if (requestManagers.commitRequestManager.isPresent()) {
-            CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
-            commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
-            // all commit request generation points have been passed,
-            // so it's safe to notify the app thread could proceed and start fetching
-            event.markReconcileAndAutoCommitComplete();
-            requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
-                hrm.membershipManager().onConsumerPoll();
-                hrm.resetPollTimer(event.pollTimeMs());
-            });
-            requestManagers.streamsGroupHeartbeatRequestManager.ifPresent(hrm -> {
-                hrm.membershipManager().onConsumerPoll();
-                hrm.resetPollTimer(event.pollTimeMs());
-            });
-        } else {
-            // safe to unblock - no auto-commit risk here:
-            // 1. commitRequestManager is not present
-            // 2. shareConsumer has no auto-commit mechanism
-            event.markReconcileAndAutoCommitComplete();
-            requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
-                hrm.membershipManager().onConsumerPoll();
-                hrm.resetPollTimer(event.pollTimeMs());
-            });
+    private void process(final CompositePollEvent event) {
+        log.debug("Processing {}", event);
+
+        ApplicationEvent.Type nextStep = event.nextStep();
+        log.debug("Processing nextStep: {}", nextStep);
+
+        if (nextStep == ApplicationEvent.Type.POLL) {
+            log.debug("nextStep == {}", nextStep);
+            log.debug("Before processPollEvent()");
+            processPollEvent(event.pollTimeMs());
+            log.debug("After processPollEvent()");
+
+            // If there are enqueued callbacks to invoke, exit to the application thread.
+            if (offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0) {
+                log.debug("Uh oh! Escaping composite poll event with {}", CompositePollResult.NEEDS_OFFSET_COMMIT_CALLBACKS);
+                event.future().complete(CompositePollResult.NEEDS_OFFSET_COMMIT_CALLBACKS);
+                return;
+            }
+
+            nextStep = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
+            log.debug("Set nextStep to {}", nextStep);
         }
+
+        if (nextStep == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
+            log.debug("nextStep == {}", nextStep);
+            log.debug("Before processUpdatePatternSubscriptionEvent()");
+            processUpdatePatternSubscriptionEvent();
+            log.debug("After processUpdatePatternSubscriptionEvent()");
+
+            // If there are background events to process, exit to the application thread.
+            if (backgroundEventHandler.size() > 0) {
+                log.debug("Uh oh! Escaping composite poll event with {}", CompositePollResult.NEEDS_BACKGROUND_EVENT_PROCESSING);
+                event.future().complete(CompositePollResult.NEEDS_BACKGROUND_EVENT_PROCESSING);
+                return;
+            }
+
+            nextStep = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
+            log.debug("Set nextStep to {}", nextStep);
+        }
+
+        if (nextStep == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
+            log.debug("nextStep == {}", nextStep);
+            processCheckAndUpdatePositionsEvent(event.deadlineMs()).whenComplete((__, updatePositionsError) -> {
+                log.debug("processCheckAndUpdatePositionsEvent complete, __: {}, updatePositionsError: {}", __, String.valueOf(updatePositionsError));
+
+                if (updatePositionsError != null && !(updatePositionsError instanceof TimeoutException)) {
+                    log.debug("Uh oh! Failing composite poll event with {}", String.valueOf(updatePositionsError));
+                    event.future().completeExceptionally(updatePositionsError);
+                    return;
+                }
+
+                // If needed, create a fetch request if there's no data in the FetchBuffer.
+                requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
+                    log.debug("createFetchRequests complete, ___: {}, fetchError: {}", ___, String.valueOf(fetchError));
+
+                    if (fetchError != null && !(fetchError instanceof TimeoutException)) {
+                        log.debug("Uh oh! Failing composite poll event with {}", String.valueOf(updatePositionsError));
+                        event.future().completeExceptionally(fetchError);
+                        return;
+                    }
+
+                    log.debug("Yay! We did it! Exiting composite poll event with {}", CompositePollResult.COMPLETE);
+                    event.future().complete(CompositePollResult.COMPLETE);
+                });
+            });
+
+            return;
+        }
+
+        event.future().completeExceptionally(new IllegalArgumentException("Unknown next step for composite poll: " + nextStep));
+    }
+
+    private void process(final PollEvent event) {
+        processPollEvent(event.pollTimeMs());
+        event.markReconcileAndAutoCommitComplete();
     }
 
     private void process(final CreateFetchRequestsEvent event) {
@@ -409,13 +468,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * This will make the consumer send the updated subscription on the next poll.
      */
     private void process(final UpdatePatternSubscriptionEvent event) {
-        if (!subscriptions.hasPatternSubscription()) {
-            return;
-        }
-        if (this.metadataVersionSnapshot < metadata.updateVersion()) {
-            this.metadataVersionSnapshot = metadata.updateVersion();
-            updatePatternSubscription(metadata.fetch());
-        }
+        processUpdatePatternSubscriptionEvent();
         event.future().complete(null);
     }
 
@@ -457,7 +510,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * them to update positions in the subscription state.
      */
     private void process(final CheckAndUpdatePositionsEvent event) {
-        CompletableFuture<Boolean> future = requestManagers.offsetsRequestManager.updateFetchPositions(event.deadlineMs());
+        CompletableFuture<Boolean> future = processCheckAndUpdatePositionsEvent(event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -742,7 +795,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final ConsumerMetadata metadata,
                                                                final SubscriptionState subscriptions,
-                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+                                                               final Supplier<RequestManagers> requestManagersSupplier,
+                                                               final BackgroundEventHandler backgroundEventHandler,
+                                                               final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker) {
         return new CachedSupplier<>() {
             @Override
             protected ApplicationEventProcessor create() {
@@ -751,7 +806,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                         logContext,
                         requestManagers,
                         metadata,
-                        subscriptions
+                        subscriptions,
+                        backgroundEventHandler,
+                        offsetCommitCallbackInvoker
                 );
             }
         };
@@ -785,5 +842,47 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     // Visible for testing
     int metadataVersionSnapshot() {
         return metadataVersionSnapshot;
+    }
+
+    private void processPollEvent(final long pollTimeMs) {
+        // Trigger a reconciliation that can safely commit offsets if needed to rebalance,
+        // as we're processing before any new fetching starts in the app thread
+        requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
+            consumerMembershipManager.maybeReconcile(true));
+        if (requestManagers.commitRequestManager.isPresent()) {
+            CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
+            commitRequestManager.updateTimerAndMaybeCommit(pollTimeMs);
+            // all commit request generation points have been passed,
+            // so it's safe to notify the app thread could proceed and start fetching
+            requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
+                hrm.membershipManager().onConsumerPoll();
+                hrm.resetPollTimer(pollTimeMs);
+            });
+            requestManagers.streamsGroupHeartbeatRequestManager.ifPresent(hrm -> {
+                hrm.membershipManager().onConsumerPoll();
+                hrm.resetPollTimer(pollTimeMs);
+            });
+        } else {
+            // safe to unblock - no auto-commit risk here:
+            // 1. commitRequestManager is not present
+            // 2. shareConsumer has no auto-commit mechanism
+            requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
+                hrm.membershipManager().onConsumerPoll();
+                hrm.resetPollTimer(pollTimeMs);
+            });
+        }
+    }
+
+    private void processUpdatePatternSubscriptionEvent() {
+        if (subscriptions.hasPatternSubscription()) {
+            if (this.metadataVersionSnapshot < metadata.updateVersion()) {
+                this.metadataVersionSnapshot = metadata.updateVersion();
+                updatePatternSubscription(metadata.fetch());
+            }
+        }
+    }
+
+    private CompletableFuture<Boolean> processCheckAndUpdatePositionsEvent(final long deadlineMs) {
+        return requestManagers.offsetsRequestManager.updateFetchPositions(deadlineMs);
     }
 }

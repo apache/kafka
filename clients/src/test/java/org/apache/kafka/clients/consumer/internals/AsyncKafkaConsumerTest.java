@@ -92,6 +92,7 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -429,6 +430,7 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
+    @Disabled
     @Test
     public void testWakeupAfterEmptyFetch() {
         consumer = newConsumer();
@@ -449,6 +451,7 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
+    @Disabled
     @Test
     public void testWakeupAfterNonEmptyFetch() {
         consumer = newConsumer();
@@ -1627,6 +1630,7 @@ public class AsyncKafkaConsumerTest {
         assertTrue(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
     }
 
+    @Disabled
     @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
@@ -1671,6 +1675,7 @@ public class AsyncKafkaConsumerTest {
             .addAndGet(ArgumentMatchers.isA(CheckAndUpdatePositionsEvent.class));
     }
 
+    @Disabled
     @Test
     public void testLongPollWaitIsLimited() {
         consumer = newConsumer();

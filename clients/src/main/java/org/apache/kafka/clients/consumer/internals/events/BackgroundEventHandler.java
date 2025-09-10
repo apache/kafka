@@ -45,6 +45,10 @@ public class BackgroundEventHandler {
         this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
 
+    public int size() {
+        return backgroundEventQueue.size();
+    }
+
     /**
      * Add a {@link BackgroundEvent} to the handler.
      *

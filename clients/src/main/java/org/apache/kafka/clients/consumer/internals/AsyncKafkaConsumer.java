@@ -49,6 +49,8 @@ import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.events.CompositePollEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompositePollResult;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
@@ -59,7 +61,6 @@ import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsE
 import org.apache.kafka.clients.consumer.internals.events.LeaveGroupOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PausePartitionsEvent;
-import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResumePartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
@@ -500,7 +501,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     subscriptions,
-                    requestManagersSupplier);
+                    requestManagersSupplier,
+                    backgroundEventHandler,
+                    Optional.of(offsetCommitCallbackInvoker)
+            );
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
                     time,
@@ -689,7 +693,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 logContext,
                 metadata,
                 subscriptions,
-                requestManagersSupplier
+                requestManagersSupplier,
+                backgroundEventHandler,
+                Optional.of(offsetCommitCallbackInvoker)
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
@@ -865,23 +871,32 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             do {
-                PollEvent event = new PollEvent(timer.currentTimeMs());
-                // Make sure to let the background thread know that we are still polling.
-                // This will trigger async auto-commits of consumed positions when hitting
-                // the interval time or reconciling new assignments
-                applicationEventHandler.add(event);
-                // Wait for reconciliation and auto-commit to be triggered, to ensure all commit requests
-                // retrieve the positions to commit before proceeding with fetching new records
-                ConsumerUtils.getResult(event.reconcileAndAutoCommit(), defaultApiTimeoutMs.toMillis());
-
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling
                 // of the fetches. A wakeup between returned fetches and returning records would lead to never
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
 
-                updateAssignmentMetadataIfNeeded(timer);
-                final Fetch<K, V> fetch = pollForFetches(timer);
+                long pollTimeMs = timer.currentTimeMs();
+                long deadlineMs = calculateDeadlineMs(timer);
+                ApplicationEvent.Type nextStep = ApplicationEvent.Type.POLL;
+
+                while (true) {
+                    CompositePollEvent event = new CompositePollEvent(pollTimeMs, deadlineMs, nextStep);
+                    CompositePollResult result = applicationEventHandler.addAndGet(event);
+
+                    if (result == CompositePollResult.NEEDS_OFFSET_COMMIT_CALLBACKS) {
+                        offsetCommitCallbackInvoker.executeCallbacks();
+                        nextStep = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
+                    } else if (result == CompositePollResult.NEEDS_BACKGROUND_EVENT_PROCESSING) {
+                        processBackgroundEvents();
+                        nextStep = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
+                    } else if (result == CompositePollResult.COMPLETE) {
+                        break;
+                    }
+                }
+
+                final Fetch<K, V> fetch = collectFetch();
                 if (!fetch.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
