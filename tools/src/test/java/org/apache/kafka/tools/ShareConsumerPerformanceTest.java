@@ -17,7 +17,10 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.MockShareConsumer;
+import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +33,8 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
+import java.util.Properties;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -118,6 +123,21 @@ public class ShareConsumerPerformanceTest {
         ShareConsumerPerformance.ShareConsumerPerfOptions config = new ShareConsumerPerformance.ShareConsumerPerfOptions(args);
 
         assertEquals("perf-share-consumer-client", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+    }
+
+    @Test
+    public void testMetricsRetrievedBeforeConsumerClosed() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--messages", "0",
+            "--print-metrics"
+        };
+
+        Function<Properties, ShareConsumer<byte[], byte[]>> shareConsumerCreator = properties -> new MockShareConsumer<>();
+
+        String err = ToolsTestUtils.captureStandardErr(() -> ShareConsumerPerformance.run(args, shareConsumerCreator));
+        assertTrue(Utils.isBlank(err), "Should be no stderr message, but was \"" + err + "\"");
     }
 
     private void testHeaderMatchContent(int expectedOutputLineCount, Runnable runnable) {
