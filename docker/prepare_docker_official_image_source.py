@@ -33,7 +33,6 @@ Usage:
 
 from datetime import date
 import argparse
-from distutils.dir_util import copy_tree
 import os
 import shutil
 import re
@@ -61,12 +60,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kafka_url = f"https://archive.apache.org/dist/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    new_dir = os.path.join(
-        current_dir, f'docker_official_images', args.kafka_version)
+    new_dir = os.path.join(current_dir, 'docker_official_images', args.kafka_version)
     if os.path.exists(new_dir):
         shutil.rmtree(new_dir)
     os.makedirs(new_dir)
-    copy_tree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.kafka_version, args.image_type))
-    copy_tree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.kafka_version, args.image_type, 'resources'))
-    remove_args_and_hardcode_values(
-        os.path.join(new_dir, args.kafka_version, args.image_type, 'Dockerfile'), args.kafka_version, kafka_url)
+    shutil.copytree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.image_type), dirs_exist_ok=True)
+    shutil.copytree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.image_type, 'resources'), dirs_exist_ok=True)
+    remove_args_and_hardcode_values(os.path.join(new_dir, args.image_type, 'Dockerfile'), args.kafka_version, kafka_url)

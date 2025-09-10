@@ -94,11 +94,6 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer, Monitorabl
         initialLoadFuture.complete(null);
     }
 
-    // Visible for testing
-    public CompletableFuture<Void> initialLoadFuture() {
-        return initialLoadFuture;
-    }
-
     @Override
     public void completeInitialLoad(Exception e) {
         if (!initialLoadFuture.isDone()) {

@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import io.opentelemetry.proto.metrics.v1.MetricsData;
@@ -181,13 +182,23 @@ public class ClientTelemetryUtils {
         return validateResourceLabel(metadata, MetricsContext.NAMESPACE);
     }
 
-    public static CompressionType preferredCompressionType(List<CompressionType> acceptedCompressionTypes) {
-        if (acceptedCompressionTypes != null && !acceptedCompressionTypes.isEmpty()) {
-            // Broker is providing the compression types in order of preference. Grab the
-            // first one.
-            return acceptedCompressionTypes.get(0);
-        }
-        return CompressionType.NONE;
+    /**
+     * Determines the preferred compression type from broker-accepted types, avoiding unsupported ones.
+     * 
+     * @param acceptedCompressionTypes the list of compression types accepted by the broker in order 
+     *                                of preference (must not be null, use empty list if no compression is accepted)
+     * @param unsupportedCompressionTypes the set of compression types that should be avoided due to 
+     *                                   missing libraries or previous failures (must not be null)
+     * @return the preferred compression type to use, or {@link CompressionType#NONE} if no acceptable
+     *         compression type is available
+     */
+    public static CompressionType preferredCompressionType(List<CompressionType> acceptedCompressionTypes, Set<CompressionType> unsupportedCompressionTypes) {
+        // Broker is providing the compression types in order of preference. Grab the
+        // first one that's supported.
+        return acceptedCompressionTypes.stream()
+                .filter(t -> !unsupportedCompressionTypes.contains(t))
+                .findFirst()
+                .orElse(CompressionType.NONE);
     }
 
     public static ByteBuffer compress(MetricsData metrics, CompressionType compressionType) throws IOException {

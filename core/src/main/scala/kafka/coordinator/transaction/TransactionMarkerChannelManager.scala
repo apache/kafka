@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersReque
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
-import org.apache.kafka.coordinator.transaction.TxnTransitMetadata
+import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -333,16 +333,16 @@ class TransactionMarkerChannelManager(
       info(s"Replaced an existing pending complete txn $prev with $pendingCompleteTxn while adding markers to send.")
     }
     addTxnMarkersToBrokerQueue(txnMetadata.producerId,
-      txnMetadata.producerEpoch, txnResult, pendingCompleteTxn, txnMetadata.topicPartitions.toSet)
+      txnMetadata.producerEpoch, txnResult, pendingCompleteTxn, txnMetadata.topicPartitions.asScala.toSet)
     maybeWriteTxnCompletion(transactionalId)
   }
 
   def numTxnsWithPendingMarkers: Int = transactionsWithPendingMarkers.size
 
   private def hasPendingMarkersToWrite(txnMetadata: TransactionMetadata): Boolean = {
-    txnMetadata.inLock {
-      txnMetadata.topicPartitions.nonEmpty
-    }
+    txnMetadata.inLock(() =>
+      !txnMetadata.topicPartitions.isEmpty
+    )
   }
 
   def maybeWriteTxnCompletion(transactionalId: String): Unit = {
@@ -429,9 +429,9 @@ class TransactionMarkerChannelManager(
 
                 val txnMetadata = epochAndMetadata.transactionMetadata
 
-                txnMetadata.inLock {
+                txnMetadata.inLock(() =>
                   topicPartitions.foreach(txnMetadata.removePartition)
-                }
+                )
 
                 maybeWriteTxnCompletion(transactionalId)
               }

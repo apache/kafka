@@ -19,77 +19,23 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Objects;
-
-public class PluginInfo {
-    private final String className;
-    private final PluginType type;
-    private final String version;
-
-    @JsonCreator
-    public PluginInfo(
-        @JsonProperty("class") String className,
-        @JsonProperty("type") PluginType type,
-        @JsonProperty("version") String version
-    ) {
-        this.className = className;
-        this.type = type;
-        this.version = version;
-    }
-
+public record PluginInfo(
+    @JsonProperty("class") String className,
+    @JsonProperty("type") PluginType type,
+    @JsonProperty("version")
+    @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = NoVersionFilter.class)
+    String version
+) {
     public PluginInfo(PluginDesc<?> plugin) {
         this(plugin.className(), plugin.type(), plugin.version());
     }
 
-    @JsonProperty("class")
-    public String className() {
-        return className;
-    }
-
-    @JsonProperty("type")
-    public String type() {
-        return type.toString();
-    }
-
-    @JsonProperty("version")
-    @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = NoVersionFilter.class)
-    public String version() {
-        return version;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        PluginInfo that = (PluginInfo) o;
-        return Objects.equals(className, that.className) &&
-               Objects.equals(type, that.type) &&
-               Objects.equals(version, that.version);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(className, type, version);
-    }
-
-    @Override
-    public String toString() {
-        return "PluginInfo{" + "className='" + className + '\'' +
-                ", type=" + type.toString() +
-                ", version='" + version + '\'' +
-                '}';
-    }
-
     public static final class NoVersionFilter {
-        // This method is used by Jackson to filter the version field for plugins that don't have a version
+        // Used by Jackson to filter out undefined versions
+        @Override
         public boolean equals(Object obj) {
             return PluginDesc.UNDEFINED_VERSION.equals(obj);
         }

@@ -49,16 +49,25 @@ class LogCompactionTest(Test):
             controller_num_nodes_override=self.num_zk)
         self.kafka.start()
 
-    def start_test_log_compaction_tool(self, security_protocol):
-        self.compaction_verifier = LogCompactionTester(self.test_context, self.kafka, security_protocol=security_protocol)
+    def start_test_log_compaction_tool(self, security_protocol, compression_config={}):
+        self.compaction_verifier = LogCompactionTester(self.test_context, self.kafka, security_protocol=security_protocol, compression_config=compression_config)
         self.compaction_verifier.start()
 
     @cluster(num_nodes=4)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_log_compaction(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=quorum.all_non_upgrade, compression_config=[
+        {},
+        {'type': 'gzip', 'level': 1},
+        {'type': 'gzip', 'level': 9},
+        {'type': 'snappy'},
+        {'type': 'lz4', 'level': 1},
+        {'type': 'lz4', 'level': 10},
+        {'type': 'zstd', 'level': 1},
+        {'type': 'zstd', 'level': 10}
+    ])
+    def test_log_compaction(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk, compression_config={}):
 
         self.start_kafka(security_protocol, security_protocol)
-        self.start_test_log_compaction_tool(security_protocol)
+        self.start_test_log_compaction_tool(security_protocol, compression_config)
 
         # Verify that compacted data verification completed in LogCompactionTester
-        wait_until(lambda: self.compaction_verifier.is_done, timeout_sec=180, err_msg="Timed out waiting to complete compaction")
+        wait_until(lambda: self.compaction_verifier.is_done, timeout_sec=240, err_msg="Timed out waiting to complete compaction")

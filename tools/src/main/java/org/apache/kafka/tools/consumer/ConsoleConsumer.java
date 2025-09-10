@@ -37,6 +37,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -160,7 +161,7 @@ public class ConsoleConsumer {
                 if (opts.partitionArg().isPresent()) {
                     seek(topic.get(), opts.partitionArg().getAsInt(), opts.offsetArg());
                 } else {
-                    consumer.subscribe(Collections.singletonList(topic.get()));
+                    consumer.subscribe(List.of(topic.get()));
                 }
             } else {
                 opts.includedTopicsArg().ifPresent(topics -> consumer.subscribe(Pattern.compile(topics)));
@@ -169,11 +170,11 @@ public class ConsoleConsumer {
 
         private void seek(String topic, int partitionId, long offset) {
             TopicPartition topicPartition = new TopicPartition(topic, partitionId);
-            consumer.assign(Collections.singletonList(topicPartition));
+            consumer.assign(List.of(topicPartition));
             if (offset == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
-                consumer.seekToBeginning(Collections.singletonList(topicPartition));
+                consumer.seekToBeginning(List.of(topicPartition));
             } else if (offset == ListOffsetsRequest.LATEST_TIMESTAMP) {
-                consumer.seekToEnd(Collections.singletonList(topicPartition));
+                consumer.seekToEnd(List.of(topicPartition));
             } else {
                 consumer.seek(topicPartition, offset);
             }

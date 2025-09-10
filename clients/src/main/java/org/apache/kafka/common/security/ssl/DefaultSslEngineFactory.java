@@ -137,14 +137,14 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         SecurityUtils.addConfiguredSecurityProviders(this.configs);
 
         List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
-        if (cipherSuitesList != null && !cipherSuitesList.isEmpty()) {
+        if (!cipherSuitesList.isEmpty()) {
             this.cipherSuites = cipherSuitesList.toArray(new String[0]);
         } else {
             this.cipherSuites = null;
         }
 
         List<String> enabledProtocolsList = (List<String>) configs.get(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
-        if (enabledProtocolsList != null && !enabledProtocolsList.isEmpty()) {
+        if (!enabledProtocolsList.isEmpty()) {
             this.enabledProtocols = enabledProtocolsList.toArray(new String[0]);
         } else {
             this.enabledProtocols = null;

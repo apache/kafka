@@ -579,10 +579,12 @@ public class KafkaAdminClient extends AdminClient {
                                            Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
+        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
         Optional<ClientTelemetryReporter> clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+        clientTelemetryReporter.ifPresent(reporters::add);
 
         try {
-            metrics = new Metrics(new MetricConfig(), new LinkedList<>(), time);
+            metrics = new Metrics(new MetricConfig(), reporters, time);
             LogContext logContext = createLogContext(clientId);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
                 client, null, logContext, clientTelemetryReporter);
@@ -627,9 +629,7 @@ public class KafkaAdminClient extends AdminClient {
             CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
             retryBackoffMaxMs,
             CommonClientConfigs.RETRY_BACKOFF_JITTER);
-        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(this.clientId, config);
         this.clientTelemetryReporter = clientTelemetryReporter;
-        this.clientTelemetryReporter.ifPresent(reporters::add);
         this.metadataRecoveryStrategy = MetadataRecoveryStrategy.forName(config.getString(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
         this.partitionLeaderCache = new HashMap<>();
         this.adminFetchMetricsManager = new AdminFetchMetricsManager(metrics);
@@ -2334,7 +2334,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         // First, we need to retrieve the node info.
-        DescribeClusterResult clusterResult = describeCluster();
+        DescribeClusterResult clusterResult = describeCluster(new DescribeClusterOptions().timeoutMs(options.timeoutMs()));
         clusterResult.nodes().whenComplete(
             (nodes, exception) -> {
                 if (exception != null) {
@@ -5154,6 +5154,8 @@ public class KafkaAdminClient extends AdminClient {
             return ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
         } else if (offsetSpec instanceof OffsetSpec.LatestTieredSpec) {
             return ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.EarliestPendingUploadSpec) {
+            return ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP;
         }
         return ListOffsetsRequest.LATEST_TIMESTAMP;
     }

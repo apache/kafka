@@ -21,44 +21,9 @@ import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
-public class ShareSessionKey {
-    private final String groupId;
-    private final Uuid memberId;
-
-    public ShareSessionKey(String groupId, Uuid memberId) {
-        this.groupId = Objects.requireNonNull(groupId);
-        this.memberId = Objects.requireNonNull(memberId);
-    }
-
-    public String groupId() {
-        return groupId;
-    }
-
-    public Uuid memberId() {
-        return memberId;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(groupId, memberId);
-    }
-
-    @Override
-    public boolean equals(final Object obj) {
-        if (this == obj)
-            return true;
-        else if (obj == null || getClass() != obj.getClass())
-            return false;
-        else {
-            ShareSessionKey that = (ShareSessionKey) obj;
-            return groupId.equals(that.groupId) && Objects.equals(memberId, that.memberId);
-        }
-    }
-
-    public String toString() {
-        return "ShareSessionKey(" +
-                " groupId=" + groupId +
-                ", memberId=" + memberId +
-                ")";
+public record ShareSessionKey(String groupId, Uuid memberId) {
+    public ShareSessionKey {
+        Objects.requireNonNull(groupId);
+        Objects.requireNonNull(memberId);
     }
 }

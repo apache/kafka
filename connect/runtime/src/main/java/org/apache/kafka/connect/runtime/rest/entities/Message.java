@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import java.util.Objects;
 
 /**
  * Standard format for regular successful REST API responses that look like:
@@ -29,32 +26,5 @@ import java.util.Objects;
  *     }
  * </pre>
  */
-public class Message {
-    private final String message;
-
-    @JsonCreator
-    public Message(@JsonProperty("message") String message) {
-        this.message = message;
-    }
-
-    @JsonProperty
-    public String message() {
-        return message;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (!(obj instanceof Message that)) {
-            return false;
-        }
-        return Objects.equals(this.message, that.message);
-    }
-
-    @Override
-    public int hashCode() {
-        return message.hashCode();
-    }
+public record Message(@JsonProperty String message) {
 }
