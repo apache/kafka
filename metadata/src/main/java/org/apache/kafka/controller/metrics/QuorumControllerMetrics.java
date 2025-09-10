@@ -19,8 +19,8 @@ package org.apache.kafka.controller.metrics;
 
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.raft.internals.TimeRatio;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.metrics.TimeRatio;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
