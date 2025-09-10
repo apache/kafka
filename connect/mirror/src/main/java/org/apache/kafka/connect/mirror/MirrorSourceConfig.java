@@ -209,18 +209,21 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         TOPICS,
                         ConfigDef.Type.LIST,
                         TOPICS_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         ConfigDef.Importance.HIGH,
                         TOPICS_DOC)
                 .define(
                         TOPICS_EXCLUDE,
                         ConfigDef.Type.LIST,
                         TOPICS_EXCLUDE_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         ConfigDef.Importance.HIGH,
                         TOPICS_EXCLUDE_DOC)
                 .define(
                         CONFIG_PROPERTIES_EXCLUDE,
                         ConfigDef.Type.LIST,
                         CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         ConfigDef.Importance.HIGH,
                         CONFIG_PROPERTIES_EXCLUDE_DOC)
                 .define(

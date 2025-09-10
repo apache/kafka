@@ -51,15 +51,11 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -82,7 +78,6 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 public class ConsumerGroupCommand {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommand.class);
 
     static final String MISSING_COLUMN_VALUE = "-";
 
@@ -123,7 +118,7 @@ public class ConsumerGroupCommand {
             return;
         }
 
-        try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Collections.emptyMap())) {
+        try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt))
                 consumerGroupService.listGroups();
             else if (opts.options.has(opts.describeOpt))
@@ -136,7 +131,7 @@ public class ConsumerGroupCommand {
                     String exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset);
                     System.out.println(exported);
                 } else
-                    printOffsetsToReset(offsetsToReset);
+                    OffsetsUtils.printOffsetsToReset(offsetsToReset);
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 consumerGroupService.deleteOffsets();
             }
@@ -180,21 +175,6 @@ public class ConsumerGroupCommand {
     static void printError(String msg, Optional<Throwable> e) {
         System.out.println("\nError: " + msg);
         e.ifPresent(Throwable::printStackTrace);
-    }
-
-    static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
-        String format = "%n%-30s %-30s %-10s %-15s";
-        if (!groupAssignmentsToReset.isEmpty())
-            System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
-
-        groupAssignmentsToReset.forEach((groupId, assignment) ->
-            assignment.forEach((consumerAssignment, offsetAndMetadata) ->
-                System.out.printf(format,
-                    groupId,
-                    consumerAssignment.topic(),
-                    consumerAssignment.partition(),
-                    offsetAndMetadata.offset())));
-        System.out.println();
     }
 
     @SuppressWarnings("ClassFanOutComplexity")
@@ -244,14 +224,14 @@ public class ConsumerGroupCommand {
         private Set<GroupState> stateValues() {
             String stateValue = opts.options.valueOf(opts.stateOpt);
             return (stateValue == null || stateValue.isEmpty())
-                ? Collections.emptySet()
+                ? Set.of()
                 : groupStatesFromString(stateValue);
         }
 
         private Set<GroupType> typeValues() {
             String typeValue = opts.options.valueOf(opts.typeOpt);
             return (typeValue == null || typeValue.isEmpty())
-                ? Collections.emptySet()
+                ? Set.of()
                 : consumerGroupTypesFromString(typeValue);
         }
 
@@ -367,20 +347,20 @@ public class ConsumerGroupCommand {
                         for (PartitionAssignmentState consumerAssignment : consumerAssignments) {
                             if (verbose) {
                                 System.out.printf(format,
-                                    consumerAssignment.group,
-                                    consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
+                                    consumerAssignment.group(),
+                                    consumerAssignment.topic().orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.leaderEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.offset().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.lag().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId().orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.host().orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId().orElse(MISSING_COLUMN_VALUE)
                                 );
                             } else {
                                 System.out.printf(format,
-                                    consumerAssignment.group,
-                                    consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE),
-                                    consumerAssignment.host.orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.orElse(MISSING_COLUMN_VALUE)
+                                    consumerAssignment.group(),
+                                    consumerAssignment.topic().orElse(MISSING_COLUMN_VALUE), consumerAssignment.partition().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.offset().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset().map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.lag().map(Object::toString).orElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId().orElse(MISSING_COLUMN_VALUE),
+                                    consumerAssignment.host().orElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId().orElse(MISSING_COLUMN_VALUE)
                                 );
                             }
                         }
@@ -399,10 +379,10 @@ public class ConsumerGroupCommand {
             if (assignments.isPresent()) {
                 Collection<PartitionAssignmentState> consumerAssignments = assignments.get();
                 for (PartitionAssignmentState consumerAssignment : consumerAssignments) {
-                    maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group.length());
-                    maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE).length());
-                    maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE).length());
-                    maxHostLen = Math.max(maxHostLen, consumerAssignment.host.orElse(MISSING_COLUMN_VALUE).length());
+                    maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group().length());
+                    maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic().orElse(MISSING_COLUMN_VALUE).length());
+                    maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId().orElse(MISSING_COLUMN_VALUE).length());
+                    maxHostLen = Math.max(maxHostLen, consumerAssignment.host().orElse(MISSING_COLUMN_VALUE).length());
 
                 }
             }
@@ -428,20 +408,20 @@ public class ConsumerGroupCommand {
                     // find proper columns width
                     if (assignments.isPresent()) {
                         for (MemberAssignmentState memberAssignment : assignments.get()) {
-                            maxGroupLen = Math.max(maxGroupLen, memberAssignment.group.length());
-                            maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId.length());
-                            maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId.length());
-                            maxHostLen = Math.max(maxHostLen, memberAssignment.host.length());
-                            maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length());
-                            includeGroupInstanceId = includeGroupInstanceId || !memberAssignment.groupInstanceId.isEmpty();
-                            String currentAssignment = memberAssignment.assignment.isEmpty() ?
-                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment);
-                            String targetAssignment = memberAssignment.targetAssignment.isEmpty() ?
-                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment);
+                            maxGroupLen = Math.max(maxGroupLen, memberAssignment.group().length());
+                            maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId().length());
+                            maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId().length());
+                            maxHostLen = Math.max(maxHostLen, memberAssignment.host().length());
+                            maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId().length());
+                            includeGroupInstanceId = includeGroupInstanceId || !memberAssignment.groupInstanceId().isEmpty();
+                            String currentAssignment = memberAssignment.assignment().isEmpty() ?
+                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment());
+                            String targetAssignment = memberAssignment.targetAssignment().isEmpty() ?
+                                MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment());
                             maxCurrentAssignment = Math.max(maxCurrentAssignment, currentAssignment.length());
                             maxTargetAssignment = Math.max(maxTargetAssignment, targetAssignment.length());
-                            hasClassicMember = hasClassicMember || (memberAssignment.upgraded.isPresent() && !memberAssignment.upgraded.get());
-                            hasConsumerMember = hasConsumerMember || (memberAssignment.upgraded.isPresent() && memberAssignment.upgraded.get());
+                            hasClassicMember = hasClassicMember || (memberAssignment.upgraded().isPresent() && !memberAssignment.upgraded().get());
+                            hasConsumerMember = hasConsumerMember || (memberAssignment.upgraded().isPresent() && memberAssignment.upgraded().get());
                         }
                     }
                 }
@@ -485,23 +465,23 @@ public class ConsumerGroupCommand {
         ) {
             for (MemberAssignmentState memberAssignment : memberAssignments) {
                 if (includeGroupInstanceId) {
-                    System.out.printf(formatWithGroupInstanceId, memberAssignment.group, memberAssignment.consumerId,
-                        memberAssignment.groupInstanceId, memberAssignment.host, memberAssignment.clientId,
-                        memberAssignment.numPartitions);
+                    System.out.printf(formatWithGroupInstanceId, memberAssignment.group(), memberAssignment.consumerId(),
+                        memberAssignment.groupInstanceId(), memberAssignment.host(), memberAssignment.clientId(),
+                        memberAssignment.numPartitions());
                 } else {
-                    System.out.printf(formatWithoutGroupInstanceId, memberAssignment.group, memberAssignment.consumerId,
-                        memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions);
+                    System.out.printf(formatWithoutGroupInstanceId, memberAssignment.group(), memberAssignment.consumerId(),
+                        memberAssignment.host(), memberAssignment.clientId(), memberAssignment.numPartitions());
                 }
                 if (verbose) {
-                    String currentEpoch = memberAssignment.currentEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE);
-                    String currentAssignment = memberAssignment.assignment.isEmpty() ?
-                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment);
-                    String targetEpoch = memberAssignment.targetEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE);
-                    String targetAssignment = memberAssignment.targetAssignment.isEmpty() ?
-                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment);
+                    String currentEpoch = memberAssignment.currentEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE);
+                    String currentAssignment = memberAssignment.assignment().isEmpty() ?
+                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.assignment());
+                    String targetEpoch = memberAssignment.targetEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE);
+                    String targetAssignment = memberAssignment.targetAssignment().isEmpty() ?
+                        MISSING_COLUMN_VALUE : getAssignmentString(memberAssignment.targetAssignment());
                     if (hasMigrationMember) {
                         System.out.printf(formatWithUpgrade, currentEpoch, currentAssignment, targetEpoch, targetAssignment,
-                            memberAssignment.upgraded.map(Object::toString).orElse(MISSING_COLUMN_VALUE));
+                            memberAssignment.upgraded().map(Object::toString).orElse(MISSING_COLUMN_VALUE));
                     } else {
                         System.out.printf(formatWithoutUpgrade, currentEpoch, currentAssignment, targetEpoch, targetAssignment);
                     }
@@ -531,23 +511,23 @@ public class ConsumerGroupCommand {
 
         private void printStates(Map<String, GroupInformation> states, boolean verbose) {
             states.forEach((groupId, state) -> {
-                if (shouldPrintMemberState(groupId, Optional.of(state.groupState), Optional.of(1))) {
-                    String coordinator = state.coordinator.host() + ":" + state.coordinator.port() + "  (" + state.coordinator.idString() + ")";
+                if (shouldPrintMemberState(groupId, Optional.of(state.groupState()), Optional.of(1))) {
+                    String coordinator = state.coordinator().host() + ":" + state.coordinator().port() + "  (" + state.coordinator().idString() + ")";
                     int coordinatorColLen = Math.max(25, coordinator.length());
-                    int groupColLen = Math.max(15, state.group.length());
+                    int groupColLen = Math.max(15, state.group().length());
 
-                    String assignmentStrategy = state.assignmentStrategy.isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy;
+                    String assignmentStrategy = state.assignmentStrategy().isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy();
 
                     if (verbose) {
                         String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %-15s %-25s %s";
                         System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE",
                             "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-                        System.out.printf(format, state.group, coordinator, assignmentStrategy, state.groupState,
-                            state.groupEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.targetAssignmentEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.numMembers);
+                        System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(),
+                            state.groupEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.targetAssignmentEpoch().map(Object::toString).orElse(MISSING_COLUMN_VALUE), state.numMembers());
                     } else {
                         String format = "\n%" + -groupColLen + "s %" + -coordinatorColLen + "s %-20s %-20s %s";
                         System.out.printf(format, "GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
-                        System.out.printf(format, state.group, coordinator, assignmentStrategy, state.groupState, state.numMembers);
+                        System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(), state.numMembers());
                     }
                     System.out.println();
                 }
@@ -587,13 +567,12 @@ public class ConsumerGroupCommand {
             Optional<String> clientIdOpt
         ) {
             if (topicPartitions.isEmpty()) {
-                return Collections.singleton(
+                return Set.of(
                     new PartitionAssignmentState(group, coordinator, Optional.empty(), Optional.empty(), Optional.empty(),
                         getLag(Optional.empty(), Optional.empty()), consumerIdOpt, hostOpt, clientIdOpt, Optional.empty(), Optional.empty())
                 );
             } else {
-                List<TopicPartition> topicPartitionsSorted = topicPartitions.stream().sorted(Comparator.comparingInt(TopicPartition::partition)).collect(Collectors.toList());
-                return describePartitions(group, coordinator, topicPartitionsSorted, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
+                return describePartitions(group, coordinator, topicPartitions, committedOffsets, consumerIdOpt, hostOpt, clientIdOpt);
             }
         }
 
@@ -604,7 +583,7 @@ public class ConsumerGroupCommand {
         private Collection<PartitionAssignmentState> describePartitions(
             String group,
             Optional<Node> coordinator,
-            List<TopicPartition> topicPartitions,
+            Collection<TopicPartition> topicPartitions,
             Map<TopicPartition, OffsetAndMetadata> committedOffsets,
             Optional<String> consumerIdOpt,
             Optional<String> hostOpt,
@@ -619,7 +598,11 @@ public class ConsumerGroupCommand {
                     consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
-            return offsetsUtils.getLogEndOffsets(topicPartitions).entrySet().stream().map(logEndOffsetResult -> {
+            List<TopicPartition> topicPartitionsWithoutLeader = offsetsUtils.filterNoneLeaderPartitions(topicPartitions);
+            List<TopicPartition> topicPartitionsWithLeader = topicPartitions.stream().filter(tp -> !topicPartitionsWithoutLeader.contains(tp)).toList();
+
+            // prepare data for partitions with leaders
+            List<PartitionAssignmentState> existLeaderAssignments = offsetsUtils.getLogEndOffsets(topicPartitionsWithLeader).entrySet().stream().map(logEndOffsetResult -> {
                 if (logEndOffsetResult.getValue() instanceof OffsetsUtils.LogOffset)
                     return getDescribePartitionResult.apply(
                         logEndOffsetResult.getKey(),
@@ -631,7 +614,18 @@ public class ConsumerGroupCommand {
                     return null;
 
                 throw new IllegalStateException("Unknown LogOffset subclass: " + logEndOffsetResult.getValue());
-            }).collect(Collectors.toList());
+            }).toList();
+
+            // prepare data for partitions without leaders
+            List<PartitionAssignmentState> noneLeaderAssignments = topicPartitionsWithoutLeader.stream()
+                    .map(tp -> getDescribePartitionResult.apply(tp, Optional.empty())).toList();
+
+            // concat the data and then sort them
+            return Stream.concat(existLeaderAssignments.stream(), noneLeaderAssignments.stream())
+                    .sorted(Comparator.<PartitionAssignmentState, String>comparing(
+                            state -> state.topic().orElse(""), String::compareTo)
+                            .thenComparingInt(state -> state.partition().orElse(-1)))
+                    .collect(Collectors.toList());
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
@@ -656,7 +650,7 @@ public class ConsumerGroupCommand {
                             break;
                         default:
                             printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
-                            result.put(groupId, Collections.emptyMap());
+                            result.put(groupId, Map.of());
                     }
                 } catch (InterruptedException ie) {
                     throw new RuntimeException(ie);
@@ -827,7 +821,7 @@ public class ConsumerGroupCommand {
          * Returns the state of the specified consumer group and partition assignment states
          */
         Entry<Optional<GroupState>, Optional<Collection<PartitionAssignmentState>>> collectGroupOffsets(String groupId) throws Exception {
-            return collectGroupsOffsets(Collections.singletonList(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
+            return collectGroupsOffsets(List.of(groupId)).getOrDefault(groupId, new SimpleImmutableEntry<>(Optional.empty(), Optional.empty()));
         }
 
         /**
@@ -871,7 +865,7 @@ public class ConsumerGroupCommand {
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE),
                         Optional.of(MISSING_COLUMN_VALUE))
-                    : Collections.emptyList();
+                    : List.of();
 
                 rowsWithConsumer.addAll(rowsWithoutConsumer);
 
@@ -882,7 +876,7 @@ public class ConsumerGroupCommand {
         }
 
         Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>> collectGroupMembers(String groupId) throws Exception {
-            return collectGroupsMembers(Collections.singleton(groupId)).get(groupId);
+            return collectGroupsMembers(Set.of(groupId)).get(groupId);
         }
 
         TreeMap<String, Entry<Optional<GroupState>, Optional<Collection<MemberAssignmentState>>>> collectGroupsMembers(Collection<String> groupIds) throws Exception {
@@ -900,7 +894,7 @@ public class ConsumerGroupCommand {
                         consumer.groupInstanceId().orElse(""),
                         consumer.assignment().topicPartitions().size(),
                         consumer.assignment().topicPartitions().stream().toList(),
-                        consumer.targetAssignment().map(a -> a.topicPartitions().stream().toList()).orElse(Collections.emptyList()),
+                        consumer.targetAssignment().map(a -> a.topicPartitions().stream().toList()).orElse(List.of()),
                         consumer.memberEpoch(),
                         consumerGroup.targetAssignmentEpoch(),
                         consumer.upgraded()
@@ -911,7 +905,7 @@ public class ConsumerGroupCommand {
         }
 
         GroupInformation collectGroupState(String groupId) throws Exception {
-            return collectGroupsState(Collections.singleton(groupId)).get(groupId);
+            return collectGroupsState(Set.of(groupId)).get(groupId);
         }
 
         TreeMap<String, GroupInformation> collectGroupsState(Collection<String> groupIds) throws Exception {
@@ -958,14 +952,14 @@ public class ConsumerGroupCommand {
                 if (!opts.options.has(opts.resetFromFileOpt))
                     CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
 
-                return Collections.emptyList();
+                return List.of();
             }
         }
 
         private Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
             try {
                 return adminClient.listConsumerGroupOffsets(
-                    Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec()),
+                    Map.of(groupId, new ListConsumerGroupOffsetsSpec()),
                     withTimeoutMs(new ListConsumerGroupOffsetsOptions())
                 ).partitionsToOffsetAndMetadata(groupId).get();
             } catch (InterruptedException | ExecutionException e) {
@@ -974,6 +968,9 @@ public class ConsumerGroupCommand {
         }
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
+            // ensure all partitions are valid, otherwise throw a runtime exception
+            offsetsUtils.checkAllTopicPartitionsValid(partitionsToReset);
+
             if (opts.options.has(opts.resetToOffsetOpt)) {
                 return offsetsUtils.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {

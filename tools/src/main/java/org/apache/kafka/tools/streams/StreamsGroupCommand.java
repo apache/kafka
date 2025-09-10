@@ -61,7 +61,6 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -457,7 +456,7 @@ public class StreamsGroupCommand {
                 boolean allPresent = topicPartitions.stream().allMatch(allTopicPartitions::containsKey);
                 if (!allPresent) {
                     printError("One or more topics are not part of the group '" + groupId + "'.", Optional.empty());
-                    return Collections.emptyList();
+                    return List.of();
                 }
                 return topicPartitions;
             } catch (InterruptedException | ExecutionException e) {
@@ -496,7 +495,8 @@ public class StreamsGroupCommand {
                                             if (e.getCause() instanceof UnknownTopicOrPartitionException) {
                                                 printError("Deleting internal topics for group '" + groupId + "' failed because the topics do not exist.", Optional.empty());
                                             } else if (e.getCause() instanceof UnsupportedVersionException) {
-                                                printError("Deleting internal topics is not supported by the broker version. " +
+                                                printError("Deleting internal topics is not supported by the broker version.\n" +
+                                                    "Internal topics: (" + String.join(",", internalTopics) + ").\n" +
                                                     "Use 'kafka-topics.sh' to delete the group's internal topics.", Optional.of(e.getCause()));
                                             } else {
                                                 printError("Deleting internal topics for group '" + groupId + "' failed due to " + e.getMessage(), Optional.of(e));
@@ -507,7 +507,7 @@ public class StreamsGroupCommand {
                                 break;
                             default:
                                 printError("Assignments can only be reset if the group '" + groupId + "' is inactive, but the current state is " + state + ".", Optional.empty());
-                                result.put(groupId, Collections.emptyMap());
+                                result.put(groupId, Map.of());
                         }
                     } catch (InterruptedException ie) {
                         throw new RuntimeException(ie);
@@ -830,8 +830,19 @@ public class StreamsGroupCommand {
                 }
             } catch (InterruptedException | ExecutionException e) {
                 if (e.getCause() instanceof UnsupportedVersionException) {
-                    printError("Retrieving internal topics is not supported by the broker version. " +
-                        "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
+                    try {
+                        // Retrieve internal topic list if possible, and add the list of topic names to error message
+                        Set<String> allTopics = adminClient.listTopics().names().get();
+                        List<String> internalTopics = allTopics.stream()
+                            .filter(topic -> groupIds.stream().anyMatch(groupId -> isInferredInternalTopic(topic, groupId)))
+                            .collect(Collectors.toList());
+                        printError("Retrieving internal topics is not supported by the broker version.\n" +
+                            "Internal topics: (" + String.join(",", internalTopics) + ").\n" +
+                            "Use 'kafka-topics.sh' to delete the group's internal topics.", Optional.of(e.getCause()));
+                    } catch (InterruptedException | ExecutionException ex) {
+                        printError("Retrieving internal topics is not supported by the broker version. " +
+                            "Use 'kafka-topics.sh' to list and delete the group's internal topics.", Optional.of(e.getCause()));
+                    }
                 } else {
                     printError("Retrieving internal topics failed due to " + e.getMessage(), Optional.of(e));
                 }
@@ -870,6 +881,7 @@ public class StreamsGroupCommand {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
 
                 List<TopicPartition> partitions = offsetsUtils.parseTopicPartitionsToReset(topics);
+                offsetsUtils.checkAllTopicPartitionsValid(partitions);
                 // if the user specified topics that do not belong to this group, we filter them out
                 partitions = filterExistingGroupTopics(groupId, partitions);
                 return partitions;
@@ -877,7 +889,7 @@ public class StreamsGroupCommand {
                 if (!opts.options.has(opts.resetFromFileOpt))
                     CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
 
-                return Collections.emptyList();
+                return List.of();
             }
         }
 

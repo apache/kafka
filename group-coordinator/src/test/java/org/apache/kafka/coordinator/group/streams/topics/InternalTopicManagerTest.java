@@ -22,7 +22,8 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCon
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
@@ -60,7 +61,7 @@ class InternalTopicManagerTest {
         // SOURCE_TOPIC_2 is missing from topicMetadata
         StreamsTopology topology = makeTestTopology();
 
-        final ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, metadataImage.topics());
+        final ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, new KRaftCoordinatorMetadataImage(metadataImage));
 
         assertEquals(Optional.empty(), configuredTopology.subtopologies());
         assertTrue(configuredTopology.topicConfigurationException().isPresent());
@@ -77,7 +78,7 @@ class InternalTopicManagerTest {
             .build();
         StreamsTopology topology = makeTestTopology();
 
-        ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, metadataImage.topics());
+        ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, new KRaftCoordinatorMetadataImage(metadataImage));
         final Map<String, CreatableTopic> internalTopicsToBeCreated = configuredTopology.internalTopicsToBeCreated();
 
         assertEquals(2, internalTopicsToBeCreated.size());

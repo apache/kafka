@@ -23,7 +23,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,7 +43,7 @@ public class SinkUtilsTest {
 
         connectorOffsets = SinkUtils.consumerGroupOffsetsToConnectorOffsets(consumerGroupOffsets);
         assertEquals(1, connectorOffsets.offsets().size());
-        assertEquals(Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 100L), connectorOffsets.offsets().get(0).offset());
+        assertEquals(Map.of(SinkUtils.KAFKA_OFFSET_KEY, 100L), connectorOffsets.offsets().get(0).offset());
 
         Map<String, Object> expectedPartition = new HashMap<>();
         expectedPartition.put(SinkUtils.KAFKA_TOPIC_KEY, "test-topic");

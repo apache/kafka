@@ -78,6 +78,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.ListSize.atMostOfSize;
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.parseType;
@@ -619,6 +620,11 @@ public class StreamsConfig extends AbstractConfig {
         "support \"classic\" or \"streams\". If \"streams\" is specified, then the streams rebalance protocol will be " +
         "used. Otherwise, the classic group protocol will be used.";
 
+    public static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG = "errors.dead.letter.queue.topic.name";
+
+    private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record to the topic with the provided name if an error occurs.\n" +
+            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.";
+
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
     private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "The output interval in milliseconds for logging summary information.\n" +
@@ -896,6 +902,8 @@ public class StreamsConfig extends AbstractConfig {
                     APPLICATION_ID_DOC)
             .define(BOOTSTRAP_SERVERS_CONFIG, // required with no default value
                     Type.LIST,
+                    NO_DEFAULT_VALUE,
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
             .define(NUM_STANDBY_REPLICAS_CONFIG,
@@ -991,6 +999,11 @@ public class StreamsConfig extends AbstractConfig {
                     LogAndFailExceptionHandler.class.getName(),
                     Importance.MEDIUM,
                     DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
+            .define(ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
+                    Type.STRING,
+                    null,
+                    Importance.MEDIUM,
+                    ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -1089,7 +1102,8 @@ public class StreamsConfig extends AbstractConfig {
             .define(CONFIG_PROVIDERS_CONFIG,
                     Type.LIST,
                     List.of(),
-                    Importance.LOW, 
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                    Importance.LOW,
                     CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,
                     Type.BOOLEAN,
@@ -1165,6 +1179,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(METRIC_REPORTER_CLASSES_CONFIG,
                     Type.LIST,
                     JmxReporter.class.getName(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_RECORDING_LEVEL_CONFIG,
@@ -1849,7 +1864,7 @@ public class StreamsConfig extends AbstractConfig {
 
             if (segmentSize < batchSize) {
                 throw new IllegalArgumentException(String.format(
-                    "Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
+                    "Specified topic segment size %d is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
                     segmentSize,
                     batchSize
                 ));

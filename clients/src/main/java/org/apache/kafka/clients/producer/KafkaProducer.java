@@ -78,6 +78,7 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
@@ -417,7 +418,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.transactionManager = configureTransactionState(config, logContext);
             // There is no need to do work required for adaptive partitioning, if we use a custom partitioner.
             boolean enableAdaptivePartitioning = partitionerPlugin.get() == null &&
-                config.getBoolean(ProducerConfig.PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG);
+                config.getBoolean(ProducerConfig.PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG);
             RecordAccumulator.PartitionerConfig partitionerConfig = new RecordAccumulator.PartitionerConfig(
                 enableAdaptivePartitioning,
                 config.getLong(ProducerConfig.PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG)
@@ -804,7 +805,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         flush();
         transactionManager.prepareTransaction();
         producerMetrics.recordPrepareTxn(time.nanoseconds() - now);
-        return transactionManager.preparedTransactionState();
+        ProducerIdAndEpoch producerIdAndEpoch = transactionManager.preparedTransactionState();
+        return new PreparedTxnState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
     }
 
     /**
@@ -908,7 +910,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
         
         // Get the current prepared transaction state
-        PreparedTxnState currentPreparedState = transactionManager.preparedTransactionState();
+        ProducerIdAndEpoch currentProducerIdAndEpoch = transactionManager.preparedTransactionState();
+        PreparedTxnState currentPreparedState = new PreparedTxnState(currentProducerIdAndEpoch.producerId, currentProducerIdAndEpoch.epoch);
         
         // Compare the prepared transaction state token and commit or abort accordingly
         if (currentPreparedState.equals(preparedTxnState)) {

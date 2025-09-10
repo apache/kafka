@@ -893,5 +893,19 @@ public class TopicsImageTest {
         assertEquals(expectedNames, names);
         assertThrows(UnsupportedOperationException.class, () -> map.remove(FOO_UUID));
         assertThrows(UnsupportedOperationException.class, () -> map.put(FOO_UUID, "bar"));
+
+        var result = IMAGE1.topicIdToNameView().get("zar");
+        assertNull(result);
+    }
+
+    @Test
+    public void testTopicsDeltaCreateThenDelete() {
+        TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
+        delta.replay(new TopicRecord().setName("test").setTopicId(FOO_UUID));
+        assertEquals(delta.createdTopicIds().contains(FOO_UUID), true);
+        assertEquals(delta.deletedTopicIds().contains(FOO_UUID), false);
+        delta.replay(new RemoveTopicRecord().setTopicId(FOO_UUID));
+        assertEquals(delta.deletedTopicIds().contains(FOO_UUID), false);
+        assertEquals(delta.createdTopicIds().contains(FOO_UUID), false);
     }
 }
