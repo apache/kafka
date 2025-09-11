@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -44,70 +45,75 @@ public class StreamsRebalanceListenerInvoker {
     }
 
     public void setRebalanceListener(StreamsRebalanceListener streamsRebalanceListener) {
-        this.listener = Optional.ofNullable(streamsRebalanceListener);
+        Objects.requireNonNull(streamsRebalanceListener, "StreamsRebalanceListener cannot be null");
+        if (listener.isPresent()) {
+            throw new IllegalStateException("StreamsRebalanceListener can only be set once");
+        }
+        this.listener = Optional.of(streamsRebalanceListener);
     }
 
     public Exception invokeAllTasksRevoked() {
-        if (listener.isPresent()) {
-            return invokeTasksRevoked(streamsRebalanceData.reconciledAssignment().activeTasks());
+        if (listener.isEmpty()) {
+            throw new IllegalStateException("StreamsRebalanceListener is not defined");
         }
-
-        return null;
+        return invokeTasksRevoked(streamsRebalanceData.reconciledAssignment().activeTasks());
     }
 
     public Exception invokeTasksAssigned(final StreamsRebalanceData.Assignment assignment) {
-        if (listener.isPresent()) {
-            log.info("Adding newly assigned tasks: {}", assignment);
-            try {
-                listener.get().onTasksAssigned(assignment);
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error(
-                    "Streams rebalance listener failed on invocation of onTasksAssigned for tasks {}",
-                    assignment,
-                    e
-                );
-                return e;
-            }
+        if (listener.isEmpty()) {
+            throw new IllegalStateException("StreamsRebalanceListener is not defined");
+        }
+        log.info("Invoking tasks assigned callback for new assignment: {}", assignment);
+        try {
+            listener.get().onTasksAssigned(assignment);
+        } catch (WakeupException | InterruptException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(
+                "Streams rebalance listener failed on invocation of onTasksAssigned for tasks {}",
+                assignment,
+                e
+            );
+            return e;
         }
         return null;
     }
 
     public Exception invokeTasksRevoked(final Set<StreamsRebalanceData.TaskId> tasks) {
-        if (listener.isPresent()) {
-            log.info("Revoke previously assigned tasks {}", tasks);
-            try {
-                listener.get().onTasksRevoked(tasks);
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error(
-                    "Streams rebalance listener failed on invocation of onTasksRevoked for tasks {}",
-                    tasks,
-                    e
-                );
-                return e;
-            }
+        if (listener.isEmpty()) {
+            throw new IllegalStateException("StreamsRebalanceListener is not defined");
         }
-
+        log.info("Invoking task revoked callback for revoked active tasks {}", tasks);
+        try {
+            listener.get().onTasksRevoked(tasks);
+        } catch (WakeupException | InterruptException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(
+                "Streams rebalance listener failed on invocation of onTasksRevoked for tasks {}",
+                tasks,
+                e
+            );
+            return e;
+        }
         return null;
     }
 
     public Exception invokeAllTasksLost() {
-        if (listener.isPresent()) {
-            log.info("Lost all previously assigned tasks");
-            try {
-                listener.get().onAllTasksLost();
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error(
-                    "Streams rebalance listener failed on invocation of onTasksLost.",
-                    e
-                );
-                return e;
-            }
+        if (listener.isEmpty()) {
+            throw new IllegalStateException("StreamsRebalanceListener is not defined");
+        }
+        log.info("Invoking tasks lost callback for all tasks");
+        try {
+            listener.get().onAllTasksLost();
+        } catch (WakeupException | InterruptException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(
+                "Streams rebalance listener failed on invocation of onTasksLost.",
+                e
+            );
+            return e;
         }
         return null;
     }

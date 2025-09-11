@@ -2233,7 +2233,6 @@ public class AsyncKafkaConsumerTest {
     
     @Test
     public void testCloseInvokesStreamsRebalanceListenerOnAllTasksLostWhenMemberEpochZeroOrNegative() {
-        // Test that close() calls streamsRebalanceListener.invokeAllTasksLost() when memberEpoch <= 0
         final String groupId = "streamsGroup";
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of());
         
@@ -2271,9 +2270,8 @@ public class AsyncKafkaConsumerTest {
             
             KafkaException thrownException = assertThrows(KafkaException.class, 
                 () -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
-            
-            assertNotNull(thrownException.getCause());
-            assertTrue(thrownException.getCause() instanceof RuntimeException);
+
+            assertInstanceOf(RuntimeException.class, thrownException.getCause());
             assertTrue(thrownException.getCause().getMessage().contains("Test streams listener exception"));
             verify(mockStreamsListener).onTasksRevoked(any());
         }
