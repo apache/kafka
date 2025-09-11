@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Monitorable;
 import org.apache.kafka.common.metrics.PluginMetrics;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -33,7 +34,7 @@ public class MonitorableConfigProvider implements ConfigProvider, Monitorable {
 
     @Override
     public void withPluginMetrics(PluginMetrics metrics) {
-        MetricName metricName = metrics.metricName(NAME, DESCRIPTION, Map.of());
+        MetricName metricName = metrics.metricName(NAME, DESCRIPTION, new LinkedHashMap<>());
         metrics.addMetric(metricName, (Measurable) (config, now) -> 123);
     }
 
