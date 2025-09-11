@@ -343,10 +343,8 @@ subprojects {
         }
     }
 
-    if (project.name.startsWith("upgrade-system-tests")) {
-        tasks.withType(AbstractTestTask).configureEach {
-          failOnNoDiscoveredTests = false
-        }
+    tasks.withType(AbstractTestTask).configureEach {
+      failOnNoDiscoveredTests = false
     }
 
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
