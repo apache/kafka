@@ -16,16 +16,25 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class CompositePollEvent extends CompletableApplicationEvent<CompositePollResult> {
+import java.util.concurrent.CompletableFuture;
 
+public class CompositePollEvent extends ApplicationEvent {
+
+    private final long deadlineMs;
     private final long pollTimeMs;
-
     private final Type nextStep;
+    private final CompletableFuture<CompositePollResult> future;
 
     public CompositePollEvent(long deadlineMs, long pollTimeMs, Type nextStep) {
-        super(Type.COMPOSITE_POLL, deadlineMs);
+        super(Type.COMPOSITE_POLL);
+        this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
         this.nextStep = nextStep;
+        this.future = new CompletableFuture<>();
+    }
+
+    public long deadlineMs() {
+        return deadlineMs;
     }
 
     public long pollTimeMs() {
@@ -36,8 +45,12 @@ public class CompositePollEvent extends CompletableApplicationEvent<CompositePol
         return nextStep;
     }
 
+    public CompletableFuture<CompositePollResult> future() {
+        return future;
+    }
+
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", pollTimeMs=" + pollTimeMs + ", nextStep=" + nextStep;
+        return super.toStringBase() + ", deadlineMs=" + deadlineMs + ", pollTimeMs=" + pollTimeMs + ", nextStep=" + nextStep + ", future=" + future;
     }
 }

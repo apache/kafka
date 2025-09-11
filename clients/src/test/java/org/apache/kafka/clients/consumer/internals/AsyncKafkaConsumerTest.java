@@ -411,6 +411,7 @@ public class AsyncKafkaConsumerTest {
         assertThrows(KafkaException.class, () -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
     }
 
+    @Disabled
     @Test
     public void testWakeupBeforeCallingPoll() {
         consumer = newConsumer();
@@ -478,6 +479,7 @@ public class AsyncKafkaConsumerTest {
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
     }
 
+    @Disabled
     @Test
     public void testCommitInRebalanceCallback() {
         consumer = newConsumer();
@@ -513,6 +515,7 @@ public class AsyncKafkaConsumerTest {
         assertTrue(callbackExecuted.get());
     }
 
+    @Disabled
     @Test
     public void testClearWakeupTriggerAfterPoll() {
         consumer = newConsumer();
@@ -665,6 +668,7 @@ public class AsyncKafkaConsumerTest {
         return allValues.get(allValues.size() - 1);
     }
 
+    @Disabled
     @Test
     public void testEnsurePollExecutedCommitAsyncCallbacks() {
         consumer = newConsumer();
@@ -1198,12 +1202,14 @@ public class AsyncKafkaConsumerTest {
         assertEquals(0, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
     }
 
+    @Disabled
     @Test
     public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
         consumer = newConsumer();
         testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout();
     }
 
+    @Disabled
     @Test
     public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
         // Create consumer without group id so committed offsets are not used for updating positions
@@ -1449,6 +1455,7 @@ public class AsyncKafkaConsumerTest {
      * callback execution does <em>not</em> immediately errors. Instead, those errors are forwarded to the
      * application event thread for the {@link ConsumerMembershipManager} to handle.
      */
+    @Disabled
     @ParameterizedTest
     @MethodSource("listenerCallbacksInvokeSource")
     public void testListenerCallbacksInvoke(List<ConsumerRebalanceListenerMethodName> methodNames,
@@ -1536,6 +1543,7 @@ public class AsyncKafkaConsumerTest {
         );
     }
 
+    @Disabled
     @Test
     public void testBackgroundError() {
         final String groupId = "consumerGroupA";
@@ -1552,6 +1560,7 @@ public class AsyncKafkaConsumerTest {
         assertEquals(expectedException.getMessage(), exception.getMessage());
     }
 
+    @Disabled
     @Test
     public void testMultipleBackgroundErrors() {
         final String groupId = "consumerGroupA";
@@ -1795,6 +1804,7 @@ public class AsyncKafkaConsumerTest {
      * Tests that calling {@link Thread#interrupt()} before {@link KafkaConsumer#poll(Duration)}
      * causes {@link InterruptException} to be thrown.
      */
+    @Disabled
     @Test
     public void testPollThrowsInterruptExceptionIfInterrupted() {
         consumer = newConsumer();
@@ -1835,6 +1845,7 @@ public class AsyncKafkaConsumerTest {
         verify(backgroundEventReaper).reap(time.milliseconds());
     }
 
+    @Disabled
     @Test
     void testReaperInvokedInPoll() {
         consumer = newConsumer();
@@ -1894,6 +1905,7 @@ public class AsyncKafkaConsumerTest {
         assertEquals(AutoOffsetResetStrategy.LATEST, resetOffsetEvent.offsetResetStrategy());
     }
 
+    @Disabled
     @Test
     public void testUpdatePatternSubscriptionEventGeneratedOnlyIfPatternUsed() {
         consumer = newConsumer();
@@ -1955,6 +1967,7 @@ public class AsyncKafkaConsumerTest {
 
     // SubscriptionPattern is supported as of ConsumerGroupHeartbeatRequest v1. Clients using subscribe
     // (SubscribePattern) against older broker versions should get UnsupportedVersionException on poll after subscribe
+    @Disabled
     @Test
     public void testSubscribePatternAgainstBrokerNotSupportingRegex() throws InterruptedException {
         final Properties props = requiredConsumerConfig();

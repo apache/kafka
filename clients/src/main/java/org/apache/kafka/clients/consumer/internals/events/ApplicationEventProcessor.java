@@ -33,10 +33,10 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.LogContext;
 
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.util.Collection;
@@ -48,6 +48,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -59,6 +60,7 @@ import java.util.stream.Collectors;
 public class ApplicationEventProcessor implements EventProcessor<ApplicationEvent> {
 
     private final Logger log;
+    private final Time time;
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
@@ -67,12 +69,14 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
+                                     final Time time,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata,
                                      final SubscriptionState subscriptions,
                                      final BackgroundEventHandler backgroundEventHandler,
                                      final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
+        this.time = time;
         this.requestManagers = requestManagers;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
@@ -231,67 +235,66 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final CompositePollEvent event) {
-        log.debug("Processing {}", event);
+        log.debug("******** TEMP DEBUG ******** Processing {}", event);
 
         ApplicationEvent.Type nextStep = event.nextStep();
-        log.debug("Processing nextStep: {}", nextStep);
+        log.debug("******** TEMP DEBUG ******** Processing nextStep: {}", nextStep);
 
         if (nextStep == ApplicationEvent.Type.POLL) {
-            log.debug("nextStep == {}", nextStep);
-            log.debug("Before processPollEvent()");
+            log.debug("******** TEMP DEBUG ******** nextStep == {}", nextStep);
+            log.debug("******** TEMP DEBUG ******** Before processPollEvent()");
             processPollEvent(event.pollTimeMs());
-            log.debug("After processPollEvent()");
+            log.debug("******** TEMP DEBUG ******** After processPollEvent()");
 
             // If there are enqueued callbacks to invoke, exit to the application thread.
-            if (offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0) {
-                log.debug("Uh oh! Escaping composite poll event with {}", CompositePollResult.NEEDS_OFFSET_COMMIT_CALLBACKS);
-                event.future().complete(CompositePollResult.NEEDS_OFFSET_COMMIT_CALLBACKS);
+            RequiresApplicationThreadExecution test = () -> offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
+
+            if (maybePauseCompositePoll(test, event.future(), CompositePollResult.NEEDS_OFFSET_COMMIT_CALLBACKS))
                 return;
-            }
 
             nextStep = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
-            log.debug("Set nextStep to {}", nextStep);
+            log.debug("******** TEMP DEBUG ******** Set nextStep to {}", nextStep);
         }
 
         if (nextStep == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
-            log.debug("nextStep == {}", nextStep);
-            log.debug("Before processUpdatePatternSubscriptionEvent()");
+            log.debug("******** TEMP DEBUG ******** nextStep == {}", nextStep);
+            log.debug("******** TEMP DEBUG ******** Before processUpdatePatternSubscriptionEvent()");
             processUpdatePatternSubscriptionEvent();
-            log.debug("After processUpdatePatternSubscriptionEvent()");
+            log.debug("******** TEMP DEBUG ******** After processUpdatePatternSubscriptionEvent()");
 
             // If there are background events to process, exit to the application thread.
-            if (backgroundEventHandler.size() > 0) {
-                log.debug("Uh oh! Escaping composite poll event with {}", CompositePollResult.NEEDS_BACKGROUND_EVENT_PROCESSING);
-                event.future().complete(CompositePollResult.NEEDS_BACKGROUND_EVENT_PROCESSING);
+            RequiresApplicationThreadExecution test = () -> backgroundEventHandler.size() > 0;
+
+            if (maybePauseCompositePoll(test, event.future(), CompositePollResult.NEEDS_BACKGROUND_EVENT_PROCESSING))
                 return;
-            }
 
             nextStep = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
-            log.debug("Set nextStep to {}", nextStep);
+            log.debug("******** TEMP DEBUG ******** Set nextStep to {}", nextStep);
         }
 
         if (nextStep == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
-            log.debug("nextStep == {}", nextStep);
-            processCheckAndUpdatePositionsEvent(event.deadlineMs()).whenComplete((__, updatePositionsError) -> {
-                log.debug("processCheckAndUpdatePositionsEvent complete, __: {}, updatePositionsError: {}", __, String.valueOf(updatePositionsError));
+            log.debug("******** TEMP DEBUG ******** nextStep == {}", nextStep);
 
-                if (updatePositionsError != null && !(updatePositionsError instanceof TimeoutException)) {
-                    log.debug("Uh oh! Failing composite poll event with {}", String.valueOf(updatePositionsError));
-                    event.future().completeExceptionally(updatePositionsError);
+            long nowMs = time.milliseconds();
+            long timeoutMs = event.deadlineMs() - nowMs;
+
+            log.debug("******** TEMP DEBUG ********  deadlineMs: {}", event.deadlineMs());
+            log.debug("******** TEMP DEBUG ********  nowMs:      {}", nowMs);
+            log.debug("******** TEMP DEBUG ********  timeoutMs:  {}", timeoutMs);
+
+            CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs())
+                .orTimeout(timeoutMs, TimeUnit.MILLISECONDS);
+
+            updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
+                if (maybeFailCompositePoll(event.future(), updatePositionsError))
                     return;
-                }
 
                 // If needed, create a fetch request if there's no data in the FetchBuffer.
                 requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
-                    log.debug("createFetchRequests complete, ___: {}, fetchError: {}", ___, String.valueOf(fetchError));
-
-                    if (fetchError != null && !(fetchError instanceof TimeoutException)) {
-                        log.debug("Uh oh! Failing composite poll event with {}", String.valueOf(updatePositionsError));
-                        event.future().completeExceptionally(fetchError);
+                    if (maybeFailCompositePoll(event.future(), fetchError))
                         return;
-                    }
 
-                    log.debug("Yay! We did it! Exiting composite poll event with {}", CompositePollResult.COMPLETE);
+                    log.debug("******** TEMP DEBUG ******** Exiting composite poll event with {}", CompositePollResult.COMPLETE);
                     event.future().complete(CompositePollResult.COMPLETE);
                 });
             });
@@ -300,6 +303,29 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         event.future().completeExceptionally(new IllegalArgumentException("Unknown next step for composite poll: " + nextStep));
+    }
+
+    private boolean maybePauseCompositePoll(RequiresApplicationThreadExecution test,
+                                            CompletableFuture<CompositePollResult> future,
+                                            CompositePollResult nextStep) {
+        if (test.requiresApplicationThread())
+            return false;
+
+        log.debug("******** TEMP DEBUG ******** Pausing composite poll at step {}", nextStep);
+        future.complete(nextStep);
+        return true;
+    }
+
+    private boolean maybeFailCompositePoll(CompletableFuture<?> future, Throwable t) {
+        if (t == null)
+            return false;
+
+        if (t instanceof org.apache.kafka.common.errors.TimeoutException || t instanceof java.util.concurrent.TimeoutException)
+            return false;
+
+        log.debug("******** TEMP DEBUG ******** Failing composite poll event", t);
+        future.completeExceptionally(t);
+        return true;
     }
 
     private void process(final PollEvent event) {
@@ -793,6 +819,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
+                                                               final Time time,
                                                                final ConsumerMetadata metadata,
                                                                final SubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier,
@@ -804,6 +831,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 RequestManagers requestManagers = requestManagersSupplier.get();
                 return new ApplicationEventProcessor(
                         logContext,
+                        time,
                         requestManagers,
                         metadata,
                         subscriptions,
@@ -885,4 +913,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private CompletableFuture<Boolean> processCheckAndUpdatePositionsEvent(final long deadlineMs) {
         return requestManagers.offsetsRequestManager.updateFetchPositions(deadlineMs);
     }
+
+    private interface RequiresApplicationThreadExecution {
+
+        boolean requiresApplicationThread();
+    }
+
+
 }

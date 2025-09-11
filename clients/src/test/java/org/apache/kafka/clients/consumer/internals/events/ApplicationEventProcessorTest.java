@@ -112,6 +112,7 @@ public class ApplicationEventProcessorTest {
         );
         processor = new ApplicationEventProcessor(
                 new LogContext(),
+                time,
                 requestManagers,
                 metadata,
                 subscriptionState,
@@ -135,6 +136,7 @@ public class ApplicationEventProcessorTest {
         );
         processor = new ApplicationEventProcessor(
             new LogContext(),
+            time,
             requestManagers,
             metadata,
             subscriptionState,

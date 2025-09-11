@@ -499,6 +499,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     streamsRebalanceData
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
+                    time,
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
@@ -691,6 +692,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
+                time,
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
@@ -879,11 +881,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 long pollTimeMs = timer.currentTimeMs();
                 long deadlineMs = calculateDeadlineMs(timer);
+
+                log.debug("******** TEMP DEBUG ******** timeout:    {}", timeout.toMillis());
+                log.debug("******** TEMP DEBUG ******** pollTimeMs: {}", pollTimeMs);
+                log.debug("******** TEMP DEBUG ******** deadlineMs: {}", deadlineMs);
+
                 ApplicationEvent.Type nextStep = ApplicationEvent.Type.POLL;
 
-                while (true) {
-                    CompositePollEvent event = new CompositePollEvent(pollTimeMs, deadlineMs, nextStep);
-                    CompositePollResult result = applicationEventHandler.addAndGet(event);
+                for (int i = 0; i < 10; i++) {
+                    CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextStep);
+                    applicationEventHandler.add(event);
+
+                    CompositePollResult result = ConsumerUtils.getResult(event.future());
 
                     if (result == CompositePollResult.NEEDS_OFFSET_COMMIT_CALLBACKS) {
                         offsetCommitCallbackInvoker.executeCallbacks();
