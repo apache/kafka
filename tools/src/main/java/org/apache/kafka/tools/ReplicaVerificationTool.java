@@ -300,12 +300,8 @@ public class ReplicaVerificationTool {
                 .ofType(Long.class)
                 .defaultsTo(30_000L);
             options = parser.parse(args);
-            if (args.length == 0 || options.has(helpOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Validate that all replicas for a set of topics have the same data.");
-            }
-            if (options.has(versionOpt)) {
-                CommandLineUtils.printVersionAndExit();
-            }
+
+            CommandLineUtils.maybePrintHelpOrVersion(this, "Validate that all replicas for a set of topics have the same data.");
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
         }
 

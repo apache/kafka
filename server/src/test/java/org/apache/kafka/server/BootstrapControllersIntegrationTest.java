@@ -70,7 +70,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG;
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG;
@@ -300,8 +299,8 @@ public class BootstrapControllersIntegrationTest {
 
     private static List<List<Integer>> translatePartitionInfoToNodeIdList(List<TopicPartitionInfo> partitions) {
         return partitions.stream()
-                .map(partition -> partition.replicas().stream().map(Node::id).collect(Collectors.toList()))
-                .collect(Collectors.toList());
+                .map(partition -> partition.replicas().stream().map(Node::id).toList())
+                .toList();
     }
 
     @ClusterTest(serverProperties = {

@@ -108,6 +108,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class RaftClientTestContext {
@@ -1341,8 +1342,12 @@ public final class RaftClientTestContext {
         assertInstanceOf(AddRaftVoterResponseData.class, response.data());
 
         AddRaftVoterResponseData addVoterResponse = (AddRaftVoterResponseData) response.data();
-        assertEquals(error, Errors.forCode(addVoterResponse.errorCode()));
-
+        if (Errors.NONE.equals(error)) {
+            assertEquals(error, Errors.forCode(addVoterResponse.errorCode()));
+            assertNull(addVoterResponse.errorMessage());
+        } else {
+            assertEquals(error, Errors.forCode(addVoterResponse.errorCode()));
+        }
         return addVoterResponse;
     }
 
@@ -1371,8 +1376,12 @@ public final class RaftClientTestContext {
         assertInstanceOf(RemoveRaftVoterResponseData.class, response.data());
 
         RemoveRaftVoterResponseData removeVoterResponse = (RemoveRaftVoterResponseData) response.data();
-        assertEquals(error, Errors.forCode(removeVoterResponse.errorCode()));
-
+        if (Errors.NONE.equals(error)) {
+            assertEquals(error, Errors.forCode(removeVoterResponse.errorCode()));
+            assertNull(removeVoterResponse.errorMessage());
+        } else {
+            assertEquals(error, Errors.forCode(removeVoterResponse.errorCode()));
+        }
         return removeVoterResponse;
     }
 
