@@ -484,6 +484,34 @@ public class ShareConsumerTest {
         }
     }
 
+    @ClusterTest
+    public void testHeadersOrderPreserved() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+
+            int numRecords = 1;
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            record.headers().add("headerKey", "headerValue".getBytes());
+            record.headers().add("headerKey2", "headerValue2".getBytes());
+            record.headers().add("headerKey3", "headerValue3".getBytes());
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, numRecords);
+            assertEquals(numRecords, records.size());
+
+            Header[] headers = records.get(0).headers().toArray();
+            assertEquals("headerKey", headers[0].key());
+            assertEquals("headerKey2", headers[1].key());
+            assertEquals("headerKey3", headers[2].key());
+
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
     private void testHeadersSerializeDeserialize(Serializer<byte[]> serializer, Deserializer<byte[]> deserializer) {
         alterShareAutoOffsetReset("group1", "earliest");
         Map<String, Object> producerConfig = Map.of(

@@ -195,6 +195,20 @@ public class PlaintextConsumerTest {
         ));
     }
 
+    @ClusterTest
+    public void testClassicConsumerHeadersOrderPreserved() throws Exception {
+        testHeadersOrderPreserved(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerHeadersOrderPreserved() throws Exception {
+        testHeadersOrderPreserved(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
     private void testHeaders(Map<String, Object> consumerConfig) throws Exception {
         var numRecords = 1;
 
@@ -214,6 +228,33 @@ public class PlaintextConsumerTest {
             assertEquals(numRecords, records.size());
             var header = records.get(0).headers().lastHeader("headerKey");
             assertEquals("headerValue", header == null ? null : new String(header.value()));
+        }
+    }
+
+    private void testHeadersOrderPreserved(Map<String, Object> consumerConfig) throws Exception {
+        var numRecords = 1;
+
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)
+        ) {
+            var record = new ProducerRecord<>(TP.topic(), TP.partition(), null, "key".getBytes(), "value".getBytes());
+            record.headers().add("headerKey", "headerValue".getBytes());
+            record.headers().add("headerKey2", "headerValue2".getBytes());
+            record.headers().add("headerKey3", "headerValue3".getBytes());
+            producer.send(record);
+
+            assertEquals(0, consumer.assignment().size());
+            consumer.assign(List.of(TP));
+            assertEquals(1, consumer.assignment().size());
+
+            consumer.seek(TP, 0);
+            var records = consumeRecords(consumer, numRecords);
+            assertEquals(numRecords, records.size());
+
+            Header[] headers = records.get(0).headers().toArray();
+            assertEquals("headerKey", headers[0].key());
+            assertEquals("headerKey2", headers[1].key());
+            assertEquals("headerKey3", headers[2].key());
         }
     }
 
