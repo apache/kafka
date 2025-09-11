@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.metadata.publisher;
 
+import org.apache.kafka.image.DelegationTokenDelta;
+import org.apache.kafka.image.DelegationTokenImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.common.DelegationTokenManager;
 import org.apache.kafka.server.fault.FaultHandler;
-
-import java.util.Optional;
 
 public class DelegationTokenPublisher implements MetadataPublisher {
     private final int nodeId;
@@ -56,7 +56,8 @@ public class DelegationTokenPublisher implements MetadataPublisher {
         try {
             if (firstPublish) {
                 // Initialize the tokenCache with the Image
-                Optional.ofNullable(newImage.delegationTokens()).ifPresent(delegationTokenImage -> {
+                DelegationTokenImage delegationTokenImage = newImage.delegationTokens();
+                if (delegationTokenImage != null) {
                     delegationTokenImage.tokens().forEach((tokenId, delegationTokenData) -> {
                         try {
                             tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.tokenInformation()));
@@ -64,23 +65,23 @@ public class DelegationTokenPublisher implements MetadataPublisher {
                             faultHandler.handleFault("Error updating delegation token during initialization", e);
                         }
                     });
-                });
-                firstPublish = false;
+                    firstPublish = false;
+                }
             }
             // Apply changes to DelegationTokens.
-            Optional.ofNullable(delta.delegationTokenDelta()).ifPresent(delegationTokenDelta -> {
+            DelegationTokenDelta delegationTokenDelta = delta.delegationTokenDelta();
+            if (delegationTokenDelta != null) {
                 delegationTokenDelta.changes().forEach((tokenId, delegationTokenData) -> {
                     try {
-                        if (delegationTokenData.isPresent()) {
+                        if (delegationTokenData.isPresent())
                             tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.get().tokenInformation()));
-                        } else {
+                        else
                             tokenManager.removeToken(tokenId);
-                        }
                     } catch (Exception e) {
                         faultHandler.handleFault("Error updating delegation token for tokenId: " + tokenId, e);
                     }
                 });
-            });
+            }
         } catch (Throwable t) {
             faultHandler.handleFault("Uncaught exception while publishing DelegationToken changes from " + deltaName, t);
         }

@@ -23,7 +23,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
-import org.apache.kafka.server.common.config.DelegationTokenManagerConfigs;
+import org.apache.kafka.server.config.DelegationTokenManagerConfigs;
 
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;

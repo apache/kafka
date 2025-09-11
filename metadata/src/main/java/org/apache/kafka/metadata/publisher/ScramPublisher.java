@@ -24,8 +24,6 @@ import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.security.CredentialProvider;
 import org.apache.kafka.server.fault.FaultHandler;
 
-import java.util.Optional;
-
 public class ScramPublisher implements MetadataPublisher {
     private final int nodeId;
     private final FaultHandler faultHandler;
@@ -56,7 +54,6 @@ public class ScramPublisher implements MetadataPublisher {
                             credentialProvider.updateCredential(mechanism, userName, change.get().toCredential());
                         else
                             credentialProvider.removeCredentials(mechanism, userName);
-                        }
                     });
                 });
             }
