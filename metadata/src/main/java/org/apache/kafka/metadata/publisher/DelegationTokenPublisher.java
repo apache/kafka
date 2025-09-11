@@ -22,7 +22,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
-import org.apache.kafka.server.common.DelegationTokenManager;
+import org.apache.kafka.DelegationTokenManager;
 import org.apache.kafka.server.fault.FaultHandler;
 
 public class DelegationTokenPublisher implements MetadataPublisher {
