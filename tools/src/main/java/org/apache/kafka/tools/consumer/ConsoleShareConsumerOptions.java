@@ -83,7 +83,7 @@ public final class ConsoleShareConsumerOptions extends CommandDefaultOptions {
                                 " print.value=true|false\n" +
                                 " key.separator=<key.separator>\n" +
                                 " line.separator=<line.separator>\n" +
-                                " headers.separator=<line.separator>\n" +
+                                " headers.separator=<headers.separator>\n" +
                                 " null.literal=<null.literal>\n" +
                                 " key.deserializer=<key.deserializer>\n" +
                                 " value.deserializer=<value.deserializer>\n" +

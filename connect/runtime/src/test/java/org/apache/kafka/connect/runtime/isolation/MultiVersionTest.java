@@ -266,6 +266,7 @@ public class MultiVersionTest {
         converterConfig.put(WorkerConfig.VALUE_CONVERTER_VERSION, "2.3.0");
         converterConfig.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className());
         converterConfig.put(WorkerConfig.HEADER_CONVERTER_VERSION, "4.3.0");
+        converterConfig.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
 
         AbstractConfig config;
         try (LoaderSwap swap = plugins.safeLoaderSwapper().apply(plugins.delegatingLoader())) {
