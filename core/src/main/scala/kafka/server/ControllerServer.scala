@@ -40,7 +40,7 @@ import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, FeaturesPublisher, ScramPublisher}
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.common.CredentialProvider
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{ProcessRole, SimpleApiVersionManager}
 import org.apache.kafka.server.common.DelegationTokenManager
 import org.apache.kafka.server.authorizer.Authorizer
