@@ -28,7 +28,6 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.logger.RuntimeLoggerManager
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.Logging
-import org.apache.kafka.DelegationTokenManager
 import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, CREATE_TOKENS, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
