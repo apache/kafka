@@ -26,13 +26,12 @@ import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
 import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -89,8 +88,8 @@ public class DescribeAclsResponse extends AbstractResponse {
         return data.resources();
     }
 
-    public static DescribeAclsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeAclsResponse(new DescribeAclsResponseData(new ByteBufferAccessor(buffer), version), version);
+    public static DescribeAclsResponse parse(Readable readable, short version) {
+        return new DescribeAclsResponse(new DescribeAclsResponseData(readable, version), version);
     }
 
     @Override

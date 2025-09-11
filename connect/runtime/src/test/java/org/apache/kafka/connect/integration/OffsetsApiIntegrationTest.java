@@ -18,7 +18,8 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
@@ -43,7 +44,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -106,7 +106,7 @@ public class OffsetsApiIntegrationTest {
         }
         try {
             assertEquals(
-                    Collections.emptySet(),
+                    Set.of(),
                     remainingConnectors,
                     "Some connectors were not properly cleaned up after this test"
             );
@@ -149,11 +149,11 @@ public class OffsetsApiIntegrationTest {
     }
 
     private static EmbeddedConnectCluster defaultConnectCluster() {
-        return createOrReuseConnectWithWorkerProps(Collections.emptyMap());
+        return createOrReuseConnectWithWorkerProps(Map.of());
     }
 
     private static EmbeddedConnectCluster exactlyOnceSourceConnectCluster() {
-        Map<String, String> workerProps = Collections.singletonMap(
+        Map<String, String> workerProps = Map.of(
                 DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG,
                 "enabled"
         );
@@ -184,7 +184,7 @@ public class OffsetsApiIntegrationTest {
 
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
-            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            Collection<GroupListing> consumerGroups = admin.listGroups(ListGroupsOptions.forConsumerGroups()).all().get();
             assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }
@@ -287,8 +287,8 @@ public class OffsetsApiIntegrationTest {
     @Test
     public void testAlterOffsetsNonExistentConnector() {
         ConnectRestException e = assertThrows(ConnectRestException.class,
-                () -> connect.alterConnectorOffsets("non-existent-connector", new ConnectorOffsets(Collections.singletonList(
-                        new ConnectorOffset(Collections.emptyMap(), Collections.emptyMap())))));
+                () -> connect.alterConnectorOffsets("non-existent-connector", new ConnectorOffsets(List.of(
+                        new ConnectorOffset(Map.of(), Map.of())))));
         assertEquals(404, e.errorCode());
     }
 
@@ -303,8 +303,7 @@ public class OffsetsApiIntegrationTest {
         // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsets.add(
-                    new ConnectorOffset(Collections.singletonMap("task.id", connectorName + "-" + i),
-                            Collections.singletonMap("saved", 5))
+                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i), Map.of("saved", 5))
             );
         }
 
@@ -343,7 +342,7 @@ public class OffsetsApiIntegrationTest {
         alterAndVerifySinkConnectorOffsets(connectorConfigs, connect.kafka());
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
-            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            Collection<GroupListing> consumerGroups = admin.listGroups(ListGroupsOptions.forConsumerGroups()).all().get();
             assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }
@@ -402,7 +401,7 @@ public class OffsetsApiIntegrationTest {
             partition = new HashMap<>();
             partition.put(SinkUtils.KAFKA_TOPIC_KEY, topic);
             partition.put(SinkUtils.KAFKA_PARTITION_KEY, i);
-            offsetsToAlter.add(new ConnectorOffset(partition, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 5)));
+            offsetsToAlter.add(new ConnectorOffset(partition, Map.of(SinkUtils.KAFKA_OFFSET_KEY, 5)));
         }
 
         // Alter the sink connector's offsets, with retry logic (since we just stopped the connector)
@@ -424,7 +423,7 @@ public class OffsetsApiIntegrationTest {
             partition = new HashMap<>();
             partition.put(SinkUtils.KAFKA_TOPIC_KEY, topic);
             partition.put(SinkUtils.KAFKA_PARTITION_KEY, i);
-            offsetsToAlter.add(new ConnectorOffset(partition, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 3)));
+            offsetsToAlter.add(new ConnectorOffset(partition, Map.of(SinkUtils.KAFKA_OFFSET_KEY, 3)));
         }
 
         response = connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter));
@@ -474,7 +473,7 @@ public class OffsetsApiIntegrationTest {
         Map<String, Object> partition = new HashMap<>();
         partition.put(SinkUtils.KAFKA_TOPIC_KEY, topic);
         partition.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
-        List<ConnectorOffset> offsetsToAlter = Collections.singletonList(new ConnectorOffset(partition, null));
+        List<ConnectorOffset> offsetsToAlter = List.of(new ConnectorOffset(partition, null));
 
         ConnectRestException e = assertThrows(ConnectRestException.class,
                 () -> connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter)));
@@ -601,8 +600,7 @@ public class OffsetsApiIntegrationTest {
         // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsetsToAlter.add(
-                    new ConnectorOffset(Collections.singletonMap("task.id", connectorName + "-" + i),
-                            Collections.singletonMap("saved", 5))
+                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i), Map.of("saved", 5))
             );
         }
 
@@ -622,8 +620,7 @@ public class OffsetsApiIntegrationTest {
         // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsetsToAlter.add(
-                    new ConnectorOffset(Collections.singletonMap("task.id", connectorName + "-" + i),
-                            Collections.singletonMap("saved", 7))
+                    new ConnectorOffset(Map.of("task.id", connectorName + "-" + i), Map.of("saved", 7))
             );
         }
 
@@ -724,7 +721,7 @@ public class OffsetsApiIntegrationTest {
         resetAndVerifySinkConnectorOffsets(connectorConfigs, connect.kafka());
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
-            Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
+            Collection<GroupListing> consumerGroups = admin.listGroups(ListGroupsOptions.forConsumerGroups()).all().get();
             assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }

@@ -16,21 +16,22 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -141,12 +142,12 @@ public class MirrorCheckpointConnectorTest {
     @Test
     public void testFindConsumerGroups() throws Exception {
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
-        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Collections.emptySet(), config);
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Set.of(), config);
         connector = spy(connector);
 
-        Collection<ConsumerGroupListing> groups = Arrays.asList(
-                new ConsumerGroupListing("g1", true),
-                new ConsumerGroupListing("g2", false));
+        List<GroupListing> groups = List.of(
+                new GroupListing("g1", Optional.of(GroupType.CLASSIC), "", Optional.empty()),
+                new GroupListing("g2", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()));
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         doReturn(groups).when(connector).listConsumerGroups();
@@ -159,26 +160,26 @@ public class MirrorCheckpointConnectorTest {
         doReturn(groupToOffsets).when(connector).listConsumerGroupOffsets(anyList());
         Set<String> groupFound = connector.findConsumerGroups();
 
-        Set<String> expectedGroups = groups.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toSet());
+        Set<String> expectedGroups = groups.stream().map(GroupListing::groupId).collect(Collectors.toSet());
         assertEquals(expectedGroups, groupFound,
                 "Expected groups are not the same as findConsumerGroups");
 
         doReturn(false).when(connector).shouldReplicateByTopicFilter(anyString());
         Set<String> topicFilterGroupFound = connector.findConsumerGroups();
-        assertEquals(Collections.emptySet(), topicFilterGroupFound);
+        assertEquals(Set.of(), topicFilterGroupFound);
     }
 
     @Test
     public void testFindConsumerGroupsInCommonScenarios() throws Exception {
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
-        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Collections.emptySet(), config);
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Set.of(), config);
         connector = spy(connector);
 
-        Collection<ConsumerGroupListing> groups = Arrays.asList(
-                new ConsumerGroupListing("g1", true),
-                new ConsumerGroupListing("g2", false),
-                new ConsumerGroupListing("g3", false),
-                new ConsumerGroupListing("g4", false));
+        List<GroupListing> groups = List.of(
+                new GroupListing("g1", Optional.of(GroupType.CLASSIC), "", Optional.empty()),
+                new GroupListing("g2", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()),
+                new GroupListing("g3", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()),
+                new GroupListing("g4", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()));
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup1 = new HashMap<>();
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup2 = new HashMap<>();
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup3 = new HashMap<>();
@@ -200,7 +201,7 @@ public class MirrorCheckpointConnectorTest {
         groupToOffsets.put("g1", offsetsForGroup1);
         groupToOffsets.put("g2", offsetsForGroup2);
         groupToOffsets.put("g3", offsetsForGroup3);
-        doReturn(groupToOffsets).when(connector).listConsumerGroupOffsets(Arrays.asList("g1", "g2", "g3"));
+        doReturn(groupToOffsets).when(connector).listConsumerGroupOffsets(List.of("g1", "g2", "g3"));
 
         Set<String> groupFound = connector.findConsumerGroups();
         Set<String> verifiedSet = new HashSet<>();
@@ -212,8 +213,8 @@ public class MirrorCheckpointConnectorTest {
     @Test
     public void testAlterOffsetsIncorrectPartitionKey() {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
-                Collections.singletonMap("unused_partition_key", "unused_partition_value"),
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Map.of(
+                Map.of("unused_partition_key", "unused_partition_value"),
                 SOURCE_OFFSET
         )));
 
@@ -228,7 +229,7 @@ public class MirrorCheckpointConnectorTest {
     public void testAlterOffsetsMissingPartitionKey() {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
 
-        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(null, Collections.singletonMap(
+        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(null, Map.of(
                 partition,
                 SOURCE_OFFSET
         ));
@@ -237,7 +238,7 @@ public class MirrorCheckpointConnectorTest {
         // Sanity check to make sure our valid partition is actually valid
         assertTrue(alterOffsets.apply(validPartition));
 
-        for (String key : Arrays.asList(CONSUMER_GROUP_ID_KEY, TOPIC_KEY, PARTITION_KEY)) {
+        for (String key : List.of(CONSUMER_GROUP_ID_KEY, TOPIC_KEY, PARTITION_KEY)) {
             Map<String, ?> invalidPartition = new HashMap<>(validPartition);
             invalidPartition.remove(key);
             assertThrows(ConnectException.class, () -> alterOffsets.apply(invalidPartition));
@@ -249,7 +250,7 @@ public class MirrorCheckpointConnectorTest {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
         Map<String, Object> partition = sourcePartition("consumer-app-2", "t", 3);
         partition.put(PARTITION_KEY, "a string");
-        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Map.of(
                 partition,
                 SOURCE_OFFSET
         )));
@@ -273,9 +274,9 @@ public class MirrorCheckpointConnectorTest {
     public void testAlterOffsetsIncorrectOffsetKey() {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
 
-        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+        Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
                 sourcePartition("consumer-app-5", "t1", 2),
-                Collections.singletonMap("unused_offset_key", 0)
+                Map.of("unused_offset_key", 0)
         );
         assertThrows(ConnectException.class, () -> connector.alterOffsets(null, offsets));
     }
@@ -284,7 +285,7 @@ public class MirrorCheckpointConnectorTest {
     public void testAlterOffsetsOffsetValues() {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
 
-        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(null, Collections.singletonMap(
+        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(null, Map.of(
                 sourcePartition("consumer-app-6", "t", 5),
                 Collections.singletonMap(MirrorUtils.OFFSET_KEY, offset)
         ));
@@ -305,7 +306,7 @@ public class MirrorCheckpointConnectorTest {
     public void testSuccessfulAlterOffsets() {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
 
-        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+        Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
                 sourcePartition("consumer-app-7", "t2", 0),
                 SOURCE_OFFSET
         );
@@ -314,7 +315,7 @@ public class MirrorCheckpointConnectorTest {
         // since it could indicate that the offsets were reset previously or that no offsets have been committed yet
         // (for a reset operation)
         assertTrue(connector.alterOffsets(null, offsets));
-        assertTrue(connector.alterOffsets(null, Collections.emptyMap()));
+        assertTrue(connector.alterOffsets(null, Map.of()));
     }
 
     @Test
@@ -334,8 +335,8 @@ public class MirrorCheckpointConnectorTest {
         assertTrue(() -> alterOffsets.apply(partition));
 
         assertTrue(() -> alterOffsets.apply(null));
-        assertTrue(() -> alterOffsets.apply(Collections.emptyMap()));
-        assertTrue(() -> alterOffsets.apply(Collections.singletonMap("unused_partition_key", "unused_partition_value")));
+        assertTrue(() -> alterOffsets.apply(Map.of()));
+        assertTrue(() -> alterOffsets.apply(Map.of("unused_partition_key", "unused_partition_value")));
     }
 
     private static Map<String, Object> sourcePartition(String consumerGroupId, String topic, int partition) {

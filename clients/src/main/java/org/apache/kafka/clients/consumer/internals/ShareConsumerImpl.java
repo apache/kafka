@@ -47,6 +47,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCo
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
+import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
@@ -99,7 +100,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createShareFetchMetricsManager;
@@ -169,26 +170,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final String clientId;
     private final String groupId;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
+    private final BackgroundEventHandler backgroundEventHandler;
     private final BackgroundEventProcessor backgroundEventProcessor;
     private final CompletableEventReaper backgroundEventReaper;
     private final Deserializers<K, V> deserializers;
     private ShareFetch<K, V> currentFetch;
     private AcknowledgementCommitCallbackHandler acknowledgementCommitCallbackHandler;
     private final List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements;
-
-    private enum AcknowledgementMode {
-        /** Acknowledgement mode is not yet known */
-        UNKNOWN,
-        /** Acknowledgement mode is pending, meaning that {@link #poll(Duration)} has been called once and
-         * {@link #acknowledge(ConsumerRecord, AcknowledgeType)} has not been called */
-        PENDING,
-        /** Acknowledgements are explicit, using {@link #acknowledge(ConsumerRecord, AcknowledgeType)} */
-        EXPLICIT,
-        /** Acknowledgements are implicit, not using {@link #acknowledge(ConsumerRecord, AcknowledgeType)} */
-        IMPLICIT
-    }
-
-    private AcknowledgementMode acknowledgementMode;
+    private final ShareAcknowledgementMode acknowledgementMode;
 
     /**
      * A thread-safe {@link ShareFetchBuffer fetch buffer} for the results that are populated in the
@@ -259,7 +248,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             this.metrics = createMetrics(config, time, reporters);
-            this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+            this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
 
             this.acknowledgementMode = initializeAcknowledgementMode(config, log);
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
@@ -275,7 +264,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             ShareFetchMetricsManager shareFetchMetricsManager = createShareFetchMetricsManager(metrics);
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
+            this.backgroundEventHandler = new BackgroundEventHandler(
                 backgroundEventQueue, time, asyncConsumerMetrics);
 
             // This FetchBuffer is shared between the application and network threads.
@@ -335,7 +324,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     new FetchConfig(config),
                     deserializers);
 
-            this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
+            this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -378,7 +367,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.fetchBuffer = new ShareFetchBuffer(logContext);
         this.completedAcknowledgements = new LinkedList<>();
 
-        ShareConsumerMetrics metricsRegistry = new ShareConsumerMetrics(CONSUMER_SHARE_METRIC_GROUP_PREFIX);
+        ShareConsumerMetrics metricsRegistry = new ShareConsumerMetrics();
         ShareFetchMetricsManager shareFetchMetricsManager = new ShareFetchMetricsManager(metrics, metricsRegistry.shareFetchMetrics);
         this.fetchCollector = new ShareFetchCollector<>(
                 logContext,
@@ -386,12 +375,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 subscriptions,
                 new FetchConfig(config),
                 deserializers);
-        this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
-        this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+        this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
+        this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
 
         final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-        final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
+        this.backgroundEventQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventHandler = new BackgroundEventHandler(
             backgroundEventQueue, time, asyncConsumerMetrics);
 
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =
@@ -431,7 +420,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 requestManagersSupplier,
                 asyncConsumerMetrics);
 
-        this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
         this.backgroundEventReaper = new CompletableEventReaper(logContext);
 
@@ -456,7 +444,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final ConsumerMetadata metadata,
                       final int requestTimeoutMs,
                       final int defaultApiTimeoutMs,
-                      final String groupId) {
+                      final String groupId,
+                      final String acknowledgementModeConfig) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -471,14 +460,16 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.metadata = metadata;
         this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.acknowledgementMode = initializeAcknowledgementMode(null, log);
+        this.acknowledgementMode = ShareAcknowledgementMode.fromString(acknowledgementModeConfig);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.currentFetch = ShareFetch.empty();
         this.applicationEventHandler = applicationEventHandler;
-        this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
+        this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
         this.clientTelemetryReporter = Optional.empty();
         this.completedAcknowledgements = Collections.emptyList();
-        this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
+        this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
+        this.backgroundEventHandler = new BackgroundEventHandler(
+                backgroundEventQueue, time, asyncConsumerMetrics);
     }
 
     // auxiliary interface for testing
@@ -572,16 +563,17 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * {@inheritDoc}
      */
     @Override
+    @SuppressWarnings("unchecked")
     public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
         Timer timer = time.timer(timeout);
 
         acquireAndEnsureOpen();
         try {
             // Handle any completed acknowledgements for which we already have the responses
-            handleCompletedAcknowledgements();
+            handleCompletedAcknowledgements(false);
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
-            acknowledgeBatchIfImplicitAcknowledgement(true);
+            acknowledgeBatchIfImplicitAcknowledgement();
 
             kafkaShareConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
@@ -612,6 +604,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             } while (timer.notExpired());
 
             return ConsumerRecords.empty();
+        } catch (ShareFetchException e) {
+            currentFetch = (ShareFetch<K, V>) e.shareFetch();
+            throw e.cause();
         } finally {
             kafkaShareConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
@@ -673,6 +668,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
             }
+            if (acknowledgementMode == ShareAcknowledgementMode.EXPLICIT) {
+                // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
+                throw new IllegalStateException("All records must be acknowledged in explicit acknowledgement mode.");
+            }
             return currentFetch;
         }
     }
@@ -702,6 +701,19 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     /**
      * {@inheritDoc}
      */
+    public void acknowledge(final String topic, final int partition, final long offset, final AcknowledgeType type) {
+        acquireAndEnsureOpen();
+        try {
+            ensureExplicitAcknowledgement();
+            currentFetch.acknowledge(topic, partition, offset, type);
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Map<TopicIdPartition, Optional<KafkaException>> commitSync() {
         return this.commitSync(Duration.ofMillis(defaultApiTimeoutMs));
@@ -715,10 +727,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             // Handle any completed acknowledgements for which we already have the responses
-            handleCompletedAcknowledgements();
+            handleCompletedAcknowledgements(false);
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
-            acknowledgeBatchIfImplicitAcknowledgement(false);
+            acknowledgeBatchIfImplicitAcknowledgement();
 
             Timer requestTimer = time.timer(timeout.toMillis());
             Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = acknowledgementsToSend();
@@ -759,10 +771,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             // Handle any completed acknowledgements for which we already have the responses
-            handleCompletedAcknowledgements();
+            handleCompletedAcknowledgements(false);
 
             // If using implicit acknowledgement, acknowledge the previously fetched records
-            acknowledgeBatchIfImplicitAcknowledgement(false);
+            acknowledgeBatchIfImplicitAcknowledgement();
 
             Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = acknowledgementsToSend();
             if (!acknowledgementsMap.isEmpty()) {
@@ -887,8 +899,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         // Prepare shutting down the network thread
         swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
                 () -> sendAcknowledgementsAndLeaveGroup(closeTimer, firstException), firstException);
+        swallow(log, Level.ERROR, "Failed to stop finding coordinator",
+                this::stopFindCoordinatorOnClose, firstException);
         swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
-                this::handleCompletedAcknowledgements, firstException);
+                () -> handleCompletedAcknowledgements(true), firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
@@ -915,6 +929,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         }
     }
 
+    private void stopFindCoordinatorOnClose() {
+        if (applicationEventHandler == null) {
+            return;
+        }
+        log.debug("Stop finding coordinator during consumer close");
+        applicationEventHandler.add(new StopFindCoordinatorOnCloseEvent());
+    }
+
     private Timer createTimerForCloseRequests(Duration timeout) {
         // this.time could be null if an exception occurs in constructor prior to setting the this.time field
         final Time time = (this.time == null) ? Time.SYSTEM : this.time;
@@ -927,6 +949,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * 2. leave the group
      */
     private void sendAcknowledgementsAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
+        if (applicationEventHandler == null || backgroundEventProcessor == null ||
+            backgroundEventReaper == null || backgroundEventQueue == null) {
+            return;
+        }
         completeQuietly(
                 () -> applicationEventHandler.addAndGet(new ShareAcknowledgeOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer))),
                 "Failed to send pending acknowledgements with a timeout(ms)=" + timer.timeoutMs(), firstException);
@@ -1017,8 +1043,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * <p>
      * If the acknowledgement commit callback throws an exception, this method will throw an exception.
      */
-    private void handleCompletedAcknowledgements() {
-        processBackgroundEvents();
+    private void handleCompletedAcknowledgements(boolean onClose) {
+        if (backgroundEventQueue == null || backgroundEventReaper == null || backgroundEventProcessor == null) {
+            return;
+        }
+        // If the user gets any fatal errors, they will get these exceptions in the background queue.
+        // While closing, we ignore these exceptions so that the consumers close successfully.
+        processBackgroundEvents(onClose ? e -> (e instanceof GroupAuthorizationException
+                || e instanceof TopicAuthorizationException
+                || e instanceof InvalidTopicException) : e -> false);
 
         if (!completedAcknowledgements.isEmpty()) {
             try {
@@ -1032,29 +1065,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     /**
-     * Called to progressively move the acknowledgement mode into IMPLICIT if it is not known to be EXPLICIT.
      * If the acknowledgement mode is IMPLICIT, acknowledges all records in the current batch.
-     *
-     * @param calledOnPoll If true, called on poll. Otherwise, called on commit.
      */
-    private void acknowledgeBatchIfImplicitAcknowledgement(boolean calledOnPoll) {
-        if (calledOnPoll) {
-            if (acknowledgementMode == AcknowledgementMode.UNKNOWN) {
-                // The first call to poll(Duration) moves into PENDING
-                acknowledgementMode = AcknowledgementMode.PENDING;
-            } else if (acknowledgementMode == AcknowledgementMode.PENDING && !currentFetch.isEmpty()) {
-                // If there are records to acknowledge and PENDING, moves into IMPLICIT
-                acknowledgementMode = AcknowledgementMode.IMPLICIT;
-            }
-        } else {
-            // If there are records to acknowledge and PENDING, moves into IMPLICIT
-            if (acknowledgementMode == AcknowledgementMode.PENDING && !currentFetch.isEmpty()) {
-                acknowledgementMode = AcknowledgementMode.IMPLICIT;
-            }
-        }
-
+    private void acknowledgeBatchIfImplicitAcknowledgement() {
         // If IMPLICIT, acknowledge all records
-        if (acknowledgementMode == AcknowledgementMode.IMPLICIT) {
+        if (acknowledgementMode == ShareAcknowledgementMode.IMPLICIT) {
             currentFetch.acknowledgeAll(AcknowledgeType.ACCEPT);
         }
     }
@@ -1067,36 +1082,29 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     }
 
     /**
-     * Called to move the acknowledgement mode into EXPLICIT, if it is not known to be IMPLICIT.
+     * Called to verify if the acknowledgement mode is EXPLICIT, else throws an exception.
      */
     private void ensureExplicitAcknowledgement() {
-        if (acknowledgementMode == AcknowledgementMode.PENDING) {
-            // If poll(Duration) has been called once, moves into EXPLICIT
-            acknowledgementMode = AcknowledgementMode.EXPLICIT;
-        } else if (acknowledgementMode == AcknowledgementMode.IMPLICIT) {
+        if (acknowledgementMode == ShareAcknowledgementMode.IMPLICIT) {
             throw new IllegalStateException("Implicit acknowledgement of delivery is being used.");
-        } else if (acknowledgementMode == AcknowledgementMode.UNKNOWN) {
-            throw new IllegalStateException("Acknowledge called before poll.");
         }
     }
 
     /**
      * Initializes the acknowledgement mode based on the configuration.
      */
-    private static AcknowledgementMode initializeAcknowledgementMode(ConsumerConfig config, Logger log) {
-        if (config == null) {
-            return AcknowledgementMode.UNKNOWN;
+    private static ShareAcknowledgementMode initializeAcknowledgementMode(ConsumerConfig config, Logger log) {
+        String s = config.getString(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
+        return ShareAcknowledgementMode.fromString(s);
+    }
+
+    private void processBackgroundEvents(final Predicate<Exception> ignoreErrorEventException) {
+        try {
+            processBackgroundEvents();
+        } catch (Exception e) {
+            if (!ignoreErrorEventException.test(e))
+                throw e;
         }
-        String acknowledgementModeStr = config.getString(ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
-        if ((acknowledgementModeStr == null) || acknowledgementModeStr.isEmpty()) {
-            return AcknowledgementMode.UNKNOWN;
-        } else if (acknowledgementModeStr.equalsIgnoreCase("implicit")) {
-            return AcknowledgementMode.IMPLICIT;
-        } else if (acknowledgementModeStr.equalsIgnoreCase("explicit")) {
-            return AcknowledgementMode.EXPLICIT;
-        }
-        log.warn("Invalid value for config {}: \"{}\"", ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, acknowledgementModeStr);
-        return AcknowledgementMode.UNKNOWN;
     }
 
     /**
@@ -1104,25 +1112,30 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * It is possible that {@link ErrorEvent an error}
      * could occur when processing the events. In such cases, the processor will take a reference to the first
      * error, continue to process the remaining events, and then throw the first error that occurred.
+     *
+     * Visible for testing.
      */
-    private boolean processBackgroundEvents() {
+    boolean processBackgroundEvents() {
         AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
-        LinkedList<BackgroundEvent> events = new LinkedList<>();
-        backgroundEventQueue.drainTo(events);
+        List<BackgroundEvent> events = backgroundEventHandler.drainEvents();
+        if (!events.isEmpty()) {
+            long startMs = time.milliseconds();
+            for (BackgroundEvent event : events) {
+                asyncConsumerMetrics.recordBackgroundEventQueueTime(time.milliseconds() - event.enqueuedMs());
+                try {
+                    if (event instanceof CompletableEvent)
+                        backgroundEventReaper.add((CompletableEvent<?>) event);
 
-        for (BackgroundEvent event : events) {
-            try {
-                if (event instanceof CompletableEvent)
-                    backgroundEventReaper.add((CompletableEvent<?>) event);
+                    backgroundEventProcessor.process(event);
+                } catch (Throwable t) {
+                    KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
 
-                backgroundEventProcessor.process(event);
-            } catch (Throwable t) {
-                KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
-
-                if (!firstError.compareAndSet(null, e))
-                    log.warn("An error occurred when processing the background event: {}", e.getMessage(), e);
+                    if (!firstError.compareAndSet(null, e))
+                        log.warn("An error occurred when processing the background event: {}", e.getMessage(), e);
+                }
             }
+            asyncConsumerMetrics.recordBackgroundEventQueueProcessingTime(time.milliseconds() - startMs);
         }
 
         backgroundEventReaper.reap(time.milliseconds());
@@ -1222,6 +1235,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     @Override
     public Metrics metricsRegistry() {
         return metrics;
+    }
+
+    AsyncConsumerMetrics asyncConsumerMetrics() {
+        return asyncConsumerMetrics;
     }
 
     @Override

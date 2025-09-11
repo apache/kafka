@@ -22,7 +22,6 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -77,26 +76,25 @@ public class PluginsRecommenders {
         return headerConverterPluginVersionRecommender;
     }
 
-    public TransformationPluginRecommender transformationPluginRecommender(String classOrAlias) {
-        return new TransformationPluginRecommender(classOrAlias);
+    public TransformationPluginRecommender transformationPluginRecommender(String classOrAliasConfig) {
+        return new TransformationPluginRecommender(classOrAliasConfig);
     }
 
-    public PredicatePluginRecommender predicatePluginRecommender(String classOrAlias) {
-        return new PredicatePluginRecommender(classOrAlias);
+    public PredicatePluginRecommender predicatePluginRecommender(String classOrAliasConfig) {
+        return new PredicatePluginRecommender(classOrAliasConfig);
     }
 
     public class ConnectorPluginVersionRecommender implements ConfigDef.Recommender {
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
             if (plugins == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             String connectorClassOrAlias = (String) parsedConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             if (connectorClassOrAlias == null) {
                 //should never happen
-                return Collections.emptyList();
+                return List.of();
             }
             List<Object> sourceConnectors = plugins.sourceConnectors(connectorClassOrAlias).stream()
                     .map(PluginDesc::version).distinct().collect(Collectors.toList());
@@ -119,7 +117,7 @@ public class PluginsRecommenders {
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
             if (plugins == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             return plugins.converters().stream()
                     .map(PluginDesc::pluginClass).distinct().collect(Collectors.toList());
@@ -136,7 +134,7 @@ public class PluginsRecommenders {
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
             if (plugins == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             return plugins.headerConverters().stream()
                     .map(PluginDesc::pluginClass).distinct().collect(Collectors.toList());
@@ -161,10 +159,10 @@ public class PluginsRecommenders {
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
             if (plugins == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             if (parsedConfig.get(converterConfig()) == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             Class converterClass = (Class) parsedConfig.get(converterConfig());
             return recommendations().apply(converterClass.getName());
@@ -222,10 +220,10 @@ public class PluginsRecommenders {
         @SuppressWarnings({"rawtypes"})
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
             if (plugins == null) {
-                return Collections.emptyList();
+                return List.of();
             }
             if (parsedConfig.get(classOrAliasConfig) == null) {
-                return Collections.emptyList();
+                return List.of();
             }
 
             Class classOrAlias = (Class) parsedConfig.get(classOrAliasConfig);

@@ -42,7 +42,6 @@ import org.apache.kafka.tools.filter.TopicPartitionFilter.TopicFilterAndPartitio
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -127,7 +126,7 @@ public class GetOffsetShell {
                     .ofType(String.class);
             timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
                     .withRequiredArg()
-                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered")
+                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered / -6 or earliest-pending-upload")
                     .ofType(String.class)
                     .defaultsTo("latest");
             commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
@@ -264,7 +263,7 @@ public class GetOffsetShell {
         }
     }
 
-    // visible for tseting
+    // Visible for testing
     static OffsetSpec parseOffsetSpec(String listOffsetsTimestamp) throws TerseException {
         switch (listOffsetsTimestamp) {
             case "earliest":
@@ -277,6 +276,8 @@ public class GetOffsetShell {
                 return OffsetSpec.earliestLocal();
             case "latest-tiered":
                 return OffsetSpec.latestTiered();
+            case "earliest-pending-upload":
+                return OffsetSpec.earliestPendingUpload();
             default:
                 long timestamp;
 
@@ -284,7 +285,7 @@ public class GetOffsetShell {
                     timestamp = Long.parseLong(listOffsetsTimestamp);
                 } catch (NumberFormatException e) {
                     throw new TerseException("Malformed time argument " + listOffsetsTimestamp + ". " +
-                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered, or a specified long format timestamp");
+                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered / -6 or earliest-pending-upload, or a specified long format timestamp");
                 }
 
                 if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
@@ -297,6 +298,8 @@ public class GetOffsetShell {
                     return OffsetSpec.earliestLocal();
                 } else if (timestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
                     return OffsetSpec.latestTiered();
+                } else if (timestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
+                    return OffsetSpec.earliestPendingUpload();
                 } else {
                     return OffsetSpec.forTimestamp(timestamp);
                 }
@@ -312,7 +315,7 @@ public class GetOffsetShell {
      * PartitionPattern: NUMBER | NUMBER-(NUMBER)? | -NUMBER
      */
     public TopicPartitionFilter createTopicPartitionFilterWithPatternList(String topicPartitions) {
-        List<String> ruleSpecs = Arrays.asList(topicPartitions.split(","));
+        List<String> ruleSpecs = List.of(topicPartitions.split(","));
         List<TopicPartitionFilter> rules = ruleSpecs.stream().map(ruleSpec -> {
             try {
                 return parseRuleSpec(ruleSpec);
@@ -338,7 +341,7 @@ public class GetOffsetShell {
         Set<Integer> partitions;
 
         if (partitionsString == null || partitionsString.isEmpty()) {
-            partitions = Collections.emptySet();
+            partitions = Set.of();
         } else {
             try {
                 partitions = Arrays.stream(partitionsString.split(",")).map(Integer::parseInt).collect(Collectors.toSet());

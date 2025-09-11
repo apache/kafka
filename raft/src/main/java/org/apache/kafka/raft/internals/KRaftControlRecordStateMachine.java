@@ -52,6 +52,7 @@ public final class KRaftControlRecordStateMachine {
     private static final long STARTING_NEXT_OFFSET = -1;
     private static final long SMALLEST_LOG_OFFSET = 0;
 
+    private final LogContext logContext;
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
@@ -95,12 +96,13 @@ public final class KRaftControlRecordStateMachine {
         KafkaRaftMetrics kafkaRaftMetrics,
         ExternalKRaftMetrics externalKRaftMetrics
     ) {
+        this.logContext = logContext;
         this.log = log;
         this.voterSetHistory = new VoterSetHistory(staticVoterSet, logContext);
         this.serde = serde;
         this.bufferSupplier = bufferSupplier;
         this.maxBatchSizeBytes = maxBatchSizeBytes;
-        this.logger = logContext.logger(this.getClass());
+        this.logger = logContext.logger(getClass());
         this.kafkaRaftMetrics = kafkaRaftMetrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
         this.staticVoterSet = staticVoterSet;
@@ -237,7 +239,8 @@ public final class KRaftControlRecordStateMachine {
                     serde,
                     bufferSupplier,
                     maxBatchSizeBytes,
-                    true // Validate batch CRC
+                    true, // Validate batch CRC
+                    logContext
                 )
             ) {
                 while (iterator.hasNext()) {
@@ -266,7 +269,8 @@ public final class KRaftControlRecordStateMachine {
                     serde,
                     bufferSupplier,
                     maxBatchSizeBytes,
-                    true // Validate batch CRC
+                    true, // Validate batch CRC
+                    logContext
                 )
             ) {
                 logger.info(

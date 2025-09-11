@@ -62,11 +62,16 @@ public class ConnectMetricsTest {
 
     private static final Map<String, String> DEFAULT_WORKER_CONFIG = Map.of(
         WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
-        WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
+        WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
+    );
     private static final ConnectorTaskId CONNECTOR_TASK_ID = new ConnectorTaskId("connector", 0);
-    private static final Map<String, String> TAGS = Map.of("t1", "v1");
-
+    private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>();
     private ConnectMetrics metrics;
+
+    static {
+        TAGS.put("t1", "v1");
+    }
 
     @BeforeEach
     public void setUp() {

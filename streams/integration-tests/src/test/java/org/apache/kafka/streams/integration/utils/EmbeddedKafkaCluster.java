@@ -143,16 +143,6 @@ public class EmbeddedKafkaCluster {
         this.time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
     }
 
-    public static EmbeddedKafkaCluster withStreamsRebalanceProtocol(final int numBrokers) {
-        return withStreamsRebalanceProtocol(numBrokers, new Properties());
-    }
-
-    public static EmbeddedKafkaCluster withStreamsRebalanceProtocol(final int numBrokers, final Properties props) {
-        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
-        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
-        return new EmbeddedKafkaCluster(numBrokers, props);
-    }
-
     public void start() {
         try {
             cluster.format();
@@ -411,6 +401,8 @@ public class EmbeddedKafkaCluster {
 
     private void addDefaultBrokerPropsIfAbsent(final Properties brokerConfig) {
         brokerConfig.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100");
+        brokerConfig.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "100");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "0");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0");
         brokerConfig.putIfAbsent(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "5");
@@ -449,7 +441,33 @@ public class EmbeddedKafkaCluster {
         }
     }
 
-    public void setStandbyReplicas(final String groupId, final int numStandbyReplicas) {
+    public void setGroupSessionTimeout(final String groupId, final int sessionTimeoutMs) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(sessionTimeoutMs)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setGroupHeartbeatTimeout(final String groupId, final int heartbeatTimeoutMs) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatTimeoutMs)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setGroupStandbyReplicas(final String groupId, final int numStandbyReplicas) {
         try (final Admin adminClient = createAdminClient()) {
             adminClient.incrementalAlterConfigs(
                 Map.of(

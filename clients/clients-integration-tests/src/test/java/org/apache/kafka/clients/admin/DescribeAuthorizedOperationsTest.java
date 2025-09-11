@@ -69,8 +69,10 @@ public class DescribeAuthorizedOperationsTest {
         return List.of(
             ClusterConfig.defaultBuilder()
                 .setTypes(Set.of(Type.KRAFT))
-                .setServerProperties(Map.of(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1"))
-                .setServerProperties(Map.of(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1"))
+                .setServerProperties(Map.of(
+                    GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1",
+                    GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1"
+                ))
                 .setBrokerSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)
                 .setControllerSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)
                 .build()
@@ -113,10 +115,10 @@ public class DescribeAuthorizedOperationsTest {
     public void testConsumerGroupAuthorizedOperations(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         setupSecurity(clusterInstance);
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD));
-             Admin user1 = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD));
+             Admin user1 = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD))
         ) {
             admin.createTopics(List.of(new NewTopic("topic1", 1, (short) 1)));
-            clusterInstance.waitForTopic("topic1", 1);
+            clusterInstance.waitTopicCreation("topic1", 1);
 
             // create consumers to avoid group not found error
             TopicPartition tp = new TopicPartition("topic1", 0);
@@ -191,8 +193,8 @@ public class DescribeAuthorizedOperationsTest {
                 new NewTopic(topic1, 1, (short) 1),
                 new NewTopic(topic2, 1, (short) 1)
             ));
-            clusterInstance.waitForTopic(topic1, 1);
-            clusterInstance.waitForTopic(topic2, 1);
+            clusterInstance.waitTopicCreation(topic1, 1);
+            clusterInstance.waitTopicCreation(topic2, 1);
         }
 
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD))) {

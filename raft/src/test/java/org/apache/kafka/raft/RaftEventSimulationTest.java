@@ -545,12 +545,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class SequentialAppendAction implements Runnable {
-        final Cluster cluster;
-
-        private SequentialAppendAction(Cluster cluster) {
-            this.cluster = cluster;
-        }
+    private record SequentialAppendAction(Cluster cluster) implements Runnable {
 
         @Override
         public void run() {
@@ -927,6 +922,7 @@ public class RaftEventSimulationTest {
     }
 
     private static class RaftNode {
+        final LogContext logContext;
         final int nodeId;
         final KafkaRaftClient<Integer> client;
         final MockLog log;
@@ -948,6 +944,7 @@ public class RaftEventSimulationTest {
             Random random,
             RecordSerde<Integer> intSerde
         ) {
+            this.logContext = logContext;
             this.nodeId = nodeId;
             this.client = client;
             this.log = log;
@@ -997,16 +994,13 @@ public class RaftEventSimulationTest {
                 logEndOffset()
             );
         }
+
+        LogContext logContext() {
+            return logContext;
+        }
     }
 
-    private static class InflightRequest {
-        final int sourceId;
-        final Node destination;
-
-        private InflightRequest(int sourceId, Node destination) {
-            this.sourceId = sourceId;
-            this.destination = destination;
-        }
+    private record InflightRequest(int sourceId, Node destination) {
     }
 
     private interface NetworkFilter {
@@ -1040,16 +1034,13 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class DropOutboundRequestsTo implements NetworkFilter {
-        private final Set<InetSocketAddress> unreachable;
-
+    private record DropOutboundRequestsTo(Set<InetSocketAddress> unreachable) implements NetworkFilter {
         /**
          * This network filter drops any outbound message sent to the {@code unreachable} nodes.
          *
          * @param unreachable the set of destination address which are not reachable
          */
-        private DropOutboundRequestsTo(Set<InetSocketAddress> unreachable) {
-            this.unreachable = unreachable;
+        private DropOutboundRequestsTo {
         }
 
         @Override
@@ -1117,12 +1108,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class MajorityReachedHighWatermark implements Invariant {
-        final Cluster cluster;
-
-        private MajorityReachedHighWatermark(Cluster cluster) {
-            this.cluster = cluster;
-        }
+    private record MajorityReachedHighWatermark(Cluster cluster) implements Invariant {
 
         @Override
         public void verify() {
@@ -1228,12 +1214,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class SnapshotAtLogStart implements Invariant {
-        final Cluster cluster;
-
-        private SnapshotAtLogStart(Cluster cluster) {
-            this.cluster = cluster;
-        }
+    private record SnapshotAtLogStart(Cluster cluster) implements Invariant {
 
         @Override
         public void verify() {
@@ -1274,12 +1255,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class LeaderNeverLoadSnapshot implements Invariant {
-        final Cluster cluster;
-
-        private LeaderNeverLoadSnapshot(Cluster cluster) {
-            this.cluster = cluster;
-        }
+    private record LeaderNeverLoadSnapshot(Cluster cluster) implements Invariant {
 
         @Override
         public void verify() {
@@ -1335,7 +1311,8 @@ public class RaftEventSimulationTest {
                         node.intSerde,
                         BufferSupplier.create(),
                         Integer.MAX_VALUE,
-                        true
+                        true,
+                        node.logContext()
                     )
                 ) {
                     // Since the state machine is only on e value we only expect one data record in the snapshot
@@ -1363,15 +1340,15 @@ public class RaftEventSimulationTest {
             });
 
             for (LogBatch batch : log.readBatches(startOffset.get(), highWatermark)) {
-                if (batch.isControlBatch) {
+                if (batch.isControlBatch()) {
                     continue;
                 }
 
-                for (LogEntry entry : batch.entries) {
-                    long offset = entry.offset;
+                for (LogEntry entry : batch.entries()) {
+                    long offset = entry.offset();
                     assertTrue(offset < highWatermark.getAsLong());
 
-                    int sequence = parseSequenceNumber(entry.record.value().duplicate());
+                    int sequence = parseSequenceNumber(entry.record().value().duplicate());
                     committedSequenceNumbers.putIfAbsent(offset, sequence);
 
                     int committedSequence = committedSequenceNumbers.get(offset);

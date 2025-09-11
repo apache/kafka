@@ -63,16 +63,15 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singleton;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
@@ -105,6 +104,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     private boolean committing;
     private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
+    private final String version;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -125,9 +125,10 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
                           WorkerErrantRecordReporter workerErrantRecordReporter,
                           StatusBackingStore statusBackingStore,
                           Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier,
+                          TaskPluginsMetadata pluginsMetadata,
                           Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, time, statusBackingStore, pluginLoaderSwapper);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, time, statusBackingStore, pluginsMetadata, pluginLoaderSwapper);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -153,6 +154,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
+        this.version = task.version();
     }
 
     @Override
@@ -225,6 +227,11 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
             log.trace("Consumer woken up during initial offset commit attempt, " 
                 + "but succeeded during a later attempt");
         }
+    }
+
+    @Override
+    public String taskVersion() {
+        return version;
     }
 
     protected void iteration() {
@@ -359,12 +366,12 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
 
     //VisibleForTesting
     Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets() {
-        return Collections.unmodifiableMap(lastCommittedOffsets);
+        return Map.copyOf(lastCommittedOffsets);
     }
 
     //VisibleForTesting
     Map<TopicPartition, OffsetAndMetadata> currentOffsets() {
-        return Collections.unmodifiableMap(currentOffsets);
+        return Map.copyOf(currentOffsets);
     }
 
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
@@ -605,7 +612,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     private void resumeAll() {
         for (TopicPartition tp : consumer.assignment())
             if (!context.pausedPartitions().contains(tp))
-                consumer.resume(singleton(tp));
+                consumer.resume(Set.of(tp));
     }
 
     private void pauseAll() {

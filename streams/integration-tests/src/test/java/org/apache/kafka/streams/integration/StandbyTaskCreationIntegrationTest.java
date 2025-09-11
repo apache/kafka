@@ -57,7 +57,7 @@ import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 public class StandbyTaskCreationIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
-    public static final EmbeddedKafkaCluster CLUSTER = EmbeddedKafkaCluster.withStreamsRebalanceProtocol(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private String safeTestName;
 
@@ -99,7 +99,7 @@ public class StandbyTaskCreationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         if (streamsProtocolEnabled) {
             streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
-            CLUSTER.setStandbyReplicas("app-" + safeTestName, 1);
+            CLUSTER.setGroupStandbyReplicas("app-" + safeTestName, 1);
         } else {
             streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         }

@@ -21,6 +21,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -46,6 +48,13 @@ public class LoggersTest {
     public void setup() {
         time = new MockTime(0, INITIAL_TIME, 0);
         loggers = (Loggers.Log4jLoggers) Loggers.newInstance(time);
+    }
+    
+    @AfterEach
+    public void tearDown() {
+        // Reset LoggerContext to its initial configuration.
+        // This ensures any log level changes made in a test do not leak into subsequent tests.
+        LoggerContext.getContext(false).reconfigure();
     }
 
     @Test

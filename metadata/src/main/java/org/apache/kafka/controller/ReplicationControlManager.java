@@ -871,6 +871,13 @@ public class ReplicationControlManager {
                 createTopicPolicy.get().validate(supplier.get());
             } catch (PolicyViolationException e) {
                 return new ApiError(Errors.POLICY_VIOLATION, e.getMessage());
+            } catch (Throwable e) {
+                // return the corresponding API error, but emit the stack trace first if it is an unknown server error
+                ApiError apiError = ApiError.fromThrowable(e);
+                if (apiError.error() == Errors.UNKNOWN_SERVER_ERROR) {
+                    log.error("Unknown server error validating Create Topic", e);
+                }
+                return apiError;
             }
         }
         return ApiError.NONE;
@@ -1102,7 +1109,6 @@ public class ReplicationControlManager {
                     topic,
                     partitionId,
                     partition,
-                    context.requestHeader().requestApiVersion(),
                     partitionData);
 
                 if (validationError != Errors.NONE) {
@@ -1232,7 +1238,6 @@ public class ReplicationControlManager {
         TopicControlInfo topic,
         int partitionId,
         PartitionRegistration partition,
-        short requestApiVersion,
         AlterPartitionRequestData.PartitionData partitionData
     ) {
         if (partition == null) {
@@ -2436,14 +2441,7 @@ public class ReplicationControlManager {
         }
     }
 
-    private static final class IneligibleReplica {
-        private final int replicaId;
-        private final String reason;
-
-        private IneligibleReplica(int replicaId, String reason) {
-            this.replicaId = replicaId;
-            this.reason = reason;
-        }
+    private record IneligibleReplica(int replicaId, String reason) {
 
         @Override
         public String toString() {

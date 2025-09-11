@@ -26,11 +26,11 @@ import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.{FetchRequest, LeaderAndIsrRequest}
+import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.metadata.{LeaderAndIsr, MetadataCache, MockConfigRepository}
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, MockConfigRepository, PartitionRegistration}
 import org.apache.kafka.server.common.{RequestLocal, TopicIdPartition}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
@@ -139,19 +139,20 @@ class PartitionLockTest extends Logging {
   def testGetReplicaWithUpdateAssignmentAndIsr(): Unit = {
     val active = new AtomicBoolean(true)
     val replicaToCheck = 3
-    val firstReplicaSet = Seq[Integer](3, 4, 5).asJava
-    val secondReplicaSet = Seq[Integer](1, 2, 3).asJava
-    def partitionState(replicas: java.util.List[Integer]) = new LeaderAndIsrRequest.PartitionState()
-      .setControllerEpoch(1)
-      .setLeader(replicas.get(0))
+    val firstReplicaSet = Array(3, 4, 5)
+    val secondReplicaSet = Array(1, 2, 3)
+    def partitionRegistration(replicas: Array[Int]) = new PartitionRegistration.Builder()
+      .setLeader(replicas(0))
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
       .setLeaderEpoch(1)
       .setIsr(replicas)
       .setPartitionEpoch(1)
       .setReplicas(replicas)
-      .setIsNew(true)
+      .setDirectories(DirectoryId.unassignedArray(replicas.length))
+      .build()
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     // Update replica set synchronously first to avoid race conditions
-    partition.makeLeader(partitionState(secondReplicaSet), offsetCheckpoints, None)
+    partition.makeLeader(partitionRegistration(secondReplicaSet), isNew = true, offsetCheckpoints, None)
     assertTrue(partition.getReplica(replicaToCheck).isDefined, s"Expected replica $replicaToCheck to be defined")
 
     val future = executorService.submit((() => {
@@ -164,7 +165,7 @@ class PartitionLockTest extends Logging {
           secondReplicaSet
         }
 
-        partition.makeLeader(partitionState(replicas), offsetCheckpoints, None)
+        partition.makeLeader(partitionRegistration(replicas), isNew = true, offsetCheckpoints, None)
 
         i += 1
         Thread.sleep(1) // just to avoid tight loop
@@ -343,26 +344,27 @@ class PartitionLockTest extends Logging {
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
 
-    val controllerEpoch = 0
-    val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
+    val replicas = (0 to numReplicaFetchers).map(i => brokerId + i).toArray
     val isr = replicas
-    replicas.forEach(replicaId => when(metadataCache.getAliveBrokerEpoch(replicaId)).thenReturn(Optional.of(1L)))
+    replicas.foreach(replicaId => when(metadataCache.getAliveBrokerEpoch(replicaId)).thenReturn(Optional.of(1L)))
 
-    assertTrue(partition.makeLeader(new LeaderAndIsrRequest.PartitionState()
-      .setControllerEpoch(controllerEpoch)
+    val partitionRegistration = new PartitionRegistration.Builder()
       .setLeader(brokerId)
+      .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
       .setLeaderEpoch(leaderEpoch)
       .setIsr(isr)
       .setPartitionEpoch(1)
       .setReplicas(replicas)
-      .setIsNew(true), offsetCheckpoints, Some(topicId)), "Expected become leader transition to succeed")
+      .setDirectories(DirectoryId.unassignedArray(replicas.length))
+      .build()
+    assertTrue(partition.makeLeader(partitionRegistration, isNew = true, offsetCheckpoints, Some(topicId)), "Expected become leader transition to succeed")
 
     partition
   }
 
   private def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000: java.lang.Integer)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, 999: java.lang.Integer)
     overrides.foreach { case (k, v) => logProps.put(k, v) }

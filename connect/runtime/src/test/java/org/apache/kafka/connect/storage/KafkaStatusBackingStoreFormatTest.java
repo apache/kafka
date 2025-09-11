@@ -35,9 +35,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.kafka.connect.json.JsonConverterConfig.SCHEMAS_ENABLE_CONFIG;
@@ -75,7 +75,7 @@ public class KafkaStatusBackingStoreFormatTest {
     public void setup() {
         time = new MockTime();
         JsonConverter converter = new JsonConverter();
-        converter.configure(Collections.singletonMap(SCHEMAS_ENABLE_CONFIG, false), false);
+        converter.configure(Map.of(SCHEMAS_ENABLE_CONFIG, false), false);
         store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, () -> null, kafkaBasedLog);
     }
 
@@ -182,7 +182,7 @@ public class KafkaStatusBackingStoreFormatTest {
         store.read(statusRecord);
         assertTrue(store.topics.containsKey("bar"));
         assertFalse(store.topics.get("bar").containsKey("foo"));
-        assertEquals(Collections.emptyMap(), store.topics.get("bar"));
+        assertEquals(Map.of(), store.topics.get("bar"));
     }
 
     @Test
@@ -204,7 +204,7 @@ public class KafkaStatusBackingStoreFormatTest {
         ConsumerRecord<String, byte[]> statusRecord = new ConsumerRecord<>(STATUS_TOPIC, 0, 0, key, valueCaptor.getValue());
         store.read(statusRecord);
         assertEquals(topicStatus, store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
-        assertEquals(Collections.singleton(topicStatus), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
+        assertEquals(Set.of(topicStatus), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
     }
 
     @Test
@@ -277,7 +277,7 @@ public class KafkaStatusBackingStoreFormatTest {
         assertEquals(secondTopicStatus, store.parseTopicStatus(valueCaptor.getValue()));
         assertEquals(firstTopicStatus, store.getTopic(FOO_CONNECTOR, FOO_TOPIC));
         assertEquals(secondTopicStatus, store.getTopic(FOO_CONNECTOR, BAR_TOPIC));
-        assertEquals(new HashSet<>(Arrays.asList(firstTopicStatus, secondTopicStatus)), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
+        assertEquals(Set.of(firstTopicStatus, secondTopicStatus), new HashSet<>(store.getAllTopics(FOO_CONNECTOR)));
     }
 
 }

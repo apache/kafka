@@ -96,7 +96,7 @@ public class JoinGroupRequest extends AbstractRequest {
      *
      * @return whether a known member id is required or not.
      */
-    public static boolean requiresKnownMemberId(short apiVersion) {
+    public static boolean requiresKnownMemberId(int apiVersion) {
         return apiVersion >= 4;
     }
 
@@ -117,7 +117,7 @@ public class JoinGroupRequest extends AbstractRequest {
      */
     public static boolean requiresKnownMemberId(
         JoinGroupRequestData request,
-        short apiVersion
+        int apiVersion
     ) {
         return request.groupInstanceId() == null
             && request.memberId().equals(UNKNOWN_MEMBER_ID)
@@ -150,7 +150,7 @@ public class JoinGroupRequest extends AbstractRequest {
      * @return whether the version supports skipping assignment.
      */
 
-    public static boolean supportsSkippingAssignment(short apiVersion) {
+    public static boolean supportsSkippingAssignment(int apiVersion) {
         return apiVersion >= 9;
     }
 

@@ -26,10 +26,13 @@ import org.apache.kafka.common.utils.MockTime;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.UUID;
 
 import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -65,8 +68,53 @@ public class RequestManagersTest {
             listener,
             Optional.empty()
         ).get();
-        requestManagers.consumerMembershipManager.ifPresent(
-            membershipManager -> assertTrue(membershipManager.stateListeners().contains(listener))
+        assertTrue(requestManagers.consumerMembershipManager.isPresent());
+        assertTrue(requestManagers.streamsMembershipManager.isEmpty());
+        assertTrue(requestManagers.streamsGroupHeartbeatRequestManager.isEmpty());
+
+        assertEquals(2, requestManagers.consumerMembershipManager.get().stateListeners().size());
+        assertTrue(requestManagers.consumerMembershipManager.get().stateListeners().stream()
+            .anyMatch(m -> m instanceof CommitRequestManager));
+        assertTrue(requestManagers.consumerMembershipManager.get().stateListeners().contains(listener));
+    }
+
+    @Test
+    public void testStreamMemberStateListenerRegistered() {
+
+        final MemberStateListener listener = (memberEpoch, memberId) -> { };
+
+        final Properties properties = requiredConsumerConfig();
+        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroup");
+        final ConsumerConfig config = new ConsumerConfig(properties);
+        final GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
+            config,
+            GroupRebalanceConfig.ProtocolType.CONSUMER
         );
+        final RequestManagers requestManagers = RequestManagers.supplier(
+            new MockTime(),
+            new LogContext(),
+            mock(BackgroundEventHandler.class),
+            mock(ConsumerMetadata.class),
+            mock(SubscriptionState.class),
+            mock(FetchBuffer.class),
+            config,
+            groupRebalanceConfig,
+            mock(ApiVersions.class),
+            mock(FetchMetricsManager.class),
+            () -> mock(NetworkClientDelegate.class),
+            Optional.empty(),
+            new Metrics(),
+            mock(OffsetCommitCallbackInvoker.class),
+            listener,
+            Optional.of(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()))
+        ).get();
+        assertTrue(requestManagers.streamsMembershipManager.isPresent());
+        assertTrue(requestManagers.streamsGroupHeartbeatRequestManager.isPresent());
+        assertTrue(requestManagers.consumerMembershipManager.isEmpty());
+
+        assertEquals(2, requestManagers.streamsMembershipManager.get().stateListeners().size());
+        assertTrue(requestManagers.streamsMembershipManager.get().stateListeners().stream()
+            .anyMatch(m -> m instanceof CommitRequestManager));
+        assertTrue(requestManagers.streamsMembershipManager.get().stateListeners().contains(listener));
     }
 }

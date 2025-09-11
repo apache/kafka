@@ -60,7 +60,7 @@ public class ProducerStateEntry {
     }
 
     public int lastSeq() {
-        return isEmpty() ? RecordBatch.NO_SEQUENCE : batchMetadata.getLast().lastSeq;
+        return isEmpty() ? RecordBatch.NO_SEQUENCE : batchMetadata.getLast().lastSeq();
     }
 
     public long firstDataOffset() {
@@ -68,11 +68,11 @@ public class ProducerStateEntry {
     }
 
     public long lastDataOffset() {
-        return isEmpty() ? -1L : batchMetadata.getLast().lastOffset;
+        return isEmpty() ? -1L : batchMetadata.getLast().lastOffset();
     }
 
     public int lastOffsetDelta() {
-        return isEmpty() ? 0 : batchMetadata.getLast().offsetDelta;
+        return isEmpty() ? 0 : batchMetadata.getLast().offsetDelta();
     }
 
     public boolean isEmpty() {
@@ -138,7 +138,7 @@ public class ProducerStateEntry {
 
     // Return the batch metadata of the cached batch having the exact sequence range, if any.
     Optional<BatchMetadata> batchWithSequenceRange(int firstSeq, int lastSeq) {
-        Stream<BatchMetadata> duplicate = batchMetadata.stream().filter(metadata -> firstSeq == metadata.firstSeq() && lastSeq == metadata.lastSeq);
+        Stream<BatchMetadata> duplicate = batchMetadata.stream().filter(metadata -> firstSeq == metadata.firstSeq() && lastSeq == metadata.lastSeq());
         return duplicate.findFirst();
     }
 

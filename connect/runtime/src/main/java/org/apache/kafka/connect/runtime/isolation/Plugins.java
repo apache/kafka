@@ -44,10 +44,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,7 +80,7 @@ public class Plugins {
     }
 
     public PluginScanResult initLoaders(Set<PluginSource> pluginSources, PluginDiscoveryMode discoveryMode) {
-        PluginScanResult empty = new PluginScanResult(Collections.emptyList());
+        PluginScanResult empty = new PluginScanResult(List.of());
         PluginScanResult serviceLoadingScanResult;
         try {
             serviceLoadingScanResult = discoveryMode.serviceLoad() ?
@@ -96,7 +93,7 @@ public class Plugins {
         }
         PluginScanResult reflectiveScanResult = discoveryMode.reflectivelyScan() ?
                 new ReflectionScanner().discoverPlugins(pluginSources) : empty;
-        PluginScanResult scanResult = new PluginScanResult(Arrays.asList(reflectiveScanResult, serviceLoadingScanResult));
+        PluginScanResult scanResult = new PluginScanResult(List.of(reflectiveScanResult, serviceLoadingScanResult));
         maybeReportHybridDiscoveryIssue(discoveryMode, serviceLoadingScanResult, scanResult);
         delegatingLoader.installDiscoveredPlugins(scanResult);
         return scanResult;
@@ -168,7 +165,6 @@ public class Plugins {
         );
     }
 
-    @SuppressWarnings("unchecked")
     protected static <U> Class<? extends U> pluginClass(
             DelegatingClassLoader loader,
             String classOrAlias,
@@ -274,7 +270,7 @@ public class Plugins {
 
     public String pluginVersion(String classOrAlias, ClassLoader sourceLoader, PluginType... allowedTypes) {
         String location = (sourceLoader instanceof PluginClassLoader) ? ((PluginClassLoader) sourceLoader).location() : null;
-        PluginDesc<?> desc = delegatingLoader.pluginDesc(classOrAlias, location, new HashSet<>(Arrays.asList(allowedTypes)));
+        PluginDesc<?> desc = delegatingLoader.pluginDesc(classOrAlias, location, Set.of(allowedTypes));
         if (desc != null) {
             return desc.version();
         }

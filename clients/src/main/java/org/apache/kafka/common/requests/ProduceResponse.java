@@ -17,15 +17,14 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.RecordBatch;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
@@ -56,6 +55,7 @@ import java.util.stream.Collectors;
  * {@link Errors#INVALID_TXN_STATE}
  * {@link Errors#INVALID_PRODUCER_ID_MAPPING}
  * {@link Errors#CONCURRENT_TRANSACTIONS}
+ * {@link Errors#UNKNOWN_TOPIC_ID}
  */
 public class ProduceResponse extends AbstractResponse {
     public static final long INVALID_OFFSET = -1L;
@@ -73,7 +73,7 @@ public class ProduceResponse extends AbstractResponse {
      * @param responses Produced data grouped by topic-partition
      */
     @Deprecated
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses) {
+    public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses) {
         this(responses, DEFAULT_THROTTLE_TIME, Collections.emptyList());
     }
 
@@ -84,7 +84,7 @@ public class ProduceResponse extends AbstractResponse {
      * @param throttleTimeMs Time in milliseconds the response was throttled
      */
     @Deprecated
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
+    public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs) {
         this(toData(responses, throttleTimeMs, Collections.emptyList()));
     }
 
@@ -97,16 +97,16 @@ public class ProduceResponse extends AbstractResponse {
      * @param nodeEndpoints List of node endpoints
      */
     @Deprecated
-    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
+    public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
         this(toData(responses, throttleTimeMs, nodeEndpoints));
     }
 
-    private static ProduceResponseData toData(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
+    private static ProduceResponseData toData(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs, List<Node> nodeEndpoints) {
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
         responses.forEach((tp, response) -> {
-            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
+            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic(), tp.topicId());
             if (tpr == null) {
-                tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic());
+                tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic()).setTopicId(tp.topicId());
                 data.responses().add(tpr);
             }
             tpr.partitionResponses()
@@ -286,8 +286,8 @@ public class ProduceResponse extends AbstractResponse {
         }
     }
 
-    public static ProduceResponse parse(ByteBuffer buffer, short version) {
-        return new ProduceResponse(new ProduceResponseData(new ByteBufferAccessor(buffer), version));
+    public static ProduceResponse parse(Readable readable, short version) {
+        return new ProduceResponse(new ProduceResponseData(readable, version));
     }
 
     @Override

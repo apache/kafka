@@ -26,14 +26,15 @@ import org.apache.kafka.server.util.CommandLineUtils;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
 
 import java.io.PrintStream;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -74,7 +75,7 @@ public class ClusterTool {
                 .help("Unregister a broker.");
         Subparser listEndpoints = subparsers.addParser("list-endpoints")
                 .help("List endpoints");
-        for (Subparser subpparser : Arrays.asList(clusterIdParser, unregisterParser, listEndpoints)) {
+        for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, listEndpoints)) {
             MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
             connectionOptions.addArgument("--bootstrap-server", "-b")
                     .action(store())
@@ -82,9 +83,13 @@ public class ClusterTool {
             connectionOptions.addArgument("--bootstrap-controller", "-C")
                     .action(store())
                     .help("A list of host/port pairs to use for establishing the connection to the KRaft controllers.");
-            subpparser.addArgument("--config", "-c")
+            subpparser.addArgument("--config")
                     .action(store())
-                    .help("A property file containing configurations for the Admin client.");
+                    .help("(DEPRECATED) A property file containing configurations for the Admin client. " +
+                            "This option will be removed in a future version. Use --command-config instead.");
+            subpparser.addArgument("--command-config", "-c")
+                    .action(store())
+                    .help("Config properties file for the Admin client.");
         }
         unregisterParser.addArgument("--id", "-i")
                 .type(Integer.class)
@@ -97,8 +102,16 @@ public class ClusterTool {
 
         Namespace namespace = parser.parseArgsOrFail(args);
         String command = namespace.getString("command");
-        String configPath = namespace.getString("config");
-        Properties properties = (configPath == null) ? new Properties() : Utils.loadProps(configPath);
+        String configFile = namespace.getString("config");
+        String commandConfigFile = namespace.getString("command_config");
+        if (configFile != null && commandConfigFile != null) {
+            throw new ArgumentParserException("--config and --command-config cannot be specified together.", parser);
+        }
+        if (configFile != null) {
+            System.out.println("Option --config has been deprecated and will be removed in a future version. Use --command-config instead.");
+            commandConfigFile = configFile;
+        }
+        Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
         CommandLineUtils.initializeBootstrapProperties(properties,
                 Optional.ofNullable(namespace.getString("bootstrap_server")),
@@ -162,12 +175,12 @@ public class ClusterTool {
             Collection<Node> nodes = adminClient.describeCluster(option).nodes().get();
 
             String maxHostLength = String.valueOf(nodes.stream().map(node -> node.host().length()).max(Integer::compareTo).orElse(100));
-            String maxRackLength = String.valueOf(nodes.stream().filter(node -> node.hasRack()).map(node -> node.rack().length()).max(Integer::compareTo).orElse(10));
+            String maxRackLength = String.valueOf(nodes.stream().filter(Node::hasRack).map(node -> node.rack().length()).max(Integer::compareTo).orElse(10));
 
             if (listControllerEndpoints) {
                 String format = "%-10s %-" + maxHostLength + "s %-10s %-" + maxRackLength + "s %-15s%n";
                 stream.printf(format, "ID", "HOST", "PORT", "RACK", "ENDPOINT_TYPE");
-                nodes.stream().forEach(node -> stream.printf(format,
+                nodes.forEach(node -> stream.printf(format,
                         node.idString(),
                         node.host(),
                         node.port(),
@@ -177,7 +190,7 @@ public class ClusterTool {
             } else {
                 String format = "%-10s %-" + maxHostLength + "s %-10s %-" + maxRackLength + "s %-10s %-15s%n";
                 stream.printf(format, "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE");
-                nodes.stream().forEach(node -> stream.printf(format,
+                nodes.forEach(node -> stream.printf(format,
                         node.idString(),
                         node.host(),
                         node.port(),

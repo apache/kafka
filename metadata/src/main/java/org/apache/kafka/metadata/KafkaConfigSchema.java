@@ -55,28 +55,17 @@ public class KafkaConfigSchema {
      * makes sense to put it here.
      */
     public static ConfigEntry.ConfigType translateConfigType(ConfigDef.Type type) {
-        switch (type) {
-            case BOOLEAN:
-                return ConfigEntry.ConfigType.BOOLEAN;
-            case STRING:
-                return ConfigEntry.ConfigType.STRING;
-            case INT:
-                return ConfigEntry.ConfigType.INT;
-            case SHORT:
-                return ConfigEntry.ConfigType.SHORT;
-            case LONG:
-                return ConfigEntry.ConfigType.LONG;
-            case DOUBLE:
-                return ConfigEntry.ConfigType.DOUBLE;
-            case LIST:
-                return ConfigEntry.ConfigType.LIST;
-            case CLASS:
-                return ConfigEntry.ConfigType.CLASS;
-            case PASSWORD:
-                return ConfigEntry.ConfigType.PASSWORD;
-            default:
-                return ConfigEntry.ConfigType.UNKNOWN;
-        }
+        return switch (type) {
+            case BOOLEAN -> ConfigEntry.ConfigType.BOOLEAN;
+            case STRING -> ConfigEntry.ConfigType.STRING;
+            case INT -> ConfigEntry.ConfigType.INT;
+            case SHORT -> ConfigEntry.ConfigType.SHORT;
+            case LONG -> ConfigEntry.ConfigType.LONG;
+            case DOUBLE -> ConfigEntry.ConfigType.DOUBLE;
+            case LIST -> ConfigEntry.ConfigType.LIST;
+            case CLASS -> ConfigEntry.ConfigType.CLASS;
+            case PASSWORD -> ConfigEntry.ConfigType.PASSWORD;
+        };
     }
 
     private static final Map<ConfigEntry.ConfigSource, DescribeConfigsResponse.ConfigSource> TRANSLATE_CONFIG_SOURCE_MAP;
@@ -166,6 +155,10 @@ public class KafkaConfigSchema {
         ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.TOPIC, EMPTY_CONFIG_DEF);
         HashMap<String, ConfigEntry> effectiveConfigs = new HashMap<>();
         for (ConfigDef.ConfigKey configKey : configDef.configKeys().values()) {
+            // This config is internal; if the user hasn't set it explicitly, it should not be returned.
+            if (configKey.internalConfig && !dynamicTopicConfigs.containsKey(configKey.name)) {
+                continue;
+            }
             ConfigEntry entry = resolveEffectiveTopicConfig(configKey, staticNodeConfig,
                 dynamicClusterConfigs, dynamicNodeConfigs, dynamicTopicConfigs);
             effectiveConfigs.put(entry.name(), entry);

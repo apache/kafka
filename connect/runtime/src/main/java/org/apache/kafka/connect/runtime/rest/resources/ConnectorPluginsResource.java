@@ -35,14 +35,12 @@ import org.apache.maven.artifact.versioning.VersionRange;
 
 import java.time.Instant;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -144,9 +142,9 @@ public class ConnectorPluginsResource {
     ) {
         synchronized (this) {
             if (connectorsOnly) {
-                return Collections.unmodifiableList(connectorPlugins.stream()
-                        .filter(p -> PluginType.SINK.toString().equals(p.type()) || PluginType.SOURCE.toString().equals(p.type()))
-                        .collect(Collectors.toList()));
+                return connectorPlugins.stream()
+                    .filter(p -> p.type() == PluginType.SINK || p.type() == PluginType.SOURCE)
+                    .toList();
             } else {
                 return List.copyOf(connectorPlugins);
             }
@@ -159,7 +157,7 @@ public class ConnectorPluginsResource {
     public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName,
                                                      final @QueryParam("version") @DefaultValue("latest") String version) {
 
-        VersionRange range = null;
+        VersionRange range;
         try {
             range = PluginUtils.connectorVersionRequirement(version);
         } catch (InvalidVersionSpecificationException e) {

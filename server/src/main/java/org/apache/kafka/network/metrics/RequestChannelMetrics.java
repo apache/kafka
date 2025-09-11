@@ -19,8 +19,8 @@ package org.apache.kafka.network.metrics;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.protocol.ApiKeys;
 
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -34,7 +34,12 @@ public class RequestChannelMetrics {
         for (ApiKeys apiKey : enabledApis) {
             metricsMap.put(apiKey.name, new RequestMetrics(apiKey.name));
         }
-        for (String name : Arrays.asList(RequestMetrics.CONSUMER_FETCH_METRIC_NAME, RequestMetrics.FOLLOW_FETCH_METRIC_NAME, RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME)) {
+        for (String name : List.of(
+            RequestMetrics.CONSUMER_FETCH_METRIC_NAME,
+            RequestMetrics.FOLLOW_FETCH_METRIC_NAME,
+            RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME,
+            RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME
+        )) {
             metricsMap.put(name, new RequestMetrics(name));
         }
     }

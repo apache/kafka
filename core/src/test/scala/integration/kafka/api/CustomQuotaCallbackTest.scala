@@ -406,7 +406,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   }
 
   override def reconfigurableConfigs: util.Set[String] = {
-    Set(DefaultProduceQuotaProp, DefaultFetchQuotaProp).asJava
+    java.util.Set.of(DefaultProduceQuotaProp, DefaultFetchQuotaProp)
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
@@ -437,9 +437,9 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
       case groupPrincipal: GroupedUserPrincipal =>
         val userGroup = groupPrincipal.userGroup
         val quotaLimit = quotaOrDefault(userGroup, quotaType)
-        if (quotaLimit != null)
-          Map(QuotaGroupTag -> userGroup).asJava
-        else
+        if (quotaLimit != null) {
+          util.Map.of(QuotaGroupTag, userGroup)
+        } else
           UnlimitedQuotaMetricTags
       case _ =>
         UnlimitedQuotaMetricTags

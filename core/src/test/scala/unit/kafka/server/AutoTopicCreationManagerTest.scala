@@ -41,6 +41,7 @@ import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.quota.ControllerMutationQuota
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -114,7 +115,7 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
     topicsCollection.add(getNewTopic(topicName, numPartitions, replicationFactor))
@@ -150,7 +151,7 @@ class AutoTopicCreationManagerTest {
     val requestContext = initializeRequestContext(userPrincipal, Optional.of(principalSerde))
 
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
 
     assertTrue(serializeIsCalled.get())
 
@@ -170,7 +171,7 @@ class AutoTopicCreationManagerTest {
 
     // Throw upon undefined principal serde when building the forward request
     assertThrows(classOf[IllegalArgumentException], () => autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext)))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext)))
   }
 
   @Test
@@ -186,9 +187,9 @@ class AutoTopicCreationManagerTest {
 
     val requestContext = initializeRequestContext(KafkaPrincipal.ANONYMOUS, Optional.of(principalSerde))
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
 
     // Should only trigger once
     val argumentCaptor = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
@@ -208,7 +209,7 @@ class AutoTopicCreationManagerTest {
 
     // Could do the send again as inflight topics are cleared.
     autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Some(requestContext))
     Mockito.verify(brokerToController, Mockito.times(2)).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
       argumentCaptor.capture())
@@ -217,7 +218,7 @@ class AutoTopicCreationManagerTest {
   @Test
   def testCreateStreamsInternalTopics(): Unit = {
     val topicConfig = new CreatableTopicConfigCollection()
-    topicConfig.add(new CreatableTopicConfig().setName("cleanup.policy").setValue("compact"));
+    topicConfig.add(new CreatableTopicConfig().setName("cleanup.policy").setValue("compact"))
 
     val topics = Map(
       "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(3).setReplicationFactor(2).setConfigs(topicConfig),
@@ -230,7 +231,7 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
     autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
 
@@ -251,7 +252,7 @@ class AutoTopicCreationManagerTest {
       .build(ApiKeys.CREATE_TOPICS.latestVersion())
 
     val forwardedRequestBuffer = capturedRequest.requestData().duplicate()
-    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer));
+    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer))
     assertEquals(requestBody.data(), CreateTopicsRequest.parse(new ByteBufferAccessor(forwardedRequestBuffer),
       ApiKeys.CREATE_TOPICS.latestVersion()).data())
   }
@@ -266,50 +267,13 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
     autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
 
     Mockito.verify(brokerToController, never()).sendRequest(
       any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
       any(classOf[ControllerRequestCompletionHandler]))
-  }
-
-  @Test
-  def testCreateStreamsInternalTopicsWithDefaultConfig(): Unit = {
-    val topics = Map(
-      "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
-    )
-    val requestContext = initializeRequestContextWithUserPrincipal()
-
-    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-      config,
-      brokerToController,
-      groupCoordinator,
-      transactionCoordinator,
-      Some(shareCoordinator))
-
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
-
-    val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
-    Mockito.verify(brokerToController).sendRequest(
-      argumentCaptor.capture(),
-      any(classOf[ControllerRequestCompletionHandler]))
-
-    val capturedRequest = argumentCaptor.getValue.asInstanceOf[EnvelopeRequest.Builder].build(ApiKeys.ENVELOPE.latestVersion())
-
-    val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.latestVersion(), "clientId", 0)
-    val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
-    topicsCollection.add(getNewTopic("stream-topic-1", config.numPartitions, config.defaultReplicationFactor.toShort))
-    val requestBody = new CreateTopicsRequest.Builder(
-      new CreateTopicsRequestData()
-        .setTopics(topicsCollection)
-        .setTimeoutMs(requestTimeout))
-      .build(ApiKeys.CREATE_TOPICS.latestVersion())
-    val forwardedRequestBuffer = capturedRequest.requestData().duplicate()
-    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer));
-    assertEquals(requestBody.data(), CreateTopicsRequest.parse(new ByteBufferAccessor(forwardedRequestBuffer),
-      ApiKeys.CREATE_TOPICS.latestVersion()).data())
   }
 
   @Test
@@ -324,9 +288,9 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
-    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
 
     val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
     Mockito.verify(brokerToController).sendRequest(
@@ -355,7 +319,7 @@ class AutoTopicCreationManagerTest {
       brokerToController,
       groupCoordinator,
       transactionCoordinator,
-      Some(shareCoordinator))
+      shareCoordinator)
 
     val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
       .setApiKey(ApiKeys.CREATE_TOPICS.id)
@@ -376,7 +340,7 @@ class AutoTopicCreationManagerTest {
                                          isInternal: Boolean,
                                          metadataContext: Option[RequestContext] = None): Unit = {
     val topicResponses = autoTopicCreationManager.createTopics(
-      Set(topicName), UnboundedControllerMutationQuota, metadataContext)
+      Set(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, metadataContext)
 
     val expectedResponses = Seq(new MetadataResponseTopic()
       .setErrorCode(error.code())

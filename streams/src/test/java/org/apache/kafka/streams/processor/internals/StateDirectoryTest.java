@@ -41,8 +41,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -95,7 +93,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class StateDirectoryTest {
 
-    private static final Logger log = LoggerFactory.getLogger(StateDirectoryTest.class);
     private final MockTime time = new MockTime();
     private File stateDir;
     private final String applicationId = "applicationId";
@@ -142,7 +139,7 @@ public class StateDirectoryTest {
         assertPermissions(stateDir);
         assertPermissions(appDir);
     }
-    
+
     private void assertPermissions(final File file) {
         final Path path = file.toPath();
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
@@ -633,7 +630,7 @@ public class StateDirectoryTest {
             new StateDirectory(
                 new StreamsConfig(
                     mkMap(
-                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, ""),
+                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "mock-localhost:9092"),
                         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "")
                     )
                 ),

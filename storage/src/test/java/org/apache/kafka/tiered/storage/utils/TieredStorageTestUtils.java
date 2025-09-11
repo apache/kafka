@@ -27,6 +27,7 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import org.junit.jupiter.api.Assertions;
@@ -53,7 +54,6 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP;
-import static org.apache.kafka.storage.internals.log.CleanerConfig.LOG_CLEANER_ENABLE_PROP;
 
 public class TieredStorageTestUtils {
 
@@ -103,6 +103,7 @@ public class TieredStorageTestUtils {
                 .toList();
     }
 
+    @SuppressWarnings("removal")
     public static Properties createPropsForRemoteStorage(String testClassName,
                                                          String storageDirPath,
                                                          int brokerCount,
@@ -158,7 +159,7 @@ public class TieredStorageTestUtils {
         // Set 2 log dirs to make sure JBOD feature is working correctly
         overridingProps.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().getAbsolutePath() + "," + TestUtils.tempDir().getAbsolutePath());
         // Disable unnecessary log cleaner
-        overridingProps.setProperty(LOG_CLEANER_ENABLE_PROP, "false");
+        overridingProps.setProperty(CleanerConfig.LOG_CLEANER_ENABLE_PROP, "false");
 
         return overridingProps;
     }
