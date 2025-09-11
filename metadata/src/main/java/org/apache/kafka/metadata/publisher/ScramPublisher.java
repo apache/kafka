@@ -44,10 +44,6 @@ public class ScramPublisher implements MetadataPublisher {
 
     @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
-        onMetadataUpdate(delta, newImage);
-    }
-
-    public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
         try {
             // Apply changes to SCRAM credentials.
             ScramDelta scramDelta = delta.scramDelta();
