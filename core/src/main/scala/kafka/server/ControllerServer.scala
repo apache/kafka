@@ -46,7 +46,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, NodeToControllerChannelManager}
 import org.apache.kafka.server.config.ConfigType
-import org.apache.kafka.server.common.config.DelegationTokenManagerConfigs
+import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}

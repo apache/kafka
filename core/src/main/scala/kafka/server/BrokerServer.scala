@@ -46,8 +46,7 @@ import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublish
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
-import org.apache.kafka.server.config.ConfigType
-import org.apache.kafka.server.common.config.DelegationTokenManagerConfigs
+import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
