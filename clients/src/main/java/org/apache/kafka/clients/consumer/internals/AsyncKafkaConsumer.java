@@ -892,7 +892,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextStep);
                     applicationEventHandler.add(event);
 
-                    CompositePollResult result = ConsumerUtils.getResult(event.future());
+                    CompositePollResult result = ConsumerUtils.getResult(event.future(), defaultApiTimeoutMs.toMillis());
 
                     if (result == CompositePollResult.NEEDS_OFFSET_COMMIT_CALLBACKS) {
                         offsetCommitCallbackInvoker.executeCallbacks();
