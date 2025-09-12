@@ -153,8 +153,9 @@ public interface ConsumerRebalanceListener {
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
-     * @param partitions The list of partitions that were assigned to the consumer and now need to be revoked (may not
-     *                   include all currently assigned partitions, i.e. there may still be some partitions left)
+     * @param partitions The list of partitions that were assigned to the consumer and now need to be revoked. This will
+     *                  include the full assignment under the Classic/Eager protocol, given that it revokes all partitions.
+     *                   It will only include the subset to revoke under the Classic/Cooperative and Consumer protocols.
      * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
@@ -180,7 +181,9 @@ public interface ConsumerRebalanceListener {
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
      * @param partitions Partitions that have been added to the assignment as a result of the rebalance.
-     *                   Note that partitions that were already owned by this consumer and remain assigned are not included in this list.
+     *                   Note that partitions that were already owned by this consumer and remain assigned are not
+     *                   included in this list under the Classic/Cooperative or Consumer protocols. THe full assignment
+     *                   will be received under the Classic/Eager protocol.
      * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
