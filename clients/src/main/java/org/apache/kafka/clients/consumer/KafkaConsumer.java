@@ -672,7 +672,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * When any of these events are triggered, the provided listener will be invoked in this way:
      * <ul>
-     *     <li>{@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} will be invoked only if there are partitions to revoke, before re-assigning those partitions to another consumer.</li>
+     *     <li>{@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} will be invoked with the partitions to revoke, before re-assigning those partitions to another consumer.</li>
      *     <li>{@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} will be invoked when the rebalance completes (even if no new partitions are assigned to the consumer)</li>
      * </ul>
      * Note that rebalances will only occur during an active call to {@link #poll(Duration)}, so callbacks will
