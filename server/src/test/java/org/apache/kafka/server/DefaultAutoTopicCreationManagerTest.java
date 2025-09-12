@@ -100,6 +100,7 @@ public class DefaultAutoTopicCreationManagerTest {
         props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1");
         props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
         props.setProperty(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeout));
+        props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
 
         props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, String.valueOf(internalTopicPartitions));
         props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, String.valueOf(internalTopicPartitions));
