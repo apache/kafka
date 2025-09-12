@@ -960,7 +960,7 @@ class TransactionStateManagerTest {
 
     // Create the first segment which contains two batches.
     // The first batch has one transactional record
-    val txnRecords1 = new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), TV_2))
+    val txnRecords1 = new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit(), true))
     val records1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L, Compression.NONE, TimestampType.CREATE_TIME, txnRecords1)
     // The second batch is an empty batch.
     val records2 = createEmptyBatch(1L, 1L)
@@ -972,7 +972,7 @@ class TransactionStateManagerTest {
     val firstSegmentRecords = MemoryRecords.readableRecords(combinedBuffer)
 
     // Create the second segment which contains one batch
-    val txnRecords3 = new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), TV_2))
+    val txnRecords3 = new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit(), true))
     val secondSegmentRecords = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 2L, Compression.NONE, TimestampType.CREATE_TIME, txnRecords3)
 
     // Prepare a txn log
