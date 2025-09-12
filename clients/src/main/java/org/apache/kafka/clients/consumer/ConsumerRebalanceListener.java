@@ -129,21 +129,21 @@ public interface ConsumerRebalanceListener {
      * It is recommended that offsets should be committed in this callback to either Kafka or a
      * custom offset store to prevent duplicate data.
      * <p>
+     * This callback is always called before re-assigning the partitions.
      * If the consumer is using the {@link GroupProtocol#CLASSIC} rebalance protocol:
      * <ul>
      *     <li>
-     *         In eager rebalancing, onPartitionsRevoked will always be called at the start of a rebalance,
-     *         with the full set of assigned partitions as parameter (all partitions are revoked). Note that it
-     *         will be called even if there are no partitions assigned.
+     *         In eager rebalancing, onPartitionsRevoked will be called with the full set of assigned partitions as parameter (all partitions are revoked).
+     *         It will be called even if there are no partitions to revoke.
      *     </li>
      *     <li>
-     *         In cooperative rebalancing, onPartitionsRevoked will be called with the set of partitions being revoked,
+     *         In cooperative rebalancing, onPartitionsRevoked will be called with the set of partitions to revoked,
      *         iff the set is non-empty.
      *     </li>
      * </ul>
      * If the consumer is using the {@link GroupProtocol#CONSUMER} rebalance protocol, this callback will be called
-     * at the end of a rebalance, with the set of partitions being revoked, iff the set is non-empty (same behavior
-     * as the {@link GroupProtocol#CLASSIC} rebalance protocol with Cooperative mode).
+     * with the set of partitions to revoked iff the set is non-empty
+     * (same behavior as the {@link GroupProtocol#CLASSIC} rebalance protocol with Cooperative mode).
      * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}.
      * <p>
