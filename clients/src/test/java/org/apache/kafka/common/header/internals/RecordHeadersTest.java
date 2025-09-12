@@ -48,6 +48,21 @@ public class RecordHeadersTest {
     }
 
     @Test
+    public void testAddHeadersPreserveOder() {
+        Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("key", "value".getBytes()));
+        headers.add(new RecordHeader("key2", "value2".getBytes()));
+        headers.add(new RecordHeader("key3", "value3".getBytes()));
+
+        Header[] headersArr = headers.toArray();
+        assertHeader("key", "value", headersArr[0]);
+        assertHeader("key2", "value2", headersArr[1]);
+        assertHeader("key3", "value3", headersArr[2]);
+
+        assertEquals(3, getCount(headers));
+    }
+
+    @Test
     public void testRemove() {
         Headers headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
