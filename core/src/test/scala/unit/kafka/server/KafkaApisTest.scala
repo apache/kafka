@@ -4542,7 +4542,7 @@ class KafkaApisTest extends Logging {
       any[util.List[TopicIdPartition]],
       any[util.Map[Uuid, String]])).thenReturn(fetchContext)
 
-    // Configure metrics.verbosity to allow only t for BytesOut/TotalFetch
+    // Enable partition metrics for topic t
     val overrideProps = Map(
       "metrics.verbosity" -> "[{\"level\":\"high\",\"names\":\"BytesOutPerSec|TotalFetchRequestsPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]"
     )
@@ -4682,7 +4682,7 @@ class KafkaApisTest extends Logging {
 
     addTopicToMetadataCache(t, 1, topicId = tId)
 
-    // Mock replicaManager.fetchMessages to return bytes for the topic
+    // Mock fetch response
     when(replicaManager.fetchMessages(
       any[FetchParams],
       any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
@@ -4697,7 +4697,7 @@ class KafkaApisTest extends Logging {
       ))
     })
 
-    // Build fetch request from a follower (replica ID >= 0)
+    // Build follower fetch request
     val fetchData = util.Map.of(
       tidpT, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty())
     )
@@ -4715,7 +4715,7 @@ class KafkaApisTest extends Logging {
       any[util.List[TopicIdPartition]],
       any[util.Map[Uuid, String]])).thenReturn(fetchContext)
 
-    // Configure metrics.verbosity to allow topic t for partition metrics
+    // Enable partition metrics for topic t
     val overrideProps = Map(
       "metrics.verbosity" -> "[{\"level\":\"high\",\"names\":\"BytesOutPerSec|TotalFetchRequestsPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]"
     )
@@ -4725,15 +4725,15 @@ class KafkaApisTest extends Logging {
     val tBytesOutBefore = tPartMetrics.bytesOutRate().count()
     val tTotalFetchBefore = tPartMetrics.totalFetchRequestRate().count()
 
-    // Create fetch request with replica ID = 1 (follower)
+    // Follower fetch request (replica ID = 1)
     val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
-      1, -1, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()  // replica ID = 1
+      1, -1, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
     val request = buildRequest(fetchRequest)
     kafkaApis.handleFetchRequest(request)
 
     verifyNoThrottling[FetchResponse](request)
 
-    // Partition metrics should NOT advance for follower fetches
+    // No partition metrics for follower fetches
     assertEquals(tBytesOutBefore, tPartMetrics.bytesOutRate().count())
     assertEquals(tTotalFetchBefore, tPartMetrics.totalFetchRequestRate().count())
   }
@@ -4747,7 +4747,7 @@ class KafkaApisTest extends Logging {
 
     addTopicToMetadataCache(t, 1, topicId = tId)
 
-    // Mock replicaManager.fetchMessages to return empty records (zero size)
+    // Mock empty fetch response
     when(replicaManager.fetchMessages(
       any[FetchParams],
       any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
@@ -4780,7 +4780,7 @@ class KafkaApisTest extends Logging {
       any[util.List[TopicIdPartition]],
       any[util.Map[Uuid, String]])).thenReturn(fetchContext)
 
-    // Configure metrics.verbosity to allow topic t
+    // Enable partition metrics for topic t
     val overrideProps = Map(
       "metrics.verbosity" -> "[{\"level\":\"high\",\"names\":\"BytesOutPerSec|TotalFetchRequestsPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]"
     )
@@ -4797,9 +4797,9 @@ class KafkaApisTest extends Logging {
 
     verifyNoThrottling[FetchResponse](request)
 
-    // BytesOut should NOT advance for zero-size fetches
+    // BytesOut unchanged for empty fetches
     assertEquals(tBytesOutBefore, tPartMetrics.bytesOutRate().count())
-    // TotalFetchRequests SHOULD advance even for zero-size fetches
+    // TotalFetchRequests still increments
     assertTrue(tPartMetrics.totalFetchRequestRate().count() > tTotalFetchBefore)
   }
 
@@ -4813,13 +4813,13 @@ class KafkaApisTest extends Logging {
     addTopicToMetadataCache(t, 1)
     addTopicToMetadataCache(u, 1)
 
-    // Configure metrics.verbosity to allow only topic t for produce metrics
+    // Enable produce partition metrics for topic t
     val overrideProps = Map(
       "metrics.verbosity" -> "[{\"level\":\"high\",\"names\":\"BytesInPerSec|TotalProduceRequestsPerSec|MessagesInPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]"
     )
     kafkaApis = createKafkaApis(overrideProperties = overrideProps)
 
-    // Mock replicaManager.appendRecords to simulate successful produce
+    // Mock produce response
     when(replicaManager.appendRecords(
       any[Long],
       any[Short],
@@ -4879,11 +4879,11 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(produceRequest)
     kafkaApis.handleProduceRequest(request, RequestLocal.NoCaching)
 
-    // Topic t (configured for high verbosity) should advance
+    // Topic t should advance
     assertTrue(tPartMetrics.bytesInRate().count() > tBytesInBefore)
     assertTrue(tPartMetrics.messagesInRate().count() > tMessagesInBefore)
     assertTrue(tPartMetrics.totalProduceRequestRate().count() > tProduceBefore)
-    // Topic u (not configured) should remain unchanged
+    // Topic u should remain unchanged
     assertEquals(uBytesInBefore, uPartMetrics.bytesInRate().count())
     assertEquals(uMessagesInBefore, uPartMetrics.messagesInRate().count())
     assertEquals(uProduceBefore, uPartMetrics.totalProduceRequestRate().count())

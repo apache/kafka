@@ -284,7 +284,7 @@ class ReplicaManagerTest {
       val t2BytesBefore = t2PartMetrics.bytesInRate().count()
       val t2MsgsBefore = t2PartMetrics.messagesInRate().count()
 
-      // Append to t1 should mark partition-level Bytes* and Messages* meters
+      // t1 metrics should increase
       val t1Records = TestUtils.singletonRecords("a".getBytes)
       appendRecords(rm, tp1, t1Records).onFire { response =>
         assertEquals(Errors.NONE, response.error)
@@ -292,7 +292,7 @@ class ReplicaManagerTest {
       assertEquals(t1BytesBefore + t1Records.sizeInBytes(), t1PartMetrics.bytesInRate().count())
       assertEquals(t1MsgsBefore + 1, t1PartMetrics.messagesInRate().count())
 
-      // Append to t2 should NOT mark partition-level Bytes* or Messages* meters
+      // t2 metrics unchanged (not configured)
       appendRecords(rm, tp2, TestUtils.singletonRecords("b".getBytes)).onFire { response =>
         assertEquals(Errors.NONE, response.error)
       }

@@ -671,7 +671,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             if (topicResponse.topic != null) {
               val tp = new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic, data.partitionIndex))
               brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), FetchResponse.recordsSize(data))
-              // Partition-level throughput (KIP-977): record per-partition fetch metrics for leader (client fetches), gated by metrics.verbosity
+              // KIP-977: Partition metrics for client fetches
               if (!fetchRequest.isFromFollower) {
                 val size = FetchResponse.recordsSize(data)
                 if (size > 0 && MetricsVerbosityController.shouldEmitPartitionMetric(
@@ -684,7 +684,6 @@ class KafkaApis(val requestChannel: RequestChannel,
                   val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
                   m.totalFetchRequestRate().mark()
                 }
-                // Partition-level conversions omitted (not accessible at this layer)
               }
             }
           }
