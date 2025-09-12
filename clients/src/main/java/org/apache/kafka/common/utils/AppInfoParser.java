@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
-import java.lang.management.ManagementFactory;
 import java.util.Properties;
 
 import javax.management.JMException;
@@ -49,6 +48,20 @@ public class AppInfoParser {
         COMMIT_ID = props.getProperty("commitId", DEFAULT_VALUE).trim();
     }
 
+    static MBeanServer getPlatformMBeanServer(ClassLoader loader) {
+        try {
+            // Not all platforms (*cough*Android*cough*) have MBeans, query using reflection
+            Class<?> managementFactory = Class.forName("java.lang.management.ManagementFactory", true, loader);
+            return (MBeanServer) managementFactory.getMethod("getPlatformMBeanServer").invoke(null);
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
+    }
+
+    static MBeanServer getPlatformMBeanServer() {
+        return getPlatformMBeanServer(AppInfoParser.class.getClassLoader());
+    }
+
     public static String getVersion() {
         return VERSION;
     }
@@ -58,9 +71,12 @@ public class AppInfoParser {
     }
 
     public static synchronized void registerAppInfo(String prefix, String id, Metrics metrics, long nowMs) {
+        MBeanServer server = getPlatformMBeanServer();
+        if (server == null) {
+            return;
+        }
         try {
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
-            MBeanServer server = ManagementFactory.getPlatformMBeanServer();
             if (server.isRegistered(name)) {
                 log.info("The mbean of App info: [{}], id: [{}] already exists, so skipping a new mbean creation.", prefix, id);
                 return;
@@ -75,7 +91,10 @@ public class AppInfoParser {
     }
 
     public static synchronized void unregisterAppInfo(String prefix, String id, Metrics metrics) {
-        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        MBeanServer server = getPlatformMBeanServer();
+        if (server == null) {
+            return;
+        }
         try {
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
             if (server.isRegistered(name))
