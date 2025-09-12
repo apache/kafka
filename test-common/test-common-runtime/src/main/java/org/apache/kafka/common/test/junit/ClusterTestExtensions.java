@@ -79,7 +79,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <pre>
  * class SomeIntegrationTest {
  *   &#64;ClusterTest(brokers = 1, controllers = 1, types = {Type.KRAFT, Type.CO_KRAFT})
- *   def someTest(): Unit = {
+ *   void someTest(ClusterInstance cluster) {
  *     assertTrue(condition)
  *   }
  * }
