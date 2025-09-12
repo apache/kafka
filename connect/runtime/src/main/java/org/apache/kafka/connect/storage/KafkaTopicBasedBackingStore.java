@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -52,7 +53,11 @@ public abstract class KafkaTopicBasedBackingStore {
                 log.info("Skipping creation of Connect internal topic for {} because automatic topic creation is disabled", getTopicPurpose());
                 Map<String, TopicDescription> existing = admin.describeTopics(topic);
                 if (existing.isEmpty()) {
-                    throw new ConnectException("Topic '" + topic + "' does not exist and automatic topic creation is disabled.");
+                    String msg = String.format("Topic '%s' specified via the '%s' property is missing." +
+                                    " The config '%s' is set to '%s', so automatic creation of internal topics is disabled." +
+                                    " Either enable automatic creation or create the topics manually before starting the worker.",
+                            topic, getTopicConfig(), DistributedConfig.INTERNAL_TOPICS_CREATION_ENABLE_CONFIG, config.internalTopicsCreationEnabled());
+                    throw new ConnectException(msg);
                 }
 
                 verifyTopicConfig(topic, admin);
