@@ -219,7 +219,7 @@ public class PlaintextConsumerTest {
             var header = records.get(0).headers().lastHeader("headerKey");
             assertEquals("headerValue", header == null ? null : new String(header.value()));
 
-            // Test the order of headers in a record is preserved when producing and consuming.
+            // Test the order of headers in a record is preserved when producing and consuming
             Header[] headers = records.get(0).headers().toArray();
             assertEquals("headerKey", headers[0].key());
             assertEquals("headerKey2", headers[1].key());
