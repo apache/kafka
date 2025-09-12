@@ -84,23 +84,20 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
         var uncreatableTopicResponses = new ArrayList<MetadataResponseTopic>();
         topics.forEach(topic -> {
             // Attempt basic topic validation before sending any requests to the controller.
-            Optional<Errors> validationError;
+            Optional<Errors> validationError = Optional.empty();
             if (!isValidTopicName(topic)) {
                 validationError = Optional.of(Errors.INVALID_TOPIC_EXCEPTION);
             } else if (!inflightTopics.add(topic)) {
                 validationError = Optional.of(Errors.UNKNOWN_TOPIC_OR_PARTITION);
-            } else {
-                validationError = Optional.empty();
             }
 
-            if (validationError.isPresent()) {
-                uncreatableTopicResponses.add(new MetadataResponseTopic()
-                        .setErrorCode(validationError.get().code())
-                        .setName(topic)
-                        .setIsInternal(Topic.isInternal(topic)));
-            } else {
-                creatableTopics.put(topic, creatableTopic(topic));
-            }
+            validationError.ifPresentOrElse(
+                    error -> uncreatableTopicResponses.add(new MetadataResponseTopic()
+                            .setErrorCode(error.code())
+                            .setName(topic)
+                            .setIsInternal(Topic.isInternal(topic))),
+                    () -> creatableTopics.put(topic, creatableTopic(topic))
+            );
         });
         var creatableTopicResponses = creatableTopics.isEmpty() ?
                 List.<MetadataResponseTopic>of() : sendCreateTopicRequest(creatableTopics, metadataRequestContext);
