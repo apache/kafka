@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.header;
 
+/**
+ * The key of a header is guaranteed to be non-null, while its value may be null.
+ * The order of headers is preserved in the order they were added.
+ */
 public interface Headers extends Iterable<Header> {
     
     /**
