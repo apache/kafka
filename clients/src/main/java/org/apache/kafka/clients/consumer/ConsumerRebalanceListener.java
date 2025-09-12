@@ -133,16 +133,16 @@ public interface ConsumerRebalanceListener {
      * If the consumer is using the {@link GroupProtocol#CLASSIC} rebalance protocol:
      * <ul>
      *     <li>
-     *         In eager rebalancing, onPartitionsRevoked will be called with the full set of assigned partitions as parameter (all partitions are revoked).
+     *         In eager rebalancing, onPartitionsRevoked will be called with the full set of assigned partitions as a parameter (all partitions are revoked).
      *         It will be called even if there are no partitions to revoke.
      *     </li>
      *     <li>
-     *         In cooperative rebalancing, onPartitionsRevoked will be called with the set of partitions to revoked,
+     *         In cooperative rebalancing, onPartitionsRevoked will be called with the set of partitions to revoke,
      *         iff the set is non-empty.
      *     </li>
      * </ul>
      * If the consumer is using the {@link GroupProtocol#CONSUMER} rebalance protocol, this callback will be called
-     * with the set of partitions to revoked iff the set is non-empty
+     * with the set of partitions to revoke iff the set is non-empty
      * (same behavior as the {@link GroupProtocol#CLASSIC} rebalance protocol with Cooperative mode).
      * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}.
