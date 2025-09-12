@@ -77,7 +77,6 @@ import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.stream.Collectors
-import java.util.function.Supplier
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
@@ -110,8 +109,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val tokenManager: DelegationTokenManager,
                 val apiVersionManager: ApiVersionManager,
                 val clientMetricsManager: ClientMetricsManager,
-                val groupConfigManager: GroupConfigManager,
-                val brokerEpochSupplier: Supplier[java.lang.Long]
+                val groupConfigManager: GroupConfigManager
 ) extends ApiRequestHandler with Logging {
 
   type ProduceResponseStats = Map[TopicIdPartition, RecordValidationStats]
@@ -247,7 +245,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_SHARE_GROUP_OFFSETS => handleDeleteShareGroupOffsetsRequest(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_DESCRIBE => handleStreamsGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_HEARTBEAT => handleStreamsGroupHeartbeat(request).exceptionally(handleError)
-        case ApiKeys.GET_REPLICA_LOG_INFO => handleGetReplicaLogInfo(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -263,79 +260,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
-  }
-
-  def handleGetReplicaLogInfo(request: RequestChannel.Request): Unit = {
-    var partitionCount = 0
-    def processPartitions(topicLogInfo: GetReplicaLogInfoResponseData.TopicPartitionLogInfo,
-                          partitionIter: util.Iterator[Integer],
-                          action: Integer => GetReplicaLogInfoResponseData.PartitionLogInfo): Unit = {
-      while (partitionIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
-        topicLogInfo.partitionLogInfo().add(action(partitionIter.next()))
-        partitionCount += 1
-      }
-    }
-
-    val isAuthorizedClusterAction = authorizeClusterOperation(request, CLUSTER_ACTION)
-    def isAuthorized(topicName: String): Boolean =
-      isAuthorizedClusterAction || authHelper.authorize(request.context, DESCRIBE, TOPIC, topicName)
-
-    val getReplicaLogInfoRequest = request.body[GetReplicaLogInfoRequest]
-    val data = getReplicaLogInfoRequest.data()
-
-    val topicIter = data.topicPartitions().iterator()
-    var previousPartitionIter: Option[util.Iterator[Integer]] = None
-    val responseData = new GetReplicaLogInfoResponseData()
-      .setBrokerEpoch(brokerEpochSupplier.get())
-
-    while (topicIter.hasNext && partitionCount < GetReplicaLogInfoRequest.MAX_PARTITIONS_PER_REQUEST) {
-      val topic = topicIter.next()
-      val partitionIter = topic.partitions().iterator()
-      previousPartitionIter = Some(partitionIter)
-
-      val topicPartitionLogInfo = new GetReplicaLogInfoResponseData.TopicPartitionLogInfo()
-        .setTopicId(topic.topicId())
-
-      val maybeTopicName = metadataCache.getTopicName(topic.topicId())
-      if (maybeTopicName.isEmpty) {
-        processPartitions(topicPartitionLogInfo, partitionIter,
-          new GetReplicaLogInfoResponseData.PartitionLogInfo()
-            .setPartition(_)
-            .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code()))
-      } else if (!isAuthorized(maybeTopicName.get())) {
-        processPartitions(topicPartitionLogInfo, partitionIter,
-          new GetReplicaLogInfoResponseData.PartitionLogInfo()
-            .setPartition(_)
-            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()))
-      } else {
-        val topicName = maybeTopicName.get()
-        processPartitions(topicPartitionLogInfo, partitionIter, { partitionId: Integer =>
-          val topicPartition = new TopicPartition(topicName, partitionId)
-          replicaManager.getPartitionOrError(topicPartition) match {
-            case Left(err) => new GetReplicaLogInfoResponseData.PartitionLogInfo()
-              .setPartition(topicPartition.partition())
-              .setErrorCode(err.code())
-            case Right(partition) => partition.log match {
-              case None => new GetReplicaLogInfoResponseData.PartitionLogInfo()
-                .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
-              case Some(log) => {
-                val logEndOffset = log.logEndOffset
-                val lastLeaderEpoch = log.latestEpoch.orElse(-1)
-                val leaderEpoch = partition.getLeaderEpoch
-                new GetReplicaLogInfoResponseData.PartitionLogInfo()
-                  .setPartition(partitionId)
-                  .setLogEndOffset(logEndOffset)
-                  .setCurrentLeaderEpoch(leaderEpoch)
-                  .setLastWrittenLeaderEpoch(lastLeaderEpoch)
-              }
-            }
-          }
-        })
-      }
-      responseData.topicPartitionLogInfoList().add(topicPartitionLogInfo)
-    }
-    responseData.setHasMoreData(topicIter.hasNext || previousPartitionIter.map(_.hasNext).getOrElse(false))
-    requestHelper.sendMaybeThrottle(request, new GetReplicaLogInfoResponse(responseData))
   }
 
   override def tryCompleteActions(): Unit = {

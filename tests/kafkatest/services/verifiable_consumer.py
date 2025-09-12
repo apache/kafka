@@ -22,7 +22,7 @@ from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition, consumer_group
 from kafkatest.services.kafka.util import get_log4j_config_param, get_log4j_config_for_tools
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_4_0_0
+from kafkatest.version import get_version, DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_4_0_0
 
 
 class ConsumerState:
@@ -424,7 +424,12 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 
-        cmd += " --command-config %s" % VerifiableConsumer.CONFIG_FILE
+        version = get_version(node)
+        if version.supports_command_config():
+            cmd += " --command-config %s" % VerifiableConsumer.CONFIG_FILE
+        else:
+            cmd += " --consumer.config %s" % VerifiableConsumer.CONFIG_FILE
+
         cmd += " 2>> %s | tee -a %s &" % (VerifiableConsumer.STDOUT_CAPTURE, VerifiableConsumer.STDOUT_CAPTURE)
         return cmd
 

@@ -44,7 +44,6 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Supplier;
 
 import scala.jdk.javaapi.OptionConverters;
 
@@ -72,7 +71,6 @@ public class KafkaApisBuilder {
     private ClientMetricsManager clientMetricsManager = null;
     private ShareCoordinator shareCoordinator = null;
     private GroupConfigManager groupConfigManager = null;
-    private Supplier<Long> brokerEpochSupplier = () -> -1L;
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -189,11 +187,6 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setBrokerEpochSupplier(Supplier<Long> brokerEpochSupplier) {
-        this.brokerEpochSupplier = brokerEpochSupplier;
-        return this;
-    }
-
     @SuppressWarnings({"CyclomaticComplexity"})
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
@@ -237,7 +230,6 @@ public class KafkaApisBuilder {
                              tokenManager,
                              apiVersionManager,
                              clientMetricsManager,
-                             groupConfigManager,
-                             brokerEpochSupplier);
+                             groupConfigManager);
     }
 }
