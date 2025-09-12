@@ -429,21 +429,4 @@ class LogConfigTest {
     logProps.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, deleteOnDisable.toString)
     LogConfig.validate(logProps)
   }
-
-  @Test
-  def testValidateWithMetadataVersionJbodSupport(): Unit = {
-    def validate(metadataVersion: MetadataVersion, jbodConfig: Boolean): Unit =
-      KafkaConfig.fromProps(
-          TestUtils.createBrokerConfig(nodeId = 0, logDirCount = if (jbodConfig) 2 else 1)
-        ).validateWithMetadataVersion(metadataVersion)
-
-    validate(MetadataVersion.IBP_3_6_IV2, jbodConfig = false)
-    validate(MetadataVersion.IBP_3_7_IV0, jbodConfig = false)
-    validate(MetadataVersion.IBP_3_7_IV2, jbodConfig = false)
-    assertThrows(classOf[IllegalArgumentException], () =>
-      validate(MetadataVersion.IBP_3_6_IV2, jbodConfig = true))
-    assertThrows(classOf[IllegalArgumentException], () =>
-      validate(MetadataVersion.IBP_3_7_IV0, jbodConfig = true))
-    validate(MetadataVersion.IBP_3_7_IV2, jbodConfig = true)
-  }
 }

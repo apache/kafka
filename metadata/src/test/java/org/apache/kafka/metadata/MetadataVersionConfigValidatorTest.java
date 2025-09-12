@@ -28,18 +28,17 @@ import org.apache.kafka.server.fault.FaultHandler;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "ThrowableNotThrown"})
 public class MetadataVersionConfigValidatorTest {
 
 
@@ -55,11 +54,10 @@ public class MetadataVersionConfigValidatorTest {
 
     void testWith(
         MetadataVersion metadataVersion,
-        int brokerId,
-        Consumer<MetadataVersion> validatorWithVersion,
+        Supplier<Boolean> multiLogDirSupplier,
         FaultHandler faultHandler
     ) throws Exception {
-        try (MetadataVersionConfigValidator validator = new MetadataVersionConfigValidator(brokerId, validatorWithVersion, faultHandler)) {
+        try (MetadataVersionConfigValidator validator = new MetadataVersionConfigValidator(0, multiLogDirSupplier, faultHandler)) {
             MetadataDelta delta = new MetadataDelta.Builder()
                 .setImage(MetadataImage.EMPTY)
                 .build();
@@ -78,30 +76,67 @@ public class MetadataVersionConfigValidatorTest {
     void testValidatesConfigOnMetadataChange() throws Exception {
         MetadataVersion metadataVersion = MetadataVersion.IBP_3_7_IV2;
         FaultHandler faultHandler = mock(FaultHandler.class);
-        Consumer<MetadataVersion> validator = mock(Consumer.class);
+        Supplier<Boolean> multiLogDirSupplier = mock(Supplier.class);
+        when(multiLogDirSupplier.get()).thenReturn(false);
 
-        testWith(metadataVersion, 8, validator, faultHandler);
+        testWith(metadataVersion, multiLogDirSupplier, faultHandler);
 
-        verify(validator, times(1)).accept(eq(metadataVersion));
+        verify(multiLogDirSupplier, times(1)).get();
         verifyNoMoreInteractions(faultHandler);
     }
 
-    @SuppressWarnings("ThrowableNotThrown")
     @Test
     void testInvokesFaultHandlerOnException() throws Exception {
-        MetadataVersion metadataVersion = MetadataVersion.IBP_3_7_IV2;
-        IllegalArgumentException exception = new IllegalArgumentException();
-        Consumer<MetadataVersion> validator = mock(Consumer.class);
+        MetadataVersion metadataVersion = MetadataVersion.IBP_3_7_IV1;
+        Supplier<Boolean> multiLogDirSupplier = mock(Supplier.class);
         FaultHandler faultHandler = mock(FaultHandler.class);
 
-        when(faultHandler.handleFault(any(), any())).thenReturn(new RuntimeException("returned exception"));
-        doThrow(exception).when(validator).accept(eq(metadataVersion));
+        when(multiLogDirSupplier.get()).thenReturn(true);
 
-        testWith(metadataVersion, 8, validator, faultHandler);
+        testWith(metadataVersion, multiLogDirSupplier, faultHandler);
 
-        verify(validator, times(1)).accept(eq(metadataVersion));
+        verify(multiLogDirSupplier, times(1)).get();
         verify(faultHandler, times(1)).handleFault(
             eq("Broker configuration does not support the cluster MetadataVersion"),
-            eq(exception));
+            any(IllegalArgumentException.class));
+    }
+
+    @Test
+    void testValidateWithMetadataVersionJbodSupport() throws Exception {
+        FaultHandler faultHandler = mock(FaultHandler.class);
+        validate(MetadataVersion.IBP_3_6_IV2, false, faultHandler);
+        verifyNoMoreInteractions(faultHandler);
+
+        faultHandler = mock(FaultHandler.class);
+        validate(MetadataVersion.IBP_3_7_IV0, false, faultHandler);
+        verifyNoMoreInteractions(faultHandler);
+
+        faultHandler = mock(FaultHandler.class);
+        validate(MetadataVersion.IBP_3_7_IV2, false, faultHandler);
+        verifyNoMoreInteractions(faultHandler);
+
+        faultHandler = mock(FaultHandler.class);
+        validate(MetadataVersion.IBP_3_6_IV2, true, faultHandler);
+        verify(faultHandler, times(1)).handleFault(
+            eq("Broker configuration does not support the cluster MetadataVersion"),
+            any(IllegalArgumentException.class));
+
+        faultHandler = mock(FaultHandler.class);
+        validate(MetadataVersion.IBP_3_7_IV0, true, faultHandler);
+        verify(faultHandler, times(1)).handleFault(
+            eq("Broker configuration does not support the cluster MetadataVersion"),
+            any(IllegalArgumentException.class));
+
+        faultHandler = mock(FaultHandler.class);
+        validate(MetadataVersion.IBP_3_7_IV2, true, faultHandler);
+        verifyNoMoreInteractions(faultHandler);
+    }
+
+    private void validate(MetadataVersion metadataVersion, boolean jbodConfig, FaultHandler faultHandler)
+        throws Exception {
+        Supplier<Boolean> multiLogDirSupplier = mock(Supplier.class);
+        when(multiLogDirSupplier.get()).thenReturn(jbodConfig);
+
+        testWith(metadataVersion, multiLogDirSupplier, faultHandler);
     }
 }

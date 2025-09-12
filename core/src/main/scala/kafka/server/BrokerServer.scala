@@ -469,7 +469,10 @@ class BrokerServer(
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
         config.numIoThreads, "RequestHandlerAvgIdlePercent")
 
-      metadataPublishers.add(new MetadataVersionConfigValidator(config.brokerId, mv => config.validateWithMetadataVersion(mv), sharedServer.metadataPublishingFaultHandler))
+      metadataPublishers.add(new MetadataVersionConfigValidator(config.brokerId,
+        () => config.processRoles.contains(ProcessRole.BrokerRole) && config.logDirs().size() > 1,
+        sharedServer.metadataPublishingFaultHandler
+      ))
       brokerMetadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,

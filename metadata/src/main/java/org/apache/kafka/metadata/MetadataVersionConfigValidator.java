@@ -24,20 +24,20 @@ import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 
-import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public class MetadataVersionConfigValidator implements MetadataPublisher {
     private final String name;
-    private final Consumer<MetadataVersion> validator;
+    private final Supplier<Boolean> multiLogDirSupplier;
     private final FaultHandler faultHandler;
 
     public MetadataVersionConfigValidator(
         int brokerId,
-        Consumer<MetadataVersion> validator,
+        Supplier<Boolean> multiLogDirSupplier,
         FaultHandler faultHandler
     ) {
         this.name = "MetadataVersionPublisher(id=" + brokerId + ")";
-        this.validator = validator;
+        this.multiLogDirSupplier = multiLogDirSupplier;
         this.faultHandler = faultHandler;
     }
 
@@ -59,13 +59,22 @@ public class MetadataVersionConfigValidator implements MetadataPublisher {
         }
     }
 
+    /**
+     * Validate some configurations for new MetadataVersion. A new MetadataVersion can take place when
+     * a FeatureLevelRecord for "metadata.version" is read from the cluster metadata.
+     */
     @SuppressWarnings("ThrowableNotThrown")
     private void onMetadataVersionChanged(MetadataVersion metadataVersion) {
-        try {
-            this.validator.accept(metadataVersion);
-        } catch (Throwable t) {
+        if (this.multiLogDirSupplier.get() && !metadataVersion.isDirectoryAssignmentSupported()) {
+            String errorMsg = String.format(
+                "Multiple log directories (aka JBOD) are not supported in the current MetadataVersion %s. Need %s or higher",
+                metadataVersion, MetadataVersion.IBP_3_7_IV2
+            );
+
             this.faultHandler.handleFault(
-                "Broker configuration does not support the cluster MetadataVersion", t);
+                "Broker configuration does not support the cluster MetadataVersion",
+                new IllegalArgumentException(errorMsg)
+            );
         }
     }
 }
