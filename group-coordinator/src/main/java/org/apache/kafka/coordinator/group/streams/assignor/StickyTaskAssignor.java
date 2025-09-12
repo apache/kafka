@@ -57,13 +57,9 @@ public class StickyTaskAssignor implements TaskAssignor {
         final LinkedList<TaskId> activeTasks = taskIds(topologyDescriber, true);
         assignActive(activeTasks);
 
-        //standby
-        final int numStandbyReplicas =
-            groupSpec.assignmentConfigs().isEmpty() ? 0
-                : Integer.parseInt(groupSpec.assignmentConfigs().get("num.standby.replicas"));
-        if (numStandbyReplicas > 0) {
+        if (localState.numStandbyReplicas > 0) {
             final LinkedList<TaskId> statefulTasks = taskIds(topologyDescriber, false);
-            assignStandby(statefulTasks, numStandbyReplicas);
+            assignStandby(statefulTasks);
         }
 
         return buildGroupAssignment(groupSpec.members().keySet());
@@ -84,13 +80,24 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     private void initialize(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) {
         localState = new LocalState();
-        localState.allTasks = 0;
+        localState.numStandbyReplicas =
+            groupSpec.assignmentConfigs().isEmpty() ? 0
+                : Integer.parseInt(groupSpec.assignmentConfigs().get("num.standby.replicas"));
+
+        // Helpers for computing active tasks per member, and tasks per member
+        localState.totalActiveTasks = 0;
+        localState.totalTasks = 0;
         for (final String subtopology : topologyDescriber.subtopologies()) {
             final int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
-            localState.allTasks += numberOfPartitions;
+            localState.totalTasks += numberOfPartitions;
+            localState.totalActiveTasks += numberOfPartitions;
+            if (topologyDescriber.isStateful(subtopology))
+                localState.totalTasks += numberOfPartitions * localState.numStandbyReplicas;
         }
-        localState.totalCapacity = groupSpec.members().size();
-        localState.tasksPerMember = computeTasksPerMember(localState.allTasks, localState.totalCapacity);
+        localState.totalMembersWithActiveTaskCapacity = groupSpec.members().size();
+        localState.totalMembersWithTaskCapacity = groupSpec.members().size();
+        localState.activeTasksPerMember = computeTasksPerMember(localState.totalActiveTasks, localState.totalMembersWithActiveTaskCapacity);
+        localState.tasksPerMember = computeTasksPerMember(localState.totalTasks, localState.totalMembersWithTaskCapacity);
 
         localState.processIdToState = new HashMap<>();
         localState.activeTaskToPrevMember = new HashMap<>();
@@ -175,11 +182,13 @@ public class StickyTaskAssignor implements TaskAssignor {
         for (final Iterator<TaskId> it = activeTasks.iterator(); it.hasNext();) {
             final TaskId task = it.next();
             final Member prevMember = localState.activeTaskToPrevMember.get(task);
-            if (prevMember != null && hasUnfulfilledQuota(prevMember)) {
+            if (prevMember != null) {
                 final ProcessState processState = localState.processIdToState.get(prevMember.processId);
-                processState.addTask(prevMember.memberId, task, true);
-                maybeUpdateTasksPerMember(processState.activeTaskCount());
-                it.remove();
+                if (hasUnfulfilledActiveTaskQuota(processState, prevMember)) {
+                    processState.addTask(prevMember.memberId, task, true);
+                    maybeUpdateActiveTasksPerMember(processState.memberToTaskCounts().get(prevMember.memberId));
+                    it.remove();
+                }
             }
         }
 
@@ -188,11 +197,13 @@ public class StickyTaskAssignor implements TaskAssignor {
             final TaskId task = it.next();
             final ArrayList<Member> prevMembers = localState.standbyTaskToPrevMember.get(task);
             final Member prevMember = findPrevMemberWithLeastLoad(prevMembers, null);
-            if (prevMember != null && hasUnfulfilledQuota(prevMember)) {
+            if (prevMember != null) {
                 final ProcessState processState = localState.processIdToState.get(prevMember.processId);
-                processState.addTask(prevMember.memberId, task, true);
-                maybeUpdateTasksPerMember(processState.activeTaskCount());
-                it.remove();
+                if (hasUnfulfilledActiveTaskQuota(processState, prevMember)) {
+                    processState.addTask(prevMember.memberId, task, true);
+                    maybeUpdateActiveTasksPerMember(processState.memberToTaskCounts().get(prevMember.memberId));
+                    it.remove();
+                }
             }
         }
 
@@ -206,24 +217,32 @@ public class StickyTaskAssignor implements TaskAssignor {
             final TaskId task = it.next();
             final ProcessState processWithLeastLoad = processByLoad.poll();
             if (processWithLeastLoad == null) {
-                throw new TaskAssignorException("No process available to assign active task {}." + task);
+                throw new TaskAssignorException(String.format("No process available to assign active task %s.", task));
             }
             final String member = memberWithLeastLoad(processWithLeastLoad);
             if (member == null) {
-                throw new TaskAssignorException("No member available to assign active task {}." + task);
+                throw new TaskAssignorException(String.format("No member available to assign active task %s.", task));
             }
             processWithLeastLoad.addTask(member, task, true);
             it.remove();
-            maybeUpdateTasksPerMember(processWithLeastLoad.activeTaskCount());
+            maybeUpdateActiveTasksPerMember(processWithLeastLoad.memberToTaskCounts().get(member));
             processByLoad.add(processWithLeastLoad); // Add it back to the queue after updating its state
         }
     }
 
-    private void maybeUpdateTasksPerMember(final int activeTasksNo) {
-        if (activeTasksNo == localState.tasksPerMember) {
-            localState.totalCapacity--;
-            localState.allTasks -= activeTasksNo;
-            localState.tasksPerMember = computeTasksPerMember(localState.allTasks, localState.totalCapacity);
+    private void maybeUpdateActiveTasksPerMember(final int activeTasksNo) {
+        if (activeTasksNo == localState.activeTasksPerMember) {
+            localState.totalMembersWithActiveTaskCapacity--;
+            localState.totalActiveTasks -= activeTasksNo;
+            localState.activeTasksPerMember = computeTasksPerMember(localState.totalActiveTasks, localState.totalMembersWithActiveTaskCapacity);
+        }
+    }
+
+    private void maybeUpdateTasksPerMember(final int taskNo) {
+        if (taskNo == localState.tasksPerMember) {
+            localState.totalMembersWithTaskCapacity--;
+            localState.totalTasks -= taskNo;
+            localState.tasksPerMember = computeTasksPerMember(localState.totalTasks, localState.totalMembersWithTaskCapacity);
         }
     }
 
@@ -298,43 +317,49 @@ public class StickyTaskAssignor implements TaskAssignor {
         return memberWithLeastLoad.orElse(null);
     }
 
-    private boolean hasUnfulfilledQuota(final Member member) {
-        return localState.processIdToState.get(member.processId).memberToTaskCounts().get(member.memberId) < localState.tasksPerMember;
+    private boolean hasUnfulfilledActiveTaskQuota(final ProcessState process, final Member member) {
+        return process.memberToTaskCounts().get(member.memberId) < localState.activeTasksPerMember;
     }
 
-    private void assignStandby(final LinkedList<TaskId> standbyTasks, int numStandbyReplicas) {
-        final ArrayList<StandbyToAssign> toLeastLoaded = new ArrayList<>(standbyTasks.size() * numStandbyReplicas);
+    private boolean hasUnfulfilledTaskQuota(final ProcessState process, final Member member) {
+        return process.memberToTaskCounts().get(member.memberId) < localState.tasksPerMember;
+    }
 
+    private void assignStandby(final LinkedList<TaskId> standbyTasks) {
+        final ArrayList<StandbyToAssign> toLeastLoaded = new ArrayList<>(standbyTasks.size() * localState.numStandbyReplicas);
+        
         // Assuming our current assignment is range-based, we want to sort by partition first.
         standbyTasks.sort(Comparator.comparing(TaskId::partition).thenComparing(TaskId::subtopologyId).reversed());
 
         for (TaskId task : standbyTasks) {
-            for (int i = 0; i < numStandbyReplicas; i++) {
+            for (int i = 0; i < localState.numStandbyReplicas; i++) {
 
                 // prev active task
-                final Member prevMember = localState.activeTaskToPrevMember.get(task);
-                if (prevMember != null) {
-                    final ProcessState prevMemberProcessState = localState.processIdToState.get(prevMember.processId);
-                    if (!prevMemberProcessState.hasTask(task) && isLoadBalanced(prevMemberProcessState)) {
-                        prevMemberProcessState.addTask(prevMember.memberId, task, false);
+                final Member prevActiveMember = localState.activeTaskToPrevMember.get(task);
+                if (prevActiveMember != null) {
+                    final ProcessState prevActiveMemberProcessState = localState.processIdToState.get(prevActiveMember.processId);
+                    if (!prevActiveMemberProcessState.hasTask(task) && hasUnfulfilledTaskQuota(prevActiveMemberProcessState, prevActiveMember)) {
+                        prevActiveMemberProcessState.addTask(prevActiveMember.memberId, task, false);
+                        maybeUpdateTasksPerMember(prevActiveMemberProcessState.memberToTaskCounts().get(prevActiveMember.memberId));
                         continue;
                     }
                 }
 
                 // prev standby tasks
-                final ArrayList<Member> prevMembers = localState.standbyTaskToPrevMember.get(task);
-                if (prevMembers != null && !prevMembers.isEmpty()) {
-                    final Member prevMember2 = findPrevMemberWithLeastLoad(prevMembers, task);
-                    if (prevMember2 != null) {
-                        final ProcessState prevMemberProcessState = localState.processIdToState.get(prevMember2.processId);
-                        if (isLoadBalanced(prevMemberProcessState)) {
-                            prevMemberProcessState.addTask(prevMember2.memberId, task, false);
+                final ArrayList<Member> prevStandbyMembers = localState.standbyTaskToPrevMember.get(task);
+                if (prevStandbyMembers != null && !prevStandbyMembers.isEmpty()) {
+                    final Member prevStandbyMember = findPrevMemberWithLeastLoad(prevStandbyMembers, task);
+                    if (prevStandbyMember != null) {
+                        final ProcessState prevStandbyMemberProcessState = localState.processIdToState.get(prevStandbyMember.processId);
+                        if (hasUnfulfilledTaskQuota(prevStandbyMemberProcessState, prevStandbyMember)) {
+                            prevStandbyMemberProcessState.addTask(prevStandbyMember.memberId, task, false);
+                            maybeUpdateTasksPerMember(prevStandbyMemberProcessState.memberToTaskCounts().get(prevStandbyMember.memberId));
                             continue;
                         }
                     }
                 }
 
-                toLeastLoaded.add(new StandbyToAssign(task, numStandbyReplicas - i));
+                toLeastLoaded.add(new StandbyToAssign(task, localState.numStandbyReplicas - i));
                 break;
             }
         }
@@ -350,7 +375,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 if (!assignStandbyToMemberWithLeastLoad(processByLoad, toAssign.taskId)) {
                     log.warn("{} There is not enough available capacity. " +
                             "You should increase the number of threads and/or application instances to maintain the requested number of standby replicas.",
-                        errorMessage(numStandbyReplicas, i, toAssign.taskId));
+                        errorMessage(localState.numStandbyReplicas, i, toAssign.taskId));
                     break;
                 }
             }
@@ -360,13 +385,6 @@ public class StickyTaskAssignor implements TaskAssignor {
     private String errorMessage(final int numStandbyReplicas, final int i, final TaskId task) {
         return "Unable to assign " + (numStandbyReplicas - i) +
             " of " + numStandbyReplicas + " standby tasks for task [" + task + "].";
-    }
-
-    private boolean isLoadBalanced(final ProcessState process) {
-        final double load = process.load();
-        final boolean isLeastLoadedProcess = localState.processIdToState.values().stream()
-            .allMatch(p -> p.load() >= load);
-        return process.hasCapacity() || isLeastLoadedProcess;
     }
 
     private static int computeTasksPerMember(final int numberOfTasks, final int numberOfMembers) {
@@ -406,8 +424,12 @@ public class StickyTaskAssignor implements TaskAssignor {
         Map<TaskId, ArrayList<Member>> standbyTaskToPrevMember;
         Map<String, ProcessState> processIdToState;
 
-        int allTasks;
-        int totalCapacity;
+        int numStandbyReplicas;
+        int totalActiveTasks;
+        int totalTasks;
+        int totalMembersWithActiveTaskCapacity;
+        int totalMembersWithTaskCapacity;
+        int activeTasksPerMember;
         int tasksPerMember;
     }
 }

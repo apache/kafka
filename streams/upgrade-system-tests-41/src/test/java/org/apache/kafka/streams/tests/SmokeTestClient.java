@@ -19,6 +19,7 @@ package org.apache.kafka.streams.tests;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -37,8 +38,10 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
@@ -53,8 +56,8 @@ public class SmokeTestClient extends SmokeTestUtil {
 
     private KafkaStreams streams;
     private boolean uncaughtException = false;
+    private boolean started;
     private volatile boolean closed;
-    private volatile boolean error;
 
     private static void addShutdownHook(final String name, final Runnable runnable) {
         if (name != null) {
@@ -64,16 +67,38 @@ public class SmokeTestClient extends SmokeTestUtil {
         }
     }
 
+    private static File tempDirectory() {
+        final String prefix = "kafka-";
+        final File file;
+        try {
+            file = Files.createTempDirectory(prefix).toFile();
+        } catch (final IOException ex) {
+            throw new RuntimeException("Failed to create a temp dir", ex);
+        }
+        file.deleteOnExit();
+
+        addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+            try {
+                Utils.delete(file);
+            } catch (final IOException e) {
+                System.out.println("Error deleting " + file.getAbsolutePath());
+                e.printStackTrace(System.out);
+            }
+        });
+
+        return file;
+    }
+
     public SmokeTestClient(final String name) {
         this.name = name;
     }
 
-    public boolean closed() {
-        return closed;
+    public boolean started() {
+        return started;
     }
 
-    public boolean error() {
-        return error;
+    public boolean closed() {
+        return closed;
     }
 
     public void start(final Properties streamsProperties) {
@@ -84,21 +109,18 @@ public class SmokeTestClient extends SmokeTestUtil {
         streams.setStateListener((newState, oldState) -> {
             System.out.printf("%s %s: %s -> %s%n", name, Instant.now(), oldState, newState);
             if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
+                started = true;
                 countDownLatch.countDown();
             }
 
             if (newState == KafkaStreams.State.NOT_RUNNING) {
                 closed = true;
             }
-
-            if (newState == KafkaStreams.State.ERROR) {
-                error = true;
-            }
         });
 
         streams.setUncaughtExceptionHandler(e -> {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
-            System.out.println(name + ": FATAL: An unexpected exception is encountered on thread " + Thread.currentThread() + ": " + e);
+            System.out.println(name + ": FATAL: An unexpected exception is encountered: " + e);
             e.printStackTrace(System.out);
             uncaughtException = true;
             return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
@@ -110,14 +132,13 @@ public class SmokeTestClient extends SmokeTestUtil {
         try {
             if (!countDownLatch.await(1, TimeUnit.MINUTES)) {
                 System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't start in one minute");
-            } else {
-                System.out.println(name + ": SMOKE-TEST-CLIENT-STARTED");
-                System.out.println(name + " started at " + Instant.now());
             }
         } catch (final InterruptedException e) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: " + e);
             e.printStackTrace(System.out);
         }
+        System.out.println(name + ": SMOKE-TEST-CLIENT-STARTED");
+        System.out.println(name + " started at " + Instant.now());
     }
 
     public void closeAsync() {
@@ -125,26 +146,22 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     public void close() {
-        final boolean wasClosed = streams.close(Duration.ofMinutes(1));
+        final boolean closed = streams.close(Duration.ofMinutes(1));
 
-        if (wasClosed && !uncaughtException) {
+        if (closed && !uncaughtException) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-CLOSED");
-        } else if (wasClosed) {
-            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Got an uncaught exception");
+        } else if (closed) {
+            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
         } else {
-            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close in time.");
+            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close");
         }
     }
 
     private Properties getStreamsConfig(final Properties props) {
         final Properties fullProps = new Properties(props);
-        if (!props.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
-            fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
-        }
+        fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
-        fullProps.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        fullProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        fullProps.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, Duration.ofDays(3).toMillis());
+        fullProps.put(StreamsConfig.STATE_DIR_CONFIG, tempDirectory().getAbsolutePath());
         fullProps.putAll(props);
         return fullProps;
     }
