@@ -61,8 +61,8 @@ public class FeaturesPublisher implements MetadataPublisher {
         try {
             if (delta.featuresDelta() != null) {
                 FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersionOrThrow(),
-                        newImage.features().finalizedVersions(),
-                        newImage.provenance().lastContainedOffset()
+                    newImage.features().finalizedVersions(),
+                    newImage.provenance().lastContainedOffset()
                 );
                 if (!newFinalizedFeatures.equals(finalizedFeatures)) {
                     log.info("Loaded new metadata {}.", newFinalizedFeatures);
@@ -70,8 +70,8 @@ public class FeaturesPublisher implements MetadataPublisher {
                 }
             }
         } catch (Throwable t) {
-            String deltaName = "MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
-            faultHandler.handleFault("Uncaught exception while publishing features changes from " + deltaName, t);
+            faultHandler.handleFault("Uncaught exception while publishing SCRAM changes from MetadataDelta up to "
+                + newImage.highestOffsetAndEpoch().offset(), t);
         }
     }
 }

@@ -58,8 +58,8 @@ public class ScramPublisher implements MetadataPublisher {
                 });
             }
         } catch (Throwable t) {
-            String deltaName = "MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
-            faultHandler.handleFault("Uncaught exception while publishing SCRAM changes from " + deltaName, t);
+            faultHandler.handleFault("Uncaught exception while publishing SCRAM changes from MetadataDelta up to "
+                + newImage.highestOffsetAndEpoch().offset(), t);
         }
     }
 }
