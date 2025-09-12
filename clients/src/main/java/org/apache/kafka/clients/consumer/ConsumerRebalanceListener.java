@@ -131,8 +131,15 @@ public interface ConsumerRebalanceListener {
      * <p>
      * If the consumer is using the {@link GroupProtocol#CLASSIC} rebalance protocol:
      * <ul>
-     *     <li>In eager rebalancing, it will always be called at the start of a rebalance and after the consumer stops fetching data.</li>
-     *     <li>In cooperative rebalancing it will be called at the end of a rebalance, with the set of partitions being revoked, iff the set is non-empty.</li>
+     *     <li>
+     *         In eager rebalancing, onPartitionsRevoked will always be called at the start of a rebalance,
+     *         with the full set of assigned partitions as parameter (all partitions are revoked). Note that it
+     *         will be called even if there are no partitions assigned.
+     *     </li>
+     *     <li>
+     *         In cooperative rebalancing, onPartitionsRevoked will be called with the set of partitions being revoked,
+     *         iff the set is non-empty.
+     *     </li>
      * </ul>
      * If the consumer is using the {@link GroupProtocol#CONSUMER} rebalance protocol, this callback will be called
      * at the end of a rebalance, with the set of partitions being revoked, iff the set is non-empty (same behavior
