@@ -76,10 +76,10 @@ public final class AssignmentsManager {
      */
     @Deprecated(since = "4.2")
     static final MetricName DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC =
-            deprecatedMetricName("QueuedReplicaToDirAssignments");
+            KafkaYammerMetrics.getMetricName("org.apache.kafka.server", "AssignmentsManager", "QueuedReplicaToDirAssignments");
 
     static final MetricName QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC =
-            metricName("QueuedReplicaToDirAssignments");
+            KafkaYammerMetrics.getMetricName("kafka.server", "AssignmentsManager", "QueuedReplicaToDirAssignments");
 
     /**
      * The event at which we send assignments, if appropriate.
@@ -145,15 +145,6 @@ public final class AssignmentsManager {
      * The event queue.
      */
     private final KafkaEventQueue eventQueue;
-
-    @Deprecated(since = "4.2")
-    static MetricName deprecatedMetricName(String name) {
-        return KafkaYammerMetrics.getMetricName("org.apache.kafka.server", "AssignmentsManager", name);
-    }
-
-    static MetricName metricName(String name) {
-        return KafkaYammerMetrics.getMetricName("kafka.server", "AssignmentsManager", name);
-    }
 
     public AssignmentsManager(
         Time time,
