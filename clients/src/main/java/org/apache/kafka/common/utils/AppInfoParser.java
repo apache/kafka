@@ -116,7 +116,7 @@ public class AppInfoParser {
         metrics.removeMetric(metricName(metrics, "commit-id", Map.of()));
         metrics.removeMetric(metricName(metrics, "start-time-ms", Map.of()));
 
-        if (clientId != null) {
+        if (!metrics.config().tags().containsKey("client-id") && clientId != null) {
             metrics.removeMetric(metricName(metrics, "version", Map.of("client-id", clientId)));
             metrics.removeMetric(metricName(metrics, "commit-id", Map.of("client-id", clientId)));
             metrics.removeMetric(metricName(metrics, "start-time-ms", Map.of("client-id", clientId)));
