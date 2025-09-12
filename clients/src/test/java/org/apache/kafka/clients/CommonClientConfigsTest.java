@@ -150,8 +150,6 @@ public class CommonClientConfigsTest {
         assertEquals(2, reporters.size());
     }
 
-    
-
     public static class MyJmxReporter extends JmxReporter {
         public MyJmxReporter() {}
     }

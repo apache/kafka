@@ -4563,9 +4563,10 @@ class KafkaApisTest extends Logging {
 
     verifyNoThrottling[FetchResponse](request)
 
-    // After fetch: topic t should advance; topic u should remain unchanged
+    // After fetch: topic t (configured for high verbosity) should advance
     assertTrue(tPartMetrics.bytesOutRate().count() > tBytesOutBefore)
     assertTrue(tPartMetrics.totalFetchRequestRate().count() > tTotalFetchBefore)
+    // Topic u (not configured for high verbosity) should remain unchanged
     assertEquals(uBytesOutBefore, uPartMetrics.bytesOutRate().count())
     assertEquals(uTotalFetchBefore, uPartMetrics.totalFetchRequestRate().count())
   }
@@ -4670,6 +4671,222 @@ class KafkaApisTest extends Logging {
     assertEquals(tTotalFetchAfter1, tPartMetrics.totalFetchRequestRate().count())
     assertTrue(uPartMetrics.bytesOutRate().count() > uBytesOutAfter1)
     assertTrue(uPartMetrics.totalFetchRequestRate().count() > uTotalFetchAfter1)
+  }
+
+  @Test
+  def testPartitionLevelMetricsGatedByMetricsVerbosity_FetchFromFollower_KafkaApis(): Unit = {
+    val t = "t"
+    val tId = Uuid.randomUuid()
+    val tpT = new TopicPartition(t, 0)
+    val tidpT = new TopicIdPartition(tId, tpT)
+
+    addTopicToMetadataCache(t, 1, topicId = tId)
+
+    // Mock replicaManager.fetchMessages to return bytes for the topic
+    when(replicaManager.fetchMessages(
+      any[FetchParams],
+      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
+      any[ReplicaQuota],
+      any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
+    )).thenAnswer(invocation => {
+      val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
+      val recT = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("a".getBytes(StandardCharsets.UTF_8)))
+      callback(Seq(
+        tidpT -> new FetchPartitionData(Errors.NONE, 0, 0, recT,
+          Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)
+      ))
+    })
+
+    // Build fetch request from a follower (replica ID >= 0)
+    val fetchData = util.Map.of(
+      tidpT, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty())
+    )
+    val fetchDataBuilder = util.Map.of(
+      tpT, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty())
+    )
+    val fetchMetadata = new JFetchMetadata(0, 0)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
+      fetchMetadata, fetchData, false, false)
+    when(fetchManager.newContext(
+      any[Short],
+      any[JFetchMetadata],
+      any[Boolean],
+      any[util.Map[TopicIdPartition, FetchRequest.PartitionData]],
+      any[util.List[TopicIdPartition]],
+      any[util.Map[Uuid, String]])).thenReturn(fetchContext)
+
+    // Configure metrics.verbosity to allow topic t for partition metrics
+    val overrideProps = Map(
+      "metrics.verbosity" -> "[{\"level\":\"high\",\"names\":\"BytesOutPerSec|TotalFetchRequestsPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]"
+    )
+    kafkaApis = createKafkaApis(overrideProperties = overrideProps)
+
+    val tPartMetrics = brokerTopicStats.partitionStats(t, 0)
+    val tBytesOutBefore = tPartMetrics.bytesOutRate().count()
+    val tTotalFetchBefore = tPartMetrics.totalFetchRequestRate().count()
+
+    // Create fetch request with replica ID = 1 (follower)
+    val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
+      1, -1, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()  // replica ID = 1
+    val request = buildRequest(fetchRequest)
+    kafkaApis.handleFetchRequest(request)
+
+    verifyNoThrottling[FetchResponse](request)
+
+    // Partition metrics should NOT advance for follower fetches
+    assertEquals(tBytesOutBefore, tPartMetrics.bytesOutRate().count())
+    assertEquals(tTotalFetchBefore, tPartMetrics.totalFetchRequestRate().count())
+  }
+
+  @Test
+  def testPartitionLevelMetricsGatedByMetricsVerbosity_FetchZeroSize_KafkaApis(): Unit = {
+    val t = "t"
+    val tId = Uuid.randomUuid()
+    val tpT = new TopicPartition(t, 0)
+    val tidpT = new TopicIdPartition(tId, tpT)
+
+    addTopicToMetadataCache(t, 1, topicId = tId)
+
+    // Mock replicaManager.fetchMessages to return empty records (zero size)
+    when(replicaManager.fetchMessages(
+      any[FetchParams],
+      any[Seq[(TopicIdPartition, FetchRequest.PartitionData)]],
+      any[ReplicaQuota],
+      any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
+    )).thenAnswer(invocation => {
+      val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
+      val emptyRecords = MemoryRecords.EMPTY
+      callback(Seq(
+        tidpT -> new FetchPartitionData(Errors.NONE, 0, 0, emptyRecords,
+          Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)
+      ))
+    })
+
+    // Build fetch request
+    val fetchData = util.Map.of(
+      tidpT, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty())
+    )
+    val fetchDataBuilder = util.Map.of(
+      tpT, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000, Optional.empty())
+    )
+    val fetchMetadata = new JFetchMetadata(0, 0)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
+      fetchMetadata, fetchData, false, false)
+    when(fetchManager.newContext(
+      any[Short],
+      any[JFetchMetadata],
+      any[Boolean],
+      any[util.Map[TopicIdPartition, FetchRequest.PartitionData]],
+      any[util.List[TopicIdPartition]],
+      any[util.Map[Uuid, String]])).thenReturn(fetchContext)
+
+    // Configure metrics.verbosity to allow topic t
+    val overrideProps = Map(
+      "metrics.verbosity" -> "[{\"level\":\"high\",\"names\":\"BytesOutPerSec|TotalFetchRequestsPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]"
+    )
+    kafkaApis = createKafkaApis(overrideProperties = overrideProps)
+
+    val tPartMetrics = brokerTopicStats.partitionStats(t, 0)
+    val tBytesOutBefore = tPartMetrics.bytesOutRate().count()
+    val tTotalFetchBefore = tPartMetrics.totalFetchRequestRate().count()
+
+    val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
+      -1, -1, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
+    val request = buildRequest(fetchRequest)
+    kafkaApis.handleFetchRequest(request)
+
+    verifyNoThrottling[FetchResponse](request)
+
+    // BytesOut should NOT advance for zero-size fetches
+    assertEquals(tBytesOutBefore, tPartMetrics.bytesOutRate().count())
+    // TotalFetchRequests SHOULD advance even for zero-size fetches
+    assertTrue(tPartMetrics.totalFetchRequestRate().count() > tTotalFetchBefore)
+  }
+
+  @Test
+  def testPartitionLevelMetricsGatedByMetricsVerbosity_Produce_KafkaApis(): Unit = {
+    val t = "t"
+    val u = "u"
+    val tpT = new TopicPartition(t, 0)
+    val tpU = new TopicPartition(u, 0)
+
+    addTopicToMetadataCache(t, 1)
+    addTopicToMetadataCache(u, 1)
+
+    // Configure metrics.verbosity to allow only topic t for produce metrics
+    val overrideProps = Map(
+      "metrics.verbosity" -> "[{\"level\":\"high\",\"names\":\"BytesInPerSec|TotalProduceRequestsPerSec|MessagesInPerSec\",\"filters\":[{\"topics\":[\"t\"]}]}]"
+    )
+    kafkaApis = createKafkaApis(overrideProperties = overrideProps)
+
+    // Mock replicaManager.appendRecords to simulate successful produce
+    when(replicaManager.appendRecords(
+      any[Long],
+      any[Short],
+      any[Boolean],
+      any[AppendOrigin],
+      any[Map[TopicPartition, MemoryRecords]],
+      any[Map[TopicPartition, ProduceResponse.PartitionResponse] => Unit],
+      any[Option[ReplicaQuota]],
+      any[RequestLocal],
+      any[Boolean]
+    )).thenAnswer(invocation => {
+      val callback = invocation.getArgument(5).asInstanceOf[Map[TopicPartition, ProduceResponse.PartitionResponse] => Unit]
+      val responses = Map(
+        tpT -> new ProduceResponse.PartitionResponse(Errors.NONE, 0, 0, RecordBatch.NO_TIMESTAMP, 0),
+        tpU -> new ProduceResponse.PartitionResponse(Errors.NONE, 0, 0, RecordBatch.NO_TIMESTAMP, 0)
+      )
+      callback(responses)
+    })
+
+    val tPartMetrics = brokerTopicStats.partitionStats(t, 0)
+    val uPartMetrics = brokerTopicStats.partitionStats(u, 0)
+    val tBytesInBefore = tPartMetrics.bytesInRate().count()
+    val tMessagesInBefore = tPartMetrics.messagesInRate().count()
+    val tProduceBefore = tPartMetrics.totalProduceRequestRate().count()
+    val uBytesInBefore = uPartMetrics.bytesInRate().count()
+    val uMessagesInBefore = uPartMetrics.messagesInRate().count()
+    val uProduceBefore = uPartMetrics.totalProduceRequestRate().count()
+
+    // Create produce request with records for both topics
+    val recordT = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))
+    val recordU = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))
+    val produceData = Map(
+      tpT -> recordT,
+      tpU -> recordU
+    ).asJava
+    val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+        List(
+          new ProduceRequestData.TopicProduceData()
+            .setName(t)
+            .setPartitionData(List(
+              new ProduceRequestData.PartitionProduceData()
+                .setIndex(0)
+                .setRecords(recordT)
+            ).asJava),
+          new ProduceRequestData.TopicProduceData()
+            .setName(u)
+            .setPartitionData(List(
+              new ProduceRequestData.PartitionProduceData()
+                .setIndex(0)
+                .setRecords(recordU)
+            ).asJava)
+        ).asJava.iterator()
+      ))
+      .setAcks(-1.toShort)
+      .setTimeoutMs(1000))
+    val request = buildRequest(produceRequest)
+    kafkaApis.handleProduceRequest(request, RequestLocal.NoCaching)
+
+    // Topic t (configured for high verbosity) should advance
+    assertTrue(tPartMetrics.bytesInRate().count() > tBytesInBefore)
+    assertTrue(tPartMetrics.messagesInRate().count() > tMessagesInBefore)
+    assertTrue(tPartMetrics.totalProduceRequestRate().count() > tProduceBefore)
+    // Topic u (not configured) should remain unchanged
+    assertEquals(uBytesInBefore, uPartMetrics.bytesInRate().count())
+    assertEquals(uMessagesInBefore, uPartMetrics.messagesInRate().count())
+    assertEquals(uProduceBefore, uPartMetrics.totalProduceRequestRate().count())
   }
 
   @Test

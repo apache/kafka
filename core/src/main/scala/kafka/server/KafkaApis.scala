@@ -72,6 +72,7 @@ import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
+import org.apache.kafka.server.metrics.MetricsVerbosityController
 
 import java.time.Duration
 import java.util
@@ -673,14 +674,13 @@ class KafkaApis(val requestChannel: RequestChannel,
               // Partition-level throughput (KIP-977): record per-partition fetch metrics for leader (client fetches), gated by metrics.verbosity
               if (!fetchRequest.isFromFollower) {
                 val size = FetchResponse.recordsSize(data)
-                val serverConfig = config
-                if (size > 0 && org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
-                  serverConfig, BrokerTopicMetrics.BYTES_OUT_PER_SEC, tp.topic)) {
+                if (size > 0 && MetricsVerbosityController.shouldEmitPartitionMetric(
+                  config, BrokerTopicMetrics.BYTES_OUT_PER_SEC, tp.topic)) {
                   val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
                   m.bytesOutRate().mark(size)
                 }
-                if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
-                  serverConfig, BrokerTopicMetrics.TOTAL_FETCH_REQUESTS_PER_SEC, tp.topic)) {
+                if (MetricsVerbosityController.shouldEmitPartitionMetric(
+                  config, BrokerTopicMetrics.TOTAL_FETCH_REQUESTS_PER_SEC, tp.topic)) {
                   val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
                   m.totalFetchRequestRate().mark()
                 }
@@ -4138,7 +4138,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.PRODUCE =>
           brokerTopicStats.topicStats(tp.topic).produceMessageConversionsRate.mark(conversionCount)
           brokerTopicStats.allTopicsStats.produceMessageConversionsRate.mark(conversionCount)
-          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+          if (MetricsVerbosityController.shouldEmitPartitionMetric(
             config, BrokerTopicMetrics.PRODUCE_MESSAGE_CONVERSIONS_PER_SEC, tp.topic)) {
             val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
             m.produceMessageConversionsRate().mark(conversionCount)
@@ -4146,7 +4146,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.FETCH =>
           brokerTopicStats.topicStats(tp.topic).fetchMessageConversionsRate.mark(conversionCount)
           brokerTopicStats.allTopicsStats.fetchMessageConversionsRate.mark(conversionCount)
-          if (org.apache.kafka.server.metrics.MetricsVerbosityController.shouldEmitPartitionMetric(
+          if (MetricsVerbosityController.shouldEmitPartitionMetric(
             config, BrokerTopicMetrics.FETCH_MESSAGE_CONVERSIONS_PER_SEC, tp.topic)) {
             val m = brokerTopicStats.partitionStats(tp.topic, tp.partition)
             m.fetchMessageConversionsRate().mark(conversionCount)

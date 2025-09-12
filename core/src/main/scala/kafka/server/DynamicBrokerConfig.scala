@@ -94,7 +94,8 @@ object DynamicBrokerConfig {
     LogCleaner.RECONFIGURABLE_CONFIGS.asScala ++
     DynamicLogConfig.ReconfigurableConfigs ++
     DynamicThreadPool.RECONFIGURABLE_CONFIGS.asScala ++
-    Set(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricConfigs.METRICS_VERBOSITY_CONFIG) ++
+    Set(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG) ++
+    Set(MetricConfigs.METRICS_VERBOSITY_CONFIG) ++
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs ++
     DynamicProducerStateManagerConfig ++
