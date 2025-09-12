@@ -3107,7 +3107,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     TestUtils.assertLeader(client, partition2, 0)
 
     // Now change the preferred leader to 1
-    waitForBrokerMetadataPropagation(partition1);
+    waitForBrokerMetadataPropagation(partition1)
+    waitForBrokerMetadataPropagation(partition2)
     changePreferredLeader(prefer1)
 
     // meaningful election
@@ -3170,6 +3171,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // but shut it down...
     killBroker(1)
     waitForBrokerMetadataPropagation(partition1)
+    waitForBrokerMetadataPropagation(partition2)
     TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     def assertPreferredLeaderNotAvailable(
