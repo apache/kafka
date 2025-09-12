@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.image.MetadataDelta;
@@ -28,36 +28,45 @@ import org.apache.kafka.server.fault.FaultHandler;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.function.Consumer;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("unchecked")
 public class MetadataVersionConfigValidatorTest {
 
-    private static final LogDeltaManifest TEST_MANIFEST = LogDeltaManifest.newBuilder()
-            .provenance(MetadataProvenance.EMPTY)
-            .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
-            .numBatches(1)
-            .elapsedNs(90)
-            .numBytes(88)
-            .build();
-    public static final MetadataProvenance TEST_PROVENANCE =
-            new MetadataProvenance(50, 3, 8000, true);
 
-    void testWith(MetadataVersion metadataVersion, KafkaConfig config, FaultHandler faultHandler) throws Exception {
-        try (MetadataVersionConfigValidator validator = new MetadataVersionConfigValidator(config, faultHandler)) {
+    private static final LogDeltaManifest TEST_MANIFEST = LogDeltaManifest.newBuilder()
+        .provenance(MetadataProvenance.EMPTY)
+        .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
+        .numBatches(1)
+        .elapsedNs(90)
+        .numBytes(88)
+        .build();
+    public static final MetadataProvenance TEST_PROVENANCE =
+        new MetadataProvenance(50, 3, 8000, true);
+
+    void testWith(
+        MetadataVersion metadataVersion,
+        int brokerId,
+        Consumer<MetadataVersion> validatorWithVersion,
+        FaultHandler faultHandler
+    ) throws Exception {
+        try (MetadataVersionConfigValidator validator = new MetadataVersionConfigValidator(brokerId, validatorWithVersion, faultHandler)) {
             MetadataDelta delta = new MetadataDelta.Builder()
-                    .setImage(MetadataImage.EMPTY)
-                    .build();
+                .setImage(MetadataImage.EMPTY)
+                .build();
             if (metadataVersion != null) {
                 delta.replay(new FeatureLevelRecord().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(metadataVersion.featureLevel()));
+                    setName(MetadataVersion.FEATURE_NAME).
+                    setFeatureLevel(metadataVersion.featureLevel()));
             }
             MetadataImage image = delta.apply(TEST_PROVENANCE);
 
@@ -68,14 +77,12 @@ public class MetadataVersionConfigValidatorTest {
     @Test
     void testValidatesConfigOnMetadataChange() throws Exception {
         MetadataVersion metadataVersion = MetadataVersion.IBP_3_7_IV2;
-        KafkaConfig config = mock(KafkaConfig.class);
         FaultHandler faultHandler = mock(FaultHandler.class);
+        Consumer<MetadataVersion> validator = mock(Consumer.class);
 
-        when(config.brokerId()).thenReturn(8);
+        testWith(metadataVersion, 8, validator, faultHandler);
 
-        testWith(metadataVersion, config, faultHandler);
-
-        verify(config, times(1)).validateWithMetadataVersion(eq(metadataVersion));
+        verify(validator, times(1)).accept(eq(metadataVersion));
         verifyNoMoreInteractions(faultHandler);
     }
 
@@ -83,21 +90,18 @@ public class MetadataVersionConfigValidatorTest {
     @Test
     void testInvokesFaultHandlerOnException() throws Exception {
         MetadataVersion metadataVersion = MetadataVersion.IBP_3_7_IV2;
-        Exception exception = new Exception();
-        KafkaConfig config = mock(KafkaConfig.class);
+        IllegalArgumentException exception = new IllegalArgumentException();
+        Consumer<MetadataVersion> validator = mock(Consumer.class);
         FaultHandler faultHandler = mock(FaultHandler.class);
 
         when(faultHandler.handleFault(any(), any())).thenReturn(new RuntimeException("returned exception"));
-        when(config.brokerId()).thenReturn(8);
-        willAnswer(invocation -> {
-            throw exception;
-        }).given(config).validateWithMetadataVersion(eq(metadataVersion));
+        doThrow(exception).when(validator).accept(eq(metadataVersion));
 
-        testWith(metadataVersion, config, faultHandler);
+        testWith(metadataVersion, 8, validator, faultHandler);
 
-        verify(config, times(1)).validateWithMetadataVersion(eq(metadataVersion));
+        verify(validator, times(1)).accept(eq(metadataVersion));
         verify(faultHandler, times(1)).handleFault(
-                eq("Broker configuration does not support the cluster MetadataVersion"),
-                eq(exception));
+            eq("Broker configuration does not support the cluster MetadataVersion"),
+            eq(exception));
     }
 }

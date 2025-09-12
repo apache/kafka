@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package org.apache.kafka.metadata;
 
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -24,18 +24,20 @@ import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 
+import java.util.function.Consumer;
+
 public class MetadataVersionConfigValidator implements MetadataPublisher {
     private final String name;
-    private final KafkaConfig config;
+    private final Consumer<MetadataVersion> validator;
     private final FaultHandler faultHandler;
 
     public MetadataVersionConfigValidator(
-            KafkaConfig config,
-            FaultHandler faultHandler
+        int brokerId,
+        Consumer<MetadataVersion> validator,
+        FaultHandler faultHandler
     ) {
-        int id = config.brokerId();
-        this.name = "MetadataVersionPublisher(id=" + id + ")";
-        this.config = config;
+        this.name = "MetadataVersionPublisher(id=" + brokerId + ")";
+        this.validator = validator;
         this.faultHandler = faultHandler;
     }
 
@@ -46,9 +48,9 @@ public class MetadataVersionConfigValidator implements MetadataPublisher {
 
     @Override
     public void onMetadataUpdate(
-            MetadataDelta delta,
-            MetadataImage newImage,
-            LoaderManifest manifest
+        MetadataDelta delta,
+        MetadataImage newImage,
+        LoaderManifest manifest
     ) {
         if (delta.featuresDelta() != null) {
             if (delta.metadataVersionChanged().isPresent()) {
@@ -60,10 +62,10 @@ public class MetadataVersionConfigValidator implements MetadataPublisher {
     @SuppressWarnings("ThrowableNotThrown")
     private void onMetadataVersionChanged(MetadataVersion metadataVersion) {
         try {
-            this.config.validateWithMetadataVersion(metadataVersion);
+            this.validator.accept(metadataVersion);
         } catch (Throwable t) {
             this.faultHandler.handleFault(
-                    "Broker configuration does not support the cluster MetadataVersion", t);
+                "Broker configuration does not support the cluster MetadataVersion", t);
         }
     }
 }
