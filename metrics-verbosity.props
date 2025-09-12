@@ -1,1 +1,0 @@
-metrics.verbosity=[{"level":"high","names":"(MessagesInPerSec|BytesInPerSec|BytesOutPerSec)","filters":[{"topics":["test-topic"]}]}]
