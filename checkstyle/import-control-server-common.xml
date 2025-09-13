@@ -60,6 +60,7 @@
     </subpackage>
 
     <subpackage name="security">
+        <allow pkg="org.apache.kafka.clients.admin" />
         <allow pkg="org.apache.kafka.common.config" />
         <allow pkg="org.apache.kafka.common.config.types" />
         <allow pkg="org.apache.kafka.server.util" />

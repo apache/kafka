@@ -35,7 +35,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
       val request = new DescribeQuorumRequest.Builder(
         singletonRequest(KafkaRaftServer.MetadataPartition)
       ).build(version.toShort)
-      val response = IntegrationTestUtils.connectAndReceive[DescribeQuorumResponse](request, cluster.boundPorts().get(0))
+      val response = IntegrationTestUtils.connectAndReceive[DescribeQuorumResponse](request, cluster.brokerBoundPorts().get(0))
 
       assertEquals(Errors.NONE, Errors.forCode(response.data.errorCode))
       assertEquals("", response.data.errorMessage)

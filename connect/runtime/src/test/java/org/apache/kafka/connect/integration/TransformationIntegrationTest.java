@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.PREDICATES_CONFIG;
@@ -173,7 +172,7 @@ public class TransformationIntegrationTest {
         connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
         // Assert that we didn't see any baz
-        Map<String, Long> expectedRecordCounts = singletonMap(fooTopic, (long) numFooRecords);
+        Map<String, Long> expectedRecordCounts = Map.of(fooTopic, (long) numFooRecords);
         assertObservedRecords(observedRecords, expectedRecordCounts);
 
         // delete connector
@@ -253,7 +252,7 @@ public class TransformationIntegrationTest {
         // wait for the connector tasks to commit all records.
         connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
-        Map<String, Long> expectedRecordCounts = singletonMap(topic, (long) (numRecords / 2));
+        Map<String, Long> expectedRecordCounts = Map.of(topic, (long) (numRecords / 2));
         assertObservedRecords(observedRecords, expectedRecordCounts);
 
         // delete connector
