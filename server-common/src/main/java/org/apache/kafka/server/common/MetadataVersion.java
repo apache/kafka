@@ -361,9 +361,7 @@ public enum MetadataVersion {
             unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting() : MetadataVersion.latestProduction());
 
         MetadataVersion metadataVersion = IBP_VERSIONS.get(key);
-        if (metadataVersion == null) {
-            throw new IllegalArgumentException(errorMsg);
-        } else if (!unstableFeatureVersionsEnabled && !metadataVersion.isProduction()) {
+        if (metadataVersion == null || (!unstableFeatureVersionsEnabled && !metadataVersion.isProduction())) {
             throw new IllegalArgumentException(errorMsg);
         }
         return metadataVersion;
