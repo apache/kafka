@@ -35,8 +35,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -144,6 +147,24 @@ public class RemoteLogMetadataCacheTest {
         updatedMetadata = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
                 Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId1);
         updateAndVerifyCacheContents(updatedMetadata, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, leaderEpoch);
+    }
+
+    @Test
+    public void testAwaitInitialized() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        assertFalse(cache.isInitialized());
+        Thread t = new Thread(() -> {
+            try {
+                cache.awaitInitialized(2000, TimeUnit.MILLISECONDS);
+                latch.countDown();
+            } catch (InterruptedException e) {
+                fail("Shouldn't throw InterruptedException");
+            }
+        });
+        t.start();
+        cache.markInitialized();
+        assertTrue(latch.await(1, TimeUnit.SECONDS));
+        assertTrue(cache.isInitialized());
     }
 
     private void updateAndVerifyCacheContents(RemoteLogSegmentMetadataUpdate updatedMetadata,

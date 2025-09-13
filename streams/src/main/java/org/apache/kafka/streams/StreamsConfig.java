@@ -78,6 +78,7 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.ListSize.atMostOfSize;
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.parseType;
@@ -441,6 +442,12 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_40 = UpgradeFromValues.UPGRADE_FROM_40.toString();
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 4.1.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_41 = UpgradeFromValues.UPGRADE_FROM_41.toString();
 
 
     /**
@@ -829,13 +836,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading in some cases -- see upgrade guide) in a backward compatible way. Default is <code>null</code>. " +
         "Please refer to the Kafka Streams upgrade guide for instructions on how and when to use this config. " +
         "Note that when upgrading from 3.5 to a newer version it is never required to specify this config, " +
-        "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config. " +
-        "Accepted values are \"" + UPGRADE_FROM_24 + "\", \"" +
-        UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
-        UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
-        UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\", \"" +
-        UPGRADE_FROM_35 + "\", \"" + UPGRADE_FROM_36 + "\", \"" + UPGRADE_FROM_37 + "\", \"" +
-        UPGRADE_FROM_38 + "\", \"" + UPGRADE_FROM_39 + "\", \"" + "(for upgrading from the corresponding old version).";
+        "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config.";
 
     /** {@code topology.optimization} */
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
@@ -901,6 +902,8 @@ public class StreamsConfig extends AbstractConfig {
                     APPLICATION_ID_DOC)
             .define(BOOTSTRAP_SERVERS_CONFIG, // required with no default value
                     Type.LIST,
+                    NO_DEFAULT_VALUE,
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
             .define(NUM_STANDBY_REPLICAS_CONFIG,
@@ -1099,7 +1102,8 @@ public class StreamsConfig extends AbstractConfig {
             .define(CONFIG_PROVIDERS_CONFIG,
                     Type.LIST,
                     List.of(),
-                    Importance.LOW, 
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                    Importance.LOW,
                     CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,
                     Type.BOOLEAN,
@@ -1175,6 +1179,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(METRIC_REPORTER_CLASSES_CONFIG,
                     Type.LIST,
                     JmxReporter.class.getName(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_RECORDING_LEVEL_CONFIG,

@@ -25,7 +25,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -92,7 +91,7 @@ public class StartAndStopLatchTest {
     @Test
     public void shouldReturnFalseWhenAwaitingForDependentLatchToComplete() throws Throwable {
         StartAndStopLatch depLatch = new StartAndStopLatch(1, 1, this::complete, null, clock);
-        dependents = Collections.singletonList(depLatch);
+        dependents = List.of(depLatch);
         latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
 
         future = asyncAwait(100);
@@ -106,7 +105,7 @@ public class StartAndStopLatchTest {
     @Test
     public void shouldReturnTrueWhenAwaitingForStartAndStopAndDependentLatch() throws Throwable {
         StartAndStopLatch depLatch = new StartAndStopLatch(1, 1, this::complete, null, clock);
-        dependents = Collections.singletonList(depLatch);
+        dependents = List.of(depLatch);
         latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
 
         future = asyncAwait(100);

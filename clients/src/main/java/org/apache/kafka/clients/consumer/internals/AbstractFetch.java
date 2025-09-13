@@ -147,6 +147,7 @@ public abstract class AbstractFetch implements Closeable {
      * @param data {@link FetchSessionHandler.FetchRequestData} that represents the session data
      * @param resp {@link ClientResponse} from which the {@link FetchResponse} will be retrieved
      */
+    @SuppressWarnings("NPathComplexity")
     protected void handleFetchSuccess(final Node fetchTarget,
                                       final FetchSessionHandler.FetchRequestData data,
                                       final ClientResponse resp) {
@@ -173,6 +174,8 @@ public abstract class AbstractFetch implements Closeable {
             final Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), requestVersion);
             final Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
             final FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
+
+            boolean needsWakeup = true;
 
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
@@ -220,7 +223,13 @@ public abstract class AbstractFetch implements Closeable {
                         metricAggregator,
                         fetchOffset);
                 fetchBuffer.add(completedFetch);
+                needsWakeup = false;
             }
+
+            // "Wake" the fetch buffer on any response, even if it's empty, to allow the consumer to not block
+            // indefinitely waiting on the fetch buffer to get data.
+            if (needsWakeup)
+                fetchBuffer.wakeup();
 
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
                 List<Node> leaderNodes = new ArrayList<>();

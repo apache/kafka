@@ -22,7 +22,7 @@ import org.apache.kafka.server.common.TransactionVersion;
 import java.util.HashSet;
 
 /**
- * Immutable object representing the target transition of the transaction metadata
+ * Represent the target transition of the transaction metadata. The topicPartitions field is mutable.
  */
 public record TxnTransitMetadata(
         long producerId,

@@ -322,7 +322,7 @@ public class DeleteConsumerGroupsTest {
     }
 
     private boolean checkGroupState(ConsumerGroupCommand.ConsumerGroupService service, String groupId, GroupState state) throws Exception {
-        return Objects.equals(service.collectGroupState(groupId).groupState, state);
+        return Objects.equals(service.collectGroupState(groupId).groupState(), state);
     }
 
     private ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
