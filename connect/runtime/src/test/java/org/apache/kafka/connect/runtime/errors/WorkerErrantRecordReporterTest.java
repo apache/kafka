@@ -35,7 +35,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -66,7 +66,7 @@ public class WorkerErrantRecordReporterTest {
         for (int i = 0; i < 4; i++) {
             TopicPartition topicPartition = new TopicPartition("topic", i);
             topicPartitions.add(topicPartition);
-            reporter.futures.put(topicPartition, Collections.singletonList(CompletableFuture.completedFuture(null)));
+            reporter.futures.put(topicPartition, List.of(CompletableFuture.completedFuture(null)));
         }
         assertFalse(reporter.futures.isEmpty());
         reporter.awaitFutures(topicPartitions);
@@ -105,7 +105,7 @@ public class WorkerErrantRecordReporterTest {
                 Time.SYSTEM,
                 errorHandlingMetrics
         );
-        retryWithToleranceOperator.reporters(Collections.singletonList(errorReporter));
+        retryWithToleranceOperator.reporters(List.of(errorReporter));
         reporter = new WorkerErrantRecordReporter(
                 retryWithToleranceOperator,
                 converter,

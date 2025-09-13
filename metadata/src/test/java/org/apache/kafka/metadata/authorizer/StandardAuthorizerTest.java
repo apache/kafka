@@ -569,9 +569,9 @@ public class StandardAuthorizerTest {
 
             String expectedAuditLog = "Principal = User:bob is Denied operation = READ " +
                 "from host = 127.0.0.1 on resource = Topic:LITERAL:alpha for request = Fetch " +
-                "with resourceRefCount = 1 based on rule MatchingAcl(acl=StandardAcl(resourceType=TOPIC, " +
+                "with resourceRefCount = 1 based on rule MatchingAcl(acl=StandardAcl[resourceType=TOPIC, " +
                 "resourceName=alp, patternType=PREFIXED, principal=User:bob, host=*, operation=READ, " +
-                "permissionType=DENY))";
+                "permissionType=DENY])";
 
             if (logIfDenied) {
                 Mockito.verify(auditLog).info(expectedAuditLog);
@@ -611,9 +611,9 @@ public class StandardAuthorizerTest {
 
             String expectedAuditLog = "Principal = User:bob is Allowed operation = READ " +
                 "from host = 127.0.0.1 on resource = Topic:LITERAL:green1 for request = Fetch " +
-                "with resourceRefCount = 1 based on rule MatchingAcl(acl=StandardAcl(resourceType=TOPIC, " +
+                "with resourceRefCount = 1 based on rule MatchingAcl(acl=StandardAcl[resourceType=TOPIC, " +
                 "resourceName=green, patternType=PREFIXED, principal=User:bob, host=*, operation=READ, " +
-                "permissionType=ALLOW))";
+                "permissionType=ALLOW])";
 
             if (logIfAllowed) {
                 Mockito.verify(auditLog).debug(expectedAuditLog);

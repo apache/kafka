@@ -300,12 +300,8 @@ public class ReplicaVerificationTool {
                 .ofType(Long.class)
                 .defaultsTo(30_000L);
             options = parser.parse(args);
-            if (args.length == 0 || options.has(helpOpt)) {
-                CommandLineUtils.printUsageAndExit(parser, "Validate that all replicas for a set of topics have the same data.");
-            }
-            if (options.has(versionOpt)) {
-                CommandLineUtils.printVersionAndExit();
-            }
+
+            CommandLineUtils.maybePrintHelpOrVersion(this, "Validate that all replicas for a set of topics have the same data.");
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
         }
 
@@ -348,18 +344,7 @@ public class ReplicaVerificationTool {
         }
     }
 
-    private static class MessageInfo {
-        final int replicaId;
-        final long offset;
-        final long nextOffset;
-        final long checksum;
-
-        MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
-            this.replicaId = replicaId;
-            this.offset = offset;
-            this.nextOffset = nextOffset;
-            this.checksum = checksum;
-        }
+    private record MessageInfo(int replicaId, long offset, long nextOffset, long checksum) {
     }
 
     protected static class ReplicaBuffer {

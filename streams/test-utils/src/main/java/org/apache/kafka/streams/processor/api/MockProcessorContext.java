@@ -214,7 +214,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
         this(
             mkProperties(mkMap(
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, ""),
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0")
             )),
             new TaskId(0, 0),
             null

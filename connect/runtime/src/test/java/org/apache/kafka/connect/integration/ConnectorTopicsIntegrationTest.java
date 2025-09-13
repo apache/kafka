@@ -34,8 +34,6 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -43,7 +41,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
@@ -115,7 +112,7 @@ public class ConnectorTopicsIntegrationTest {
         connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
         connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
 
-        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),
+        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, List.of(),
                 "Active topic set is not empty for connector: " + FOO_CONNECTOR);
 
         // start a source connector
@@ -124,8 +121,8 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.singletonList(FOO_TOPIC),
-                "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + FOO_CONNECTOR);
+        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, List.of(FOO_TOPIC),
+                "Active topic set is not: " + List.of(FOO_TOPIC) + " for connector: " + FOO_CONNECTOR);
 
         // start another source connector
         connect.configureConnector(BAR_CONNECTOR, defaultSourceConnectorProps(BAR_TOPIC));
@@ -133,8 +130,8 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(BAR_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertConnectorActiveTopics(BAR_CONNECTOR, Collections.singletonList(BAR_TOPIC),
-                "Active topic set is not: " + Collections.singletonList(BAR_TOPIC) + " for connector: " + BAR_CONNECTOR);
+        connect.assertions().assertConnectorActiveTopics(BAR_CONNECTOR, List.of(BAR_TOPIC),
+                "Active topic set is not: " + List.of(BAR_TOPIC) + " for connector: " + BAR_CONNECTOR);
 
         // start a sink connector
         connect.configureConnector(SINK_CONNECTOR, defaultSinkConnectorProps(FOO_TOPIC, BAR_TOPIC));
@@ -142,8 +139,8 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(SINK_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Arrays.asList(FOO_TOPIC, BAR_TOPIC),
-                "Active topic set is not: " + Arrays.asList(FOO_TOPIC, BAR_TOPIC) + " for connector: " + SINK_CONNECTOR);
+        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, List.of(FOO_TOPIC, BAR_TOPIC),
+                "Active topic set is not: " + List.of(FOO_TOPIC, BAR_TOPIC) + " for connector: " + SINK_CONNECTOR);
 
         // deleting a connector resets its active topics
         connect.deleteConnector(BAR_CONNECTOR);
@@ -151,7 +148,7 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorDoesNotExist(BAR_CONNECTOR,
                 "Connector wasn't deleted in time.");
 
-        connect.assertions().assertConnectorActiveTopics(BAR_CONNECTOR, Collections.emptyList(),
+        connect.assertions().assertConnectorActiveTopics(BAR_CONNECTOR, List.of(),
                 "Active topic set is not empty for deleted connector: " + BAR_CONNECTOR);
 
         // Unfortunately there's currently no easy way to know when the consumer caught up with
@@ -162,8 +159,8 @@ public class ConnectorTopicsIntegrationTest {
         // reset active topics for the sink connector after one of the topics has become idle
         connect.resetConnectorTopics(SINK_CONNECTOR);
 
-        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Collections.singletonList(FOO_TOPIC),
-                "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
+        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, List.of(FOO_TOPIC),
+                "Active topic set is not: " + List.of(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
     }
 
     @Test
@@ -177,7 +174,7 @@ public class ConnectorTopicsIntegrationTest {
         connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
         connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
 
-        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),
+        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, List.of(),
                 "Active topic set is not empty for connector: " + FOO_CONNECTOR);
 
         // start a source connector
@@ -186,8 +183,8 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.singletonList(FOO_TOPIC),
-                "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + FOO_CONNECTOR);
+        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, List.of(FOO_TOPIC),
+                "Active topic set is not: " + List.of(FOO_TOPIC) + " for connector: " + FOO_CONNECTOR);
 
         // start a sink connector
         connect.configureConnector(SINK_CONNECTOR, defaultSinkConnectorProps(FOO_TOPIC));
@@ -195,8 +192,8 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(SINK_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Collections.singletonList(FOO_TOPIC),
-                "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
+        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, List.of(FOO_TOPIC),
+                "Active topic set is not: " + List.of(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
 
         // deleting a connector resets its active topics
         connect.deleteConnector(FOO_CONNECTOR);
@@ -204,7 +201,7 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorDoesNotExist(FOO_CONNECTOR,
                 "Connector wasn't deleted in time.");
 
-        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),
+        connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, List.of(),
                 "Active topic set is not empty for deleted connector: " + FOO_CONNECTOR);
 
         // Unfortunately there's currently no easy way to know when the consumer caught up with
@@ -216,8 +213,8 @@ public class ConnectorTopicsIntegrationTest {
         Exception e = assertThrows(ConnectRestException.class, () -> connect.resetConnectorTopics(SINK_CONNECTOR));
         assertTrue(e.getMessage().contains("Topic tracking reset is disabled."));
 
-        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Collections.singletonList(FOO_TOPIC),
-                "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
+        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, List.of(FOO_TOPIC),
+                "Active topic set is not: " + List.of(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
     }
 
     @Test
@@ -252,7 +249,7 @@ public class ConnectorTopicsIntegrationTest {
     public void assertNoTopicStatusInStatusTopic() {
         String statusTopic = workerProps.get(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG);
         Consumer<byte[], byte[]> verifiableConsumer = connect.kafka().createConsumer(
-                Collections.singletonMap("group.id", "verifiable-consumer-group-0"));
+            Map.of("group.id", "verifiable-consumer-group-0"));
 
         List<PartitionInfo> partitionInfos = verifiableConsumer.partitionsFor(statusTopic);
         if (partitionInfos.isEmpty()) {
@@ -260,7 +257,7 @@ public class ConnectorTopicsIntegrationTest {
         }
         List<TopicPartition> partitions = partitionInfos.stream()
                 .map(info -> new TopicPartition(info.topic(), info.partition()))
-                .collect(Collectors.toList());
+                .toList();
         verifiableConsumer.assign(partitions);
 
         // Based on the implementation of {@link org.apache.kafka.connect.util.KafkaBasedLog#readToLogEnd}
