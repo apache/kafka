@@ -20,14 +20,13 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.{Optional, OptionalInt, Collection => JCollection, Map => JMap}
+import java.util.{OptionalInt, Collection => JCollection, Map => JMap}
 import java.util.concurrent.CompletableFuture
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
@@ -258,10 +257,6 @@ class KafkaRaftManager[T](
     )
 
     (controllerListenerName, networkClient)
-  }
-
-  override def voterNode(id: Int, listener: ListenerName): Optional[Node] = {
-    client.voterNode(id, listener)
   }
 
   override def recordSerde: RecordSerde[T] = serde

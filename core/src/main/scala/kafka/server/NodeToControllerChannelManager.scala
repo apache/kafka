@@ -79,7 +79,7 @@ class RaftControllerNodeProvider(
   val saslMechanism: String
 ) extends ControllerNodeProvider with Logging {
 
-  private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName).toScala
+  private def idToNode(id: Int): Option[Node] = raftManager.client.voterNode(id, listenerName).toScala
 
   override def getControllerInfo(): ControllerInformation =
     ControllerInformation(raftManager.client.leaderAndEpoch.leaderId.toScala.flatMap(idToNode),
