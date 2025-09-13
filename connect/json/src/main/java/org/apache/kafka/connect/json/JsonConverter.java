@@ -222,7 +222,7 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private JsonConverterConfig config;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
-    private Schema schema = null;     // if a schema is provided in config, this schema will be used for all messages
+    private Schema schema = null;     // if a schema is provided in config, this schema will be used for all messages for sink connector
 
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;

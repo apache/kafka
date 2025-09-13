@@ -30,6 +30,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -1772,10 +1773,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
      * timeout. See {@link #close(CloseOptions)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
+     * <p>
+     * This close operation will attempt all shutdown steps even if one of them fails.
+     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
-     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
-     *             before or while this function is called
-     * @throws org.apache.kafka.common.KafkaException for any other error during close
+     * @throws WakeupException    if {@link #wakeup()} is called before or while this function is called
+     * @throws InterruptException if the calling thread is interrupted before or while this function is called
+     * @throws KafkaException     for any other error during close
+     *                            (e.g., errors thrown from rebalance callbacks or commit callbacks from previous asynchronous commits)
      */
     @Override
     public void close() {
@@ -1799,13 +1804,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
      * Note that the execution time of callbacks (such as {@link OffsetCommitCallback} and
      * {@link ConsumerRebalanceListener}) does not consume time from the close timeout.
+     * <p>
+     * This close operation will attempt all shutdown steps even if one of them fails.
+     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
-     *
      * @throws IllegalArgumentException If the {@code timeout} is negative.
-     * @throws InterruptException If the thread is interrupted before or while this function is called
-     * @throws org.apache.kafka.common.KafkaException for any other error during close
+     * @throws WakeupException          if {@link #wakeup()} is called before or while this function is called
+     * @throws InterruptException       if the calling thread is interrupted before or while this function is called
+     * @throws KafkaException           for any other error during close
+     *                                  (e.g., errors thrown from rebalance callbacks or commit callbacks from previous asynchronous commits)
      */
     @Deprecated(since = "4.1")
     @Override
@@ -1833,8 +1842,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
      * Note that the execution time of callbacks (such as {@link OffsetCommitCallback} and
      * {@link ConsumerRebalanceListener}) does not consume time from the close timeout.
+     * <p>
+     * This close operation will attempt all shutdown steps even if one of them fails.
+     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
      * @param option see {@link CloseOptions}; cannot be {@code null}
+     * @throws IllegalArgumentException If the {@code option} timeout is negative
+     * @throws WakeupException          if {@link #wakeup()} is called before or while this function is called
+     * @throws InterruptException       if the calling thread is interrupted before or while this function is called
+     * @throws KafkaException           for any other error during close
+     *                                  (e.g., errors thrown from rebalance callbacks or commit callbacks from previous asynchronous commits)
      */
     @Override
     public void close(CloseOptions option) {

@@ -113,6 +113,35 @@
     <li>
         The <code>num.replica.fetchers</code> config has a new lower bound of 1.
     </li>
+    <li>
+        Improvements have been made to the validation rules and default values of LIST-type configurations
+        (<a href="https://cwiki.apache.org/confluence/x/HArXF">KIP-1161</a>).
+        <ul>
+            <li>
+                LIST-type configurations now enforce stricter validation:
+                <ul>
+                    <li>Null values are no longer accepted for most LIST-type configurations, except those that explicitly
+                        allow a null default value or where a null value has a well-defined semantic meaning.</li>
+                    <li>Duplicate entries within the same list are no longer permitted.</li>
+                    <li>Empty lists are no longer allowed, except in configurations where an empty list has a well-defined
+                        semantic meaning.</li>
+                </ul>
+            </li>
+            <li>
+                Several configurations have been reclassified from STRING-type to LIST-type to better reflect their
+                intended use as comma-separated values.
+            </li>
+            <li>
+                Default values for certain configurations have been adjusted to ensure better consistency with related
+                settings.
+            </li>
+            <li>
+                The <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to true, the
+                local log segments will be cleaned based on the values of <code>log.local.retention.bytes</code> and
+                <code>log.local.retention.ms</code>.
+            </li>
+        </ul>
+    </li>
 </ul>
 
 <h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0</a></h4>
@@ -225,6 +254,11 @@
         <li>
             The filename for rotated <code>state-change.log</code> files has been updated from <code>stage-change.log.[date]</code> to <code>state-change.log.[date]</code> in the log4j2.yaml configuration file.
             See <a href="https://issues.apache.org/jira/browse/KAFKA-19576">KAFKA-19576</a> for details.
+        </li>
+        <li>
+            Kafka Streams include a critical fix to upgrade from <code>KStreams#transformValues()</code> (remove with 4.0.0 release)
+            to <code>KStreams#processValues()</code>.
+            For more details, see the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a>.
         </li>
     </ul>
     <h5><a id="upgrade_servers_400_notable" href="#upgrade_servers_400_notable">Notable changes in 4.0.0</a></h5>
@@ -509,10 +543,15 @@
 			    See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
                         </li>
                         <li>
-			    The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
+                            The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
                         </li>
                         <li>
-			    For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
+                            For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
+                        </li>
+                        <li>
+                            If you are using <code>KStream#transformValues()</code> which was removed with Apache Kafka 4.0.0 release,
+                            and you need to rewrite your program to use <code>KStreams#processValues()</code> instead,
+                            pay close attention to the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a>.
                         </li>
                     </ul>
                 </li>
