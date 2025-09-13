@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.types.BoundField;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.common.protocol.types.Type;
@@ -27,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 public class Protocol {
 
@@ -49,7 +51,23 @@ public class Protocol {
                     subTypes.put(field.def.name, type.arrayElementType().get());
                 }
             } else if (type instanceof TaggedFields) {
-                b.append("_tagged_fields ");
+                Map<Integer, Field> taggedFields = new TreeMap<>(((TaggedFields) type).fields());
+                taggedFields.forEach((tag, taggedField) -> {
+                    if (taggedField.type.isArray()) {
+                        b.append("[");
+                        b.append(taggedField.name);
+                        b.append("]");
+                        if (!subTypes.containsKey(taggedField.name))
+                            subTypes.put(taggedField.name + "<" + tag.toString() + ">", taggedField.type.arrayElementType().get());
+                    } else {
+                        b.append(taggedField.name);
+                        if (!subTypes.containsKey(taggedField.name))
+                            subTypes.put(taggedField.name + "<" + tag.toString() + ">", taggedField.type);
+                    }
+                    b.append("<");
+                    b.append(tag);
+                    b.append("> ");
+                });
             } else {
                 b.append(field.def.name);
                 b.append(" ");
