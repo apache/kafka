@@ -1498,7 +1498,7 @@ public class CommitRequestManagerTest {
     public void testPollWithFatalErrorDuringCoordinatorIsEmptyAndClosing() {
         CommitRequestManager commitRequestManager = create(true, 100);
 
-        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(new TopicPartition("topic", 1),
                 new OffsetAndMetadata(0));
 
         var commitFuture = commitRequestManager.commitAsync(offsets);
