@@ -145,7 +145,7 @@ class ControllerServer(
 
       metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
 
-      featuresPublisher = new FeaturesPublisher(logContext)
+      featuresPublisher = new FeaturesPublisher(logContext, sharedServer.metadataPublishingFaultHandler)
 
       registrationsPublisher = new ControllerRegistrationsPublisher()
 
