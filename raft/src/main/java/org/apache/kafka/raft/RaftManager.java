@@ -33,9 +33,22 @@ public interface RaftManager<T> {
         long createdTimeMs
     );
 
+    /**
+     * Returns a Raft client.
+     * <p>
+     * Always returns the same instance. Callers must NOT close it.
+     */
     RaftClient<T> client();
 
+    /**
+     * Returns a replicated log.
+     * <p>
+     * Always returns the same instance. Callers must NOT close it.
+     */
     ReplicatedLog replicatedLog();
 
+    /**
+     * Returns the record Serde.
+     */
     RecordSerde<T> recordSerde();
 }
