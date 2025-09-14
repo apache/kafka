@@ -202,24 +202,39 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     public Map<TopicPartition, Throwable> handleUnsupportedVersionException(
         int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys
     ) {
-        log.warn("Broker " + brokerId + " does not support MAX_TIMESTAMP offset specs");
-        Map<TopicPartition, Throwable> maxTimestampPartitions = new HashMap<>();
+        Map<TopicPartition, Throwable> timestampPartitions = new HashMap<>();
+        // From newest to oldest version, so we can find the oldest version that doesn't support the TopicPartition
+        timestampPartitions.putAll(handleUnsupportedListOffsets(brokerId, exception, keys, ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP));
+        timestampPartitions.putAll(handleUnsupportedListOffsets(brokerId, exception, keys, ListOffsetsRequest.LATEST_TIERED_TIMESTAMP));
+        timestampPartitions.putAll(handleUnsupportedListOffsets(brokerId, exception, keys, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP));
+        timestampPartitions.putAll(handleUnsupportedListOffsets(brokerId, exception, keys, ListOffsetsRequest.MAX_TIMESTAMP));
+
+        // If there are no partitions with timestampType specs the UnsupportedVersionException cannot be handled
+        // and all partitions should be failed here.
+        // Otherwise, just the partitions with timestampType specs should be failed here and the fulfillment stage
+        // will later be retried for the potentially empty set of partitions with non-timestampType specs.
+        if (timestampPartitions.isEmpty()) {
+            return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
+        }
+
+        return timestampPartitions;
+    }
+
+    private Map<TopicPartition, Throwable> handleUnsupportedListOffsets(
+        int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys, long timestampType
+    ) {
+        log.warn("Broker " + brokerId + " does not support " + ListOffsetsRequest.timestampToString(timestampType) + " offset specs");
+        Map<TopicPartition, Throwable> timestampPartitions = new HashMap<>();
         for (TopicPartition topicPartition : keys) {
             Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
-            if (offsetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
-                maxTimestampPartitions.put(topicPartition, exception);
+            if (offsetTimestamp == timestampType) {
+                timestampPartitions.put(topicPartition, exception);
             }
         }
-        // If there are no partitions with MAX_TIMESTAMP specs the UnsupportedVersionException cannot be handled
-        // and all partitions should be failed here.
-        // Otherwise, just the partitions with MAX_TIMESTAMP specs should be failed here and the fulfillment stage
-        // will later be retried for the potentially empty set of partitions with non-MAX_TIMESTAMP specs.
-        if (maxTimestampPartitions.isEmpty()) {
-            return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
-        } else {
-            return maxTimestampPartitions;
-        }
+
+        return timestampPartitions;
     }
+
 
     public static PartitionLeaderStrategy.PartitionLeaderFuture<ListOffsetsResultInfo> newFuture(
         Collection<TopicPartition> topicPartitions,
