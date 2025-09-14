@@ -17,12 +17,22 @@
 package org.apache.kafka.common.header;
 
 /**
- * The key of a header is guaranteed to be non-null, while the value of a header may be null.
+ * A header is a key-value pair.
  */
 public interface Header {
-   
+
+    /**
+     * Returns the key of the header.
+     *
+     * @return the header's key; must not be null.
+     */
     String key();
 
+    /**
+     * Returns the value of the header.
+     *
+     * @return the header's value; may be null.
+     */
     byte[] value();
-   
+
 }
