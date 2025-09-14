@@ -176,7 +176,7 @@ jobs:
   test:
     needs: [configure, validate, load-catalog]
     if: ${{ ! needs.configure.outputs.is-draft }}
-    runs-on: asf-runner
+    runs-on: testy
     strategy:
       fail-fast: false
       matrix:
