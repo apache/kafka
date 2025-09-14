@@ -356,12 +356,12 @@ public enum MetadataVersion {
         } else {
             key = String.join(".", Arrays.copyOfRange(versionSegments, 0, numSegments));
         }
-        String errorMsg = "Unknown metadata.version '" + versionString + "'. Supported metadata.version are: "
-            + metadataVersionsToString(MetadataVersion.MINIMUM_VERSION,
-            unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting() : MetadataVersion.latestProduction());
 
         MetadataVersion metadataVersion = IBP_VERSIONS.get(key);
         if (metadataVersion == null || (!unstableFeatureVersionsEnabled && !metadataVersion.isProduction())) {
+            String errorMsg = "Unknown metadata.version '" + versionString + "'. Supported metadata.version are: "
+                + metadataVersionsToString(MetadataVersion.MINIMUM_VERSION,
+                unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting() : MetadataVersion.latestProduction());
             throw new IllegalArgumentException(errorMsg);
         }
         return metadataVersion;
