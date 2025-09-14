@@ -34,7 +34,6 @@ import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
-import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AbortTransactionHandler;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver;
 import org.apache.kafka.clients.admin.internals.AdminApiFuture;
@@ -237,7 +236,6 @@ import org.apache.kafka.common.requests.ListConfigResourcesRequest;
 import org.apache.kafka.common.requests.ListConfigResourcesResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -295,6 +293,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.admin.internals.AdminUtils.validAclOperations;
+import static org.apache.kafka.clients.admin.internals.ListOffsetsHandler.getOffsetFromSpec;
 import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_NAME;
 import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
@@ -5133,23 +5132,6 @@ public class KafkaAdminClient extends AdminClient {
                 }
             }
         };
-    }
-
-    private static long getOffsetFromSpec(OffsetSpec offsetSpec) {
-        if (offsetSpec instanceof TimestampSpec) {
-            return ((TimestampSpec) offsetSpec).timestamp();
-        } else if (offsetSpec instanceof OffsetSpec.EarliestSpec) {
-            return ListOffsetsRequest.EARLIEST_TIMESTAMP;
-        } else if (offsetSpec instanceof OffsetSpec.MaxTimestampSpec) {
-            return ListOffsetsRequest.MAX_TIMESTAMP;
-        } else if (offsetSpec instanceof OffsetSpec.EarliestLocalSpec) {
-            return ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
-        } else if (offsetSpec instanceof OffsetSpec.LatestTieredSpec) {
-            return ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
-        } else if (offsetSpec instanceof OffsetSpec.EarliestPendingUploadSpec) {
-            return ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP;
-        }
-        return ListOffsetsRequest.LATEST_TIMESTAMP;
     }
 
     /**

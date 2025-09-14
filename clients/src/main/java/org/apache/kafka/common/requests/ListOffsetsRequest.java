@@ -201,22 +201,4 @@ public class ListOffsetsRequest extends AbstractRequest {
         }
         return new ArrayList<>(topics.values());
     }
-
-    public static String timestampToString(long timestamp) {
-        if (timestamp == EARLIEST_TIMESTAMP) {
-            return "EARLIEST_TIMESTAMP";
-        } else if (timestamp == LATEST_TIMESTAMP) {
-            return "LATEST_TIMESTAMP";
-        } else if (timestamp == MAX_TIMESTAMP) {
-            return "MAX_TIMESTAMP";
-        } else if (timestamp == EARLIEST_LOCAL_TIMESTAMP) {
-            return "EARLIEST_LOCAL_TIMESTAMP";
-        } else if (timestamp == LATEST_TIERED_TIMESTAMP) {
-            return "LATEST_TIERED_TIMESTAMP";
-        } else if (timestamp == EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
-            return "EARLIEST_PENDING_UPLOAD_TIMESTAMP";
-        } else {
-            return "UNKNOWN_TIMESTAMP";
-        }
-    }
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.Batched;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -223,7 +224,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     private Map<TopicPartition, Throwable> handleUnsupportedListOffsets(
         int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys, long timestampType
     ) {
-        log.warn("Broker " + brokerId + " does not support " + ListOffsetsRequest.timestampToString(timestampType) + " offset specs");
+        log.warn("Broker " + brokerId + " does not support " + timestampToString(timestampType) + " offset specs");
         Map<TopicPartition, Throwable> timestampPartitions = new HashMap<>();
         for (TopicPartition topicPartition : keys) {
             Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
@@ -241,5 +242,60 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         Map<TopicPartition, Integer> partitionLeaderCache
     ) {
         return new PartitionLeaderStrategy.PartitionLeaderFuture<>(new HashSet<>(topicPartitions), partitionLeaderCache);
+    }
+
+    private static String timestampToString(long timestamp) {
+        if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
+            return "EARLIEST_TIMESTAMP";
+        } else if (timestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
+            return "LATEST_TIMESTAMP";
+        } else if (timestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
+            return "MAX_TIMESTAMP";
+        } else if (timestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
+            return "EARLIEST_LOCAL_TIMESTAMP";
+        } else if (timestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
+            return "LATEST_TIERED_TIMESTAMP";
+        } else if (timestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
+            return "EARLIEST_PENDING_UPLOAD_TIMESTAMP";
+        } else {
+            return "UNKNOWN_TIMESTAMP";
+        }
+    }
+
+    // Visible for test
+    public static long getOffsetFromSpec(OffsetSpec offsetSpec) {
+        if (offsetSpec instanceof OffsetSpec.TimestampSpec) {
+            return ((OffsetSpec.TimestampSpec) offsetSpec).timestamp();
+        } else if (offsetSpec instanceof OffsetSpec.EarliestSpec) {
+            return ListOffsetsRequest.EARLIEST_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.MaxTimestampSpec) {
+            return ListOffsetsRequest.MAX_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.EarliestLocalSpec) {
+            return ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.LatestTieredSpec) {
+            return ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.EarliestPendingUploadSpec) {
+            return ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP;
+        }
+        return ListOffsetsRequest.LATEST_TIMESTAMP;
+    }
+
+    // A reverse function to get an OffsetSpec from a long offset.
+    // This function only works for special, constant offset values.
+    public static OffsetSpec getSpecFromOffset(long offset) {
+        if (offset == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
+            return new OffsetSpec.EarliestSpec();
+        } else if (offset == ListOffsetsRequest.LATEST_TIMESTAMP) {
+            return new OffsetSpec.LatestSpec();
+        } else if (offset == ListOffsetsRequest.MAX_TIMESTAMP) {
+            return new OffsetSpec.MaxTimestampSpec();
+        } else if (offset == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
+            return new OffsetSpec.EarliestLocalSpec();
+        } else if (offset == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
+            return new OffsetSpec.LatestTieredSpec();
+        } else if (offset == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
+            return new OffsetSpec.EarliestPendingUploadSpec();
+        }
+        return OffsetSpec.forTimestamp(offset);
     }
 }
