@@ -38,7 +38,7 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
-    - uses: actions/labeler@v5
+    - uses: actions/labeler@v6
       with:
         configuration-path: .github/configs/labeler.yml
     - name: check small label

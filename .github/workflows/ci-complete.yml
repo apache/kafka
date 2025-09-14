@@ -72,7 +72,7 @@ jobs:
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
       - name: Download build scan archive
         id: download-build-scan
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         continue-on-error: true  # Don't want this step to fail the overall workflow
         with:
           github-token: ${{ github.token }}
