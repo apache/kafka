@@ -101,7 +101,7 @@ public class AppInfoParser {
         metrics.addMetric(metricName(metrics, "version", Map.of()), (Gauge<String>) (config, now) -> appInfo.getVersion());
         metrics.addMetric(metricName(metrics, "commit-id", Map.of()), (Gauge<String>) (config, now) -> appInfo.getCommitId());
         metrics.addMetric(metricName(metrics, "start-time-ms", Map.of()), (Gauge<Long>) (config, now) -> appInfo.getStartTimeMs());
-        // MirrorMaker doesn't set client-id tag into the metrics config, so we need to set it here.
+        // MirrorMaker/Worker doesn't set client-id tag into the metrics config, so we need to set it here.
         if (!metrics.config().tags().containsKey("client-id") && clientId != null) {
             metrics.addMetric(metricName(metrics, "version", Map.of("client-id", clientId)), (Gauge<String>) (config, now) -> appInfo.getVersion());
             metrics.addMetric(metricName(metrics, "commit-id", Map.of("client-id", clientId)), (Gauge<String>) (config, now) -> appInfo.getCommitId());
