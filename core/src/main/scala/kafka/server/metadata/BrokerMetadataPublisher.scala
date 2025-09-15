@@ -227,7 +227,7 @@ class BrokerMetadataPublisher(
       scramPublisher.onMetadataUpdate(delta, newImage, manifest)
 
       // Apply DelegationToken delta.
-      delegationTokenPublisher.onMetadataUpdate(delta, newImage)
+      delegationTokenPublisher.onMetadataUpdate(delta, newImage, manifest)
 
       // Apply ACL delta.
       aclPublisher.onMetadataUpdate(delta, newImage, manifest)

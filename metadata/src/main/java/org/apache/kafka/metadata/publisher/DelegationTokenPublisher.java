@@ -46,11 +46,7 @@ public class DelegationTokenPublisher implements MetadataPublisher {
 
     @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
-        onMetadataUpdate(delta, newImage);
-    }
-
-    public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
-        String deltaName = firstPublish 
+        String deltaName = firstPublish
             ? "initial MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset()
             : "update MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
         try {
