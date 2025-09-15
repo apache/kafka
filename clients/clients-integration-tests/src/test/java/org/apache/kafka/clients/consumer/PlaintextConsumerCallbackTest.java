@@ -171,25 +171,25 @@ public class PlaintextConsumerCallbackTest {
     @ClusterTest
     public void testOnPartitionsAssignedCalledWithNewPartitionsOnlyForClassicCooperative() throws InterruptedException {
         try (var consumer = createClassicConsumerCooperativeProtocol()) {
-            testOnPartitionsAssignedCalledWithNewPartitionsOnly(consumer, true);
+            testOnPartitionsAssignedCalledWithExpectedPartitions(consumer, true);
         }
     }
 
     @ClusterTest
     public void testOnPartitionsAssignedCalledWithNewPartitionsOnlyForAsyncConsumer() throws InterruptedException {
         try (var consumer = createConsumer(CONSUMER)) {
-            testOnPartitionsAssignedCalledWithNewPartitionsOnly(consumer, true);
+            testOnPartitionsAssignedCalledWithExpectedPartitions(consumer, true);
         }
     }
 
     @ClusterTest
     public void testOnPartitionsAssignedCalledWithNewPartitionsOnlyForClassicEager() throws InterruptedException {
         try (var consumer = createConsumer(CLASSIC)) {
-            testOnPartitionsAssignedCalledWithNewPartitionsOnly(consumer, false);
+            testOnPartitionsAssignedCalledWithExpectedPartitions(consumer, false);
         }
     }
 
-    private void testOnPartitionsAssignedCalledWithNewPartitionsOnly(
+    private void testOnPartitionsAssignedCalledWithExpectedPartitions(
             Consumer<byte[], byte[]> consumer,
             boolean expectNewPartitionsOnlyInCallback) throws InterruptedException {
         subscribeAndExpectOnPartitionsAssigned(consumer, List.of(topic), List.of(tp));
@@ -221,8 +221,7 @@ public class PlaintextConsumerCallbackTest {
         consumer.subscribe(topics, new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // Make sure the partition used in the test is actually assigned before continuing.
-                if (!partitions.isEmpty()) {
+                if (partitions.containsAll(expectedPartitionsInCallback)) {
                     partitionsFromCallback.set(partitions);
                     partitionsAssigned.set(true);
                 }
@@ -240,7 +239,7 @@ public class PlaintextConsumerCallbackTest {
         );
         // These are different types, so comparing values instead
         assertTrue(expectedPartitionsInCallback.containsAll(partitionsFromCallback.get()) && partitionsFromCallback.get().containsAll(expectedPartitionsInCallback),
-                "Expected newly added partitions " + expectedPartitionsInCallback + " as parameter for onPartitionsAssigned, but got " + partitionsFromCallback.get());
+                "Expected partitions " + expectedPartitionsInCallback + " as parameter for onPartitionsAssigned, but got " + partitionsFromCallback.get());
     }
 
     @ClusterTest
