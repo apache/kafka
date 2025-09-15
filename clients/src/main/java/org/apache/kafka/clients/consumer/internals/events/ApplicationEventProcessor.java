@@ -914,10 +914,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         return requestManagers.offsetsRequestManager.updateFetchPositions(deadlineMs);
     }
 
+    /**
+     * This interface exists mostly to make the code more intuitive. When {@link #requiresApplicationThread()}
+     * returns true, the {@link CompositePollEvent} processing needs to be <em>interrupted</em> so that processing
+     * can return to the application thread.
+     */
     private interface RequiresApplicationThreadExecution {
 
         boolean requiresApplicationThread();
     }
-
-
 }
