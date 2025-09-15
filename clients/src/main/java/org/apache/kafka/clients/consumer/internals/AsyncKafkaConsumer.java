@@ -50,7 +50,6 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableApplication
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.CompositePollEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompositePollResult;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
@@ -878,33 +877,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // of the fetches. A wakeup between returned fetches and returning records would lead to never
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
-
-                long pollTimeMs = timer.currentTimeMs();
-                long deadlineMs = calculateDeadlineMs(timer);
-
-                log.debug("******** TEMP DEBUG ******** timeout:    {}", timeout.toMillis());
-                log.debug("******** TEMP DEBUG ******** pollTimeMs: {}", pollTimeMs);
-                log.debug("******** TEMP DEBUG ******** deadlineMs: {}", deadlineMs);
-
-                ApplicationEvent.Type nextStep = ApplicationEvent.Type.POLL;
-
-                for (int i = 0; i < 10; i++) {
-                    CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextStep);
-                    applicationEventHandler.add(event);
-
-                    CompositePollResult result = ConsumerUtils.getResult(event.future(), defaultApiTimeoutMs.toMillis());
-
-                    if (result == CompositePollResult.NEEDS_OFFSET_COMMIT_CALLBACKS) {
-                        offsetCommitCallbackInvoker.executeCallbacks();
-                        nextStep = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
-                    } else if (result == CompositePollResult.NEEDS_BACKGROUND_EVENT_PROCESSING) {
-                        processBackgroundEvents();
-                        nextStep = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
-                    } else if (result == CompositePollResult.COMPLETE) {
-                        break;
-                    }
-                }
-
+                prepareFetch(timer);
                 final Fetch<K, V> fetch = collectFetch();
                 if (!fetch.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
@@ -929,6 +902,31 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
+        }
+    }
+
+    private void prepareFetch(Timer timer) {
+        long pollTimeMs = timer.currentTimeMs();
+        long deadlineMs = calculateDeadlineMs(timer);
+
+        ApplicationEvent.Type nextEventType = ApplicationEvent.Type.POLL;
+
+        while (true) {
+            CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextEventType);
+            applicationEventHandler.add(event);
+            CompositePollEvent.State state = ConsumerUtils.getResult(event.future(), defaultApiTimeoutMs.toMillis());
+
+            if (state == CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED) {
+                offsetCommitCallbackInvoker.executeCallbacks();
+                nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
+            } else if (state == CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED) {
+                processBackgroundEvents();
+                nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
+            } else if (state == CompositePollEvent.State.COMPLETE) {
+                break;
+            } else {
+                throw new IllegalStateException("Unexpected state: " + state);
+            }
         }
     }
 

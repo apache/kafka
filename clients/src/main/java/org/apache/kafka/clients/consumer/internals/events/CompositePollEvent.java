@@ -20,16 +20,23 @@ import java.util.concurrent.CompletableFuture;
 
 public class CompositePollEvent extends ApplicationEvent {
 
+    public enum State {
+
+        OFFSET_COMMIT_CALLBACKS_REQUIRED,
+        BACKGROUND_EVENT_PROCESSING_REQUIRED,
+        COMPLETE
+    }
+
     private final long deadlineMs;
     private final long pollTimeMs;
-    private final Type nextStep;
-    private final CompletableFuture<CompositePollResult> future;
+    private final Type nextEventType;
+    private final CompletableFuture<State> future;
 
-    public CompositePollEvent(long deadlineMs, long pollTimeMs, Type nextStep) {
+    public CompositePollEvent(long deadlineMs, long pollTimeMs, Type nextEventType) {
         super(Type.COMPOSITE_POLL);
         this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
-        this.nextStep = nextStep;
+        this.nextEventType = nextEventType;
         this.future = new CompletableFuture<>();
     }
 
@@ -41,16 +48,16 @@ public class CompositePollEvent extends ApplicationEvent {
         return pollTimeMs;
     }
 
-    public Type nextStep() {
-        return nextStep;
+    public Type nextEventType() {
+        return nextEventType;
     }
 
-    public CompletableFuture<CompositePollResult> future() {
+    public CompletableFuture<State> future() {
         return future;
     }
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", deadlineMs=" + deadlineMs + ", pollTimeMs=" + pollTimeMs + ", nextStep=" + nextStep + ", future=" + future;
+        return super.toStringBase() + ", deadlineMs=" + deadlineMs + ", pollTimeMs=" + pollTimeMs + ", nextEventType=" + nextEventType + ", future=" + future;
     }
 }
