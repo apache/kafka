@@ -406,7 +406,8 @@ public final class QuorumController implements Controller {
 
             KafkaEventQueue queue = null;
             try {
-                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+                queue = new KafkaEventQueue(time, logContext, threadNamePrefix, EventQueue.VoidEvent.INSTANCE, controllerMetrics::updateIdleTime);
+
                 return new QuorumController(
                     nonFatalFaultHandler,
                     fatalFaultHandler,
@@ -1488,7 +1489,6 @@ public final class QuorumController implements Controller {
         this.queue = queue;
         this.time = time;
         this.controllerMetrics = controllerMetrics;
-        queue.setIdleTimeCallback(controllerMetrics::updateIdleTime);
         this.snapshotRegistry = new SnapshotRegistry(logContext);
         this.deferredEventQueue = new DeferredEventQueue(logContext);
         this.resourceExists = new ConfigResourceExistenceChecker();

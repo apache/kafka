@@ -424,4 +424,55 @@ public class KafkaEventQueueTest {
             assertEquals(InterruptedException.class, ieTrapper2.exception.get().getClass());
         }
     }
+
+    @Test
+    public void testIdleTimeCallback() throws Exception {
+        MockTime time = new MockTime();
+        AtomicLong lastIdleTimeMs = new AtomicLong(0);
+        AtomicInteger idleCallCount = new AtomicInteger(0);
+
+        try (KafkaEventQueue queue = new KafkaEventQueue(
+                time,
+                logContext,
+                "testIdleTimeCallback",
+                EventQueue.VoidEvent.INSTANCE,
+                idleMs -> {
+                    lastIdleTimeMs.set(idleMs);
+                    idleCallCount.incrementAndGet();
+                })) {
+            
+            // Test 1: Two events with a wait in between using FutureEvent
+            CompletableFuture<String> event1 = new CompletableFuture<>();
+            queue.append(new FutureEvent<>(event1, () -> {
+                time.sleep(1);
+                return "event1-processed";
+            }));
+            assertEquals("event1-processed", event1.get());
+
+            long waitTime5Ms = 5;
+            time.sleep(waitTime5Ms);
+            
+            CompletableFuture<String> event2 = new CompletableFuture<>();
+            queue.append(new FutureEvent<>(event2, () -> {
+                time.sleep(1);
+                return "event2-processed";
+            }));
+            assertEquals("event2-processed", event2.get());
+
+            assertEquals(2, idleCallCount.get(), "Idle callback should have been called twice");
+            assertEquals(waitTime5Ms, lastIdleTimeMs.get(), "Last idle time should be 5ms");
+
+            // Test 2: Deferred event
+            long waitTime2Ms = 2;
+            CompletableFuture<Void> deferredEvent2 = new CompletableFuture<>();
+            queue.scheduleDeferred("deferred2",
+                    __ -> OptionalLong.of(time.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(waitTime2Ms)),
+                    () -> deferredEvent2.complete(null));
+            time.sleep(waitTime2Ms);
+            deferredEvent2.get();
+
+            assertEquals(waitTime2Ms, lastIdleTimeMs.get(), "Last idle time should be 2ms");
+            assertEquals(3, idleCallCount.get(), "Idle callback should have been called three times");
+        }
+    }
 }
