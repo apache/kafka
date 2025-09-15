@@ -81,8 +81,8 @@ public class UuidTest {
     public void testRandomUuid() {
         Uuid randomID = Uuid.randomUuid();
 
-        assertNotEquals(randomID, Uuid.ZERO_UUID);
-        assertNotEquals(randomID, Uuid.METADATA_TOPIC_ID);
+        assertNotEquals(Uuid.ZERO_UUID, randomID);
+        assertNotEquals(Uuid.METADATA_TOPIC_ID, randomID);
         assertFalse(randomID.toString().startsWith("-"));
     }
 
