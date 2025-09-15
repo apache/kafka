@@ -109,14 +109,14 @@ public final class ListOffsetsHandlerTest {
         ListOffsetsRequest request =
             handler.buildBatchedRequest(node.id(), offsetTimestampsByPartition.keySet()).build();
         List<ListOffsetsTopic> topics = request.topics();
-        assertEquals(3, topics.size());
+        assertEquals(4, topics.size());
         Map<TopicPartition, ListOffsetsPartition> partitions = new HashMap<>();
         for (ListOffsetsTopic topic : topics) {
             for (ListOffsetsPartition partition : topic.partitions()) {
                 partitions.put(new TopicPartition(topic.name(), partition.partitionIndex()), partition);
             }
         }
-        assertEquals(6, partitions.size());
+        assertEquals(7, partitions.size());
         for (Map.Entry<TopicPartition, ListOffsetsPartition> entry : partitions.entrySet()) {
             assertExpectedTimestamp(entry.getKey(), entry.getValue().timestamp());
         }
