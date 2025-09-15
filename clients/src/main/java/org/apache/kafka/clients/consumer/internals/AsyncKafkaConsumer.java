@@ -1500,7 +1500,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         int memberEpoch = groupMetadata.get().get().generationId();
 
-        final Exception error;
+        Exception error = null;
 
         if (streamsRebalanceListenerInvoker != null && streamsRebalanceListenerInvoker.isPresent()) {
 
