@@ -407,6 +407,7 @@ kafka.api.PlaintextEndToEndAuthorizationTest:
 - testProduceConsumeWithPrefixedAcls
 - testProduceConsumeWithWildcardAcls
 kafka.api.PlaintextProducerSendTest:
+- groupProtocol
 - testAutoCreateTopic
 - testBatchSizeZero
 - testBatchSizeZeroNoPartitionNoRecordKey
@@ -422,6 +423,7 @@ kafka.api.PlaintextProducerSendTest:
 - testSendNonCompressedMessageWithLogAppendTime
 - testSendOffset
 - testSendRecordBatchWithMaxRequestSizeAndHigher
+- testSendTimeoutErrorWhenPartitionDoesNotExist
 - testSendToPartition
 - testSendToPartitionWithFollowerShutdownShouldNotTimeout
 - testSendWithInvalidBeforeAndAfterTimestamp
