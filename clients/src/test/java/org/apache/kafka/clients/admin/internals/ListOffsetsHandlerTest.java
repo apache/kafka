@@ -62,6 +62,7 @@ public final class ListOffsetsHandlerTest {
     private final TopicPartition t1p1 = new TopicPartition("t1", 1);
     private final TopicPartition t2p0 = new TopicPartition("t2", 0);
     private final TopicPartition t2p1 = new TopicPartition("t2", 1);
+    private final TopicPartition t3p0 = new TopicPartition("t3", 0);
 
     private final Node node = new Node(1, "host", 1234);
 
@@ -73,8 +74,16 @@ public final class ListOffsetsHandlerTest {
             put(t1p1, ListOffsetsRequest.MAX_TIMESTAMP);
             put(t2p0, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
             put(t2p1, ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+            put(t3p0, ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
         }
     };
+
+    private final Map<Long, TopicPartition> timestampPartitionsByOffset = offsetTimestampsByPartition.entrySet()
+            .stream()
+            .collect(Collectors.toMap(
+                    Map.Entry::getValue,
+                    Map.Entry::getKey
+            ));
 
     @Test
     public void testBuildRequestSimple() {
@@ -218,35 +227,50 @@ public final class ListOffsetsHandlerTest {
 
     @Test
     public void testHandleResponseUnsupportedVersion() {
+        testHandleResponseUnsupportedVersion(OffsetSpec.maxTimestamp());
+        testHandleResponseUnsupportedVersion(OffsetSpec.earliestLocal());
+        testHandleResponseUnsupportedVersion(OffsetSpec.latestTiered());
+        testHandleResponseUnsupportedVersion(OffsetSpec.earliestPendingUpload());
+    }
+
+    private void testHandleResponseUnsupportedVersion(OffsetSpec offsetSpec) {
         int brokerId = 1;
         UnsupportedVersionException uve = new UnsupportedVersionException("");
-        Map<TopicPartition, OffsetSpec> maxTimestampPartitions = new HashMap<>();
-        maxTimestampPartitions.put(t1p1, OffsetSpec.maxTimestamp());
+        Map<TopicPartition, Long> supportedTimestampPartitions = new HashMap<>();
+        Long unsupportedOffsetSpec = ListOffsetsHandler.getOffsetFromSpec(offsetSpec);
+        for (Map.Entry<TopicPartition, Long> entry : offsetTimestampsByPartition.entrySet()) {
+            if (entry.getValue() > unsupportedOffsetSpec) {
+                supportedTimestampPartitions.put(entry.getKey(), entry.getValue());
+            }
+        }
 
         ListOffsetsHandler handler =
             new ListOffsetsHandler(offsetTimestampsByPartition, new ListOffsetsOptions(), logContext, defaultApiTimeoutMs);
 
-        final Map<TopicPartition, Long> nonMaxTimestampPartitions = new HashMap<>(offsetTimestampsByPartition);
-        maxTimestampPartitions.forEach((k, v) -> nonMaxTimestampPartitions.remove(k));
+        final Map<TopicPartition, Long> unsupportedTimestampPartitions = new HashMap<>(offsetTimestampsByPartition);
+        supportedTimestampPartitions.forEach((k, v) -> {
+            unsupportedTimestampPartitions.remove(k);
+        });
+
         // Unsupported version exceptions currently cannot be handled if there's no partition with a
-        // MAX_TIMESTAMP spec...
-        Set<TopicPartition> keysToTest = nonMaxTimestampPartitions.keySet();
+        // unsupported spec...
+        Set<TopicPartition> keysToTest = unsupportedTimestampPartitions.keySet();
         Set<TopicPartition> expectedFailures = keysToTest;
         assertEquals(
             mapToError(expectedFailures, uve),
             handler.handleUnsupportedVersionException(brokerId, uve, keysToTest));
 
-        // ...or if there are only partitions with MAX_TIMESTAMP specs.
-        keysToTest = maxTimestampPartitions.keySet();
+        // ...or if there are only partitions with offset specs.
+        keysToTest = Set.of(timestampPartitionsByOffset.get(ListOffsetsHandler.getOffsetFromSpec(offsetSpec)));
         expectedFailures = keysToTest;
         assertEquals(
             mapToError(expectedFailures, uve),
             handler.handleUnsupportedVersionException(brokerId, uve, keysToTest));
 
-        // What can be handled is a request with a mix of partitions with MAX_TIMESTAMP specs
-        // and partitions with non-MAX_TIMESTAMP specs.
+        // What can be handled is a request with a mix of partitions with current specs
+        // and partitions with non-current specs.
         keysToTest = offsetTimestampsByPartition.keySet();
-        expectedFailures = maxTimestampPartitions.keySet();
+        expectedFailures = keysToTest;
         assertEquals(
             mapToError(expectedFailures, uve),
             handler.handleUnsupportedVersionException(brokerId, uve, keysToTest));

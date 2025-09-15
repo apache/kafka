@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -203,12 +204,12 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     public Map<TopicPartition, Throwable> handleUnsupportedVersionException(
         int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys
     ) {
-        Map<TopicPartition, Throwable> timestampPartitions = new HashMap<>();
-        // From newest to oldest version, so we can find the oldest version that doesn't support the TopicPartition
-        timestampPartitions.putAll(handleUnsupportedListOffsets(brokerId, exception, keys, ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP));
-        timestampPartitions.putAll(handleUnsupportedListOffsets(brokerId, exception, keys, ListOffsetsRequest.LATEST_TIERED_TIMESTAMP));
-        timestampPartitions.putAll(handleUnsupportedListOffsets(brokerId, exception, keys, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP));
-        timestampPartitions.putAll(handleUnsupportedListOffsets(brokerId, exception, keys, ListOffsetsRequest.MAX_TIMESTAMP));
+        Optional<Long> minRequiredTimestampType = offsetTimestampsByPartition.values().stream().min(Comparator.naturalOrder());
+
+        if (minRequiredTimestampType.isEmpty()) {
+            return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
+        }
+        Map<TopicPartition, Throwable> timestampPartitions = handleUnsupportedListOffsets(brokerId, exception, keys, minRequiredTimestampType.get());
 
         // If there are no partitions with timestampType specs the UnsupportedVersionException cannot be handled
         // and all partitions should be failed here.
@@ -222,13 +223,13 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     }
 
     private Map<TopicPartition, Throwable> handleUnsupportedListOffsets(
-        int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys, long timestampType
+        int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys, long minRequireTimestamp
     ) {
-        log.warn("Broker " + brokerId + " does not support " + timestampToString(timestampType) + " offset specs");
+        log.warn("Broker " + brokerId + " does not support " + timestampToString(minRequireTimestamp) + " offset specs");
         Map<TopicPartition, Throwable> timestampPartitions = new HashMap<>();
         for (TopicPartition topicPartition : keys) {
             Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
-            if (offsetTimestamp == timestampType) {
+            if (offsetTimestamp < minRequireTimestamp) {
                 timestampPartitions.put(topicPartition, exception);
             }
         }
@@ -258,7 +259,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         } else if (timestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
             return "EARLIEST_PENDING_UPLOAD_TIMESTAMP";
         } else {
-            return "UNKNOWN_TIMESTAMP";
+            return "TIMESTAMP";
         }
     }
 
@@ -278,24 +279,5 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             return ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP;
         }
         return ListOffsetsRequest.LATEST_TIMESTAMP;
-    }
-
-    // A reverse function to get an OffsetSpec from a long offset.
-    // This function only works for special, constant offset values.
-    public static OffsetSpec getSpecFromOffset(long offset) {
-        if (offset == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
-            return new OffsetSpec.EarliestSpec();
-        } else if (offset == ListOffsetsRequest.LATEST_TIMESTAMP) {
-            return new OffsetSpec.LatestSpec();
-        } else if (offset == ListOffsetsRequest.MAX_TIMESTAMP) {
-            return new OffsetSpec.MaxTimestampSpec();
-        } else if (offset == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
-            return new OffsetSpec.EarliestLocalSpec();
-        } else if (offset == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
-            return new OffsetSpec.LatestTieredSpec();
-        } else if (offset == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
-            return new OffsetSpec.EarliestPendingUploadSpec();
-        }
-        return OffsetSpec.forTimestamp(offset);
     }
 }
