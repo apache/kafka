@@ -249,7 +249,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             // If there are enqueued callbacks to invoke, exit to the application thread.
             RequiresApplicationThreadExecution test = () -> offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
 
-            if (maybePauseCompositePoll(test, event.future(), CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED))
+            if (maybeInterruptCompositePoll(test, event.future(), CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED))
                 return;
 
             nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
@@ -265,7 +265,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             // If there are background events to process, exit to the application thread.
             RequiresApplicationThreadExecution test = () -> backgroundEventHandler.size() > 0;
 
-            if (maybePauseCompositePoll(test, event.future(), CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED))
+            if (maybeInterruptCompositePoll(test, event.future(), CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED))
                 return;
 
             nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
@@ -305,10 +305,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         event.future().completeExceptionally(new IllegalArgumentException("Unknown next step for composite poll: " + nextEventType));
     }
 
-    private boolean maybePauseCompositePoll(RequiresApplicationThreadExecution test,
-                                            CompletableFuture<CompositePollEvent.State> future,
-                                            CompositePollEvent.State state) {
-        if (test.requiresApplicationThread())
+    private boolean maybeInterruptCompositePoll(RequiresApplicationThreadExecution test,
+                                                CompletableFuture<CompositePollEvent.State> future,
+                                                CompositePollEvent.State state) {
+        if (!test.requiresApplicationThread())
             return false;
 
         log.debug("******** TEMP DEBUG ******** Pausing composite poll at state {}", state);
