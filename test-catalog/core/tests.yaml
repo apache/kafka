@@ -789,14 +789,6 @@ kafka.coordinator.transaction.TransactionCoordinatorTest:
 - testRetryInitProducerIdAfterProducerIdRotation
 - testTV2AllowsEpochReBumpingAfterFailedWrite
 - testVerifyPartitionHandling
-kafka.coordinator.transaction.TransactionLogTest:
-- shouldReadWriteMessages
-- shouldThrowExceptionWriteInvalidTxn
-- testDeserializeFutureTransactionLogValue
-- testDeserializeHighestSupportedTransactionLogValue
-- testReadTxnRecordKeyCanReadUnknownMessage
-- testSerializeTransactionLogValueToFlexibleVersion
-- testSerializeTransactionLogValueToHighestNonFlexibleVersion
 kafka.coordinator.transaction.TransactionMarkerChannelManagerTest:
 - shouldAbortAppendToLogOnEndTxnWhenNotCoordinatorError
 - shouldCompleteAppendToLogOnEndTxnWhenSendMarkersSucceed
