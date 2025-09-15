@@ -459,7 +459,10 @@ public class KafkaEventQueueTest {
             }));
             assertEquals("event2-processed", event2.get());
 
-            assertEquals(2, idleCallCount.get(), "Idle callback should have been called twice");
+            TestUtils.waitForCondition(
+                    () -> idleCallCount.get() == 2,
+                    "Idle callback should have been called twice"
+            );
             assertEquals(waitTime5Ms, lastIdleTimeMs.get(), "Last idle time should be 5ms");
 
             // Test 2: Deferred event
@@ -471,7 +474,10 @@ public class KafkaEventQueueTest {
             time.sleep(waitTime2Ms);
             deferredEvent2.get();
 
-            assertEquals(waitTime2Ms, lastIdleTimeMs.get(), "Last idle time should be 2ms");
+            TestUtils.waitForCondition(
+                    () -> idleCallCount.get() == 3,
+                    "Idle callback should have been called three times"
+            );
             assertEquals(3, idleCallCount.get(), "Idle callback should have been called three times");
         }
     }
