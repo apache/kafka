@@ -145,14 +145,10 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @MethodSource(Array("protocolAndAutoCreateTopicProviders"))
   def testSendTimeoutErrorMessageWhenTopicDoesNotExist(groupProtocol: String, autoCreateTopicsEnabled: String): Unit = {
     val producer = createProducer(maxBlockMs = 500)
-    try {
-      val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
-      val exception = assertThrows(classOf[ExecutionException], () => producer.send(record).get)
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-      assertEquals("Topic topic not present in metadata after 500 ms.", exception.getCause.getMessage)
-    } finally {
-      producer.close()
-    }
+    val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
+    val exception = assertThrows(classOf[ExecutionException], () => producer.send(record).get)
+    assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    assertEquals("Topic topic not present in metadata after 500 ms.", exception.getCause.getMessage)
   }
 
   /**
@@ -163,19 +159,15 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
   def testSendTimeoutErrorWhenPartitionDoesNotExist(groupProtocol: String): Unit = {
     val producer = createProducer(maxBlockMs = 500)
-    try {
-      // Send a message to auto-create the topic
-      var record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
-      assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
+    // Send a message to auto-create the topic
+    var record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
+    assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
 
-      // Send another message to the topic that exists but to a partition that does not
-      record = new ProducerRecord(topic, 10, "key".getBytes, "value".getBytes)
-      val exception = assertThrows(classOf[ExecutionException], () => producer.send(record).get)
-      assertInstanceOf(classOf[TimeoutException], exception.getCause)
-      assertEquals("Partition 10 of topic topic with partition count 4 is not present in metadata after 500 ms.", exception.getCause.getMessage)
-    } finally {
-      producer.close()
-    }
+    // Send another message to the topic that exists but to a partition that does not
+    record = new ProducerRecord(topic, 10, "key".getBytes, "value".getBytes)
+    val exception = assertThrows(classOf[ExecutionException], () => producer.send(record).get)
+    assertInstanceOf(classOf[TimeoutException], exception.getCause)
+    assertEquals("Partition 10 of topic topic with partition count 4 is not present in metadata after 500 ms.", exception.getCause.getMessage)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)

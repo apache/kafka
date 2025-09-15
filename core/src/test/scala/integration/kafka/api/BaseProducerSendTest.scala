@@ -48,14 +48,13 @@ import scala.jdk.javaapi.OptionConverters
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   def generateConfigs: scala.collection.Seq[KafkaConfig] = {
-    val overridingProps = brokerOverrides
     val numServers = 2
     TestUtils.createBrokerConfigs(
       numServers,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile,
       saslProperties = serverSaslProperties
-    ).map(KafkaConfig.fromProps(_, overridingProps))
+    ).map(KafkaConfig.fromProps(_, brokerOverrides))
   }
 
   protected def brokerOverrides: Properties = {
