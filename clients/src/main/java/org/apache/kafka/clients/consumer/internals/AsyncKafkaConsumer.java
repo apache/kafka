@@ -1445,7 +1445,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             () -> autoCommitOnClose(closeTimer), firstException);
         swallow(log, Level.ERROR, "Failed to stop finding coordinator",
             this::stopFindCoordinatorOnClose, firstException);
-        swallow(log, Level.ERROR, "Failed to release group assignment",
+        swallow(log, Level.ERROR, "Failed to run rebalance callbacks",
             this::runRebalanceCallbacksOnClose, firstException);
         swallow(log, Level.ERROR, "Failed to leave group while closing consumer",
             () -> leaveGroupOnClose(closeTimer, membershipOperation), firstException);
@@ -1502,7 +1502,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         final Exception error;
 
-        if (streamsRebalanceListenerInvoker.isPresent()) {
+        if (streamsRebalanceListenerInvoker != null && streamsRebalanceListenerInvoker.isPresent()) {
 
             if (memberEpoch > 0) {
                 error = streamsRebalanceListenerInvoker.get().invokeAllTasksRevoked();
@@ -1510,7 +1510,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 error = streamsRebalanceListenerInvoker.get().invokeAllTasksLost();
             }
 
-        } else {
+        } else if (rebalanceListenerInvoker != null) {
 
             Set<TopicPartition> assignedPartitions = groupAssignmentSnapshot.get();
 
