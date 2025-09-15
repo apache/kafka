@@ -82,7 +82,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime();
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
@@ -95,6 +95,7 @@ public class ApplicationEventProcessorTest {
     private final StreamsMembershipManager streamsMembershipManager = mock(StreamsMembershipManager.class);
     private final BackgroundEventHandler backgroundEventHandler = mock(BackgroundEventHandler.class);
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
+    private final NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
     private ApplicationEventProcessor processor;
 
     private void setupProcessor(boolean withGroupId) {
@@ -114,6 +115,7 @@ public class ApplicationEventProcessorTest {
                 new LogContext(),
                 time,
                 requestManagers,
+                networkClientDelegate,
                 metadata,
                 subscriptionState,
                 backgroundEventHandler,
@@ -138,6 +140,7 @@ public class ApplicationEventProcessorTest {
             new LogContext(),
             time,
             requestManagers,
+            networkClientDelegate,
             metadata,
             subscriptionState,
             backgroundEventHandler,

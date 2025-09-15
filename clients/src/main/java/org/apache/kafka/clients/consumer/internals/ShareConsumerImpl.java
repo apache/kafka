@@ -303,6 +303,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
+                    networkClientDelegateSupplier,
                     backgroundEventHandler,
                     Optional.empty()
             );
@@ -387,7 +388,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             backgroundEventQueue, time, asyncConsumerMetrics);
 
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =
-                () -> new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics);
+                NetworkClientDelegate.supplier(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics);
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -412,6 +413,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
+                networkClientDelegateSupplier,
                 backgroundEventHandler,
                 Optional.empty()
         );

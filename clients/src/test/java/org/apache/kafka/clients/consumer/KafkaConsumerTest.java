@@ -110,7 +110,6 @@ import org.apache.kafka.test.TestUtils;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -3141,7 +3140,6 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Disabled
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) throws InterruptedException {

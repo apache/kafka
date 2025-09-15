@@ -502,6 +502,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
+                    networkClientDelegateSupplier,
                     backgroundEventHandler,
                     Optional.of(offsetCommitCallbackInvoker)
             );
@@ -660,7 +661,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             new RebalanceCallbackMetricsManager(metrics)
         );
         ApiVersions apiVersions = new ApiVersions();
-        Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
+        Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
             time,
             config,
             logContext,
@@ -695,6 +696,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
+                networkClientDelegateSupplier,
                 backgroundEventHandler,
                 Optional.of(offsetCommitCallbackInvoker)
         );
