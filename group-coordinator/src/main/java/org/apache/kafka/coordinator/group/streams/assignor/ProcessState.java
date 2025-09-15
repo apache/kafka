@@ -87,9 +87,23 @@ public class ProcessState {
         return assignedStandbyTasks;
     }
 
-    public void addTask(final String memberId, final TaskId taskId, final boolean isActive) {
-        addTaskInternal(memberId, taskId, isActive);
-        membersByLoad = null; // reset, since it may not be sorted anymore
+    /**
+     * Assigns a task to a member of this process.
+     *
+     * @param memberId The member to assign to.
+     * @param taskId   The task to assign.
+     * @param isActive Whether the task is an active task (true) or a standby task (false).
+     * @return the number of tasks that `memberId` has assigned after adding the new task.
+     */
+    public int addTask(final String memberId, final TaskId taskId, final boolean isActive) {
+        int newTaskCount = addTaskInternal(memberId, taskId, isActive);
+        // We cannot efficiently add a task to a specific member and keep the memberByLoad ordered correctly.
+        // So we just drop the heap here.
+        //
+        // The order in which addTask and addTaskToLeastLoadedMember is called ensures that the heaps are built at most
+        // twice (once for active, once for standby)
+        membersByLoad = null;
+        return newTaskCount;
     }
 
     private int addTaskInternal(final String memberId, final TaskId taskId, final boolean isActive) {
@@ -108,6 +122,14 @@ public class ProcessState {
         return newTaskCount;
     }
 
+    /**
+     * Assigns a task to the least loaded member of this process
+     *
+     * @param taskId   The task to assign.
+     * @param isActive Whether the task is an active task (true) or a standby task (false).
+     * @return the number of tasks that `memberId` has assigned after adding the new task, or -1 if the
+     *         task was not assigned to any member.
+     */
     public int addTaskToLeastLoadedMember(final TaskId taskId, final boolean isActive) {
         if (memberToTaskCounts.isEmpty()) {
             return -1;
