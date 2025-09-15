@@ -68,7 +68,8 @@ trait AutoTopicCreationManager {
 /**
  * Thread-safe cache that stores topic creation errors with per-entry expiration.
  * - Expiration: maintained by a min-heap (priority queue) on expiration time
- * - Capacity: enforced by insertion-order removal (keeps the most recently inserted entries)
+ * - Capacity: enforced by evicting entries with earliest expiration time (not LRU)
+ * - Updates: old entries remain in queue but are ignored via reference equality check
  */
 private[server] class ExpiringErrorCache(maxSize: Int, time: Time) {
 

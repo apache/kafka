@@ -380,7 +380,8 @@ class AutoTopicCreationManagerTest {
       groupCoordinator,
       transactionCoordinator,
       shareCoordinator,
-      mockTime)
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
 
     val topics = Map(
       "test-topic-1" -> new CreatableTopic().setName("test-topic-1").setNumPartitions(1).setReplicationFactor(1)
@@ -408,7 +409,7 @@ class AutoTopicCreationManagerTest {
       0, 0, false, null, null, createTopicsResponse)
 
     // Trigger the completion handler
-    argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
+    argumentCaptor.getValue.onComplete(clientResponse)
 
     // Verify that the error was cached
     val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic-1"), mockTime.milliseconds())
@@ -425,7 +426,8 @@ class AutoTopicCreationManagerTest {
       groupCoordinator,
       transactionCoordinator,
       shareCoordinator,
-      mockTime)
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
 
     val topics = Map(
       "success-topic" -> new CreatableTopic().setName("success-topic").setNumPartitions(1).setReplicationFactor(1),
@@ -458,7 +460,7 @@ class AutoTopicCreationManagerTest {
     val clientResponse = new ClientResponse(header, null, null,
       0, 0, false, null, null, createTopicsResponse)
 
-    argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
+    argumentCaptor.getValue.onComplete(clientResponse)
 
     // Only the failed topic should be cached
     val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("success-topic", "failed-topic", "nonexistent-topic"), mockTime.milliseconds())
@@ -475,7 +477,8 @@ class AutoTopicCreationManagerTest {
       groupCoordinator,
       transactionCoordinator,
       shareCoordinator,
-      mockTime)
+      mockTime,
+      topicErrorCacheCapacity = testCacheCapacity)
 
 
     // First cache an error by simulating topic creation failure
@@ -505,7 +508,7 @@ class AutoTopicCreationManagerTest {
       0, 0, false, null, null, createTopicsResponse)
 
     // Cache the error at T0
-    argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
+    argumentCaptor.getValue.onComplete(clientResponse)
 
     // Verify error is cached and accessible within TTL
     val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(Set("test-topic"), mockTime.milliseconds())
@@ -521,28 +524,16 @@ class AutoTopicCreationManagerTest {
   }
 
   @Test
-  def testErrorCacheLRUEviction(): Unit = {
-    // Create a config with a small cache size for testing
-    val props = TestUtils.createBrokerConfig(1)
-    props.setProperty(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
-    props.setProperty(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG, "3") // Small cache size for testing
-    
-    props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
-    props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
-    props.setProperty(ShareCoordinatorConfig.STATE_TOPIC_REPLICATION_FACTOR_CONFIG , internalTopicPartitions.toString)
-    
-    props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
-    props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
-    props.setProperty(ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
-    
-    val smallCacheConfig = KafkaConfig.fromProps(props)
-    
-    // Verify the configuration was properly set
-    assertEquals(3, smallCacheConfig.maxIncrementalFetchSessionCacheSlots, "Cache size configuration should be 3")
-    
-    // Replace the test class's config with our smallCacheConfig
-    // so that initializeRequestContext will use the correct config
-    config = smallCacheConfig
+  def testErrorCacheExpirationBasedEviction(): Unit = {
+    // Create manager with small cache size for testing
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      shareCoordinator,
+      mockTime,
+      topicErrorCacheCapacity = 3)
     
     val requestContext = initializeRequestContextWithUserPrincipal()
     
@@ -575,7 +566,7 @@ class AutoTopicCreationManagerTest {
       val clientResponse = new ClientResponse(header, null, null,
         0, 0, false, null, null, createTopicsResponse)
       
-      argumentCaptor.getValue.asInstanceOf[ControllerRequestCompletionHandler].onComplete(clientResponse)
+      argumentCaptor.getValue.onComplete(clientResponse)
       
       // Advance time slightly between additions to ensure different timestamps
       mockTime.sleep(10)
