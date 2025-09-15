@@ -1,7 +1,7 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
+ * this work for additional information registryarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -358,6 +358,7 @@ class AbstractFetcherManagerTest {
 
   @Test
   def testMetricsClassName(): Unit = {
+    val registry = KafkaYammerMetrics.defaultRegistry()
     val config = mock(classOf[KafkaConfig])
     val replicaManager = mock(classOf[ReplicaManager])
     val quotaManager = mock(classOf[ReplicationQuotaManager])
@@ -368,10 +369,11 @@ class AbstractFetcherManagerTest {
     val metadataVersionSupplier = () => MetadataVersion.LATEST_PRODUCTION
     val brokerEpochSupplier = () => 1L
 
-    val replicaAlterLogDirsManager = new ReplicaAlterLogDirsManager(config, replicaManager, quotaManager, brokerTopicStats, directoryEventHandler)
-    val replicaFetcherManager = new ReplicaFetcherManager(config, replicaManager, metrics, time, quotaManager, metadataVersionSupplier, brokerEpochSupplier)
-
-    assertEquals("ReplicaAlterLogDirsManager", replicaAlterLogDirsManager.getMetricsClassName)
-    assertEquals("ReplicaFetcherManager", replicaFetcherManager.getMetricsClassName)
+    val _ = new ReplicaAlterLogDirsManager(config, replicaManager, quotaManager, brokerTopicStats, directoryEventHandler)
+    val _ = new ReplicaFetcherManager(config, replicaManager, metrics, time, quotaManager, metadataVersionSupplier, brokerEpochSupplier)
+    val existReplicaAlterLogDirsManager = registry.allMetrics.entrySet().stream().filter(metric => metric.getKey.getType == "ReplicaAlterLogDirsManager").findFirst()
+    val existReplicaFetcherManager = registry.allMetrics.entrySet().stream().filter(metric => metric.getKey.getType == "ReplicaFetcherManager").findFirst()
+    assertTrue(existReplicaAlterLogDirsManager.isPresent)
+    assertTrue(existReplicaFetcherManager.isPresent)
   }
 }

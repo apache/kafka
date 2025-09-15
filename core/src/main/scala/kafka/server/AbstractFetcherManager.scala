@@ -228,10 +228,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
       fetcherThreadMap.clear()
     }
   }
-
-  def getMetricsClassName: String = {
-    this.metricsClassName
-  }
 }
 
 /**
