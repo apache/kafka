@@ -83,35 +83,19 @@ private[server] class ExpiringErrorCache(maxSize: Int, time: Time) {
   def put(topicName: String, errorMessage: String, ttlMs: Long): Unit = {
     lock.lock()
     try {
-      val existing = byTopic.get(topicName)
-      if (existing != null) {
-        // Remove old instance from structures
-        expiryQueue.remove(existing)
-      }
-
       val currentTimeMs = time.milliseconds()
       val expirationTimeMs = currentTimeMs + ttlMs
       val entry = Entry(topicName, errorMessage, expirationTimeMs)
       byTopic.put(topicName, entry)
       expiryQueue.add(entry)
 
-      // Clean up expired entries
-      while (!expiryQueue.isEmpty && expiryQueue.peek().expirationTimeMs <= currentTimeMs) {
-        val expired = expiryQueue.poll()
-        val current = byTopic.get(expired.topicName)
-        if (current != null && (current eq expired)) {
-          byTopic.remove(expired.topicName)
-        }
-      }
-
-      // Enforce capacity by removing entries with earliest expiration time first
-      while (byTopic.size() > maxSize && !expiryQueue.isEmpty) {
+      // Clean up expired entries and enforce capacity
+      while (!expiryQueue.isEmpty && 
+             (expiryQueue.peek().expirationTimeMs <= currentTimeMs || byTopic.size() > maxSize)) {
         val evicted = expiryQueue.poll()
-        if (evicted != null) {
-          val current = byTopic.get(evicted.topicName)
-          if (current != null && (current eq evicted)) {
-            byTopic.remove(evicted.topicName)
-          }
+        val current = byTopic.get(evicted.topicName)
+        if (current != null && (current eq evicted)) {
+          byTopic.remove(evicted.topicName)
         }
       }
     } finally {
