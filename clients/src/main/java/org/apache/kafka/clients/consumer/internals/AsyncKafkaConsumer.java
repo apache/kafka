@@ -1517,7 +1517,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void autoCommitOnClose(final Timer timer) {
-        if (groupMetadata.get().isEmpty())
+        if (groupMetadata.get().isEmpty() || applicationEventHandler == null)
             return;
 
         if (autoCommitEnabled)
@@ -1527,7 +1527,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void runRebalanceCallbacksOnClose() {
-        if (groupMetadata.get().isEmpty())
+        if (groupMetadata.get().isEmpty() || rebalanceListenerInvoker == null)
             return;
 
         int memberEpoch = groupMetadata.get().get().generationId();
@@ -1553,7 +1553,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void leaveGroupOnClose(final Timer timer, final CloseOptions.GroupMembershipOperation membershipOperation) {
-        if (groupMetadata.get().isEmpty())
+        if (groupMetadata.get().isEmpty() ||  applicationEventHandler == null)
             return;
 
         log.debug("Leaving the consumer group during consumer close");
@@ -1569,7 +1569,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void stopFindCoordinatorOnClose() {
-        if (groupMetadata.get().isEmpty())
+        if (groupMetadata.get().isEmpty() || applicationEventHandler == null)
             return;
         log.debug("Stop finding coordinator during consumer close");
         applicationEventHandler.add(new StopFindCoordinatorOnCloseEvent());
@@ -1634,7 +1634,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void awaitPendingAsyncCommitsAndExecuteCommitCallbacks(Timer timer, boolean enableWakeup) {
-        if (lastPendingAsyncCommit == null) {
+        if (lastPendingAsyncCommit == null || offsetCommitCallbackInvoker == null) {
             return;
         }
 
