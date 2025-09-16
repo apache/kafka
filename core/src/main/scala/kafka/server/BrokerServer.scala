@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWriter}
+import kafka.coordinator.group.CoordinatorPartitionWriter
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.network.SocketServer
@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
+import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
@@ -42,7 +42,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRec
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
-import org.apache.kafka.metadata.publisher.AclPublisher
+import org.apache.kafka.metadata.publisher.{AclPublisher, ScramPublisher}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
@@ -387,7 +387,7 @@ class BrokerServer(
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, clientToControllerChannelManager, groupCoordinator,
-        transactionCoordinator, shareCoordinator)
+        transactionCoordinator, shareCoordinator, time)
 
       dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
@@ -463,8 +463,7 @@ class BrokerServer(
         tokenManager = tokenManager,
         apiVersionManager = apiVersionManager,
         clientMetricsManager = clientMetricsManager,
-        groupConfigManager = groupConfigManager,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch)
+        groupConfigManager = groupConfigManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
@@ -498,7 +497,7 @@ class BrokerServer(
           quotaManagers,
         ),
         new ScramPublisher(
-          config,
+          config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
           credentialProvider),
@@ -611,7 +610,8 @@ class BrokerServer(
     )
     val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
       time,
-      replicaManager,
+      tp => replicaManager.getLog(tp).toJava,
+      tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
       config.groupCoordinatorConfig.offsetsLoadBufferSize
     )
@@ -641,7 +641,8 @@ class BrokerServer(
     val serde = new ShareCoordinatorRecordSerde
     val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
       time,
-      replicaManager,
+      tp => replicaManager.getLog(tp).toJava,
+      tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
       config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
     )
@@ -778,6 +779,9 @@ class BrokerServer(
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
       if (shareCoordinator != null)
         CoreUtils.swallow(shareCoordinator.shutdown(), this)
+
+      if (autoTopicCreationManager != null)
+        CoreUtils.swallow(autoTopicCreationManager.close(), this)
 
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)

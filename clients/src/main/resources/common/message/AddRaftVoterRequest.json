@@ -18,7 +18,8 @@
   "type": "request",
   "listeners": ["controller", "broker"],
   "name": "AddRaftVoterRequest",
-  "validVersions": "0",
+  // Version 1 adds the AckWhenCommitted field.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+",
@@ -37,6 +38,8 @@
         "about": "The hostname." },
       { "name": "Port", "type": "uint16", "versions": "0+",
         "about": "The port." }
-    ]}
+    ]},
+    { "name": "AckWhenCommitted", "type": "bool", "versions": "1+", "default": "true",
+      "about": "When true, return a response after the new voter set is committed. Otherwise, return after the leader writes the changes locally." }
   ]
 }

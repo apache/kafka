@@ -226,7 +226,7 @@ public class ReassignPartitionsCommand {
         if (!partsOngoing && !movesOngoing && !preserveThrottles) {
             // If the partition assignments and replica assignments are done, clear any throttles
             // that were set.  We have to clear all throttles, because we don't have enough
-            // information to know all of the source brokers that might have been involved in the
+            // information to know all the source brokers that might have been involved in the
             // previous reassignments.
             clearAllThrottles(adminClient, targetParts);
         }
@@ -279,12 +279,12 @@ public class ReassignPartitionsCommand {
         bld.add("Status of partition reassignment:");
         states.keySet().stream().sorted(ReassignPartitionsCommand::compareTopicPartitions).forEach(topicPartition -> {
             PartitionReassignmentState state = states.get(topicPartition);
-            if (state.done) {
-                if (state.currentReplicas.equals(state.targetReplicas)) {
+            if (state.done()) {
+                if (state.currentReplicas().equals(state.targetReplicas())) {
                     bld.add(String.format("Reassignment of partition %s is completed.", topicPartition));
                 } else {
-                    String currentReplicaStr = state.currentReplicas.stream().map(String::valueOf).collect(Collectors.joining(","));
-                    String targetReplicaStr = state.targetReplicas.stream().map(String::valueOf).collect(Collectors.joining(","));
+                    String currentReplicaStr = state.currentReplicas().stream().map(String::valueOf).collect(Collectors.joining(","));
+                    String targetReplicaStr = state.targetReplicas().stream().map(String::valueOf).collect(Collectors.joining(","));
 
                     bld.add("There is no active reassignment of partition " + topicPartition + ", " +
                         "but replica set is " + currentReplicaStr + " rather than " +
@@ -467,8 +467,8 @@ public class ReassignPartitionsCommand {
                 bld.add("Partition " + replica.topic() + "-" + replica.partition() + " cannot be found " +
                     "in any live log directory on broker " + replica.brokerId() + ".");
             } else if (state instanceof ActiveMoveState) {
-                String targetLogDir = ((ActiveMoveState) state).targetLogDir;
-                String futureLogDir = ((ActiveMoveState) state).futureLogDir;
+                String targetLogDir = ((ActiveMoveState) state).targetLogDir();
+                String futureLogDir = ((ActiveMoveState) state).futureLogDir();
                 if (targetLogDir.equals(futureLogDir)) {
                     bld.add("Reassignment of replica " + replica + " is still in progress.");
                 } else {
@@ -477,8 +477,8 @@ public class ReassignPartitionsCommand {
                         "instead of " + targetLogDir + ".");
                 }
             } else if (state instanceof CancelledMoveState) {
-                String targetLogDir = ((CancelledMoveState) state).targetLogDir;
-                String currentLogDir = ((CancelledMoveState) state).currentLogDir;
+                String targetLogDir = ((CancelledMoveState) state).targetLogDir();
+                String currentLogDir = ((CancelledMoveState) state).currentLogDir();
                 bld.add("Partition " + replica.topic() + "-" + replica.partition() + " on broker " +
                     replica.brokerId() + " is not being moved from log dir " + currentLogDir + " to " +
                     targetLogDir + ".");
@@ -566,10 +566,11 @@ public class ReassignPartitionsCommand {
         List<String> topicsToReassign = t0.getValue();
 
         Map<TopicPartition, List<Integer>> currentAssignments = getReplicaAssignmentForTopics(adminClient, topicsToReassign);
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentAssignments);
         List<UsableBroker> usableBrokers = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
         Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentAssignments, usableBrokers);
         System.out.printf("Current partition replica assignment%n%s%n%n",
-            formatAsReassignmentJson(currentAssignments, Map.of()));
+            formatAsReassignmentJson(currentAssignments, currentReplicaLogDirs));
         System.out.printf("Proposed partition reassignment configuration%n%s%n",
             formatAsReassignmentJson(proposedAssignments, Map.of()));
         return Map.entry(proposedAssignments, currentAssignments);
@@ -775,7 +776,7 @@ public class ReassignPartitionsCommand {
 
         verifyBrokerIds(adminClient, brokers);
         Map<TopicPartition, List<Integer>> currentParts = getReplicaAssignmentForPartitions(adminClient, proposedParts.keySet());
-        System.out.println(currentPartitionReplicaAssignmentToString(proposedParts, currentParts));
+        System.out.println(currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts));
 
         if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
             System.out.println(YOU_MUST_RUN_VERIFY_PERIODICALLY_MESSAGE);
@@ -849,7 +850,7 @@ public class ReassignPartitionsCommand {
                             .map(Object::toString)
                             .collect(Collectors.joining(","))));
             } else {
-                // If a replica has been moved to a new host and we also specified a particular
+                // If a replica has been moved to a new host, and we also specified a particular
                 // log directory, we will have to keep retrying the alterReplicaLogDirs
                 // call.  It can't take effect until the replica is moved to that host.
                 time.sleep(100);
@@ -916,20 +917,23 @@ public class ReassignPartitionsCommand {
     /**
      * Return the string which we want to print to describe the current partition assignment.
      *
+     * @param adminClient                 The admin client object to use.
      * @param proposedParts               The proposed partition assignment.
      * @param currentParts                The current partition assignment.
      *
      * @return                            The string to print.  We will only print information about
      *                                    partitions that appear in the proposed partition assignment.
      */
-    static String currentPartitionReplicaAssignmentToString(Map<TopicPartition, List<Integer>> proposedParts,
-                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException {
+    static String currentPartitionReplicaAssignmentToString(Admin adminClient,
+                                                            Map<TopicPartition, List<Integer>> proposedParts,
+                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException, ExecutionException, InterruptedException {
         Map<TopicPartition, List<Integer>> partitionsToBeReassigned = currentParts.entrySet().stream()
             .filter(e -> proposedParts.containsKey(e.getKey()))
             .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, partitionsToBeReassigned);
 
         return String.format("Current partition replica assignment%n%n%s%n%nSave this to use as the %s",
-            formatAsReassignmentJson(partitionsToBeReassigned, Map.of()),
+            formatAsReassignmentJson(partitionsToBeReassigned, currentReplicaLogDirs),
             "--reassignment-json-file option during rollback");
     }
 
@@ -1292,7 +1296,7 @@ public class ReassignPartitionsCommand {
         Map<TopicPartitionReplica, String> curMovingParts = new HashMap<>();
         findLogDirMoveStates(adminClient, targetReplicas).forEach((part, moveState) -> {
             if (moveState instanceof ActiveMoveState)
-                curMovingParts.put(part, ((ActiveMoveState) moveState).currentLogDir);
+                curMovingParts.put(part, ((ActiveMoveState) moveState).currentLogDir());
         });
         if (curMovingParts.isEmpty()) {
             System.out.print("None of the specified partition moves are active.");
@@ -1342,21 +1346,18 @@ public class ReassignPartitionsCommand {
     }
 
     private static List<String> parseTopicsData(int version, JsonValue js) throws JsonMappingException {
-        switch (version) {
-            case 1:
-                List<String> results = new ArrayList<>();
-                Optional<JsonValue> partitionsSeq = js.asJsonObject().get("topics");
-                if (partitionsSeq.isPresent()) {
-                    Iterator<JsonValue> iter = partitionsSeq.get().asJsonArray().iterator();
-                    while (iter.hasNext()) {
-                        results.add(iter.next().asJsonObject().apply("topic").to(STRING));
-                    }
+        if (version == 1) {
+            List<String> results = new ArrayList<>();
+            Optional<JsonValue> partitionsSeq = js.asJsonObject().get("topics");
+            if (partitionsSeq.isPresent()) {
+                Iterator<JsonValue> iter = partitionsSeq.get().asJsonArray().iterator();
+                while (iter.hasNext()) {
+                    results.add(iter.next().asJsonObject().apply("topic").to(STRING));
                 }
-                return results;
-
-            default:
-                throw new AdminOperationException("Not supported version field value " + version);
+            }
+            return results;
         }
+        throw new AdminOperationException("Not supported version field value " + version);
     }
 
     private static Entry<List<Entry<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> parsePartitionReassignmentData(
@@ -1376,46 +1377,43 @@ public class ReassignPartitionsCommand {
     private static Entry<List<Entry<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> parsePartitionReassignmentData(
         int version, JsonValue jsonData
     ) throws JsonMappingException {
-        switch (version) {
-            case 1:
-                List<Entry<TopicPartition, List<Integer>>> partitionAssignment = new ArrayList<>();
-                Map<TopicPartitionReplica, String> replicaAssignment = new HashMap<>();
+        if (version == 1) {
+            List<Entry<TopicPartition, List<Integer>>> partitionAssignment = new ArrayList<>();
+            Map<TopicPartitionReplica, String> replicaAssignment = new HashMap<>();
 
-                Optional<JsonValue> partitionsSeq = jsonData.asJsonObject().get("partitions");
-                if (partitionsSeq.isPresent()) {
-                    Iterator<JsonValue> iter = partitionsSeq.get().asJsonArray().iterator();
-                    while (iter.hasNext()) {
-                        JsonObject partitionFields = iter.next().asJsonObject();
-                        String topic = partitionFields.apply("topic").to(STRING);
-                        int partition = partitionFields.apply("partition").to(INT);
-                        List<Integer> newReplicas = partitionFields.apply("replicas").to(INT_LIST);
-                        Optional<JsonValue> logDirsOpts = partitionFields.get("log_dirs");
-                        List<String> newLogDirs;
-                        if (logDirsOpts.isPresent())
-                            newLogDirs = logDirsOpts.get().to(STRING_LIST);
-                        else
-                            newLogDirs = newReplicas.stream().map(r -> ANY_LOG_DIR).collect(Collectors.toList());
-                        if (newReplicas.size() != newLogDirs.size())
-                            throw new AdminCommandFailedException("Size of replicas list " + newReplicas + " is different from " +
-                                "size of log dirs list " + newLogDirs + " for partition " + new TopicPartition(topic, partition));
-                        partitionAssignment.add(Map.entry(new TopicPartition(topic, partition), newReplicas));
-                        for (int i = 0; i < newLogDirs.size(); i++) {
-                            Integer replica = newReplicas.get(i);
-                            String logDir = newLogDirs.get(i);
+            Optional<JsonValue> partitionsSeq = jsonData.asJsonObject().get("partitions");
+            if (partitionsSeq.isPresent()) {
+                Iterator<JsonValue> iter = partitionsSeq.get().asJsonArray().iterator();
+                while (iter.hasNext()) {
+                    JsonObject partitionFields = iter.next().asJsonObject();
+                    String topic = partitionFields.apply("topic").to(STRING);
+                    int partition = partitionFields.apply("partition").to(INT);
+                    List<Integer> newReplicas = partitionFields.apply("replicas").to(INT_LIST);
+                    Optional<JsonValue> logDirsOpts = partitionFields.get("log_dirs");
+                    List<String> newLogDirs;
+                    if (logDirsOpts.isPresent())
+                        newLogDirs = logDirsOpts.get().to(STRING_LIST);
+                    else
+                        newLogDirs = newReplicas.stream().map(r -> ANY_LOG_DIR).collect(Collectors.toList());
+                    if (newReplicas.size() != newLogDirs.size())
+                        throw new AdminCommandFailedException("Size of replicas list " + newReplicas + " is different from " +
+                            "size of log dirs list " + newLogDirs + " for partition " + new TopicPartition(topic, partition));
+                    partitionAssignment.add(Map.entry(new TopicPartition(topic, partition), newReplicas));
+                    for (int i = 0; i < newLogDirs.size(); i++) {
+                        Integer replica = newReplicas.get(i);
+                        String logDir = newLogDirs.get(i);
 
-                            if (logDir.equals(ANY_LOG_DIR))
-                                continue;
+                        if (logDir.equals(ANY_LOG_DIR))
+                            continue;
 
-                            replicaAssignment.put(new TopicPartitionReplica(topic, partition, replica), logDir);
-                        }
+                        replicaAssignment.put(new TopicPartitionReplica(topic, partition, replica), logDir);
                     }
                 }
+            }
 
-                return Map.entry(partitionAssignment, replicaAssignment);
-
-            default:
-                throw new AdminOperationException("Not supported version field value " + version);
+            return Map.entry(partitionAssignment, replicaAssignment);
         }
+        throw new AdminOperationException("Not supported version field value " + version);
     }
 
     static ReassignPartitionsCommandOptions validateAndParseArgs(String[] args) {
@@ -1519,5 +1517,27 @@ public class ReassignPartitionsCommand {
             }
         }
         return results;
+    }
+
+    static Map<TopicPartitionReplica, String> getReplicaToLogDir(
+        Admin adminClient,
+        Map<TopicPartition, List<Integer>> topicPartitionToReplicas
+    ) throws InterruptedException, ExecutionException {
+        var replicaLogDirs = topicPartitionToReplicas
+                .entrySet()
+                .stream()
+                .flatMap(entry -> entry.getValue()
+                    .stream()
+                    .map(id -> new TopicPartitionReplica(entry.getKey().topic(), entry.getKey().partition(), id)))
+                .collect(Collectors.toUnmodifiableSet());
+
+        return adminClient.describeReplicaLogDirs(replicaLogDirs).all().get()
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getValue().getCurrentReplicaLogDir() != null)
+                .collect(Collectors.toMap(
+                    Entry::getKey,
+                    entry -> entry.getValue().getCurrentReplicaLogDir()
+                ));
     }
 }

@@ -50,6 +50,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -269,6 +270,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
         private static final double INITIAL_PUSH_JITTER_LOWER = 0.5;
         private static final double INITIAL_PUSH_JITTER_UPPER = 1.5;
 
+        private final Set<CompressionType> unsupportedCompressionTypes = ConcurrentHashMap.newKeySet();
         private final ReadWriteLock lock = new ReentrantReadWriteLock();
         private final Condition subscriptionLoaded = lock.writeLock().newCondition();
         /*
@@ -713,12 +715,26 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 return Optional.empty();
             }
 
-            CompressionType compressionType = ClientTelemetryUtils.preferredCompressionType(localSubscription.acceptedCompressionTypes());
+            CompressionType compressionType = ClientTelemetryUtils.preferredCompressionType(localSubscription.acceptedCompressionTypes(), unsupportedCompressionTypes);
             ByteBuffer compressedPayload;
             try {
                 compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
             } catch (Throwable e) {
-                log.debug("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
+                // Distinguish between recoverable errors (NoClassDefFoundError for missing compression libs) 
+                // and fatal errors (OutOfMemoryError, etc.) that should terminate telemetry.
+                if (e instanceof Error && !(e instanceof NoClassDefFoundError) && !(e.getCause() instanceof NoClassDefFoundError)) {
+                    lock.writeLock().lock();
+                    try {
+                        state = ClientTelemetryState.TERMINATED;
+                    } finally {
+                        lock.writeLock().unlock();
+                    }
+                    log.error("Unexpected error occurred while compressing telemetry payload for compression: {}, stopping client telemetry", compressionType, e);
+                    throw new KafkaException("Unexpected compression error", e);
+                }
+
+                log.debug("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType, e);
+                unsupportedCompressionTypes.add(compressionType);
                 compressedPayload = ByteBuffer.wrap(payload.toByteArray());
                 compressionType = CompressionType.NONE;
             }
