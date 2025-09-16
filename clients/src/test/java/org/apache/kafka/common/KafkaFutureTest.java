@@ -318,7 +318,7 @@ public class KafkaFutureTest {
         awaitAndAssertResult(future, 21, null);
         Throwable cause = awaitAndAssertFailure(dependantFuture, CompletionException.class, "java.lang.RuntimeException: We require more vespene gas");
         assertInstanceOf(RuntimeException.class, cause.getCause());
-        assertEquals(cause.getCause().getMessage(), "We require more vespene gas");
+        assertEquals("We require more vespene gas", cause.getCause().getMessage());
     }
 
     @Test
