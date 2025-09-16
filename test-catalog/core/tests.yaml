@@ -1601,6 +1601,10 @@ kafka.server.AutoTopicCreationManagerTest:
 - testCreateStreamsInternalTopicsPassesPrincipal
 - testCreateStreamsInternalTopicsWithEmptyTopics
 - testCreateTxnTopic
+- testErrorCacheExpirationBasedEviction
+- testErrorCacheTTL
+- testGetTopicCreationErrorsWithMultipleTopics
+- testTopicCreationErrorCaching
 - testTopicCreationWithMetadataContextNoRetryUponUnsupportedVersion
 - testTopicCreationWithMetadataContextPassPrincipal
 - testTopicCreationWithMetadataContextWhenPrincipalSerdeNotDefined
@@ -1912,6 +1916,26 @@ kafka.server.EdgeCaseRequestTest:
 - testInvalidApiVersionRequest
 - testMalformedHeaderRequest
 - testProduceRequestWithNullClientId
+kafka.server.ExpiringErrorCacheTest:
+- testCapacityEnforcement
+- testCapacityWithDifferentTTLs
+- testClearOperation
+- testConcurrentPutAndGet
+- testConcurrentPutOperations
+- testConcurrentUpdates
+- testEmptyCache
+- testEvictionOrder
+- testExpiredEntriesCleanedOnPut
+- testExpiredEntryNotReturned
+- testGetMultipleTopics
+- testGetNonExistentTopic
+- testMixedExpiredAndValidEntries
+- testPutAndGet
+- testSingleEntryCache
+- testStaleEntriesInQueueHandledCorrectly
+- testUpdateDoesNotLeaveStaleEntries
+- testUpdateExistingEntry
+- testZeroTTL
 kafka.server.FetchFromFollowerIntegrationTest:
 - testFetchFromFollowerWithRoll
 - testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable
@@ -2267,6 +2291,7 @@ kafka.server.KafkaApisTest:
 - testStreamsGroupHeartbeatRequestProtocolDisabledViaFeature
 - testStreamsGroupHeartbeatRequestTopicAuthorizationFailed
 - testStreamsGroupHeartbeatRequestWithAuthorizedTopology
+- testStreamsGroupHeartbeatRequestWithCachedTopicCreationErrors
 - testStreamsGroupHeartbeatRequestWithInternalTopicsToCreate
 - testStreamsGroupHeartbeatRequestWithInternalTopicsToCreateMissingCreateACL
 - testStreamsGroupHeartbeatReturnsUnsupportedVersion
