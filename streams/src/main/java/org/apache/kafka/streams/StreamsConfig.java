@@ -288,66 +288,6 @@ public class StreamsConfig extends AbstractConfig {
         SINGLE_STORE_SELF_JOIN);
 
     /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0100 = UpgradeFromValues.UPGRADE_FROM_0100.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0101 = UpgradeFromValues.UPGRADE_FROM_0101.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.2.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0102 = UpgradeFromValues.UPGRADE_FROM_0102.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.11.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0110 = UpgradeFromValues.UPGRADE_FROM_0110.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_10 = UpgradeFromValues.UPGRADE_FROM_10.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_11 = UpgradeFromValues.UPGRADE_FROM_11.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_20 = UpgradeFromValues.UPGRADE_FROM_20.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_21 = UpgradeFromValues.UPGRADE_FROM_21.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.2.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_22 = UpgradeFromValues.UPGRADE_FROM_22.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.3.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_23 = UpgradeFromValues.UPGRADE_FROM_23.toString();
-
-    /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.4.x}.
      */
     @SuppressWarnings("WeakerAccess")
