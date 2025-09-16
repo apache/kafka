@@ -60,9 +60,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -213,7 +211,7 @@ public class ConnectRestServerTest {
         doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
         doReturn(plugins).when(herder).plugins();
         expectEmptyRestExtensions();
-        doReturn(Arrays.asList("a", "b")).when(herder).connectors();
+        doReturn(List.of("a", "b")).when(herder).connectors();
 
         server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
@@ -256,7 +254,7 @@ public class ConnectRestServerTest {
         doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
         doReturn(plugins).when(herder).plugins();
         expectEmptyRestExtensions();
-        doReturn(Arrays.asList("a", "b")).when(herder).connectors();
+        doReturn(List.of("a", "b")).when(herder).connectors();
 
         server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
@@ -278,8 +276,8 @@ public class ConnectRestServerTest {
         doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
         doReturn(plugins).when(herder).plugins();
         expectEmptyRestExtensions();
-        doReturn(Collections.emptyList()).when(herder).setWorkerLoggerLevel(logger, loggingLevel);
-        doReturn(Collections.singletonMap(logger, new LoggerLevel(loggingLevel, lastModified))).when(herder).allLoggerLevels();
+        doReturn(List.of()).when(herder).setWorkerLoggerLevel(logger, loggingLevel);
+        doReturn(Map.of(logger, new LoggerLevel(loggingLevel, lastModified))).when(herder).allLoggerLevels();
 
         server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
@@ -296,7 +294,7 @@ public class ConnectRestServerTest {
         Map<String, Object> expectedLogger = new HashMap<>();
         expectedLogger.put("level", loggingLevel);
         expectedLogger.put("last_modified", lastModified);
-        Map<String, Map<String, Object>> expectedLoggers = Collections.singletonMap(logger, expectedLogger);
+        Map<String, Map<String, Object>> expectedLoggers = Map.of(logger, expectedLogger);
         Map<String, Map<String, Object>> actualLoggers = mapper.readValue(responseStr, new TypeReference<>() { });
         assertEquals(expectedLoggers, actualLoggers);
     }
@@ -438,7 +436,7 @@ public class ConnectRestServerTest {
         doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
         doReturn(plugins).when(herder).plugins();
         expectEmptyRestExtensions();
-        doReturn(Arrays.asList("a", "b")).when(herder).connectors();
+        doReturn(List.of("a", "b")).when(herder).connectors();
 
         server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
@@ -481,8 +479,8 @@ public class ConnectRestServerTest {
     }
 
     private void expectEmptyRestExtensions() {
-        doReturn(Collections.emptyList()).when(plugins).newPlugins(
-                eq(Collections.emptyList()),
+        doReturn(List.of()).when(plugins).newPlugins(
+                eq(List.of()),
                 any(AbstractConfig.class),
                 eq(ConnectRestExtension.class)
         );

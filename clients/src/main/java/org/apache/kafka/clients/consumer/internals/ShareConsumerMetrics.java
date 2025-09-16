@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer.internals;
 import java.util.HashSet;
 import java.util.Set;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
+
 public class ShareConsumerMetrics {
     public ShareFetchMetricsRegistry shareFetchMetrics;
 
@@ -26,7 +28,7 @@ public class ShareConsumerMetrics {
         this.shareFetchMetrics = new ShareFetchMetricsRegistry(metricsTags, metricGrpPrefix);
     }
 
-    public ShareConsumerMetrics(String metricGroupPrefix) {
-        this(new HashSet<>(), metricGroupPrefix);
+    public ShareConsumerMetrics() {
+        this(new HashSet<>(), CONSUMER_SHARE_METRIC_GROUP_PREFIX);
     }
 }
