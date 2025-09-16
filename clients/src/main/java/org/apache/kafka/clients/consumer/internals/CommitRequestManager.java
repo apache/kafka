@@ -541,7 +541,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
             if (!inflightRemoved) {
                 log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
-                    "outbound buffer:" + fetchRequest);
+                    "outbound buffer: {}", fetchRequest);
             }
             if (error == null) {
                 maybeUpdateLastSeenEpochIfNewer(res);
