@@ -823,9 +823,9 @@ public class ConsoleConsumerOptionsTest {
 
             // via --group only
             final String[] args5 = new String[]{
-                    "--bootstrap-server", "localhost:9092",
-                    "--topic", "test",
-                    "--group", "group-from-arguments"
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "group-from-arguments"
             };
 
             config = new ConsoleConsumerOptions(args5);
