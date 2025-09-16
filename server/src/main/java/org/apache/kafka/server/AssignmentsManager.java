@@ -71,13 +71,13 @@ public final class AssignmentsManager {
      */
     static final long MIN_NOISY_FAILURE_INTERVAL_NS = TimeUnit.MINUTES.toNanos(2);
 
-    /**
-     * The metric reflecting the number of pending assignments.
-     */
     @Deprecated(since = "4.2")
     static final MetricName DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC =
             KafkaYammerMetrics.getMetricName("org.apache.kafka.server", "AssignmentsManager", "QueuedReplicaToDirAssignments");
 
+    /**
+     * The metric reflecting the number of pending assignments.
+     */
     static final MetricName QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC =
             KafkaYammerMetrics.getMetricName("kafka.server", "AssignmentsManager", "QueuedReplicaToDirAssignments");
 

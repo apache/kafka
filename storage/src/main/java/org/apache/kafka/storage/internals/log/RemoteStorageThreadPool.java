@@ -34,7 +34,7 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteStorageThreadPool.class);
     @Deprecated(since = "4.2")
     // This metrics group is used to register deprecated metrics. It will be removed in Kafka 5.0
-    private final KafkaMetricsGroup internalsLogMetricsGroup = new KafkaMetricsGroup(this.getClass());
+    private final KafkaMetricsGroup deprecatedLogMetricsGroup = new KafkaMetricsGroup("org.apache.kafka.storage.internals.log", "RemoteStorageThreadPool");
     private final KafkaMetricsGroup logRemoteMetricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteStorageThreadPool");
 
     public RemoteStorageThreadPool(String threadNamePattern,
@@ -48,9 +48,9 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
                 ThreadUtils.createThreadFactory(threadNamePattern, false,
                         (t, e) -> LOGGER.error("Uncaught exception in thread '{}':", t.getName(), e))
         );
-        internalsLogMetricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
+        deprecatedLogMetricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
-        internalsLogMetricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
+        deprecatedLogMetricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
                 () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
         logRemoteMetricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
@@ -66,7 +66,7 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
     }
 
     public void removeMetrics() {
-        REMOTE_STORAGE_THREAD_POOL_METRICS.forEach(internalsLogMetricsGroup::removeMetric);
+        REMOTE_STORAGE_THREAD_POOL_METRICS.forEach(deprecatedLogMetricsGroup::removeMetric);
         REMOTE_STORAGE_THREAD_POOL_METRICS.forEach(logRemoteMetricsGroup::removeMetric);
     }
 }
