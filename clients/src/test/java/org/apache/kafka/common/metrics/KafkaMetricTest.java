@@ -48,4 +48,29 @@ public class KafkaMetricTest {
         assertThrows(IllegalStateException.class, metric::measurable);
     }
 
+    @Test
+    public void testMeasurableValueReturnsZeroWhenNotMeasurable() {
+        MockTime time = new MockTime();
+        MetricConfig config = new MetricConfig();
+        Gauge<Integer> gauge = (c, now) -> 7;
+
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME, gauge, config, time);
+        assertEquals(0.0d, metric.measurableValue(time.milliseconds()), 0.0d);
+    }
+
+    @Test
+    public void testKafkaMetricAcceptsNonMeasurableNonGaugeProvider() {
+        MetricValueProvider<String> provider = (config, now) -> "metric value provider";
+        KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME, provider, new MetricConfig(), new MockTime());
+
+        Object value = metric.metricValue();
+        assertEquals("metric value provider", value);
+    }
+
+    @Test
+    public void testConstructorWithNullProvider() {
+        assertThrows(NullPointerException.class, () ->
+                new KafkaMetric(new Object(), METRIC_NAME, null, new MetricConfig(), new MockTime())
+        );
+    }
 }

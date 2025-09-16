@@ -22,11 +22,26 @@ package org.apache.kafka.common.metrics;
 public interface Measurable extends MetricValueProvider<Double> {
 
     /**
-     * Measure this quantity and return the result as a double
+     * Measure this quantity and return the result as a double.
+     *
      * @param config The configuration for this metric
      * @param now The POSIX time in milliseconds the measurement is being taken
      * @return The measured value
      */
     double measure(MetricConfig config, long now);
+
+    /**
+     * Measure this quantity and return the result as a double.
+     *
+     * This default implementation delegates to {@link #measure(MetricConfig, long)}.
+     *
+     * @param config The configuration for this metric
+     * @param now The POSIX time in milliseconds the measurement is being taken
+     * @return The measured value as a {@link Double}
+     */
+    @Override
+    default Double value(MetricConfig config, long now) {
+        return measure(config, now);
+    }
 
 }
