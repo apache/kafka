@@ -46,9 +46,6 @@ public class StreamsRebalanceListenerInvoker {
 
     public void setRebalanceListener(StreamsRebalanceListener streamsRebalanceListener) {
         Objects.requireNonNull(streamsRebalanceListener, "StreamsRebalanceListener cannot be null");
-        if (listener.isPresent() && listener.get() != streamsRebalanceListener) {
-            throw new IllegalStateException("StreamsRebalanceListener can only be set once");
-        }
         this.listener = Optional.of(streamsRebalanceListener);
     }
 

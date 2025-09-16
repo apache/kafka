@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,17 +67,24 @@ public class StreamsRebalanceListenerInvokerTest {
     }
 
     @Test
-    public void testSetRebalanceListenerThrowsWhenCalledTwice() {
-        StreamsRebalanceListener firstListener = mock(StreamsRebalanceListener.class);
-        StreamsRebalanceListener secondListener = mock(StreamsRebalanceListener.class);
-        
+    public void testSetRebalanceListenerOverwritesExisting() {
+        StreamsRebalanceListener firstListener = org.mockito.Mockito.mock(StreamsRebalanceListener.class);
+        StreamsRebalanceListener secondListener = org.mockito.Mockito.mock(StreamsRebalanceListener.class);
+
+        StreamsRebalanceData.Assignment mockAssignment = createMockAssignment();
+        when(streamsRebalanceData.reconciledAssignment()).thenReturn(mockAssignment);
+        when(secondListener.onTasksRevoked(any())).thenReturn(Optional.empty());
+
         // Set first listener
         invoker.setRebalanceListener(firstListener);
-        
-        // Attempting to set second listener should throw IllegalStateException
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
-            () -> invoker.setRebalanceListener(secondListener));
-        assertEquals("StreamsRebalanceListener can only be set once", exception.getMessage());
+
+        // Overwrite with second listener
+        invoker.setRebalanceListener(secondListener);
+
+        // Should use second listener
+        invoker.invokeAllTasksRevoked();
+        verify(firstListener, never()).onTasksRevoked(any());
+        verify(secondListener).onTasksRevoked(eq(mockAssignment.activeTasks()));
     }
 
     @Test
