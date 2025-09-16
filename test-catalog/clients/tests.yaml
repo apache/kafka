@@ -1126,9 +1126,12 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testClearWakeupTriggerAfterPoll
 - testCloseAwaitPendingAsyncCommitComplete
 - testCloseAwaitPendingAsyncCommitIncomplete
+- testCloseInvokesStreamsRebalanceListenerOnAllTasksLostWhenMemberEpochZeroOrNegative
+- testCloseInvokesStreamsRebalanceListenerOnTasksRevokedWhenMemberEpochPositive
 - testCloseLeavesGroup
 - testCloseLeavesGroupDespiteInterrupt
 - testCloseLeavesGroupDespiteOnPartitionsLostError
+- testCloseWrapsStreamsRebalanceListenerException
 - testCommitAsyncShouldCopyOffsets
 - testCommitAsyncUserSuppliedCallbackNoException
 - testCommitAsyncUserSuppliedCallbackWithException
@@ -2482,6 +2485,23 @@ org.apache.kafka.clients.consumer.internals.StreamsRebalanceDataTest:
 - testTaskIdCompareTo
 - testTaskIdEqualsAndHashCode
 - topicInfoShouldNotAcceptNulls
+org.apache.kafka.clients.consumer.internals.StreamsRebalanceListenerInvokerTest:
+- testInvokeAllTasksLostWithInterruptException
+- testInvokeAllTasksLostWithListener
+- testInvokeAllTasksLostWithOtherException
+- testInvokeAllTasksLostWithWakeupException
+- testInvokeAllTasksRevokedWithListener
+- testInvokeMethodsWithNoListener
+- testInvokeTasksAssignedWithInterruptException
+- testInvokeTasksAssignedWithListener
+- testInvokeTasksAssignedWithOtherException
+- testInvokeTasksAssignedWithWakeupException
+- testInvokeTasksRevokedWithInterruptException
+- testInvokeTasksRevokedWithListener
+- testInvokeTasksRevokedWithOtherException
+- testInvokeTasksRevokedWithWakeupException
+- testSetRebalanceListenerOverwritesExisting
+- testSetRebalanceListenerWithNull
 org.apache.kafka.clients.consumer.internals.SubscriptionStateTest:
 - cantAssignPartitionForUnmatchedPattern
 - cantAssignPartitionForUnsubscribedTopics
