@@ -147,7 +147,8 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+    # Note: In Kafka 4.2+, --command-config replaces the deprecated --producer.config option.
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
 - File Input:
     - Here ssl configs are provided via file input.
@@ -167,7 +168,8 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+    # Note: In Kafka 4.2+, --command-config replaces the deprecated --producer.config option.
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
 
 Multi Node Cluster
@@ -219,7 +221,8 @@ Multi Node Cluster
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```
         # Run from root of the repo
-        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        # Note: In Kafka 4.2+, --command-config replaces the deprecated --producer.config option.
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
         ```
 - Isolated:
     - Examples are present in `docker-compose-files/cluster/isolated` directory.
@@ -258,7 +261,8 @@ Multi Node Cluster
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```
         # Run from root of the repo
-        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        # Note: In Kafka 4.2+, --command-config replaces the deprecated --producer.config option.
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
         ```
 
 - Note that the examples are meant to be tried one at a time, make sure you close an example server before trying out the other to avoid conflicts.

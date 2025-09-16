@@ -131,8 +131,10 @@ public class ConsoleProducer {
         private final OptionSpec<Integer> socketBufferSizeOpt;
         private final OptionSpec<String> propertyOpt;
         private final OptionSpec<String> readerConfigOpt;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> producerPropertyOpt;
         private OptionSpec<String> commandPropertyOpt;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> producerConfigOpt;
         private OptionSpec<String> commandConfigOpt;
 

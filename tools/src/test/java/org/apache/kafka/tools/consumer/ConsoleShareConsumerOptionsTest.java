@@ -180,9 +180,11 @@ public class ConsoleShareConsumerOptionsTest {
 
         config = new ConsoleShareConsumerOptions(args5);
         props = config.consumerProps();
-        assertEquals("group-from-arguments", props.getProperty("group.id"));
-
-        Exit.resetExitProcedure();
+        try {
+            assertEquals("group-from-arguments", props.getProperty("group.id"));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test
@@ -429,9 +431,11 @@ public class ConsoleShareConsumerOptionsTest {
 
         config = new ConsoleShareConsumerOptions(args5);
         props = config.consumerProps();
-        assertEquals("group-from-arguments", props.getProperty("group.id"));
-
-        Exit.resetExitProcedure();
+        try {
+            assertEquals("group-from-arguments", props.getProperty("group.id"));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test

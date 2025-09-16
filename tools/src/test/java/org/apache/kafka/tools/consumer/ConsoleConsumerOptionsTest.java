@@ -280,76 +280,78 @@ public class ConsoleConsumerOptionsTest {
         Exit.setExitProcedure((code, message) -> {
             throw new IllegalArgumentException(message);
         });
+        try {
 
-        // different in all three places
-        File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
-        final String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments",
-            "--consumer-property", "group.id=group-from-properties",
-            "--consumer.config", propsFile.getAbsolutePath()
-        };
+            // different in all three places
+            File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "group-from-arguments",
+                    "--consumer-property", "group.id=group-from-properties",
+                    "--consumer.config", propsFile.getAbsolutePath()
+            };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
 
-        // the same in all three places
-        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "test-group"));
-        final String[] args1 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "test-group",
-            "--consumer-property", "group.id=test-group",
-            "--consumer.config", propsFile.getAbsolutePath()
-        };
+            // the same in all three places
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "test-group"));
+            final String[] args1 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "test-group",
+                    "--consumer-property", "group.id=test-group",
+                    "--consumer.config", propsFile.getAbsolutePath()
+            };
 
-        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args1);
-        Properties props = config.consumerProps();
-        assertEquals("test-group", props.getProperty("group.id"));
+            ConsoleConsumerOptions config = new ConsoleConsumerOptions(args1);
+            Properties props = config.consumerProps();
+            assertEquals("test-group", props.getProperty("group.id"));
 
-        // different via --consumer-property and --consumer.config
-        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
-        final String[] args2 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--consumer-property", "group.id=group-from-properties",
-            "--consumer.config", propsFile.getAbsolutePath()
-        };
+            // different via --consumer-property and --consumer.config
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args2 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--consumer-property", "group.id=group-from-properties",
+                    "--consumer.config", propsFile.getAbsolutePath()
+            };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args2));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args2));
 
-        // different via --consumer-property and --group
-        final String[] args3 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments",
-            "--consumer-property", "group.id=group-from-properties"
-        };
+            // different via --consumer-property and --group
+            final String[] args3 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "group-from-arguments",
+                    "--consumer-property", "group.id=group-from-properties"
+            };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args3));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args3));
 
-        // different via --group and --consumer.config
-        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
-        final String[] args4 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments",
-            "--consumer.config", propsFile.getAbsolutePath()
-        };
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args4));
+            // different via --group and --consumer.config
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args4 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "group-from-arguments",
+                    "--consumer.config", propsFile.getAbsolutePath()
+            };
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args4));
 
-        // via --group only
-        final String[] args5 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments"
-        };
+            // via --group only
+            final String[] args5 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "group-from-arguments"
+            };
 
-        config = new ConsoleConsumerOptions(args5);
-        props = config.consumerProps();
-        assertEquals("group-from-arguments", props.getProperty("group.id"));
-
-        Exit.resetExitProcedure();
+            config = new ConsoleConsumerOptions(args5);
+            props = config.consumerProps();
+            assertEquals("group-from-arguments", props.getProperty("group.id"));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test
@@ -761,75 +763,77 @@ public class ConsoleConsumerOptionsTest {
             throw new IllegalArgumentException(message);
         });
 
-        // different in all three places
-        File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
-        final String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments",
-            "--command-property", "group.id=group-from-properties",
-            "--command-config", propsFile.getAbsolutePath()
-        };
+        try {
+            // different in all three places
+            File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "group-from-arguments",
+                    "--command-property", "group.id=group-from-properties",
+                    "--command-config", propsFile.getAbsolutePath()
+            };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
 
-        // the same in all three places
-        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "test-group"));
-        final String[] args1 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "test-group",
-            "--command-property", "group.id=test-group",
-            "--command-config", propsFile.getAbsolutePath()
-        };
+            // the same in all three places
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "test-group"));
+            final String[] args1 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "test-group",
+                    "--command-property", "group.id=test-group",
+                    "--command-config", propsFile.getAbsolutePath()
+            };
 
-        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args1);
-        Properties props = config.consumerProps();
-        assertEquals("test-group", props.getProperty("group.id"));
+            ConsoleConsumerOptions config = new ConsoleConsumerOptions(args1);
+            Properties props = config.consumerProps();
+            assertEquals("test-group", props.getProperty("group.id"));
 
-        // different via --command-property and --command-config
-        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
-        final String[] args2 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--command-property", "group.id=group-from-properties",
-            "--command-config", propsFile.getAbsolutePath()
-        };
+            // different via --command-property and --command-config
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args2 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--command-property", "group.id=group-from-properties",
+                    "--command-config", propsFile.getAbsolutePath()
+            };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args2));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args2));
 
-        // different via --command-property and --group
-        final String[] args3 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments",
-            "--command-property", "group.id=group-from-properties"
-        };
+            // different via --command-property and --group
+            final String[] args3 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "group-from-arguments",
+                    "--command-property", "group.id=group-from-properties"
+            };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args3));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args3));
 
-        // different via --group and --command-config
-        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
-        final String[] args4 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments",
-            "--command-config", propsFile.getAbsolutePath()
-        };
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args4));
+            // different via --group and --command-config
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args4 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "group-from-arguments",
+                    "--command-config", propsFile.getAbsolutePath()
+            };
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args4));
 
-        // via --group only
-        final String[] args5 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments"
-        };
+            // via --group only
+            final String[] args5 = new String[]{
+                    "--bootstrap-server", "localhost:9092",
+                    "--topic", "test",
+                    "--group", "group-from-arguments"
+            };
 
-        config = new ConsoleConsumerOptions(args5);
-        props = config.consumerProps();
-        assertEquals("group-from-arguments", props.getProperty("group.id"));
-
-        Exit.resetExitProcedure();
+            config = new ConsoleConsumerOptions(args5);
+            props = config.consumerProps();
+            assertEquals("group-from-arguments", props.getProperty("group.id"));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test
