@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.metadata.publisher;
 
-import org.apache.kafka.image.DelegationTokenDelta;
 import org.apache.kafka.image.DelegationTokenImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
