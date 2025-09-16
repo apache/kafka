@@ -147,7 +147,6 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    # Note: In Kafka 4.2+, --command-config replaces the deprecated --producer.config option.
     $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
 - File Input:
@@ -168,7 +167,6 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    # Note: In Kafka 4.2+, --command-config replaces the deprecated --producer.config option.
     $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
 
