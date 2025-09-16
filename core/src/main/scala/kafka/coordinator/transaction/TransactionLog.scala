@@ -52,7 +52,7 @@ object TransactionLog {
     *
     * @return key bytes
     */
-  private[transaction] def keyToBytes(transactionalId: String): Array[Byte] = {
+  def keyToBytes(transactionalId: String): Array[Byte] = {
     MessageUtil.toCoordinatorTypePrefixedBytes(new TransactionLogKey().setTransactionalId(transactionalId))
   }
 
@@ -61,7 +61,7 @@ object TransactionLog {
     *
     * @return value payload bytes
     */
-  private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
+  def valueToBytes(txnMetadata: TxnTransitMetadata,
                                         transactionVersionLevel: TransactionVersion): Array[Byte] = {
     if (txnMetadata.txnState == TransactionState.EMPTY && !txnMetadata.topicPartitions.isEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")

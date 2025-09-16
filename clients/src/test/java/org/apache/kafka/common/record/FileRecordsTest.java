@@ -197,7 +197,7 @@ public class FileRecordsTest {
      * Test a simple append and read.
      */
     @Test
-    public void testRead() throws IOException {
+    public void testRead() {
         FileRecords read = fileRecords.slice(0, fileRecords.sizeInBytes());
         assertEquals(fileRecords.sizeInBytes(), read.sizeInBytes());
         TestUtils.checkEquals(fileRecords.batches(), read.batches());
@@ -279,7 +279,7 @@ public class FileRecordsTest {
      * Test that the message set iterator obeys start and end slicing
      */
     @Test
-    public void testIteratorWithLimits() throws IOException {
+    public void testIteratorWithLimits() {
         RecordBatch batch = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetFromPosition(1, 0).position;
         int size = batch.sizeInBytes();
