@@ -240,61 +240,42 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final CompositePollEvent event) {
-        log.debug("******** TEMP DEBUG ******** Processing {}", event);
-
         Optional<Exception> exception = networkClientDelegate.getAndClearMetadataError();
 
         if (exception.isPresent()) {
-            log.debug("******** TEMP DEBUG ******** Metadata error: {} from network client delegate {}", exception, networkClientDelegate.hashCode());
             event.future().completeExceptionally(exception.get());
             return;
         }
 
         ApplicationEvent.Type nextEventType = event.nextEventType();
-        log.debug("******** TEMP DEBUG ******** Processing nextEventType: {}", nextEventType);
 
         if (nextEventType == ApplicationEvent.Type.POLL) {
-            log.debug("******** TEMP DEBUG ******** nextEventType == {}", nextEventType);
-            log.debug("******** TEMP DEBUG ******** Before processPollEvent()");
             processPollEvent(event.pollTimeMs());
-            log.debug("******** TEMP DEBUG ******** After processPollEvent()");
 
             // If there are enqueued callbacks to invoke, exit to the application thread.
             RequiresApplicationThreadExecution test = () -> offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
 
-            if (maybeInterruptCompositePoll(test, event.future(), CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED))
+            if (maybePauseCompositePoll(test, event.future(), CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED))
                 return;
 
             nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
-            log.debug("******** TEMP DEBUG ******** Set nextEventType to {}", nextEventType);
         }
 
         if (nextEventType == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
-            log.debug("******** TEMP DEBUG ******** nextEventType == {}", nextEventType);
-            log.debug("******** TEMP DEBUG ******** Before processUpdatePatternSubscriptionEvent()");
             processUpdatePatternSubscriptionEvent();
-            log.debug("******** TEMP DEBUG ******** After processUpdatePatternSubscriptionEvent()");
 
             // If there are background events to process, exit to the application thread.
             RequiresApplicationThreadExecution test = () -> backgroundEventHandler.size() > 0;
 
-            if (maybeInterruptCompositePoll(test, event.future(), CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED))
+            if (maybePauseCompositePoll(test, event.future(), CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED))
                 return;
 
             nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
-            log.debug("******** TEMP DEBUG ******** Set nextEventType to {}", nextEventType);
         }
 
         if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
-            log.debug("******** TEMP DEBUG ******** nextEventType == {}", nextEventType);
-
             long nowMs = time.milliseconds();
             long timeoutMs = event.deadlineMs() - nowMs;
-
-            log.debug("******** TEMP DEBUG ********  deadlineMs: {}", event.deadlineMs());
-            log.debug("******** TEMP DEBUG ********  nowMs:      {}", nowMs);
-            log.debug("******** TEMP DEBUG ********  timeoutMs:  {}", timeoutMs);
-
             CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs())
                 .orTimeout(timeoutMs, TimeUnit.MILLISECONDS);
 
@@ -307,7 +288,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                     if (maybeFailCompositePoll(event.future(), fetchError))
                         return;
 
-                    log.debug("******** TEMP DEBUG ******** Exiting composite poll event with {}", CompositePollEvent.State.COMPLETE);
                     event.future().complete(CompositePollEvent.State.COMPLETE);
                 });
             });
@@ -318,9 +298,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         event.future().completeExceptionally(new IllegalArgumentException("Unknown next step for composite poll: " + nextEventType));
     }
 
-    private boolean maybeInterruptCompositePoll(RequiresApplicationThreadExecution test,
-                                                CompletableFuture<CompositePollEvent.State> future,
-                                                CompositePollEvent.State state) {
+    private boolean maybePauseCompositePoll(RequiresApplicationThreadExecution test,
+                                            CompletableFuture<CompositePollEvent.State> future,
+                                            CompositePollEvent.State state) {
         if (!test.requiresApplicationThread())
             return false;
 
