@@ -22,7 +22,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
-import org.apache.kafka.server.DelegationTokenManager;
+import org.apache.kafka.security.DelegationTokenManager;
 import org.apache.kafka.server.fault.FaultHandler;
 
 public class DelegationTokenPublisher implements MetadataPublisher {
@@ -46,40 +46,35 @@ public class DelegationTokenPublisher implements MetadataPublisher {
 
     @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
-        String deltaName = firstPublish
-            ? "initial MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset()
-            : "update MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
+        var first = firstPublish;
         try {
             if (firstPublish) {
                 // Initialize the tokenCache with the Image
                 DelegationTokenImage delegationTokenImage = newImage.delegationTokens();
-                if (delegationTokenImage != null) {
-                    delegationTokenImage.tokens().forEach((tokenId, delegationTokenData) -> {
-                        try {
-                            tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.tokenInformation()));
-                        } catch (Exception e) {
-                            faultHandler.handleFault("Error updating delegation token during initialization", e);
-                        }
-                    });
-                    firstPublish = false;
-                }
-            }
-            // Apply changes to DelegationTokens.
-            DelegationTokenDelta delegationTokenDelta = delta.delegationTokenDelta();
-            if (delegationTokenDelta != null) {
-                delegationTokenDelta.changes().forEach((tokenId, delegationTokenData) -> {
+                delegationTokenImage.tokens().forEach((tokenId, delegationTokenData) -> {
                     try {
-                        if (delegationTokenData.isPresent())
-                            tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.get().tokenInformation()));
-                        else
-                            tokenManager.removeToken(tokenId);
+                        tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.tokenInformation()));
                     } catch (Exception e) {
-                        faultHandler.handleFault("Error updating delegation token for tokenId: " + tokenId, e);
+                        faultHandler.handleFault("Error updating delegation token during initialization", e);
                     }
                 });
+                firstPublish = false;
             }
+            // Apply changes to DelegationTokens.
+            delta.getOrCreateDelegationTokenDelta().changes().forEach((tokenId, delegationTokenData) -> {
+                try {
+                    if (delegationTokenData.isPresent())
+                        tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.get().tokenInformation()));
+                    else
+                        tokenManager.removeToken(tokenId);
+                } catch (Exception e) {
+                    faultHandler.handleFault("Error updating delegation token for tokenId: " + tokenId, e);
+                }
+            });
         } catch (Throwable t) {
-            faultHandler.handleFault("Uncaught exception while publishing DelegationToken changes from " + deltaName, t);
+            var msg = String.format("Uncaught exception while publishing DelegationToken changes from %s MetadataDelta up to %s",
+                first ? "initial" : "update", newImage.highestOffsetAndEpoch().offset());
+            faultHandler.handleFault(msg, t);
         }
     }
 }
