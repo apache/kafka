@@ -70,7 +70,7 @@ import java.util.stream.Collectors;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
- * user-facing producer and consumer clients.
+ * user-facing producer, consumer and admin clients.
  * <p>
  * This class is not thread-safe!
  */

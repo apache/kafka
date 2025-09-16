@@ -40,14 +40,12 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffsetsResultInfo> {
 
@@ -56,6 +54,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     private final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
     private final int defaultApiTimeoutMs;
+    private long requireOffsetTimestamp;
 
     public ListOffsetsHandler(
         Map<TopicPartition, Long> offsetTimestampsByPartition,
@@ -204,39 +203,22 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     public Map<TopicPartition, Throwable> handleUnsupportedVersionException(
         int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys
     ) {
-        Optional<Long> minRequiredTimestampType = offsetTimestampsByPartition.values().stream().min(Comparator.naturalOrder());
+        log.warn("Broker {} does not support {} offset specs", brokerId, timestampToString(requireOffsetTimestamp));
 
-        if (minRequiredTimestampType.isEmpty()) {
-            return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
-        }
-        Map<TopicPartition, Throwable> timestampPartitions = handleUnsupportedListOffsets(brokerId, exception, keys, minRequiredTimestampType.get());
-
-        // If there are no partitions with timestampType specs the UnsupportedVersionException cannot be handled
-        // and all partitions should be failed here.
-        // Otherwise, just the partitions with timestampType specs should be failed here and the fulfillment stage
-        // will later be retried for the potentially empty set of partitions with non-timestampType specs.
-        if (timestampPartitions.isEmpty()) {
-            return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
-        }
-
-        return timestampPartitions;
-    }
-
-    private Map<TopicPartition, Throwable> handleUnsupportedListOffsets(
-        int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys, long minRequireTimestamp
-    ) {
-        log.warn("Broker " + brokerId + " does not support " + timestampToString(minRequireTimestamp) + " offset specs");
-        Map<TopicPartition, Throwable> timestampPartitions = new HashMap<>();
+        Map<TopicPartition, Throwable> maxTimestampPartitions = new HashMap<>();
         for (TopicPartition topicPartition : keys) {
             Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
-            if (offsetTimestamp < minRequireTimestamp) {
-                timestampPartitions.put(topicPartition, exception);
+            if (offsetTimestamp == requireOffsetTimestamp) {
+                maxTimestampPartitions.put(topicPartition, exception);
             }
         }
 
-        return timestampPartitions;
+        return maxTimestampPartitions;
     }
 
+    public void setRequireOffsetTimestamp(long offsetTimestamp) {
+        this.requireOffsetTimestamp = offsetTimestamp;
+    }
 
     public static PartitionLeaderStrategy.PartitionLeaderFuture<ListOffsetsResultInfo> newFuture(
         Collection<TopicPartition> topicPartitions,

@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetFetchRequest.NoBatchedOffsetFetchRequestException;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
@@ -179,6 +180,10 @@ public class AdminApiDriver<K, V> {
         }
     }
 
+//    private void retryFulfillment(Collection<K> keys) {
+//        keys.forEach(this::unmap);
+//    }
+
     private void retryLookup(Collection<K> keys) {
         keys.forEach(this::unmap);
     }
@@ -278,12 +283,34 @@ public class AdminApiDriver<K, V> {
         } else if (t instanceof UnsupportedVersionException) {
             if (spec.scope instanceof FulfillmentScope) {
                 int brokerId = ((FulfillmentScope) spec.scope).destinationBrokerId;
-                Map<K, Throwable> unrecoverableFailures =
-                    handler.handleUnsupportedVersionException(
-                        brokerId,
-                        (UnsupportedVersionException) t,
-                        spec.keys);
-                completeExceptionally(unrecoverableFailures);
+                if (handler instanceof ListOffsetsHandler) {
+                    Set<K> keys = new HashSet<>(spec.keys);
+                    ListOffsetsHandler listOffsetsHandler = (ListOffsetsHandler) handler;
+                    for (long offsetTimestamp : ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS) {
+                        listOffsetsHandler.setRequireOffsetTimestamp(offsetTimestamp);
+                        if (keys.isEmpty()) {
+                            break;
+                        }
+                        Map<K, Throwable> unrecoverableFailures =
+                                handler.handleUnsupportedVersionException(
+                                        brokerId,
+                                        (UnsupportedVersionException) t,
+                                        keys);
+                        System.err.println("RRR keys " + keys);
+                        completeExceptionally(unrecoverableFailures);
+                        keys = keys.stream().filter(
+                            key -> !unrecoverableFailures.containsKey(key)).collect(Collectors.toSet()
+                        );
+                    }
+//                    retryFulfillment(keys);
+                } else {
+                    Map<K, Throwable> unrecoverableFailures =
+                            handler.handleUnsupportedVersionException(
+                                    brokerId,
+                                    (UnsupportedVersionException) t,
+                                    spec.keys);
+                    completeExceptionally(unrecoverableFailures);
+                }
             } else {
                 Map<K, Throwable> unrecoverableLookupFailures =
                     handler.lookupStrategy().handleUnsupportedVersionException(
@@ -405,7 +432,7 @@ public class AdminApiDriver<K, V> {
         ) {
             this.name = name;
             this.scope = scope;
-            this.keys = keys;
+            this.keys = Collections.unmodifiableSet(keys);
             this.request = request;
             this.nextAllowedTryMs = nextAllowedTryMs;
             this.deadlineMs = deadlineMs;

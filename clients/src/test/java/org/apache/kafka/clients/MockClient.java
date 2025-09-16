@@ -67,6 +67,13 @@ public class MockClient implements KafkaClient {
             this.isUnsupportedRequest = isUnsupportedRequest;
         }
 
+        @Override
+        public String toString() {
+            return "node: " + node +
+                   " responseBody " + responseBody +
+                   " disconnected " + disconnected +
+                   " isUnsupportedRequest " + isUnsupportedRequest;
+        }
     }
 
     private int correlation;
