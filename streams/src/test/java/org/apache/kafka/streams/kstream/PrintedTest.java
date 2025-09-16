@@ -81,7 +81,7 @@ public class PrintedTest {
 
         processor.process(new Record<>("good", 2, 0L));
         processor.close();
-        assertEquals(sysOut.toString(StandardCharsets.UTF_8), "[processor]: good, 2\n");
+        assertEquals("[processor]: good, 2\n", sysOut.toString(StandardCharsets.UTF_8));
     }
 
     @Test
@@ -92,7 +92,7 @@ public class PrintedTest {
 
         processor.process(new Record<>("hello", 3, 0L));
         processor.close();
-        assertEquals(sysOut.toString(StandardCharsets.UTF_8), "[label]: hello, 3\n");
+        assertEquals("[label]: hello, 3\n", sysOut.toString(StandardCharsets.UTF_8));
     }
 
     @Test
@@ -102,7 +102,7 @@ public class PrintedTest {
         ).build("processor").get();
         processor.process(new Record<>("hello", 1, 0L));
         processor.close();
-        assertEquals(sysOut.toString(StandardCharsets.UTF_8), "[processor]: hello -> 1\n");
+        assertEquals("[processor]: hello -> 1\n", sysOut.toString(StandardCharsets.UTF_8));
     }
 
     @Test

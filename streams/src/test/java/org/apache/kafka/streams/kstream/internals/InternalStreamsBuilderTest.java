@@ -474,7 +474,7 @@ public class InternalStreamsBuilderTest {
         assertTrue(((StreamStreamJoinNode) join).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 1);
+        assertEquals(1, count.get());
     }
 
     @Test
@@ -494,7 +494,7 @@ public class InternalStreamsBuilderTest {
         assertTrue(((StreamStreamJoinNode) join).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 1);
+        assertEquals(1, count.get());
     }
 
     @Test
@@ -515,7 +515,7 @@ public class InternalStreamsBuilderTest {
         assertTrue(((StreamStreamJoinNode) join).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 1);
+        assertEquals(1, count.get());
     }
 
     @Test
@@ -535,12 +535,12 @@ public class InternalStreamsBuilderTest {
         // Then:
         final List<GraphNode> result = new ArrayList<>();
         getNodesByType(builder.root, StreamStreamJoinNode.class, new HashSet<>(), result);
-        assertEquals(result.size(), 2);
+        assertEquals(2, result.size());
         assertTrue(((StreamStreamJoinNode) result.get(0)).getSelfJoin());
         assertFalse(((StreamStreamJoinNode) result.get(1)).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 3);
+        assertEquals(3, count.get());
     }
 
     @Test
@@ -564,12 +564,12 @@ public class InternalStreamsBuilderTest {
         // Then:
         final List<GraphNode> result = new ArrayList<>();
         getNodesByType(builder.root, StreamStreamJoinNode.class, new HashSet<>(), result);
-        assertEquals(result.size(), 2);
+        assertEquals(2, result.size());
         assertTrue(((StreamStreamJoinNode) result.get(0)).getSelfJoin());
         assertTrue(((StreamStreamJoinNode) result.get(1)).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 2);
+        assertEquals(2, count.get());
     }
 
     @Test
@@ -590,12 +590,12 @@ public class InternalStreamsBuilderTest {
         // Then:
         final List<GraphNode> joinNodes = new ArrayList<>();
         getNodesByType(builder.root, StreamStreamJoinNode.class, new HashSet<>(), joinNodes);
-        assertEquals(joinNodes.size(), 2);
+        assertEquals(2, joinNodes.size());
         assertTrue(((StreamStreamJoinNode) joinNodes.get(0)).getSelfJoin());
         assertFalse(((StreamStreamJoinNode) joinNodes.get(1)).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 3);
+        assertEquals(3, count.get());
     }
 
     @Test
@@ -616,12 +616,12 @@ public class InternalStreamsBuilderTest {
         // Then:
         final List<GraphNode> joinNodes = new ArrayList<>();
         getNodesByType(builder.root, StreamStreamJoinNode.class, new HashSet<>(), joinNodes);
-        assertEquals(joinNodes.size(), 2);
+        assertEquals(2, joinNodes.size());
         assertTrue(((StreamStreamJoinNode) joinNodes.get(0)).getSelfJoin());
         assertFalse(((StreamStreamJoinNode) joinNodes.get(1)).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 3);
+        assertEquals(3, count.get());
     }
 
 
@@ -643,7 +643,7 @@ public class InternalStreamsBuilderTest {
         assertTrue(((StreamStreamJoinNode) join).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 1);
+        assertEquals(1, count.get());
     }
 
     @Test
@@ -663,12 +663,12 @@ public class InternalStreamsBuilderTest {
         // Then:
         final List<GraphNode> joinNodes = new ArrayList<>();
         getNodesByType(builder.root, StreamStreamJoinNode.class, new HashSet<>(), joinNodes);
-        assertEquals(joinNodes.size(), 2);
+        assertEquals(2, joinNodes.size());
         assertTrue(((StreamStreamJoinNode) joinNodes.get(0)).getSelfJoin());
         assertTrue(((StreamStreamJoinNode) joinNodes.get(1)).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 2);
+        assertEquals(2, count.get());
     }
 
     /**
@@ -696,7 +696,7 @@ public class InternalStreamsBuilderTest {
         assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 2);
+        assertEquals(2, count.get());
     }
 
     /**
@@ -723,7 +723,7 @@ public class InternalStreamsBuilderTest {
         assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 2);
+        assertEquals(2, count.get());
     }
 
     @Test
@@ -743,7 +743,7 @@ public class InternalStreamsBuilderTest {
         assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 2);
+        assertEquals(2, count.get());
     }
 
     @Test
@@ -762,7 +762,7 @@ public class InternalStreamsBuilderTest {
         assertTrue(((StreamStreamJoinNode) join).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 1);
+        assertEquals(1, count.get());
     }
 
     @Test
@@ -784,7 +784,7 @@ public class InternalStreamsBuilderTest {
         assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 2);
+        assertEquals(2, count.get());
     }
 
     @Test

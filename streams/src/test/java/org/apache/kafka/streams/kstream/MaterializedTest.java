@@ -55,7 +55,7 @@ public class MaterializedTest {
         final NullPointerException e = assertThrows(NullPointerException.class,
             () -> Materialized.as((WindowBytesStoreSupplier) null));
 
-        assertEquals(e.getMessage(), "supplier can't be null");
+        assertEquals("supplier can't be null", e.getMessage());
     }
 
     @Test
@@ -63,7 +63,7 @@ public class MaterializedTest {
         final NullPointerException e = assertThrows(NullPointerException.class,
             () -> Materialized.as((KeyValueBytesStoreSupplier) null));
 
-        assertEquals(e.getMessage(), "supplier can't be null");
+        assertEquals("supplier can't be null", e.getMessage());
     }
 
     @Test
@@ -71,7 +71,7 @@ public class MaterializedTest {
         final NullPointerException e = assertThrows(NullPointerException.class,
             () -> Materialized.as((Materialized.StoreType) null));
 
-        assertEquals(e.getMessage(), "store type can't be null");
+        assertEquals("store type can't be null", e.getMessage());
     }
 
     @Test
@@ -79,7 +79,7 @@ public class MaterializedTest {
         final NullPointerException e = assertThrows(NullPointerException.class,
             () -> Materialized.as((SessionBytesStoreSupplier) null));
 
-        assertEquals(e.getMessage(), "supplier can't be null");
+        assertEquals("supplier can't be null", e.getMessage());
     }
 
     @Test
@@ -87,7 +87,7 @@ public class MaterializedTest {
         final IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
             () -> Materialized.as("valid-name").withRetention(Duration.of(-1, ChronoUnit.DAYS)));
 
-        assertEquals(e.getMessage(), "Retention must not be negative.");
+        assertEquals( "Retention must not be negative.", e.getMessage());
     }
 
     @Test
@@ -95,7 +95,7 @@ public class MaterializedTest {
         final IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> Materialized.as(Stores.persistentKeyValueStore("test")).withStoreType(Materialized.StoreType.ROCKS_DB));
 
-        assertEquals(e.getMessage(), "Cannot set store type when store supplier is pre-configured.");
+        assertEquals("Cannot set store type when store supplier is pre-configured.", e.getMessage());
     }
 
     @Test
