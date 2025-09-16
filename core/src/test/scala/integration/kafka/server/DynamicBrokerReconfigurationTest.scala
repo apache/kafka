@@ -62,6 +62,7 @@ import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.quota.{ClientQuotaEntity, ClientQuotaManager}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions._
@@ -964,9 +965,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val clientId = "test-client-1"
     servers.foreach { server =>
       server.quotaManagers.produce.updateQuota(
-        None,
-        Some(ClientQuotaManager.ClientIdEntity(clientId)),
-        Some(Quota.upperBound(10000000))
+        Optional.empty,
+        Optional.of(new ClientQuotaManager.ClientIdEntity(clientId): ClientQuotaEntity.ConfigEntity),
+        Optional.of(Quota.upperBound(10000000))
       )
     }
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol, clientId)
@@ -1099,15 +1100,28 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testServersCanStartWithInvalidStaticConfigsAndValidDynamicConfigs(groupProtocol: String): Unit = {
+    TestNumReplicaFetcherMetricsReporter.testReporters.clear()
+
     // modify snapshot interval config to explicitly take snapshot on a broker with valid dynamic configs
     val props = defaultStaticConfig(numServers)
     props.put(MetadataLogConfig.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, "10000")
+    props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[TestNumReplicaFetcherMetricsReporter].getName)
+    props.put(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "1")
 
     val kafkaConfig = KafkaConfig.fromProps(props)
     val newBroker = createBroker(kafkaConfig).asInstanceOf[BrokerServer]
     servers += newBroker
 
     alterSslKeystoreUsingConfigCommand(sslProperties1, listenerPrefix(SecureExternal))
+
+    // Add num.replica.fetchers to the cluster-level config.
+    val clusterLevelProps = new Properties
+    clusterLevelProps.put(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "2")
+    reconfigureServers(clusterLevelProps, perBrokerConfig = false, (ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "2"))
+
+    // Wait for the metrics reporter to be configured
+    val initialReporter = TestNumReplicaFetcherMetricsReporter.waitForReporters(1).head
+    initialReporter.verifyState(reconfigureCount = 1, numFetcher = 2)
 
     TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
 
@@ -1121,11 +1135,19 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     newBroker.shutdown()
     newBroker.awaitShutdown()
 
+    // Clean up the test reporter
+    TestNumReplicaFetcherMetricsReporter.testReporters.clear()
+
     val invalidStaticConfigs = defaultStaticConfig(newBroker.config.brokerId)
     invalidStaticConfigs.putAll(securityProps(invalidSslConfigs, KEYSTORE_PROPS, listenerPrefix(SecureExternal)))
     newBroker.config.updateCurrentConfig(KafkaConfig.fromProps(invalidStaticConfigs))
 
     newBroker.startup()
+
+    // Verify that the custom MetricsReporter is not reconfigured after restart.
+    // If readDynamicBrokerConfigsFromSnapshot works correctly, the reporter should maintain its state.
+    val reporterAfterRestart = TestNumReplicaFetcherMetricsReporter.waitForReporters(1).head
+    reporterAfterRestart.verifyState(reconfigureCount = 0, numFetcher = 2)
   }
 
   private def awaitInitialPositions(consumer: Consumer[_, _]): Unit = {
@@ -1631,6 +1653,64 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
     assertTrue(matchingMetrics.nonEmpty, "Metric not found")
     val total = matchingMetrics.foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     assertTrue(total > 0.0, "Invalid metric value " + total + " for name " + name + " , group " + group)
+  }
+}
+
+object TestNumReplicaFetcherMetricsReporter {
+  val testReporters = new ConcurrentLinkedQueue[TestNumReplicaFetcherMetricsReporter]()
+
+  def waitForReporters(count: Int): List[TestNumReplicaFetcherMetricsReporter] = {
+    TestUtils.waitUntilTrue(() => testReporters.size == count, msg = "Metrics reporters size not matched. Expected: " + count + ", actual: " + testReporters.size())
+
+    val reporters = testReporters.asScala.toList
+    TestUtils.waitUntilTrue(() => reporters.forall(_.configureCount == 1), msg = "Metrics reporters not configured")
+    reporters
+  }
+}
+
+
+class TestNumReplicaFetcherMetricsReporter extends MetricsReporter {
+  import TestNumReplicaFetcherMetricsReporter._
+  @volatile var configureCount = 0
+  @volatile var reconfigureCount = 0
+  @volatile var numFetchers: Int = 1
+  testReporters.add(this)
+
+  override def init(metrics: util.List[KafkaMetric]): Unit = {
+  }
+
+  override def configure(configs: util.Map[String, _]): Unit = {
+    configureCount += 1
+    numFetchers = configs.get(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG).toString.toInt
+  }
+
+  override def metricChange(metric: KafkaMetric): Unit = {
+  }
+
+  override def metricRemoval(metric: KafkaMetric): Unit = {
+  }
+
+  override def reconfigurableConfigs(): util.Set[String] = {
+    util.Set.of(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG)
+  }
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
+    val numFetchers = configs.get(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG).toString.toInt
+    if (numFetchers <= 0)
+      throw new ConfigException(s"Invalid num.replica.fetchers $numFetchers")
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = {
+    reconfigureCount += 1
+    numFetchers = configs.get(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG).toString.toInt
+  }
+
+  override def close(): Unit = {
+  }
+
+  def verifyState(reconfigureCount: Int, numFetcher: Int = 1): Unit = {
+    assertEquals(reconfigureCount, this.reconfigureCount)
+    assertEquals(numFetcher, this.numFetchers)
   }
 }
 

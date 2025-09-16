@@ -294,7 +294,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
     public static Map<String, Object> toMap(String split) throws OAuthBearerIllegalTokenException {
         Map<String, Object> retval = new HashMap<>();
         try {
-            byte[] decode = Base64.getDecoder().decode(split);
+            byte[] decode = Base64.getUrlDecoder().decode(split);
             JsonNode jsonNode = new ObjectMapper().readTree(decode);
             if (jsonNode == null)
                 throw new OAuthBearerIllegalTokenException(OAuthBearerValidationResult.newFailure("malformed JSON"));

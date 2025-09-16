@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWriter}
+import kafka.coordinator.group.CoordinatorPartitionWriter
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.network.SocketServer
@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
+import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
@@ -42,7 +42,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRec
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
-import org.apache.kafka.metadata.publisher.AclPublisher
+import org.apache.kafka.metadata.publisher.{AclPublisher, ScramPublisher}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
@@ -62,7 +62,6 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import java.time.Duration
 import java.util
 import java.util.Optional
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
@@ -95,8 +94,6 @@ class BrokerServer(
   @volatile var lifecycleManager: BrokerLifecycleManager = _
 
   private var assignmentsManager: AssignmentsManager = _
-
-  private val isShuttingDown = new AtomicBoolean(false)
 
   val lock: ReentrantLock = new ReentrantLock()
   val awaitShutdownCond: Condition = lock.newCondition()
@@ -172,10 +169,7 @@ class BrokerServer(
       info(s"Transition from $status to $to")
 
       status = to
-      if (to == SHUTTING_DOWN) {
-        isShuttingDown.set(true)
-      } else if (to == SHUTDOWN) {
-        isShuttingDown.set(false)
+      if (to == SHUTDOWN) {
         awaitShutdownCond.signalAll()
       }
     } finally {
@@ -354,8 +348,6 @@ class BrokerServer(
         logDirFailureChannel = logDirFailureChannel,
         alterPartitionManager = alterPartitionManager,
         brokerTopicStats = brokerTopicStats,
-        isShuttingDown = isShuttingDown,
-        threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
         addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
@@ -395,7 +387,7 @@ class BrokerServer(
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, clientToControllerChannelManager, groupCoordinator,
-        transactionCoordinator, shareCoordinator)
+        transactionCoordinator, shareCoordinator, time)
 
       dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
@@ -412,7 +404,7 @@ class BrokerServer(
         config,
         "heartbeat",
         s"broker-${config.nodeId}-",
-        config.brokerSessionTimeoutMs / 2 // KAFKA-14392
+        config.brokerHeartbeatIntervalMs
       )
       lifecycleManager.start(
         () => sharedServer.loader.lastAppliedOffset(),
@@ -505,7 +497,7 @@ class BrokerServer(
           quotaManagers,
         ),
         new ScramPublisher(
-          config,
+          config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
           credentialProvider),
@@ -618,7 +610,8 @@ class BrokerServer(
     )
     val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
       time,
-      replicaManager,
+      tp => replicaManager.getLog(tp).toJava,
+      tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
       config.groupCoordinatorConfig.offsetsLoadBufferSize
     )
@@ -648,7 +641,8 @@ class BrokerServer(
     val serde = new ShareCoordinatorRecordSerde
     val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
       time,
-      replicaManager,
+      tp => replicaManager.getLog(tp).toJava,
+      tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
       config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
     )
@@ -786,6 +780,9 @@ class BrokerServer(
       if (shareCoordinator != null)
         CoreUtils.swallow(shareCoordinator.shutdown(), this)
 
+      if (autoTopicCreationManager != null)
+        CoreUtils.swallow(autoTopicCreationManager.close(), this)
+
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)
 
@@ -821,8 +818,6 @@ class BrokerServer(
 
       if (persister != null)
         CoreUtils.swallow(persister.stop(), this)
-
-      isShuttingDown.set(false)
 
       if (lifecycleManager != null)
         CoreUtils.swallow(lifecycleManager.close(), this)

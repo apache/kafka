@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
+import java.util.Map;
 
 /**
  * Specification of streams group offsets to list using {@link Admin#listStreamsGroupOffsets(Map, ListStreamsGroupOffsetsOptions)}.
@@ -35,7 +36,7 @@ public class ListStreamsGroupOffsetsSpec {
     /**
      * Set the topic partitions whose offsets are to be listed for a streams group.
      */
-    ListStreamsGroupOffsetsSpec topicPartitions(Collection<TopicPartition> topicPartitions) {
+    public ListStreamsGroupOffsetsSpec topicPartitions(Collection<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions;
         return this;
     }
@@ -43,7 +44,7 @@ public class ListStreamsGroupOffsetsSpec {
     /**
      * Returns the topic partitions whose offsets are to be listed for a streams group.
      */
-    Collection<TopicPartition> topicPartitions() {
+    public Collection<TopicPartition> topicPartitions() {
         return topicPartitions;
     }
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -31,7 +32,6 @@ import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignment
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
-import org.apache.kafka.image.MetadataImage;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -47,7 +47,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -95,7 +94,7 @@ public class ShareGroupAssignorBenchmark {
     @Param({"1", "10", "100"})
     private int partitionCount;
 
-    @Param({"10", "100"})
+    @Param({"1", "10", "100"})
     private int topicCount;
 
     @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
@@ -114,7 +113,7 @@ public class ShareGroupAssignorBenchmark {
 
     private GroupSpec groupSpec;
 
-    private List<String> allTopicNames = Collections.emptyList();
+    private List<String> allTopicNames = List.of();
 
     private TopicIds.TopicResolver topicResolver;
 
@@ -137,8 +136,8 @@ public class ShareGroupAssignorBenchmark {
     private void setupTopics() {
         allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
-        MetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
-        topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
+        CoordinatorMetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
+        topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
         subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }
@@ -179,14 +178,14 @@ public class ShareGroupAssignorBenchmark {
         for (String memberId : groupSpec.memberIds()) {
             MemberAssignment memberAssignment = members.getOrDefault(
                 memberId,
-                new MemberAssignmentImpl(Collections.emptyMap())
+                new MemberAssignmentImpl(Map.of())
             );
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 groupSpec.memberSubscription(memberId).rackId(),
                 Optional.empty(),
                 groupSpec.memberSubscription(memberId).subscribedTopicIds(),
-                new Assignment(Collections.unmodifiableMap(memberAssignment.partitions()))
+                new Assignment(Map.copyOf(memberAssignment.partitions()))
             ));
         }
 

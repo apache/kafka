@@ -29,11 +29,13 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.LogReadResult;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperation;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
+import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.share.fetch.ShareFetchPartitionData;
@@ -367,6 +369,14 @@ public class DelayedShareFetch extends DelayedOperation {
                         "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     sharePartitions.keySet());
             }
+            // At this point, there could be delayed requests sitting in the purgatory which are waiting on
+            // DelayedShareFetchPartitionKeys corresponding to partitions, whose leader has been changed to a different broker.
+            // In that case, such partitions would not be able to get acquired, and the tryComplete will keep on returning false.
+            // Eventually the operation will get timed out and completed, but it might not get removed from the purgatory.
+            // This has been eventually left it like this because the purging mechanism will trigger whenever the number of completed
+            // but still being watched operations is larger than the purge interval. This purge interval is defined by the config
+            // share.fetch.purgatory.purge.interval.requests and is 1000 by default, thereby ensuring that such stale operations do not
+            // grow indefinitely.
             return false;
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
@@ -511,11 +521,11 @@ public class DelayedShareFetch extends DelayedOperation {
         // extend it to support other FetchIsolation types.
         FetchIsolation isolationType = shareFetch.fetchParams().isolation;
         if (isolationType == FetchIsolation.LOG_END)
-            return offsetSnapshot.logEndOffset;
+            return offsetSnapshot.logEndOffset();
         else if (isolationType == FetchIsolation.HIGH_WATERMARK)
-            return offsetSnapshot.highWatermark;
+            return offsetSnapshot.highWatermark();
         else
-            return offsetSnapshot.lastStableOffset;
+            return offsetSnapshot.lastStableOffset();
 
     }
 
@@ -756,7 +766,8 @@ public class DelayedShareFetch extends DelayedOperation {
      * Case a: The partition is in an offline log directory on this broker
      * Case b: This broker does not know the partition it tries to fetch
      * Case c: This broker is no longer the leader of the partition it tries to fetch
-     * Case d: All remote storage read requests completed
+     * Case d: This broker is no longer the leader or follower of the partition it tries to fetch
+     * Case e: All remote storage read requests completed
      * @return boolean representing whether the remote fetch is completed or not.
      */
     private boolean maybeCompletePendingRemoteFetch() {
@@ -764,14 +775,20 @@ public class DelayedShareFetch extends DelayedOperation {
 
         for (TopicIdPartition topicIdPartition : pendingRemoteFetchesOpt.get().fetchOffsetMetadataMap().keySet()) {
             try {
-                replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
+                Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
+                if (!partition.isLeader()) {
+                    throw new NotLeaderException("Broker is no longer the leader of topicPartition: " + topicIdPartition);
+                }
             } catch (KafkaStorageException e) { // Case a
                 log.debug("TopicPartition {} is in an offline log directory, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
             } catch (UnknownTopicOrPartitionException e) { // Case b
                 log.debug("Broker no longer knows of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
-            } catch (NotLeaderOrFollowerException e) { // Case c
+            } catch (NotLeaderException e) { // Case c
+                log.debug("Broker is no longer the leader of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
+                canComplete = true;
+            } catch (NotLeaderOrFollowerException e) { // Case d
                 log.debug("Broker is no longer the leader or follower of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
             }
@@ -779,7 +796,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 break;
         }
 
-        if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case d
+        if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case e
             return forceComplete();
         } else
             return false;
@@ -804,13 +821,22 @@ public class DelayedShareFetch extends DelayedOperation {
         }
         // Releasing the lock to move ahead with the next request in queue.
         releasePartitionLocks(topicIdPartitions);
-        // If we have a fetch request completed for a topic-partition, we release the locks for that partition,
-        // then we should check if there is a pending share fetch request for the topic-partition and complete it.
-        // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
-        // we directly call delayedShareFetchPurgatory.checkAndComplete
-        replicaManager.addToActionQueue(() -> topicIdPartitions.forEach(topicIdPartition ->
+        replicaManager.addToActionQueue(() -> topicIdPartitions.forEach(topicIdPartition -> {
+            // If we have a fetch request completed for a share-partition, we release the locks for that partition,
+            // then we should check if there is a pending share fetch request for the share-partition and complete it.
+            // We add the action to delayed actions queue to avoid an infinite call stack, which could happen if
+            // we directly call delayedShareFetchPurgatory.checkAndComplete.
             replicaManager.completeDelayedShareFetchRequest(
-                new DelayedShareFetchGroupKey(shareFetch.groupId(), topicIdPartition.topicId(), topicIdPartition.partition()))));
+                new DelayedShareFetchGroupKey(shareFetch.groupId(), topicIdPartition.topicId(), topicIdPartition.partition()));
+            // As DelayedShareFetch operation is watched over multiple keys, same operation might be
+            // completed and can contain references to data fetched. Hence, if the operation is not
+            // removed from other watched keys then there can be a memory leak. The removal of the
+            // operation is dependent on the purge task by DelayedOperationPurgatory. Hence, this can
+            // also be prevented by setting smaller value for configuration {@link ShareGroupConfig#SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG}.
+            // However, it's best to trigger the check on all the keys that are being watched which
+            // should free the memory for the completed operation.
+            replicaManager.completeDelayedShareFetchRequest(new DelayedShareFetchPartitionKey(topicIdPartition));
+        }));
     }
 
     /**
@@ -825,8 +851,8 @@ public class DelayedShareFetch extends DelayedOperation {
             for (RemoteFetch remoteFetch : pendingRemoteFetchesOpt.get().remoteFetches()) {
                 if (remoteFetch.remoteFetchResult().isDone()) {
                     RemoteLogReadResult remoteLogReadResult = remoteFetch.remoteFetchResult().get();
-                    if (remoteLogReadResult.error.isPresent()) {
-                        Throwable error = remoteLogReadResult.error.get();
+                    if (remoteLogReadResult.error().isPresent()) {
+                        Throwable error = remoteLogReadResult.error().get();
                         // If there is any error for the remote fetch topic partition, we populate the error accordingly.
                         shareFetchPartitionData.add(
                             new ShareFetchPartitionData(
@@ -836,7 +862,7 @@ public class DelayedShareFetch extends DelayedOperation {
                             )
                         );
                     } else {
-                        FetchDataInfo info = remoteLogReadResult.fetchDataInfo.get();
+                        FetchDataInfo info = remoteLogReadResult.fetchDataInfo().get();
                         TopicIdPartition topicIdPartition = remoteFetch.topicIdPartition();
                         LogReadResult logReadResult = remoteFetch.logReadResult();
                         shareFetchPartitionData.add(

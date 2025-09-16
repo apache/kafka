@@ -1013,7 +1013,7 @@ public class SharePartitionManagerTest {
         ShareFetchResponse resp1 = context1.updateAndGenerateResponseData(groupId, reqMetadata1.memberId(), respData1);
         assertEquals(Errors.NONE, resp1.error());
 
-        assertEquals(new HashSet<>(List.of(tp0, tp1)),
+        assertEquals(Set.of(tp0, tp1),
                 new HashSet<>(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, memberId1)));
 
         // Create a new share session with an initial share fetch request.
@@ -1047,7 +1047,7 @@ public class SharePartitionManagerTest {
         ShareFetchResponse resp3 = context3.updateAndGenerateResponseData(groupId, reqMetadata1.memberId(), respData3);
         assertEquals(Errors.NONE, resp3.error());
 
-        assertEquals(new HashSet<>(List.of(tp0, tp1, tp2)),
+        assertEquals(Set.of(tp0, tp1, tp2),
                 new HashSet<>(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, memberId1)));
 
         // Continue the second session we created.
@@ -2470,7 +2470,6 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testShareFetchProcessingExceptions() throws Exception {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
@@ -2622,7 +2621,8 @@ public class SharePartitionManagerTest {
         assertEquals(Errors.FENCED_STATE_EPOCH.code(), partitionDataMap.get(tp2).errorCode());
         assertEquals("Fenced state epoch", partitionDataMap.get(tp2).errorMessage());
 
-        Mockito.verify(replicaManager, times(0)).completeDelayedShareFetchRequest(any());
+        Mockito.verify(replicaManager, times(1)).completeDelayedShareFetchRequest(
+            new DelayedShareFetchGroupKey(groupId, tp2));
         Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         // Should have 1 fetch recorded and 1 failure as single topic has multiple partition fetch
@@ -3231,6 +3231,7 @@ public class SharePartitionManagerTest {
         return CollectionConverters.asScala(logReadResults).toSeq();
     }
 
+    @SuppressWarnings("unchecked")
     static void mockReplicaManagerDelayedShareFetch(ReplicaManager replicaManager,
                                                     DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
         doAnswer(invocationOnMock -> {

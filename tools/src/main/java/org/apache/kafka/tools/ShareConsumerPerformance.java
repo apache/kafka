@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
+import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -37,16 +38,18 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 import joptsimple.OptionException;
 import joptsimple.OptionSpec;
@@ -57,6 +60,10 @@ public class ShareConsumerPerformance {
     private static final Logger LOG = LoggerFactory.getLogger(ShareConsumerPerformance.class);
 
     public static void main(String[] args) {
+        run(args, KafkaShareConsumer::new);
+    }
+
+    static void run(String[] args, Function<Properties, ShareConsumer<byte[], byte[]>> shareConsumerCreator) {
         try {
             LOG.info("Starting share consumer/consumers...");
             ShareConsumerPerfOptions options = new ShareConsumerPerfOptions(args);
@@ -66,9 +73,9 @@ public class ShareConsumerPerformance {
             if (!options.hideHeader())
                 printHeader();
 
-            List<KafkaShareConsumer<byte[], byte[]>> shareConsumers = new ArrayList<>();
+            List<ShareConsumer<byte[], byte[]>> shareConsumers = new ArrayList<>();
             for (int i = 0; i < options.threads(); i++) {
-                shareConsumers.add(new KafkaShareConsumer<>(options.props()));
+                shareConsumers.add(shareConsumerCreator.apply(options.props()));
             }
             long startMs = System.currentTimeMillis();
             consume(shareConsumers, options, totalMessagesRead, totalBytesRead, startMs);
@@ -81,7 +88,6 @@ public class ShareConsumerPerformance {
             shareConsumers.forEach(shareConsumer -> {
                 @SuppressWarnings("UnusedLocalVariable")
                 Map<TopicIdPartition, Optional<KafkaException>> ignored = shareConsumer.commitSync();
-                shareConsumer.close(Duration.ofMillis(500));
             });
 
             // Print final stats for share group.
@@ -92,6 +98,7 @@ public class ShareConsumerPerformance {
 
             shareConsumersMetrics.forEach(ToolsUtils::printMetrics);
 
+            shareConsumers.forEach(shareConsumer -> shareConsumer.close(Duration.ofMillis(500)));
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -104,11 +111,11 @@ public class ShareConsumerPerformance {
         System.out.printf("start.time, end.time, data.consumed.in.MB, MB.sec, nMsg.sec, data.consumed.in.nMsg%s%n", newFieldsInHeader);
     }
 
-    private static void consume(List<KafkaShareConsumer<byte[], byte[]>> shareConsumers,
+    private static void consume(List<ShareConsumer<byte[], byte[]>> shareConsumers,
                                 ShareConsumerPerfOptions options,
                                 AtomicLong totalMessagesRead,
                                 AtomicLong totalBytesRead,
-                                long startMs) {
+                                long startMs) throws ExecutionException, InterruptedException {
         long numMessages = options.numMessages();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         shareConsumers.forEach(shareConsumer -> shareConsumer.subscribe(options.topic()));
@@ -120,17 +127,18 @@ public class ShareConsumerPerformance {
 
 
         ExecutorService executorService = Executors.newFixedThreadPool(shareConsumers.size());
+        List<Future<?>> futures = new ArrayList<>();
         for (int i = 0; i < shareConsumers.size(); i++) {
             final int index = i;
             ShareConsumerConsumption shareConsumerConsumption = new ShareConsumerConsumption(0, 0);
-            executorService.submit(() -> {
+            futures.add(executorService.submit(() -> {
                 try {
                     consumeMessagesForSingleShareConsumer(shareConsumers.get(index), messagesRead, bytesRead, options,
                         shareConsumerConsumption, index + 1);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
-            });
+            }));
             shareConsumersConsumptionDetails.add(shareConsumerConsumption);
         }
         LOG.debug("Shutting down of thread pool is started");
@@ -153,6 +161,9 @@ public class ShareConsumerPerformance {
             // Preserve interrupt status
             Thread.currentThread().interrupt();
         }
+        for (Future<?> future : futures) {
+            future.get();
+        }
 
         if (options.showShareConsumerStats()) {
             long endMs = System.currentTimeMillis();
@@ -174,7 +185,7 @@ public class ShareConsumerPerformance {
         totalBytesRead.set(bytesRead.get());
     }
 
-    private static void consumeMessagesForSingleShareConsumer(KafkaShareConsumer<byte[], byte[]> shareConsumer,
+    private static void consumeMessagesForSingleShareConsumer(ShareConsumer<byte[], byte[]> shareConsumer,
                                                               AtomicLong totalMessagesRead,
                                                               AtomicLong totalBytesRead,
                                                               ShareConsumerPerfOptions options,
@@ -328,7 +339,7 @@ public class ShareConsumerPerformance {
                     .describedAs("milliseconds")
                     .ofType(Long.class)
                     .defaultsTo(10_000L);
-            numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
+            numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to consume.")
                     .withRequiredArg()
                     .describedAs("count")
                     .ofType(Long.class);
@@ -389,7 +400,7 @@ public class ShareConsumerPerformance {
         }
 
         public Set<String> topic() {
-            return Collections.singleton(options.valueOf(topicOpt));
+            return Set.of(options.valueOf(topicOpt));
         }
 
         public long numMessages() {

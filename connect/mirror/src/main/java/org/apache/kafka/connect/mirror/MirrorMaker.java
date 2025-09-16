@@ -57,7 +57,6 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -232,7 +231,7 @@ public class MirrorMaker {
     }
 
     private void addHerder(SourceAndTarget sourceAndTarget) {
-        log.info("creating herder for " + sourceAndTarget.toString());
+        log.info("creating herder for {}", sourceAndTarget.toString());
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
         String encodedSource = encodePath(sourceAndTarget.source());
         String encodedTarget = encodePath(sourceAndTarget.target());
@@ -250,7 +249,7 @@ public class MirrorMaker {
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase,
                 plugins.newInternalConverter(true, JsonConverter.class.getName(),
-                        Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
+                        Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(distributedConfig);
         ConnectorClientConfigOverridePolicy clientConfigOverridePolicy = new AllConnectorClientConfigOverridePolicy();
         clientConfigOverridePolicy.configure(config.originals());

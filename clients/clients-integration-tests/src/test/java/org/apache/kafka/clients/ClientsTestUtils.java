@@ -33,7 +33,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -64,19 +64,19 @@ public class ClientsTestUtils {
 
     private ClientsTestUtils() {}
 
-    public static List<ConsumerRecord<byte[], byte[]>> consumeRecords(
-        Consumer<byte[], byte[]> consumer,
+    public static <K, V> List<ConsumerRecord<K, V>> consumeRecords(
+        Consumer<K, V> consumer,
         int numRecords
     ) throws InterruptedException {
         return consumeRecords(consumer, numRecords, Integer.MAX_VALUE);
     }
 
-    public static List<ConsumerRecord<byte[], byte[]>> consumeRecords(
-        Consumer<byte[], byte[]> consumer,
+    public static <K, V> List<ConsumerRecord<K, V>> consumeRecords(
+        Consumer<K, V> consumer,
         int numRecords,
         int maxPollRecords
     ) throws InterruptedException {
-        List<ConsumerRecord<byte[], byte[]>> consumedRecords = new ArrayList<>();
+        List<ConsumerRecord<K, V>> consumedRecords = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
             var records = consumer.poll(Duration.ofMillis(100));
             records.forEach(consumedRecords::add);
@@ -109,14 +109,58 @@ public class ClientsTestUtils {
     }
 
     public static void pollUntilTrue(
-            Consumer<byte[], byte[]> consumer,
-            Supplier<Boolean> testCondition,
-            long waitTimeMs, String msg
+        Consumer<byte[], byte[]> consumer,
+        Supplier<Boolean> testCondition,
+        String msg
+    ) throws InterruptedException {
+        pollUntilTrue(consumer, Duration.ofMillis(100), testCondition, 15_000L, msg);
+    }
+
+    public static void pollUntilTrue(
+        Consumer<byte[], byte[]> consumer,
+        Supplier<Boolean> testCondition,
+        long waitTimeMs,
+        String msg
+    ) throws InterruptedException {
+        pollUntilTrue(consumer, Duration.ofMillis(100), testCondition, waitTimeMs, msg);
+    }
+
+    public static void pollUntilTrue(
+        Consumer<byte[], byte[]> consumer,
+        Duration timeout,
+        Supplier<Boolean> testCondition,
+        long waitTimeMs, 
+        String msg
     ) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
-            consumer.poll(Duration.ofMillis(100));
+            consumer.poll(timeout);
             return testCondition.get();
         }, waitTimeMs, msg);
+    }
+
+    public static void consumeAndVerifyRecordsWithTimeTypeLogAppend(
+        Consumer<byte[], byte[]> consumer,
+        TopicPartition tp,
+        int numRecords,
+        long startingTimestamp
+    ) throws InterruptedException {
+        var records = consumeRecords(consumer, numRecords, Integer.MAX_VALUE);
+        var now = System.currentTimeMillis();
+        for (var i = 0; i < numRecords; i++) {
+            var record = records.get(i);
+            assertEquals(tp.topic(), record.topic());
+            assertEquals(tp.partition(), record.partition());
+
+            assertTrue(record.timestamp() >= startingTimestamp && record.timestamp() <= now,
+                "Got unexpected timestamp " + record.timestamp() + ". Timestamp should be between [" + startingTimestamp + ", " + now + "]");
+
+            assertEquals(i, record.offset());
+            assertEquals(KEY_PREFIX + i, new String(record.key()));
+            assertEquals(VALUE_PREFIX + i, new String(record.value()));
+            // this is true only because K and V are byte arrays
+            assertEquals((KEY_PREFIX + i).length(), record.serializedKeySize());
+            assertEquals((VALUE_PREFIX + i).length(), record.serializedValueSize());
+        }
     }
 
     public static void consumeAndVerifyRecords(
@@ -262,12 +306,12 @@ public class ClientsTestUtils {
         return record;
     }
 
-    public static void sendAndAwaitAsyncCommit(
-        Consumer<byte[], byte[]> consumer,
+    public static <K, V> void sendAndAwaitAsyncCommit(
+        Consumer<K, V> consumer,
         Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
     ) throws InterruptedException {
 
-        var commitCallback = new RetryCommitCallback(consumer, offsetsOpt);
+        var commitCallback = new RetryCommitCallback<>(consumer, offsetsOpt);
         sendAsyncCommit(consumer, commitCallback, offsetsOpt);
 
         TestUtils.waitForCondition(() -> {
@@ -298,6 +342,21 @@ public class ClientsTestUtils {
         var initialRevokeCalls = rebalanceListener.callsToRevoked;
         sendAndAwaitAsyncCommit(consumer, Optional.empty());
         assertEquals(initialRevokeCalls, rebalanceListener.callsToRevoked);
+    }
+
+
+    public static void waitForPollThrowException(
+        Consumer<byte[], byte[]> consumer,
+        Class<? extends Exception> exceptedException
+    ) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            try {
+                consumer.poll(Duration.ZERO);
+                return false;
+            } catch (Exception e) {
+                return exceptedException.isInstance(e);
+            }
+        }, "Continuous poll not fail");
     }
 
     /**
@@ -389,8 +448,8 @@ public class ClientsTestUtils {
         }
     }
 
-    public static void sendAsyncCommit(
-        Consumer<byte[], byte[]> consumer,
+    public static <K, V> void sendAsyncCommit(
+        Consumer<K, V> consumer,
         OffsetCommitCallback callback,
         Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
     ) {
@@ -438,14 +497,14 @@ public class ClientsTestUtils {
         }
     }
 
-    private static class RetryCommitCallback implements OffsetCommitCallback {
+    private static class RetryCommitCallback<K, V> implements OffsetCommitCallback {
         boolean isComplete = false;
         Optional<Exception> error = Optional.empty();
-        Consumer<byte[], byte[]> consumer;
+        Consumer<K, V> consumer;
         Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt;
 
         public RetryCommitCallback(
-            Consumer<byte[], byte[]> consumer,
+            Consumer<K, V> consumer,
             Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
         ) {
             this.consumer = consumer;

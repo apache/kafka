@@ -64,6 +64,8 @@ public class RaftUtil {
             case FETCH_SNAPSHOT -> new FetchSnapshotResponseData().setErrorCode(error.code());
             case API_VERSIONS -> new ApiVersionsResponseData().setErrorCode(error.code());
             case UPDATE_RAFT_VOTER -> new UpdateRaftVoterResponseData().setErrorCode(error.code());
+            case ADD_RAFT_VOTER -> new AddRaftVoterResponseData().setErrorCode(error.code());
+            case REMOVE_RAFT_VOTER -> new RemoveRaftVoterResponseData().setErrorCode(error.code());
             default -> throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
         };
     }
@@ -524,22 +526,26 @@ public class RaftUtil {
         String clusterId,
         int timeoutMs,
         ReplicaKey voter,
-        Endpoints listeners
+        Endpoints listeners,
+        boolean ackWhenCommitted
     ) {
         return new AddRaftVoterRequestData()
             .setClusterId(clusterId)
             .setTimeoutMs(timeoutMs)
             .setVoterId(voter.id())
             .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
-            .setListeners(listeners.toAddVoterRequest());
+            .setListeners(listeners.toAddVoterRequest())
+            .setAckWhenCommitted(ackWhenCommitted);
     }
 
     public static AddRaftVoterResponseData addVoterResponse(
         Errors error,
         String errorMessage
     ) {
-        errorMessage = errorMessage == null ? error.message() : errorMessage;
-
+        // return the provided errorMessage if it exists, Errors.NONE should have a null message
+        if (errorMessage == null && error != Errors.NONE) {
+            errorMessage = error.message();
+        }
         return new AddRaftVoterResponseData()
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
@@ -559,8 +565,10 @@ public class RaftUtil {
         Errors error,
         String errorMessage
     ) {
-        errorMessage = errorMessage == null ? error.message() : errorMessage;
-
+        // return the provided errorMessage if it exists, Errors.NONE should have a null message
+        if (errorMessage == null && error != Errors.NONE) {
+            errorMessage = error.message();
+        }
         return new RemoveRaftVoterResponseData()
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);

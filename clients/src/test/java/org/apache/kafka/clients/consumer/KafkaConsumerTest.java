@@ -716,26 +716,27 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances(GroupProtocol groupProtocol) {
-        final int targetInterceptor = 3;
+        final int targetInterceptor = 1;
 
         try {
             Properties props = new Properties();
             props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,  MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName());
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, 
+                    CloseInterceptor.class.getName() + "," + MockConsumerInterceptor.class.getName());
 
             MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
             assertThrows(KafkaException.class, () -> newConsumer(
                     props, new StringDeserializer(), new StringDeserializer()));
 
-            assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
-            assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CONFIG_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
 
+            assertEquals(1, CloseInterceptor.CLOSE_COUNT.get());
         } finally {
             MockConsumerInterceptor.resetCounters();
+            CloseInterceptor.resetCounters();
         }
     }
 
@@ -1974,12 +1975,9 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testOperationsBySubscribingConsumerWithDefaultGroupId(GroupProtocol groupProtocol) {
-        try {
-            newConsumer(groupProtocol, null, Optional.of(Boolean.TRUE));
-            fail("Expected an InvalidConfigurationException");
-        } catch (InvalidConfigurationException e) {
-            // OK, expected
-        }
+        assertThrows(InvalidConfigurationException.class,
+            () -> newConsumer(groupProtocol, null, Optional.of(true)),
+            "Expected an InvalidConfigurationException");
 
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null)) {
             assertThrows(InvalidGroupIdException.class, () -> consumer.subscribe(Set.of(topic)));
@@ -2087,7 +2085,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
         client.prepareResponseFrom(syncGroupResponse(List.of(tp0), Errors.NONE), coordinator);
 
-        client.prepareResponseFrom(body -> body instanceof FetchRequest 
+        client.prepareResponseFrom(body -> body instanceof FetchRequest
             && ((FetchRequest) body).fetchData(topicNames).containsKey(new TopicIdPartition(topicId, tp0)), fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
@@ -2142,7 +2140,7 @@ public class KafkaConsumerTest {
                 future.get(100, TimeUnit.MILLISECONDS);
                 if (closeTimeoutMs != 0)
                     fail("Close completed without waiting for commit or leave response");
-            } catch (TimeoutException e) {
+            } catch (TimeoutException swallow) {
                 // Expected exception
             }
 
@@ -3118,6 +3116,7 @@ public class KafkaConsumerTest {
         configs.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, retryBackoffMs);
         configs.put(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, throwOnStableOffsetNotSupported);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         groupInstanceId.ifPresent(gi -> configs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, gi));
 
         return new ConsumerConfig(configs);
@@ -3563,9 +3562,9 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
             Node node = metadata.fetch().nodes().get(0);
             client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         }
-        
+
         final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
-        
+
         int maxPreparedResponses = GroupProtocol.CLASSIC.equals(groupProtocol) ? 10 : 1;
         for (int i = 0; i < maxPreparedResponses; i++) {
             client.prepareResponse(
@@ -3586,20 +3585,20 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
     @EnumSource(GroupProtocol.class)
     public void testCommittedThrowsTimeoutExceptionForNoResponse(GroupProtocol groupProtocol) {
         Time time = new MockTime(Duration.ofSeconds(1).toMillis());
-        
+
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
-        
+
         initMetadata(client, Map.of(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.assign(List.of(tp0));
-        
+
         // lookup coordinator
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-        
+
         // try to get committed offsets for one topic-partition - but it is disconnected so there's no response and it will time out
         client.prepareResponseFrom(offsetResponse(Map.of(tp0, 0L), Errors.NONE), coordinator, true);
         org.apache.kafka.common.errors.TimeoutException timeoutException = assertThrows(org.apache.kafka.common.errors.TimeoutException.class,
@@ -3799,6 +3798,35 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         public void withPluginMetrics(PluginMetrics metrics) {
             MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
             metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
+    }
+
+    public static class CloseInterceptor implements ConsumerInterceptor<String, String> {
+
+        public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+
+        @Override
+        public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
+            return null;
+        }
+
+        @Override
+        public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            // no-op
+        }
+
+        @Override
+        public void close() {
+            CLOSE_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // no-op
+        }
+
+        public static void resetCounters() {
+            CLOSE_COUNT.set(0);
         }
     }
 }

@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -124,13 +123,13 @@ public class RangeSetTest {
         RangeSet rangeSet2 = new RangeSet(5, 10);
         RangeSet rangeSet3 = new RangeSet(6, 10);
         Set<Integer> set = Set.of(5, 6, 7, 8, 9);
-        HashSet<Integer> hashSet = new HashSet<>(Set.of(6, 7, 8, 9));
+        Set<Integer> hashSet = Set.of(6, 7, 8, 9);
 
         assertEquals(rangeSet1, rangeSet2);
         assertNotEquals(rangeSet1, rangeSet3);
-        assertEquals(rangeSet1, set);
-        assertEquals(rangeSet3, hashSet);
-        assertNotEquals(rangeSet1, new Object());
+        assertEquals(set, rangeSet1);
+        assertEquals(hashSet, rangeSet3);
+        assertNotEquals(new Object(), rangeSet1);
 
         // Empty sets are equal.
         RangeSet emptyRangeSet1 = new RangeSet(0, 0);

@@ -33,7 +33,7 @@ TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py" bash tests/docker/run_
 ```
 * Run multiple test files
 ```
-TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py tests/kafkatest/services/console_consumer.py" bash tests/docker/run_tests.sh
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py tests/kafkatest/sanity_checks/test_console_consumer.py" bash tests/docker/run_tests.sh
 ```
 * Run a specific test class
 ```
@@ -45,16 +45,17 @@ TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest.
 ```
 * Run a specific test method with specific parameters
 ```
-TC_PATHS="tests/kafkatest/tests/streams/streams_upgrade_test.py::StreamsUpgradeTest.test_metadata_upgrade" _DUCKTAPE_OPTIONS='--parameters '\''{"from_version":"0.10.1.1","to_version":"2.6.0-SNAPSHOT"}'\' bash tests/docker/run_tests.sh
+TC_PATHS="tests/kafkatest/tests/streams/streams_upgrade_test.py::StreamsUpgradeTest.test_rolling_upgrade_with_2_bounces" _DUCKTAPE_OPTIONS='--parameters '\''{"from_version":"2.4.1","metadata_quorum":"COMBINED_KRAFT"}'\' bash tests/docker/run_tests.sh
 ```
 * Run tests with a specific image name
 ```
-image_name="ducker-ak-openjdk:17-buster" bash tests/docker/run_tests.sh
+image_name="ducker-ak-openjdk:17" bash tests/docker/run_tests.sh
 ```
 * Run tests with a different JVM
 ```
-bash tests/docker/ducker-ak up -j 'openjdk:17-buster'; tests/docker/run_tests.sh
+bash tests/docker/ducker-ak up -j '<JDK_IMAGE>'; tests/docker/run_tests.sh
 ```
+  You can customize the OpenJDK base image using the `-j` or `--jdk` parameter, otherwise a default value will be used.
 * Remove ducker-ak containers
 ```
 bash tests/docker/ducker-ak down -f

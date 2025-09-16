@@ -19,6 +19,8 @@ package org.apache.kafka.jmh.assignor;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -35,8 +37,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,7 +96,7 @@ public class AssignorBenchmarkUtils {
      * @return A TopicsImage containing the topic ids, names and partition counts from the
      *         subscription metadata.
      */
-    public static MetadataImage createMetadataImage(
+    public static CoordinatorMetadataImage createMetadataImage(
         List<String> allTopicNames,
         int partitionsPerTopic
     ) {
@@ -111,7 +111,7 @@ public class AssignorBenchmarkUtils {
             );
         }
 
-        return delta.apply(MetadataProvenance.EMPTY);
+        return new KRaftCoordinatorMetadataImage(delta.apply(MetadataProvenance.EMPTY));
     }
 
     /**
@@ -145,7 +145,7 @@ public class AssignorBenchmarkUtils {
         return new GroupSpecImpl(
             memberSpecs,
             subscriptionType,
-            Collections.emptyMap()
+            Map.of()
         );
     }
 
@@ -335,7 +335,7 @@ public class AssignorBenchmarkUtils {
             delta.replay(new PartitionRecord()
                 .setTopicId(topicId)
                 .setPartitionId(i)
-                .setReplicas(Arrays.asList(i % 4, (i + 1) % 4)));
+                .setReplicas(List.of(i % 4, (i + 1) % 4)));
         }
     }
 }

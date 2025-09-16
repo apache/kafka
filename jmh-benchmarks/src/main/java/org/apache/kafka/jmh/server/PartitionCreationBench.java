@@ -27,14 +27,16 @@ import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.ConfigRepository;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MockConfigRepository;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
@@ -60,7 +62,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -123,7 +124,7 @@ public class PartitionCreationBench {
         ConfigRepository configRepository = new MockConfigRepository();
         this.logManager = new LogManagerBuilder().
             setLogDirs(files).
-            setInitialOfflineDirs(Collections.emptyList()).
+            setInitialOfflineDirs(List.of()).
             setConfigRepository(configRepository).
             setInitialDefaultConfig(createLogConfig()).
             setCleanerConfig(cleanerConfig).
@@ -182,29 +183,23 @@ public class PartitionCreationBench {
             topicPartitions.add(new TopicPartition(topicName, partitionNum));
         }
 
-        List<Integer> replicas = new ArrayList<>();
-        replicas.add(0);
-        replicas.add(1);
-        replicas.add(2);
+        int[] replicas = {0, 1, 2};
 
         OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Optional.of(0L);
         for (TopicPartition topicPartition : topicPartitions) {
             final Partition partition = this.replicaManager.createPartition(topicPartition);
-            List<Integer> inSync = new ArrayList<>();
-            inSync.add(0);
-            inSync.add(1);
-            inSync.add(2);
+            int[] isr = {0, 1, 2};
 
-            LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
-                    .setControllerEpoch(0)
+            PartitionRegistration partitionRegistration = new PartitionRegistration.Builder()
                     .setLeader(0)
+                    .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
                     .setLeaderEpoch(0)
-                    .setIsr(inSync)
+                    .setIsr(isr)
                     .setPartitionEpoch(1)
                     .setReplicas(replicas)
-                    .setIsNew(true);
-
-            partition.makeFollower(partitionState, checkpoints, topicId, Option.empty());
+                    .setDirectories(DirectoryId.unassignedArray(replicas.length))
+                    .build();
+            partition.makeFollower(partitionRegistration, true, checkpoints, topicId, Option.empty());
         }
     }
 }

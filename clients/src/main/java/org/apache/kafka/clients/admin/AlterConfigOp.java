@@ -26,6 +26,20 @@ import java.util.stream.Collectors;
 
 /**
  * A class representing an alter configuration entry containing name, value and operation type.
+ * <p>
+ * <b>Note for Broker Logger Configuration:</b><br>
+ * When altering broker logger levels (using {@link org.apache.kafka.common.config.ConfigResource.Type#BROKER_LOGGER}),
+ * it is strongly recommended to use log level constants from {@link org.apache.kafka.common.config.LogLevelConfig} instead of string literals.
+ * This ensures compatibility with Kafka's log level validation and avoids potential configuration errors.
+ * <p>
+ * Example:
+ * <pre>
+ * Recommended approach:
+ * new AlterConfigOp(new ConfigEntry(loggerName, LogLevelConfig.DEBUG_LOG_LEVEL), OpType.SET)
+ *
+ * Avoid this:
+ * new AlterConfigOp(new ConfigEntry(loggerName, "DEBUG"), OpType.SET)
+ * </pre>
  */
 public class AlterConfigOp {
 

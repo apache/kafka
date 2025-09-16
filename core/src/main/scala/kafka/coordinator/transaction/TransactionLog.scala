@@ -21,11 +21,12 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.coordinator.transaction.{TransactionState, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState, TxnTransitMetadata}
 import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordType, TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
-import scala.collection.mutable
+import java.util
+
 import scala.jdk.CollectionConverters._
 
 /**
@@ -51,7 +52,7 @@ object TransactionLog {
     *
     * @return key bytes
     */
-  private[transaction] def keyToBytes(transactionalId: String): Array[Byte] = {
+  def keyToBytes(transactionalId: String): Array[Byte] = {
     MessageUtil.toCoordinatorTypePrefixedBytes(new TransactionLogKey().setTransactionalId(transactionalId))
   }
 
@@ -60,7 +61,7 @@ object TransactionLog {
     *
     * @return value payload bytes
     */
-  private[transaction] def valueToBytes(txnMetadata: TxnTransitMetadata,
+  def valueToBytes(txnMetadata: TxnTransitMetadata,
                                         transactionVersionLevel: TransactionVersion): Array[Byte] = {
     if (txnMetadata.txnState == TransactionState.EMPTY && !txnMetadata.topicPartitions.isEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
@@ -114,28 +115,25 @@ object TransactionLog {
       val version = buffer.getShort
       if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
         val value = new TransactionLogValue(new ByteBufferAccessor(buffer), version)
-        val transactionMetadata = new TransactionMetadata(
-          transactionalId = transactionalId,
-          producerId = value.producerId,
-          prevProducerId = value.previousProducerId,
-          nextProducerId = value.nextProducerId,
-          producerEpoch = value.producerEpoch,
-          lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-          txnTimeoutMs = value.transactionTimeoutMs,
-          state = TransactionState.fromId(value.transactionStatus),
-          topicPartitions = mutable.Set.empty[TopicPartition],
-          txnStartTimestamp = value.transactionStartTimestampMs,
-          txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs,
-          clientTransactionVersion = TransactionVersion.fromFeatureLevel(value.clientTransactionVersion))
-
-        if (!transactionMetadata.state.equals(TransactionState.EMPTY))
-          value.transactionPartitions.forEach(partitionsSchema =>
-            transactionMetadata.addPartitions(partitionsSchema.partitionIds
-              .asScala
-              .map(partitionId => new TopicPartition(partitionsSchema.topic, partitionId))
-              .toSet)
-          )
-        Some(transactionMetadata)
+        val state = TransactionState.fromId(value.transactionStatus)
+        val tps: util.Set[TopicPartition] = new util.HashSet[TopicPartition]()
+        if (!state.equals(TransactionState.EMPTY))
+          value.transactionPartitions.forEach(partitionsSchema => {
+            partitionsSchema.partitionIds.forEach(partitionId => tps.add(new TopicPartition(partitionsSchema.topic, partitionId.intValue())))
+          })
+        Some(new TransactionMetadata(
+          transactionalId,
+          value.producerId,
+          value.previousProducerId,
+          value.nextProducerId,
+          value.producerEpoch,
+          RecordBatch.NO_PRODUCER_EPOCH,
+          value.transactionTimeoutMs,
+          state,
+          tps,
+          value.transactionStartTimestampMs,
+          value.transactionLastUpdateTimestampMs,
+          TransactionVersion.fromFeatureLevel(value.clientTransactionVersion)))
       } else throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
     }
   }

@@ -62,10 +62,10 @@ public class ChannelBuildersTest {
         assertNull(configs.get("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
 
-        assertEquals(configs.get("gssapi.sasl.kerberos.service.name"), "testkafka");
+        assertEquals("testkafka", configs.get("gssapi.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("gssapi.sasl.kerberos.service.name"));
 
-        assertEquals(configs.get("sasl.kerberos.service.name"), "testkafkaglobal");
+        assertEquals("testkafkaglobal", configs.get("sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("sasl.kerberos.service.name"));
 
         assertNull(configs.get("listener.name.listener1.sasl.kerberos.service.name"));
@@ -74,35 +74,35 @@ public class ChannelBuildersTest {
         assertNull(configs.get("plain.sasl.server.callback.handler.class"));
         assertFalse(securityConfig.unused().contains("plain.sasl.server.callback.handler.class"));
 
-        assertEquals(configs.get("listener.name.listener1.gssapi.config1.key"), "custom.config1");
+        assertEquals("custom.config1", configs.get("listener.name.listener1.gssapi.config1.key"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.gssapi.config1.key"));
 
-        assertEquals(configs.get("custom.config2.key"), "custom.config2");
+        assertEquals("custom.config2", configs.get("custom.config2.key"));
         assertFalse(securityConfig.unused().contains("custom.config2.key"));
 
         // test configs without listener prefix
         securityConfig = new TestSecurityConfig(props);
         configs = ChannelBuilders.channelBuilderConfigs(securityConfig, null);
 
-        assertEquals(configs.get("listener.name.listener1.gssapi.sasl.kerberos.service.name"), "testkafka");
+        assertEquals("testkafka", configs.get("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
 
         assertNull(configs.get("gssapi.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("gssapi.sasl.kerberos.service.name"));
 
-        assertEquals(configs.get("listener.name.listener1.sasl.kerberos.service.name"), "testkafkaglobal");
+        assertEquals("testkafkaglobal", configs.get("listener.name.listener1.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.sasl.kerberos.service.name"));
 
         assertNull(configs.get("sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("sasl.kerberos.service.name"));
 
-        assertEquals(configs.get("plain.sasl.server.callback.handler.class"), "callback");
+        assertEquals("callback", configs.get("plain.sasl.server.callback.handler.class"));
         assertFalse(securityConfig.unused().contains("plain.sasl.server.callback.handler.class"));
 
-        assertEquals(configs.get("listener.name.listener1.gssapi.config1.key"), "custom.config1");
+        assertEquals("custom.config1", configs.get("listener.name.listener1.gssapi.config1.key"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.gssapi.config1.key"));
 
-        assertEquals(configs.get("custom.config2.key"), "custom.config2");
+        assertEquals("custom.config2", configs.get("custom.config2.key"));
         assertFalse(securityConfig.unused().contains("custom.config2.key"));
     }
 
@@ -116,6 +116,16 @@ public class ChannelBuildersTest {
 
         @Override
         public KafkaPrincipal build(AuthenticationContext context) {
+            return null;
+        }
+
+        @Override
+        public byte[] serialize(KafkaPrincipal principal) {
+            return new byte[0];
+        }
+
+        @Override
+        public KafkaPrincipal deserialize(byte[] bytes) {
             return null;
         }
     }
