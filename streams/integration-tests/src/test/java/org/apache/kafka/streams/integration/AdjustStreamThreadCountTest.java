@@ -28,12 +28,18 @@ import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThr
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
@@ -88,11 +94,12 @@ public class AdjustStreamThreadCountTest {
 
     @AfterAll
     public static void closeCluster() {
-        CLUSTER.stop();
+        CLUSTER.stop(); 
     }
 
     private final List<KafkaStreams.State> stateTransitionHistory = new ArrayList<>();
     private static String inputTopic;
+    private static String outputTopic;
     private static StreamsBuilder builder;
     private static Properties properties;
     private static String appId = "";
@@ -103,10 +110,21 @@ public class AdjustStreamThreadCountTest {
         final String testId = safeUniqueTestName(testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
+        outputTopic = "output" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
         builder = new StreamsBuilder();
-        builder.stream(inputTopic);
+        // Build a simple stateful topology to exercise concurrency with state stores
+        final KStream<String, String> source = builder.stream(inputTopic);
+        final KTable<String, Long> counts = source
+            .groupByKey()
+            .count(Named.as("counts"), Materialized.as("counts-store"));
+        counts
+            .toStream()
+            .mapValues(Object::toString)
+            .to(outputTopic);
+
+        produceTestRecords(inputTopic, CLUSTER);
 
         properties = mkObjectProperties(
             mkMap(
@@ -119,6 +137,24 @@ public class AdjustStreamThreadCountTest {
                 mkEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000)
             )
         );
+    }
+
+    private void produceTestRecords(final String inputTopic, final EmbeddedKafkaCluster cluster) {
+        final Properties props = new Properties();
+        props.put("acks", "all");
+        props.put("retries", 1);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, "test-client");
+        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        final KafkaProducer<String, String> dummyProducer = new KafkaProducer<>(props);
+        for (int i = 0; i < 5000; i++) {
+            final String key = "key-" + (i % 50);
+            final String value = "value-" + i;
+            dummyProducer.send(new ProducerRecord<String, String>(inputTopic, key, value));
+        }
+        dummyProducer.flush();
+        dummyProducer.close();
     }
 
     private void startStreamsAndWaitForRunning(final KafkaStreams kafkaStreams) throws InterruptedException {
