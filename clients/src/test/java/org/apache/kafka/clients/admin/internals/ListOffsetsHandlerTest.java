@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -241,7 +242,7 @@ public final class ListOffsetsHandlerTest {
         ListOffsetsHandler handler =
             new ListOffsetsHandler(offsetTimestampsByPartition, new ListOffsetsOptions(), logContext, defaultApiTimeoutMs);
         // Set require offset timestamp
-        handler.setRequireOffsetTimestamp(ListOffsetsHandler.getOffsetFromSpec(supportedOffsetSpec));
+        handler.setRequireOffsetTimestamp(OptionalLong.of(ListOffsetsHandler.getOffsetFromSpec(supportedOffsetSpec)));
 
         final Map<TopicPartition, Long> nonSupportedTimestampPartitions = new HashMap<>(offsetTimestampsByPartition);
         supportedTimestampPartitions.forEach((k, v) -> nonSupportedTimestampPartitions.remove(k));

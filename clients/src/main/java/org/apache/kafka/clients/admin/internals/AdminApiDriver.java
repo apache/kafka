@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -286,10 +287,11 @@ public class AdminApiDriver<K, V> {
                 if (handler instanceof ListOffsetsHandler) {
                     Set<K> keys = new HashSet<>(spec.keys);
                     ListOffsetsHandler listOffsetsHandler = (ListOffsetsHandler) handler;
-                    for (long offsetTimestamp : ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS) {
+                    for (OptionalLong offsetTimestamp : ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS) {
                         if (keys.isEmpty()) {
                             break;
                         }
+                        // extra to function
                         listOffsetsHandler.setRequireOffsetTimestamp(offsetTimestamp);
                         Map<K, Throwable> unrecoverableFailures =
                                 handler.handleUnsupportedVersionException(
@@ -301,6 +303,14 @@ public class AdminApiDriver<K, V> {
                             key -> !unrecoverableFailures.containsKey(key)).collect(Collectors.toSet()
                         );
                     }
+                    // fail all remainder keys
+                    listOffsetsHandler.setRequireOffsetTimestamp(OptionalLong.empty());
+                    Map<K, Throwable> unrecoverableFailures =
+                            handler.handleUnsupportedVersionException(
+                                    brokerId,
+                                    (UnsupportedVersionException) t,
+                                    keys);
+                    completeExceptionally(unrecoverableFailures);
                 } else {
                     Map<K, Throwable> unrecoverableFailures =
                             handler.handleUnsupportedVersionException(

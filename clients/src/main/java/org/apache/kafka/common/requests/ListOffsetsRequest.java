@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 
 public class ListOffsetsRequest extends AbstractRequest {
@@ -50,11 +51,11 @@ public class ListOffsetsRequest extends AbstractRequest {
 
     public static final long EARLIEST_PENDING_UPLOAD_TIMESTAMP = -6L;
 
-    public static final Collection<Long> LEAST_TO_OLDEST_TIMESTAMPS = List.of(
-            EARLIEST_PENDING_UPLOAD_TIMESTAMP,
-            LATEST_TIERED_TIMESTAMP,
-            EARLIEST_LOCAL_TIMESTAMP,
-            MAX_TIMESTAMP
+    public static final Collection<OptionalLong> LEAST_TO_OLDEST_TIMESTAMPS = List.of(
+            OptionalLong.of(EARLIEST_PENDING_UPLOAD_TIMESTAMP),
+            OptionalLong.of(LATEST_TIERED_TIMESTAMP),
+            OptionalLong.of(EARLIEST_LOCAL_TIMESTAMP),
+            OptionalLong.of(MAX_TIMESTAMP)
     );
 
     public static final int CONSUMER_REPLICA_ID = -1;
