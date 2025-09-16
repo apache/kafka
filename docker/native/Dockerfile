@@ -29,15 +29,18 @@ ENV TARGET_PATH="$KAFKA_DIR/kafka.Kafka"
 COPY native-image-configs $NATIVE_CONFIGS_DIR
 COPY native_command.sh native_command.sh
 
-RUN mkdir $KAFKA_DIR; \
-    microdnf install wget; \
-    wget -nv -O kafka.tgz "$KAFKA_URL"; \
-    wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
+COPY *kafka.tgz /app
+
+RUN if [ -n "$KAFKA_URL" ]; then \
+        microdnf install wget; \
+        wget -nv -O kafka.tgz "$KAFKA_URL"; \
+        wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
+        wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
+        gpg --import KEYS; \
+        gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    fi; \
+    mkdir $KAFKA_DIR; \
     tar xfz kafka.tgz -C $KAFKA_DIR --strip-components 1; \
-    wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-    gpg --import KEYS; \
-    gpg --batch --verify kafka.tgz.asc kafka.tgz; \
-    rm kafka.tgz ; \
 # Build the native-binary of the apache kafka using graalVM native-image.
     /app/native_command.sh $NATIVE_IMAGE_PATH $NATIVE_CONFIGS_DIR $KAFKA_LIBS_DIR $TARGET_PATH
 

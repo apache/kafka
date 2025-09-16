@@ -118,49 +118,46 @@ public class DefaultStreamsRebalanceListenerTest {
 
     @Test
     void testOnTasksAssigned() {
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(
-            UUID.randomUUID(),
-            Optional.empty(),
-            Map.of(
-                "1",
-                new StreamsRebalanceData.Subtopology(
-                    Set.of("source1"),
-                    Set.of(),
-                    Map.of("repartition1", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of())),
-                    Map.of(),
-                    Set.of()
-                ),
-                "2",
-                new StreamsRebalanceData.Subtopology(
-                    Set.of("source2"),
-                    Set.of(),
-                    Map.of("repartition2", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of())),
-                    Map.of(),
-                    Set.of()
-                ),
-                "3",
-                new StreamsRebalanceData.Subtopology(
-                    Set.of("source3"),
-                    Set.of(),
-                    Map.of("repartition3", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of())),
-                    Map.of(),
-                    Set.of()
-                )
+        final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
+        when(streamsRebalanceData.subtopologies()).thenReturn(Map.of(
+            "1",
+            new StreamsRebalanceData.Subtopology(
+                Set.of("source1"),
+                Set.of(),
+                Map.of("repartition1", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of())),
+                Map.of(),
+                Set.of()
             ),
-            Map.of()
-        ));
-
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(
-            new StreamsRebalanceData.Assignment(
-                Set.of(new StreamsRebalanceData.TaskId("1", 0)),
-                Set.of(new StreamsRebalanceData.TaskId("2", 0)),
-                Set.of(new StreamsRebalanceData.TaskId("3", 0))
+            "2",
+            new StreamsRebalanceData.Subtopology(
+                Set.of("source2"),
+                Set.of(),
+                Map.of("repartition2", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of())),
+                Map.of(),
+                Set.of()
+            ),
+            "3",
+            new StreamsRebalanceData.Subtopology(
+                Set.of("source3"),
+                Set.of(),
+                Map.of("repartition3", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.of((short) 1), Map.of())),
+                Map.of(),
+                Set.of()
             )
+        ));
+        createRebalanceListenerWithRebalanceData(streamsRebalanceData);
+
+        final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
+            Set.of(new StreamsRebalanceData.TaskId("1", 0)),
+            Set.of(new StreamsRebalanceData.TaskId("2", 0)),
+            Set.of(new StreamsRebalanceData.TaskId("3", 0))
         );
+
+        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(assignment);
 
         assertTrue(result.isEmpty());
 
-        final InOrder inOrder = inOrder(taskManager, streamThread);
+        final InOrder inOrder = inOrder(taskManager, streamThread, streamsRebalanceData);
         inOrder.verify(taskManager).handleAssignment(
             Map.of(new TaskId(1, 0), Set.of(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0))),
             Map.of(
@@ -170,6 +167,7 @@ public class DefaultStreamsRebalanceListenerTest {
         );
         inOrder.verify(streamThread).setState(StreamThread.State.PARTITIONS_ASSIGNED);
         inOrder.verify(taskManager).handleRebalanceComplete();
+        inOrder.verify(streamsRebalanceData).setReconciledAssignment(assignment);
     }
 
     @Test
@@ -177,21 +175,32 @@ public class DefaultStreamsRebalanceListenerTest {
         final Exception exception = new RuntimeException("sample exception");
         doThrow(exception).when(taskManager).handleAssignment(any(), any());
 
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
-        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of()));
-        assertTrue(defaultStreamsRebalanceListener.onAllTasksLost().isEmpty());
+        final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
+        when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
+        createRebalanceListenerWithRebalanceData(streamsRebalanceData);
+
+        final Optional<Exception> result = defaultStreamsRebalanceListener.onTasksAssigned(
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of())
+        );
         assertTrue(result.isPresent());
         assertEquals(exception, result.get());
-        verify(taskManager).handleLostAll();
+        verify(taskManager).handleAssignment(any(), any());
         verify(streamThread, never()).setState(StreamThread.State.PARTITIONS_ASSIGNED);
         verify(taskManager, never()).handleRebalanceComplete();
+        verify(streamsRebalanceData, never()).setReconciledAssignment(any());
     }
 
     @Test
     void testOnAllTasksLost() {
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
+        final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
+        when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
+        createRebalanceListenerWithRebalanceData(streamsRebalanceData);
+        
         assertTrue(defaultStreamsRebalanceListener.onAllTasksLost().isEmpty());
-        verify(taskManager).handleLostAll();
+        
+        final InOrder inOrder = inOrder(taskManager, streamsRebalanceData);
+        inOrder.verify(taskManager).handleLostAll();
+        inOrder.verify(streamsRebalanceData).setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
     }
 
     @Test
@@ -199,10 +208,13 @@ public class DefaultStreamsRebalanceListenerTest {
         final Exception exception = new RuntimeException("sample exception");
         doThrow(exception).when(taskManager).handleLostAll();
 
-        createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
+        final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
+        when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
+        createRebalanceListenerWithRebalanceData(streamsRebalanceData);
         final Optional<Exception> result = defaultStreamsRebalanceListener.onAllTasksLost();
         assertTrue(result.isPresent());
         assertEquals(exception, result.get());
         verify(taskManager).handleLostAll();
+        verify(streamsRebalanceData, never()).setReconciledAssignment(any());
     }
 }

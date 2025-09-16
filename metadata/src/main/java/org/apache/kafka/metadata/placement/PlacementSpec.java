@@ -19,65 +19,9 @@ package org.apache.kafka.metadata.placement;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Objects;
-
-
 /**
  * Specifies a replica placement that we want to make.
  */
 @InterfaceStability.Unstable
-public class PlacementSpec {
-    private final int startPartition;
-
-    private final int numPartitions;
-
-    private final short numReplicas;
-
-    public PlacementSpec(
-        int startPartition,
-        int numPartitions,
-        short numReplicas
-    ) {
-        this.startPartition = startPartition;
-        this.numPartitions = numPartitions;
-        this.numReplicas = numReplicas;
-    }
-
-    public int startPartition() {
-        return startPartition;
-    }
-
-    public int numPartitions() {
-        return numPartitions;
-    }
-
-    public short numReplicas() {
-        return numReplicas;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null) return false;
-        if (!(o.getClass().equals(this.getClass()))) return false;
-        PlacementSpec other = (PlacementSpec) o;
-        return startPartition == other.startPartition &&
-            numPartitions == other.numPartitions &&
-            numReplicas == other.numReplicas;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(startPartition,
-            numPartitions,
-            numReplicas);
-    }
-
-    @Override
-    public String toString() {
-        return "PlacementSpec" +
-            "(startPartition=" + startPartition +
-            ", numPartitions=" + numPartitions +
-            ", numReplicas=" + numReplicas +
-            ")";
-    }
+public record PlacementSpec(int startPartition, int numPartitions, short numReplicas) {
 }

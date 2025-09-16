@@ -177,7 +177,7 @@ public class FetchBufferTest {
         try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             final Thread waitingThread = new Thread(() -> {
                 final Timer timer = time.timer(Duration.ofMinutes(1));
-                fetchBuffer.awaitNotEmpty(timer);
+                fetchBuffer.awaitWakeup(timer);
             });
             waitingThread.start();
             fetchBuffer.wakeup();

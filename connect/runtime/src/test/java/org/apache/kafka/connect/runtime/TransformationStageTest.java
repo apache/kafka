@@ -26,7 +26,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import static java.util.Collections.singletonMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -36,8 +37,8 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class TransformationStageTest {
 
-    private final SourceRecord initial = new SourceRecord(singletonMap("initial", 1), null, null, null, null);
-    private final SourceRecord transformed = new SourceRecord(singletonMap("transformed", 2), null, null, null, null);
+    private final SourceRecord initial = new SourceRecord(Map.of("initial", 1), null, null, null, null);
+    private final SourceRecord transformed = new SourceRecord(Map.of("transformed", 2), null, null, null, null);
 
     @Test
     public void apply() throws Exception {
