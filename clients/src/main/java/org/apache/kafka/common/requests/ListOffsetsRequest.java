@@ -54,9 +54,7 @@ public class ListOffsetsRequest extends AbstractRequest {
             EARLIEST_PENDING_UPLOAD_TIMESTAMP,
             LATEST_TIERED_TIMESTAMP,
             EARLIEST_LOCAL_TIMESTAMP,
-            MAX_TIMESTAMP,
-            EARLIEST_TIMESTAMP,
-            LATEST_TIMESTAMP
+            MAX_TIMESTAMP
     );
 
     public static final int CONSUMER_REPLICA_ID = -1;

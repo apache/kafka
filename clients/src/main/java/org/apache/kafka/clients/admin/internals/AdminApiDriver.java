@@ -287,22 +287,20 @@ public class AdminApiDriver<K, V> {
                     Set<K> keys = new HashSet<>(spec.keys);
                     ListOffsetsHandler listOffsetsHandler = (ListOffsetsHandler) handler;
                     for (long offsetTimestamp : ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS) {
-                        listOffsetsHandler.setRequireOffsetTimestamp(offsetTimestamp);
                         if (keys.isEmpty()) {
                             break;
                         }
+                        listOffsetsHandler.setRequireOffsetTimestamp(offsetTimestamp);
                         Map<K, Throwable> unrecoverableFailures =
                                 handler.handleUnsupportedVersionException(
                                         brokerId,
                                         (UnsupportedVersionException) t,
                                         keys);
-                        System.err.println("RRR keys " + keys);
                         completeExceptionally(unrecoverableFailures);
                         keys = keys.stream().filter(
                             key -> !unrecoverableFailures.containsKey(key)).collect(Collectors.toSet()
                         );
                     }
-//                    retryFulfillment(keys);
                 } else {
                     Map<K, Throwable> unrecoverableFailures =
                             handler.handleUnsupportedVersionException(
