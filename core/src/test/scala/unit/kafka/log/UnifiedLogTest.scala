@@ -5066,7 +5066,7 @@ class UnifiedLogTest {
 
   case class TimestampAndEpoch(timestamp: Long, leaderEpoch: Int)
 
-    @Test
+  @Test
   def testStaleProducerEpochReturnsRecoverableErrorForTV1Clients(): Unit = {
     // Producer epoch gets incremented (coordinator fail over, completed transaction, etc.)
     // and client has stale cached epoch. Fix prevents fatal InvalidTxnStateException.
