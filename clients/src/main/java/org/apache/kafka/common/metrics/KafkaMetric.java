@@ -67,9 +67,9 @@ public final class KafkaMetric implements Metric {
     }
 
     /**
-     * Take the metric and return the value, which could be a {@link Measurable} or a {@link Gauge}
+     * Take the metric and return the value via {@link MetricValueProvider#value(MetricConfig, long)}.
+     *
      * @return Return the metric value
-     * @throws IllegalStateException if the underlying metric is not a {@link Measurable} or a {@link Gauge}.
      */
     @Override
     public Object metricValue() {
