@@ -284,6 +284,12 @@ public class AdminApiDriver<K, V> {
                         (UnsupportedVersionException) t,
                         spec.keys);
                 completeExceptionally(unrecoverableFailures);
+                if (handler instanceof ListOffsetsHandler) {
+                    ListOffsetsHandler listOffsetsHandler = (ListOffsetsHandler) handler;
+                    listOffsetsHandler.downgradeOffsetTimestampVersion();
+                    // We already get the result of requestSpec so we can change keys here.
+                    spec.keys.removeAll(unrecoverableFailures.keySet());
+                }
             } else {
                 Map<K, Throwable> unrecoverableLookupFailures =
                     handler.lookupStrategy().handleUnsupportedVersionException(
@@ -405,7 +411,7 @@ public class AdminApiDriver<K, V> {
         ) {
             this.name = name;
             this.scope = scope;
-            this.keys = Collections.unmodifiableSet(keys);
+            this.keys = keys;
             this.request = request;
             this.nextAllowedTryMs = nextAllowedTryMs;
             this.deadlineMs = deadlineMs;

@@ -29,7 +29,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,7 +49,8 @@ public class ListOffsetsRequest extends AbstractRequest {
 
     public static final long EARLIEST_PENDING_UPLOAD_TIMESTAMP = -6L;
 
-    public static final Collection<Long> LEAST_TO_OLDEST_TIMESTAMPS = List.of(
+    // This sequence MUST require from Least to oldest
+    public static final List<Long> LEAST_TO_OLDEST_TIMESTAMPS = List.of(
             EARLIEST_PENDING_UPLOAD_TIMESTAMP,
             LATEST_TIERED_TIMESTAMP,
             EARLIEST_LOCAL_TIMESTAMP,
