@@ -373,6 +373,13 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             Class<?> messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt));
             formatter = (MessageFormatter) messageFormatterClass.getDeclaredConstructor().newInstance();
 
+            if (options.has(messageFormatterArgOpt) && options.has(messageFormatterArgOptDeprecated)) {
+                CommandLineUtils.printUsageAndExit(parser, "Options --property and --formatter-property cannot be specified together.");
+            }
+            if (options.has(messageFormatterArgOptDeprecated)) {
+                System.out.println("Option --property is deprecated and will be removed in a future version. Use --formatter-property instead.");
+                messageFormatterArgOpt = messageFormatterArgOptDeprecated;
+            }
             Properties formatterArgs = formatterArgs();
             Map<String, String> formatterConfigs = new HashMap<>();
             for (final String name : formatterArgs.stringPropertyNames()) {
@@ -447,13 +454,6 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         String valueDeserializer = options.valueOf(valueDeserializerOpt);
         if (valueDeserializer != null && !valueDeserializer.isEmpty()) {
             formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer);
-        }
-        if (options.has(messageFormatterArgOpt) && options.has(messageFormatterArgOptDeprecated)) {
-            CommandLineUtils.printUsageAndExit(parser, "Options --property and --formatter-property cannot be specified together.");
-        }
-        if (options.has(messageFormatterArgOptDeprecated)) {
-            System.out.println("Option --property is deprecated and will be removed in a future version. Use --formatter-property instead.");
-            messageFormatterArgOpt = messageFormatterArgOptDeprecated;
         }
         formatterArgs.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt)));
 
