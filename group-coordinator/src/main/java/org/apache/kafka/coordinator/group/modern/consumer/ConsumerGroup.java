@@ -1122,7 +1122,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * Create a new consumer group according to the given classic group.
      *
      * @param snapshotRegistry  The SnapshotRegistry.
-     * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
      * @param topicHashCache    The cache for topic hashes.
      * @param metadataImage     The current metadata image for the Kafka cluster.
