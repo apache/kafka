@@ -285,10 +285,11 @@ public class AdminApiDriver<K, V> {
                         spec.keys);
                 completeExceptionally(unrecoverableFailures);
                 if (handler instanceof ListOffsetsHandler) {
+                    // We dont need to do other operations because completeExceptionally
+                    // help us to remove lookup and fulfillmentMap, and the downgraded
+                    // offsetStamp still in fulfillmentMap so it will generate next request.
                     ListOffsetsHandler listOffsetsHandler = (ListOffsetsHandler) handler;
                     listOffsetsHandler.downgradeOffsetTimestampVersion();
-                    // We already get the result of requestSpec so we can change keys here.
-                    spec.keys.removeAll(unrecoverableFailures.keySet());
                 }
             } else {
                 Map<K, Throwable> unrecoverableLookupFailures =

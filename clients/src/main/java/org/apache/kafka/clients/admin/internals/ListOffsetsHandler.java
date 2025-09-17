@@ -58,7 +58,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     private final int maxUnsupportedVersionRetry = ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size();
     private int unsupportedVersionRetry = 0;
     private long currentUnsupportedVersion = ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.get(unsupportedVersionRetry);
-    private final HashMap<TopicPartition, Throwable> unsupportedTimestampPartition = new HashMap<>();
+    private final HashMap<TopicPartition, Throwable> accUnsupportedTimestampPartition = new HashMap<>();
 
     public ListOffsetsHandler(
         Map<TopicPartition, Long> offsetTimestampsByPartition,
@@ -209,11 +209,12 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     ) {
         log.warn("Broker {} does not support {} offset specs", brokerId, timestampToString(currentUnsupportedVersion));
         Map<TopicPartition, Throwable> supportedTimestampPartitions = new HashMap<>();
+
         for (TopicPartition topicPartition : keys) {
             Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
-            if (offsetTimestamp == currentUnsupportedVersion && !unsupportedTimestampPartition.containsKey(topicPartition)) {
+            if (offsetTimestamp == currentUnsupportedVersion && !accUnsupportedTimestampPartition.containsKey(topicPartition)) {
                 supportedTimestampPartitions.put(topicPartition, exception);
-                unsupportedTimestampPartition.put(topicPartition, exception);
+                accUnsupportedTimestampPartition.put(topicPartition, exception);
             }
         }
 
@@ -221,7 +222,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         // and all partitions should be failed here.
         // Otherwise, just the partitions with support specs should be failed here and the fulfillment stage
         // will later be retried for the potentially empty set of partitions with non-support specs.
-        if (unsupportedVersionRetry == maxUnsupportedVersionRetry && unsupportedTimestampPartition.isEmpty()) {
+        if (unsupportedVersionRetry == maxUnsupportedVersionRetry && accUnsupportedTimestampPartition.isEmpty()) {
             return keys.stream().collect(Collectors.toMap(k -> k, k -> exception));
         } else {
             return supportedTimestampPartitions;
@@ -232,6 +233,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         if (unsupportedVersionRetry >= maxUnsupportedVersionRetry) {
             throw new IllegalStateException("should not larger " + ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size());
         }
+
         unsupportedVersionRetry += 1;
         currentUnsupportedVersion = ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.get(unsupportedVersionRetry);
     }
@@ -239,6 +241,12 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     public void reset() {
         currentUnsupportedVersion = ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.get(0);
         unsupportedVersionRetry = 0;
+        accUnsupportedTimestampPartition.clear();
+    }
+
+    // Visible for test
+    void setCurrentUnsupportedVersion(long offsetTimestamp) {
+        currentUnsupportedVersion = offsetTimestamp;
     }
 
     public static PartitionLeaderStrategy.PartitionLeaderFuture<ListOffsetsResultInfo> newFuture(
