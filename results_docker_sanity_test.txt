@@ -1,0 +1,76 @@
+docker git:(KAFKA-19623) ✗ python docker_build_test.py kafka/test --image-tag=4.2.0-SNAPSHOT --image-type=jvm --kafka-archive=/Users/shivsundarr/dev/opensource/kafka/core/build/distributions/kafka_2.13-4.2.0-SNAPSHOT.tgz --test
+[+] Building 0.0s (0/0)                                                                                                                                                    docker-container:buildx-builder
+[+] Running 4/4
+ ✔ Network combined_default  Created                                                                                                                                                                  0.1s
+ ✔ Container broker2         Started                                                                                                                                                                  0.1s
+ ✔ Container broker3         Started                                                                                                                                                                  0.1s
+ ✔ Container broker1         Started                                                                                                                                                                  0.1s
+Created topic test-topic-broker-metrics.
+Trying to connect to JMX url: service:jmx:rmi:///jndi/rmi://:9101/jmxrmi
+Processed a total of 1 messages
+Trying to connect to JMX url: service:jmx:rmi:///jndi/rmi://:9101/jmxrmi
+Created topic test-topic-ssl.
+Processed a total of 1 messages
+Created topic test-topic-file-input.
+Processed a total of 1 messages
+Created topic test-topic-broker-restart.
+broker1
+broker1
+[2025-09-17 13:17:35,303] WARN [Consumer clientId=console-consumer, groupId=console-consumer-39790] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:17:35,398] WARN [Consumer clientId=console-consumer, groupId=console-consumer-39790] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:17:35,649] WARN [Consumer clientId=console-consumer, groupId=console-consumer-39790] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:17:35,893] WARN [Consumer clientId=console-consumer, groupId=console-consumer-39790] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:17:36,316] WARN [Consumer clientId=console-consumer, groupId=console-consumer-39790] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:17:37,251] WARN [Consumer clientId=console-consumer, groupId=console-consumer-39790] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:17:39,080] WARN [Consumer clientId=console-consumer, groupId=console-consumer-39790] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:17:39,952] WARN [Consumer clientId=console-consumer, groupId=console-consumer-39790] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:17:41,061] WARN [Consumer clientId=console-consumer, groupId=console-consumer-39790] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+Processed a total of 1 messages
+[+] Running 4/4
+ ✔ Container broker1         Removed                                                                                                                                                                  0.8s
+ ✔ Container broker2         Removed                                                                                                                                                                  5.8s
+ ✔ Container broker3         Removed                                                                                                                                                                  0.8s
+ ✔ Network combined_default  Removed                                                                                                                                                                  0.1s
+[+] Building 0.0s (0/0)                                                                                                                                                    docker-container:buildx-builder
+[+] Running 7/7
+ ✔ Network isolated_default  Created                                                                                                                                                                  0.0s
+ ✔ Container controller1     Started                                                                                                                                                                  0.1s
+ ✔ Container controller2     Started                                                                                                                                                                  0.1s
+ ✔ Container controller3     Started                                                                                                                                                                  0.1s
+ ✔ Container broker3         Started                                                                                                                                                                  0.0s
+ ✔ Container broker2         Started                                                                                                                                                                  0.0s
+ ✔ Container broker1         Started                                                                                                                                                                  0.0s
+Created topic test-topic-broker-metrics.
+Trying to connect to JMX url: service:jmx:rmi:///jndi/rmi://:9101/jmxrmi
+Processed a total of 1 messages
+Trying to connect to JMX url: service:jmx:rmi:///jndi/rmi://:9101/jmxrmi
+Created topic test-topic-ssl.
+Processed a total of 1 messages
+Created topic test-topic-file-input.
+Processed a total of 1 messages
+Created topic test-topic-broker-restart.
+broker1
+broker1
+[2025-09-17 13:18:29,599] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:18:29,719] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:18:29,874] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:18:30,143] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:18:30,605] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:18:32,269] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:18:33,293] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:18:34,299] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:18:35,122] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+[2025-09-17 13:18:36,320] WARN [Consumer clientId=console-consumer, groupId=console-consumer-14575] Bootstrap broker localhost:9092 (id: -1 rack: null isFenced: false) disconnected (org.apache.kafka.clients.NetworkClient)
+Processed a total of 1 messages
+[+] Running 7/7
+ ✔ Container broker3         Removed                                                                                                                                                                  0.8s
+ ✔ Container broker1         Removed                                                                                                                                                                  0.8s
+ ✔ Container broker2         Removed                                                                                                                                                                  0.9s
+ ✔ Container controller2     Removed                                                                                                                                                                  0.6s
+ ✔ Container controller3     Removed                                                                                                                                                                  5.7s
+ ✔ Container controller1     Removed                                                                                                                                                                  0.7s
+ ✔ Network isolated_default  Removed                                                                                                                                                                  0.1s
+<_io.TextIOWrapper name='<stderr>' mode='w' encoding='utf-8'>
+Time Elapsed: 0:01:50.191667
+All tests passed successfully. To view test report please check /Users/shivsundarr/dev/opensource/kafka/docker/test/report_jvm.html
+..%
