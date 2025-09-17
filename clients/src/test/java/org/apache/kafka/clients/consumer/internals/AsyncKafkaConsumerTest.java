@@ -1677,7 +1677,7 @@ public class AsyncKafkaConsumerTest {
         markReconcileAndAutoCommitCompleteForPollEvent();
         markResultForCompositePollEvent(CompositePollEvent.State.COMPLETE);
         consumer.poll(Duration.ofMillis(100));
-        verify(applicationEventHandler).add(any(CompositePollEvent.class));
+        verify(applicationEventHandler).addAndGet(any(CompositePollEvent.class));
     }
 
     private Properties requiredConsumerConfigAndGroupId(final String groupId) {
@@ -2255,14 +2255,11 @@ public class AsyncKafkaConsumerTest {
 
     private void markResultForCompositePollEvent(CompositePollEvent.State state) {
         doAnswer(invocation -> {
-            CompositePollEvent event = invocation.getArgument(0);
-
             if (Thread.currentThread().isInterrupted())
-                event.future().completeExceptionally(new InterruptException("Test interrupt"));
-            else
-                event.future().complete(state);
-            return null;
-        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CompositePollEvent.class));
+                throw new InterruptException("Test interrupt");
+
+            return state;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(CompositePollEvent.class));
     }
 
     private void markResultForCompositePollEvent(Collection<CompositePollEvent.State> states) {
@@ -2274,13 +2271,10 @@ public class AsyncKafkaConsumerTest {
             if (state == null)
                 throw new IllegalStateException("The array of " + CompositePollEvent.State.class.getSimpleName() + " did not provide enough values");
 
-            CompositePollEvent event = invocation.getArgument(0);
-
             if (Thread.currentThread().isInterrupted())
-                event.future().completeExceptionally(new InterruptException("Test interrupt"));
-            else
-                event.future().complete(state);
-            return null;
-        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CompositePollEvent.class));
+                throw new InterruptException("Test interrupt");
+
+            return state;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(CompositePollEvent.class));
     }
 }

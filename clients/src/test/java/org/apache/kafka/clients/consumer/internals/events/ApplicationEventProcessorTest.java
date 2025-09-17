@@ -96,6 +96,7 @@ public class ApplicationEventProcessorTest {
     private final BackgroundEventHandler backgroundEventHandler = mock(BackgroundEventHandler.class);
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
     private final NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
+    private final CompletableEventReaper applicationEventReaper = mock(CompletableEventReaper.class);
     private ApplicationEventProcessor processor;
 
     private void setupProcessor(boolean withGroupId) {
@@ -113,13 +114,13 @@ public class ApplicationEventProcessorTest {
         );
         processor = new ApplicationEventProcessor(
                 new LogContext(),
-                time,
                 requestManagers,
                 networkClientDelegate,
                 metadata,
                 subscriptionState,
                 backgroundEventHandler,
-                Optional.of(offsetCommitCallbackInvoker)
+                Optional.of(offsetCommitCallbackInvoker),
+                applicationEventReaper
         );
     }
 
@@ -138,13 +139,13 @@ public class ApplicationEventProcessorTest {
         );
         processor = new ApplicationEventProcessor(
             new LogContext(),
-            time,
             requestManagers,
             networkClientDelegate,
             metadata,
             subscriptionState,
             backgroundEventHandler,
-            Optional.of(offsetCommitCallbackInvoker)
+            Optional.of(offsetCommitCallbackInvoker),
+            applicationEventReaper
         );
     }
 

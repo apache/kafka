@@ -25,8 +25,9 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
@@ -41,13 +42,13 @@ public class CompletableEventReaper {
     private final Logger log;
 
     /**
-     * List of tracked events that are candidates for expiration.
+     * Tracked events that are candidates for expiration. The key is the event and the value is a flag for paused.
      */
-    private final List<CompletableEvent<?>> tracked;
+    private final Map<CompletableEvent<?>, Boolean> tracked;
 
     public CompletableEventReaper(LogContext logContext) {
         this.log = logContext.logger(CompletableEventReaper.class);
-        this.tracked = new ArrayList<>();
+        this.tracked = new HashMap<>();
     }
 
     /**
@@ -56,7 +57,36 @@ public class CompletableEventReaper {
      * @param event Event to track
      */
     public void add(CompletableEvent<?> event) {
-        tracked.add(Objects.requireNonNull(event, "Event to track must be non-null"));
+        put(event, false, false, "add");
+    }
+
+    /**
+     * Pauses an event to exclude it as a candidate for reaps.
+     *
+     * @param event Event to pause
+     */
+    public void pause(CompletableEvent<?> event) {
+        put(event, true, true, "pause");
+    }
+
+    /**
+     * Resumes tracking an event for reaping.
+     *
+     * @param event Event to resume
+     */
+    public void resume(CompletableEvent<?> event) {
+        put(event, false, true, "resume");
+    }
+
+    private void put(CompletableEvent<?> event, boolean paused, boolean checkExists, String verb) {
+        Objects.requireNonNull(event, "Event to " + verb + " must be non-null");
+
+        if (checkExists && !tracked.containsKey(event))
+            throw new IllegalArgumentException("The event " + event + " was not previously added; cannot " + verb);
+
+        tracked.put(event, paused);
+
+        log.debug("Event {} was {}-d with paused set to {}", event, verb, paused);
     }
 
     /**
@@ -85,15 +115,23 @@ public class CompletableEventReaper {
      */
     public long reap(long currentTimeMs) {
         int count = 0;
+        List<CompletableEvent<?>> unpausedEvents = new ArrayList<>(tracked.size());
 
-        Iterator<CompletableEvent<?>> iterator = tracked.iterator();
+        for (Map.Entry<CompletableEvent<?>, Boolean> entry : tracked.entrySet()) {
+            boolean isPaused = entry.getValue();
 
-        while (iterator.hasNext()) {
-            CompletableEvent<?> event = iterator.next();
+            if (isPaused) {
+                // Don't reap "paused" events
+                continue;
+            }
 
+            unpausedEvents.add(entry.getKey());
+        }
+
+        for (CompletableEvent<?> event : unpausedEvents) {
             if (event.future().isDone()) {
                 // Remove any events that are already complete.
-                iterator.remove();
+                tracked.remove(event);
                 continue;
             }
 
@@ -115,7 +153,7 @@ public class CompletableEventReaper {
             count++;
 
             // Remove the events so that we don't hold a reference to it.
-            iterator.remove();
+            tracked.remove(event);
         }
 
         return count;
@@ -143,7 +181,7 @@ public class CompletableEventReaper {
     public long reap(Collection<?> events) {
         Objects.requireNonNull(events, "Event queue to reap must be non-null");
 
-        long trackedExpiredCount = completeEventsExceptionallyOnClose(tracked);
+        long trackedExpiredCount = completeEventsExceptionallyOnClose(tracked.keySet());
         tracked.clear();
 
         long eventExpiredCount = completeEventsExceptionallyOnClose(events);
@@ -157,7 +195,7 @@ public class CompletableEventReaper {
     }
 
     public boolean contains(CompletableEvent<?> event) {
-        return event != null && tracked.contains(event);
+        return event != null && tracked.containsKey(event);
     }
 
     public List<CompletableEvent<?>> uncompletedEvents() {
@@ -165,7 +203,9 @@ public class CompletableEventReaper {
         // path of the ConsumerNetworkThread loop.
         List<CompletableEvent<?>> events = new ArrayList<>();
 
-        for (CompletableEvent<?> event : tracked) {
+        for (Map.Entry<CompletableEvent<?>, Boolean> entry : tracked.entrySet()) {
+            CompletableEvent<?> event = entry.getKey();
+
             if (!event.future().isDone())
                 events.add(event);
         }

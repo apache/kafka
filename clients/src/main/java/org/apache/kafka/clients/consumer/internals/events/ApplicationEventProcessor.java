@@ -36,7 +36,6 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 
 import org.slf4j.Logger;
 
@@ -49,7 +48,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -62,32 +60,56 @@ import java.util.stream.Collectors;
 public class ApplicationEventProcessor implements EventProcessor<ApplicationEvent> {
 
     private final Logger log;
-    private final Time time;
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
     private final NetworkClientDelegate networkClientDelegate;
-    private final BackgroundEventHandler backgroundEventHandler;
-    private final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker;
+    private final RequiresApplicationThreadExecution backgroundEventProcessingRequiredTest;
+    private final RequiresApplicationThreadExecution offsetCommitCallbackInvocationRequiredTest;
+    private final CompletableEventReaper applicationEventReaper;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
-                                     final Time time,
                                      final RequestManagers requestManagers,
                                      final NetworkClientDelegate networkClientDelegate,
                                      final ConsumerMetadata metadata,
                                      final SubscriptionState subscriptions,
                                      final BackgroundEventHandler backgroundEventHandler,
-                                     final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker) {
+                                     final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker,
+                                     final CompletableEventReaper applicationEventReaper) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
-        this.time = time;
         this.requestManagers = requestManagers;
         this.networkClientDelegate = networkClientDelegate;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.backgroundEventHandler = backgroundEventHandler;
-        this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
+        this.applicationEventReaper = applicationEventReaper;
         this.metadataVersionSnapshot = metadata.updateVersion();
+
+        // If there are background events to process, exit to the application thread.
+        this.backgroundEventProcessingRequiredTest = new RequiresApplicationThreadExecution() {
+            @Override
+            public boolean requiresApplicationThread() {
+                return backgroundEventHandler.size() > 0;
+            }
+
+            @Override
+            public CompositePollEvent.State targetState() {
+                return CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED;
+            }
+        };
+
+        // If there are enqueued callbacks to invoke, exit to the application thread.
+        this.offsetCommitCallbackInvocationRequiredTest = new RequiresApplicationThreadExecution() {
+            @Override
+            public boolean requiresApplicationThread() {
+                return offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
+            }
+
+            @Override
+            public CompositePollEvent.State targetState() {
+                return CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED;
+            }
+        };
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "JavaNCSSCheck"})
@@ -252,10 +274,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (nextEventType == ApplicationEvent.Type.POLL) {
             processPollEvent(event.pollTimeMs());
 
-            // If there are enqueued callbacks to invoke, exit to the application thread.
-            RequiresApplicationThreadExecution test = () -> offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
-
-            if (maybePauseCompositePoll(test, event.future(), CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED))
+            if (maybePauseCompositePoll(offsetCommitCallbackInvocationRequiredTest, event.future()))
                 return;
 
             nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
@@ -264,22 +283,22 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (nextEventType == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
             processUpdatePatternSubscriptionEvent();
 
-            // If there are background events to process, exit to the application thread.
-            RequiresApplicationThreadExecution test = () -> backgroundEventHandler.size() > 0;
-
-            if (maybePauseCompositePoll(test, event.future(), CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED))
+            if (maybePauseCompositePoll(backgroundEventProcessingRequiredTest, event.future()))
                 return;
 
             nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
         }
 
         if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
-            long nowMs = time.milliseconds();
-            long timeoutMs = event.deadlineMs() - nowMs;
-            CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs())
-                .orTimeout(timeoutMs, TimeUnit.MILLISECONDS);
+            // This is a bit tricky... The CompositePollEvent should be "paused" from being reaped while the code
+            // for new CheckAndUpdatePositionsEvent is in flight.
+            applicationEventReaper.pause(event);
+            CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs());
+            applicationEventReaper.add(new CompositePollPsuedoEvent<>(updatePositionsFuture, event.deadlineMs()));
 
             updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
+                applicationEventReaper.resume(event);
+
                 if (maybeFailCompositePoll(event.future(), updatePositionsError))
                     return;
 
@@ -299,13 +318,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private boolean maybePauseCompositePoll(RequiresApplicationThreadExecution test,
-                                            CompletableFuture<CompositePollEvent.State> future,
-                                            CompositePollEvent.State state) {
+                                            CompletableFuture<CompositePollEvent.State> future) {
         if (!test.requiresApplicationThread())
             return false;
 
-        log.debug("******** TEMP DEBUG ******** Pausing composite poll at state {}", state);
-        future.complete(state);
+        CompositePollEvent.State targetState = test.targetState();
+        log.debug("******** TEMP DEBUG ******** Pausing composite poll to process logic for target state {}", targetState);
+        future.complete(targetState);
         return true;
     }
 
@@ -812,13 +831,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
-                                                               final Time time,
                                                                final ConsumerMetadata metadata,
                                                                final SubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier,
                                                                final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                                final BackgroundEventHandler backgroundEventHandler,
-                                                               final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker) {
+                                                               final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker,
+                                                               final CompletableEventReaper applicationEventReaper) {
         return new CachedSupplier<>() {
             @Override
             protected ApplicationEventProcessor create() {
@@ -827,13 +846,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
                 return new ApplicationEventProcessor(
                         logContext,
-                        time,
                         requestManagers,
                         networkClientDelegate,
                         metadata,
                         subscriptions,
                         backgroundEventHandler,
-                        offsetCommitCallbackInvoker
+                        offsetCommitCallbackInvoker,
+                        applicationEventReaper
                 );
             }
         };
@@ -919,5 +938,33 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private interface RequiresApplicationThreadExecution {
 
         boolean requiresApplicationThread();
+
+        CompositePollEvent.State targetState();
+    }
+
+    private static class CompositePollPsuedoEvent<T> implements CompletableEvent<T> {
+
+        private final CompletableFuture<T> future;
+        private final long deadlineMs;
+
+        public CompositePollPsuedoEvent(CompletableFuture<T> future, long deadlineMs) {
+            this.future = future;
+            this.deadlineMs = deadlineMs;
+        }
+
+        @Override
+        public CompletableFuture<T> future() {
+            return future;
+        }
+
+        @Override
+        public long deadlineMs() {
+            return deadlineMs;
+        }
+
+        @Override
+        public String toString() {
+            return getClass().getSimpleName() + "{future=" + future + ", deadlineMs=" + deadlineMs + '}';
+        }
     }
 }

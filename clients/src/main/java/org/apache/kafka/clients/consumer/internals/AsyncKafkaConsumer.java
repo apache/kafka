@@ -497,20 +497,21 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     memberStateListener,
                     streamsRebalanceData
             );
+            final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
-                    time,
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
                     networkClientDelegateSupplier,
                     backgroundEventHandler,
-                    Optional.of(offsetCommitCallbackInvoker)
+                    Optional.of(offsetCommitCallbackInvoker),
+                    applicationEventReaper
             );
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
                     time,
                     applicationEventQueue,
-                    new CompletableEventReaper(logContext),
+                    applicationEventReaper,
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
@@ -690,20 +691,21 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             memberStateListener,
             Optional.empty()
         );
+        final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
-                time,
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
                 networkClientDelegateSupplier,
                 backgroundEventHandler,
-                Optional.of(offsetCommitCallbackInvoker)
+                Optional.of(offsetCommitCallbackInvoker),
+                applicationEventReaper
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
                 applicationEventQueue,
-                new CompletableEventReaper(logContext),
+                applicationEventReaper,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
@@ -910,13 +912,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void prepareFetch(Timer timer) {
         long pollTimeMs = timer.currentTimeMs();
         long deadlineMs = calculateDeadlineMs(timer);
-
         ApplicationEvent.Type nextEventType = ApplicationEvent.Type.POLL;
 
         while (true) {
             CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextEventType);
-            applicationEventHandler.add(event);
-            CompositePollEvent.State state = ConsumerUtils.getResult(event.future(), defaultApiTimeoutMs.toMillis());
+            CompositePollEvent.State state;
+
+            try {
+                state = applicationEventHandler.addAndGet(event);
+            } catch (TimeoutException e) {
+                // Timeouts are OK, there's just no data to return on this pass.
+                break;
+            }
 
             if (state == CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED) {
                 offsetCommitCallbackInvoker.executeCallbacks();
@@ -930,6 +937,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalStateException("Unexpected state: " + state);
             }
         }
+
+        timer.update();
     }
 
     /**

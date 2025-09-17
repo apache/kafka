@@ -297,22 +297,23 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     clientTelemetryReporter,
                     metrics
             );
+            final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                     logContext,
-                    time,
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
                     networkClientDelegateSupplier,
                     backgroundEventHandler,
-                    Optional.empty()
+                    Optional.empty(),
+                    applicationEventReaper
             );
 
             this.applicationEventHandler = applicationEventHandlerFactory.build(
                     logContext,
                     time,
                     applicationEventQueue,
-                    new CompletableEventReaper(logContext),
+                    applicationEventReaper,
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
@@ -407,22 +408,23 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 metrics
         );
 
+        final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
         final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
-                time,
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
                 networkClientDelegateSupplier,
                 backgroundEventHandler,
-                Optional.empty()
+                Optional.empty(),
+                applicationEventReaper
         );
 
         this.applicationEventHandler = new ApplicationEventHandler(
                 logContext,
                 time,
                 applicationEventQueue,
-                new CompletableEventReaper(logContext),
+                applicationEventReaper,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
