@@ -387,7 +387,7 @@ class BrokerServer(
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, clientToControllerChannelManager, groupCoordinator,
-        transactionCoordinator, shareCoordinator)
+        transactionCoordinator, shareCoordinator, time)
 
       dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
@@ -779,6 +779,9 @@ class BrokerServer(
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
       if (shareCoordinator != null)
         CoreUtils.swallow(shareCoordinator.shutdown(), this)
+
+      if (autoTopicCreationManager != null)
+        CoreUtils.swallow(autoTopicCreationManager.close(), this)
 
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)
