@@ -80,7 +80,7 @@ help|-h|--help
 up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
         [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [-j|--jdk JDK_VERSION] [--ipv6]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
-    The Docker image name defaults to ${default_image_name}.  If --force is specified, we will
+    The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
 
     If --custom-ducktape is specified, we will install the provided custom
