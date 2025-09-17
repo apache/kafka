@@ -131,7 +131,6 @@ public class Formatter {
      * The initial KIP-853 voters.
      */
     private Optional<DynamicVoters> initialControllers = Optional.empty();
-    private boolean noInitialControllersFlag = false;
 
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
@@ -217,17 +216,12 @@ public class Formatter {
         return this;
     }
 
-    public Formatter setNoInitialControllersFlag(boolean noInitialControllersFlag) {
-        this.noInitialControllersFlag = noInitialControllersFlag;
-        return this;
-    }
-
     public Optional<DynamicVoters> initialVoters() {
         return initialControllers;
     }
 
     boolean hasDynamicQuorum() {
-        return initialControllers.isPresent() || noInitialControllersFlag;
+        return initialControllers.isPresent();
     }
 
     public BootstrapMetadata bootstrapMetadata() {
@@ -337,7 +331,7 @@ public class Formatter {
     /**
      * Calculate the effective feature level for kraft.version. In order to keep existing
      * command-line invocations of StorageTool working, we default this to 0 if no dynamic
-     * voter quorum arguments were provided. As a convenience, if dynamic voter quorum arguments
+     * voter quorum arguments were provided. As a convenience, if --standalone or --initial-voters
      * were passed, we set the latest kraft.version. (Currently there is only 1 non-zero version).
      *
      * @param configuredKRaftVersionLevel   The configured level for kraft.version
@@ -348,20 +342,17 @@ public class Formatter {
             if (configuredKRaftVersionLevel.get() == 0) {
                 if (hasDynamicQuorum()) {
                     throw new FormatterException(
-                        "Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() +
-                        " if one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
+                        "Cannot set kraft.version to " + configuredKRaftVersionLevel.get() +
+                        " if one of the flags --standalone or --initial-controllers is used. " +
                         "For dynamic controllers support, try removing the --feature flag for kraft.version."
                     );
                 }
             } else {
                 if (!hasDynamicQuorum()) {
                     throw new FormatterException(
-                        "Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() +
-                        " unless one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
-                        "For dynamic controllers support, try using one of --standalone, --initial-controllers, or " +
-                        "--no-initial-controllers."
+                        "Cannot set kraft.version to " + configuredKRaftVersionLevel.get() +
+                        " unless one of the flags --standalone or --initial-controllers is used. " +
+                        "For dynamic controllers support, try using one of --standalone or --initial-controllers."
                     );
                 }
             }

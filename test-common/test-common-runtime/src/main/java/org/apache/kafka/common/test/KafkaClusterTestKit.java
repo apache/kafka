@@ -493,8 +493,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             )
                         );
                         formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
-                    } else {
-                        formatter.setNoInitialControllersFlag(true);
                     }
                 } else if (initialVoterSet.isPresent()) {
                     for (final var controllerNode : initialVoterSet.get().entrySet()) {

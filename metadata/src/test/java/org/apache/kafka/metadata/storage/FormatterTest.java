@@ -462,9 +462,8 @@ public class FormatterTest {
                     parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             assertTrue(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
-                "Cannot set kraft.version to 0 if one of the flags --standalone, --initial-controllers, or " +
-                "--no-initial-controllers is used. For dynamic controllers support, try removing the " +
-                "--feature flag for kraft.version.",
+                "Cannot set kraft.version to 0 if one of the flags --standalone or --initial-controllers " +
+                "is used. For dynamic controllers support, try removing the --feature flag for kraft.version.",
                 assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
             );
         }
@@ -478,9 +477,8 @@ public class FormatterTest {
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             assertFalse(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
-                "Cannot set kraft.version to 1 unless one of the flags --standalone, --initial-controllers, or " +
-                "--no-initial-controllers is used. For dynamic controllers support, try using one of " +
-                "--standalone, --initial-controllers, or --no-initial-controllers.",
+                "Cannot set kraft.version to 1 unless one of the flags --standalone or --initial-controllers " +
+                "is used. For dynamic controllers support, try using one of --standalone or --initial-controllers.",
                 assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
             );
         }
@@ -499,6 +497,17 @@ public class FormatterTest {
                 "metadata.version level 21",
                     assertThrows(IllegalArgumentException.class,
                         formatter1.formatter::run).getMessage());
+        }
+    }
+
+    @Test
+    public void testFormatWithNoInitialVotersFailsWithOlderMetadataVersion() throws Exception {
+        try (TestEnv testEnv = new TestEnv(2)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_8_IV0);
+            // This MV does not support kraft.version = 1
+            formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
+            formatter1.formatter.run();
         }
     }
 
@@ -530,20 +539,14 @@ public class FormatterTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testFormatWithNoInitialControllers(boolean specifyKRaftVersion) throws Exception {
+    @Test
+    public void testFormatWithNoInitialControllers() throws Exception {
         try (TestEnv testEnv = new TestEnv(2)) {
             FormatterContext formatter1 = testEnv.newFormatter();
-            if (specifyKRaftVersion) {
-                formatter1.formatter.setFeatureLevel("kraft.version", (short) 1);
-            }
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
-            formatter1.formatter.setNoInitialControllersFlag(true);
-            assertTrue(formatter1.formatter.hasDynamicQuorum());
-
+            assertFalse(formatter1.formatter.hasDynamicQuorum());
             formatter1.formatter.run();
-            assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
+            assertEquals((short) 0, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 1));
             assertEquals(List.of(
                     "Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata(),
                     String.format("Formatting data directory %s with %s %s.",
@@ -571,31 +574,23 @@ public class FormatterTest {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setFeatureLevel("kraft.version", (short) 1);
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
-            formatter1.formatter.setNoInitialControllersFlag(false);
             assertFalse(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
-                "Cannot set kraft.version to 1 unless one of the flags --standalone, --initial-controllers, or " +
-                "--no-initial-controllers is used. For dynamic controllers support, try using one of " +
-                "--standalone, --initial-controllers, or --no-initial-controllers.",
+                "Cannot set kraft.version to 1 unless one of the flags --standalone or --initial-controllers " +
+                "is used. For dynamic controllers support, try using one of --standalone or --initial-controllers.",
                 assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
             );
         }
     }
 
     @Test
-    public void testFormatWithNoInitialControllersFailsWithOlderKraftVersion() throws Exception {
+    public void testFormatWithNoInitialControllersPassesWithOlderKraftVersion() throws Exception {
         try (TestEnv testEnv = new TestEnv(2)) {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setFeatureLevel("kraft.version", (short) 0);
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
-            formatter1.formatter.setNoInitialControllersFlag(true);
-            assertTrue(formatter1.formatter.hasDynamicQuorum());
-            assertEquals(
-                "Cannot set kraft.version to 0 if one of the flags --standalone, --initial-controllers, or " +
-                "--no-initial-controllers is used. For dynamic controllers support, try removing the " +
-                "--feature flag for kraft.version.",
-                assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
-            );
+            assertFalse(formatter1.formatter.hasDynamicQuorum());
+            formatter1.formatter.run();
         }
     }
 }

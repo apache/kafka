@@ -163,16 +163,13 @@ object StorageTool extends Logging {
     if (isStandalone) {
       formatter.setInitialControllers(createStandaloneDynamicVoters(config))
     }
-    if (namespace.getBoolean("no_initial_controllers")) {
-      formatter.setNoInitialControllersFlag(true)
-    } else {
-      if (config.processRoles.contains(ProcessRole.ControllerRole)) {
-        if (config.quorumConfig.voters().isEmpty && formatter.initialVoters().isEmpty) {
+    if (!namespace.getBoolean("no_initial_controllers") &&
+      config.processRoles.contains(ProcessRole.ControllerRole) &&
+      config.quorumConfig.voters().isEmpty &&
+      formatter.initialVoters().isEmpty) {
           throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
             " is not set on this controller, you must specify one of the following: " +
             "--standalone, --initial-controllers, or --no-initial-controllers.");
-        }
-      }
     }
     Option(namespace.getList("add_scram")).
       foreach(scramArgs => formatter.setScramArguments(scramArgs.asInstanceOf[util.List[String]]))
