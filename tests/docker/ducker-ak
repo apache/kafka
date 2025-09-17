@@ -67,7 +67,7 @@ debugpy_port=5678
 usage() {
     local exit_status="${1}"
     cat <<EOF
-ducker-ak: a tool for running Apache Kafka tests inside container images.
+ducker-ak: a tool for running Apache Kafka tests inside Docker images.
 
 Supports Docker and Podman container runtimes. Auto-detects available runtime
 or can be overridden with CONTAINER_RUNTIME environment variable.
@@ -77,10 +77,10 @@ Usage: ${script_path} [command] [options]
 help|-h|--help
     Display this help message
 
-up [-n|--num-nodes NUM_NODES] [-f|--force] [container-image]
+up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
         [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [-j|--jdk JDK_VERSION] [--ipv6]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
-    The container image name defaults to ${default_image_name}.  If --force is specified, we will
+    The Docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
 
     If --custom-ducktape is specified, we will install the provided custom
@@ -95,7 +95,7 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [container-image]
     If -j|--jdk is specified, you can customize the OpenJDK base image used for building
     the ducker container. Defaults to ${default_jdk}. Example: -j openjdk:17-bullseye
 
-    If --ipv6 is specified, we will create a container network with IPv6 enabled.
+    If --ipv6 is specified, we will create a Docker network with IPv6 enabled.
     
     Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678 
     on your local machine to enable debugging in VS Code.
@@ -121,12 +121,12 @@ ssh [node-name|user-name@node-name] [command]
 
 down [-q|--quiet] [-f|--force]
     Tear down all the currently active ducker-ak nodes.  If --quiet is specified,
-    only error messages are printed. If --force or -f is specified, "container rm -f"
+    only error messages are printed. If --force or -f is specified, "docker rm -f"
     will be used to remove the nodes, which kills currently running ducker-ak test.
 
 purge [--f|--force]
-    Purge container images created by ducker-ak.  This will free disk space.
-    If --force is set, we run 'container rmi -f'.
+    Purge Docker images created by ducker-ak.  This will free disk space.
+    If --force is set, we run 'docker rmi -f'.
 EOF
     exit "${exit_status}"
 }
@@ -325,7 +325,7 @@ docker_run() {
         expose_ports="${expose_ports} -p ${port_mapping}:${port_mapping}"
     fi
 
-    # Invoke container run. We need privileged mode to be able to run iptables
+    # Invoke docker-run. We need privileged mode to be able to run iptables
     # and mount FUSE filesystems inside the container.  We also need it to
     # run iptables inside the container.
     local memory_swappiness_option=""
