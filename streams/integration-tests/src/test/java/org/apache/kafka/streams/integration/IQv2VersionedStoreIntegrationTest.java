@@ -47,6 +47,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -67,6 +68,7 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Tag("integration")
@@ -115,17 +117,17 @@ public class IQv2VersionedStoreIntegrationTest {
             producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[2], RECORD_KEY, RECORD_VALUES[2])).get();
             producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[3], RECORD_KEY, RECORD_VALUES[3])).get();
         }
-        inputPosition = Position.emptyPosition();
-        inputPosition = inputPosition.withComponent(INPUT_TOPIC_NAME, 0, 3);
+        inputPosition = Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, 3);
     }
 
-    private void setup(final String groupProtocol) {
+    private void setup(final String groupProtocol, final TestInfo testInfo) {
         this.groupProtocol = groupProtocol;
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(INPUT_TOPIC_NAME,
             Materialized.as(Stores.persistentVersionedKeyValueStore(STORE_NAME, HISTORY_RETENTION, SEGMENT_INTERVAL)));
         final Properties configs = new Properties();
-        configs.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + System.nanoTime() + "-" + groupProtocol);
+        final String safeTestName = safeUniqueTestName(testInfo);
+        configs.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         configs.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
         configs.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
@@ -155,9 +157,9 @@ public class IQv2VersionedStoreIntegrationTest {
 
     @ParameterizedTest(name = "{1}")
     @MethodSource("groupProtocolParameters")
-    public void verifyStore(final String groupProtocol, final String testName) throws Exception {
+    public void verifyStore(final String groupProtocol, final String testName, final TestInfo testInfo) throws Exception {
         // Set up streams
-        setup(groupProtocol);
+        setup(groupProtocol, testInfo);
         
         /* Test Versioned Key Queries */
         // retrieve the latest value

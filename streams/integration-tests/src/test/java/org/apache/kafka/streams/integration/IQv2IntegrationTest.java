@@ -88,7 +88,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@Timeout(1200)
+@Timeout(600)
 @Tag("integration")
 public class IQv2IntegrationTest {
     private static final int NUM_BROKERS = 1;
@@ -445,9 +445,9 @@ public class IQv2IntegrationTest {
             kafkaStreams.close();
         }
         final String safeTestName = safeUniqueTestName(testInfo);
+        this.groupProtocol = groupProtocol;
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(safeTestName));
         kafkaStreams.cleanUp();
-        this.groupProtocol = groupProtocol;
 
         kafkaStreams.start();
         final StateQueryResult<ValueAndTimestamp<Integer>> result =

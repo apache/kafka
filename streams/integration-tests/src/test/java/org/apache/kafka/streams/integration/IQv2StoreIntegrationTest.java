@@ -117,7 +117,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("integration")
-@Timeout(1200)
+@Timeout(600)
 public class IQv2StoreIntegrationTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(IQv2StoreIntegrationTest.class);
