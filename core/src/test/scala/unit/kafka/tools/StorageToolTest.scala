@@ -351,7 +351,7 @@ Found problem:
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
-    assertEquals("No feature:kraft.version with feature level 999",
+    assertEquals("Unknown KRaft feature level: 999",
       assertThrows(classOf[IllegalArgumentException], () =>
         runFormatCommand(new ByteArrayOutputStream(), properties,
           Seq("--feature", "kraft.version=999", "--standalone"))).getMessage)
