@@ -255,6 +255,7 @@ public class AsyncKafkaConsumerTest {
         long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
+        ThreadSafeAsyncConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitDisabled();
         return new AsyncKafkaConsumer<>(
             new LogContext(),
             "client-id",
@@ -274,7 +275,7 @@ public class AsyncKafkaConsumerTest {
             requestTimeoutMs,
             defaultApiTimeoutMs,
             "group-id",
-            false);
+            threadSafeConsumerState);
     }
 
     @Test
@@ -1338,6 +1339,7 @@ public class AsyncKafkaConsumerTest {
             any(),
             any(),
             applicationThreadMemberStateListener.capture(),
+            any(),
             any()
         ));
         return applicationThreadMemberStateListener.getValue();
@@ -1409,7 +1411,8 @@ public class AsyncKafkaConsumerTest {
             any(),
             any(),
             any(),
-            streamRebalanceData.capture()
+            streamRebalanceData.capture(),
+            any()
         ));
         return streamRebalanceData.getValue();
     }

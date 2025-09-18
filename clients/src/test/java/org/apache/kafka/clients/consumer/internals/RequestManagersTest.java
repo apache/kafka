@@ -50,6 +50,7 @@ public class RequestManagersTest {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
+        final ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitDisabled();
         final RequestManagers requestManagers = RequestManagers.supplier(
             new MockTime(),
             new LogContext(),
@@ -66,7 +67,8 @@ public class RequestManagersTest {
             new Metrics(),
             mock(OffsetCommitCallbackInvoker.class),
             listener,
-            Optional.empty()
+            Optional.empty(),
+            threadSafeConsumerState
         ).get();
         assertTrue(requestManagers.consumerMembershipManager.isPresent());
         assertTrue(requestManagers.streamsMembershipManager.isEmpty());
@@ -90,6 +92,7 @@ public class RequestManagersTest {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
+        final ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitDisabled();
         final RequestManagers requestManagers = RequestManagers.supplier(
             new MockTime(),
             new LogContext(),
@@ -106,7 +109,8 @@ public class RequestManagersTest {
             new Metrics(),
             mock(OffsetCommitCallbackInvoker.class),
             listener,
-            Optional.of(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()))
+            Optional.of(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of())),
+            threadSafeConsumerState
         ).get();
         assertTrue(requestManagers.streamsMembershipManager.isPresent());
         assertTrue(requestManagers.streamsGroupHeartbeatRequestManager.isPresent());

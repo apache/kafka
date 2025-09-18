@@ -151,7 +151,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      BackgroundEventHandler backgroundEventHandler,
                                      Time time,
                                      Metrics metrics,
-                                     boolean autoCommitEnabled) {
+                                     ThreadSafeConsumerState threadSafeConsumerState) {
         this(groupId,
             groupInstanceId,
             rackId,
@@ -164,7 +164,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             backgroundEventHandler,
             time,
             new ConsumerRebalanceMetricsManager(metrics),
-            autoCommitEnabled);
+            threadSafeConsumerState);
     }
 
     // Visible for testing
@@ -180,14 +180,14 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                               BackgroundEventHandler backgroundEventHandler,
                               Time time,
                               RebalanceMetricsManager metricsManager,
-                              boolean autoCommitEnabled) {
+                              ThreadSafeConsumerState threadSafeConsumerState) {
         super(groupId,
             subscriptions,
             metadata,
             logContext.logger(ConsumerMembershipManager.class),
             time,
             metricsManager,
-            autoCommitEnabled);
+            threadSafeConsumerState);
         this.groupInstanceId = groupInstanceId;
         this.rackId = rackId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;

@@ -141,10 +141,14 @@ public class ConsumerMembershipManagerTest {
     }
 
     private ConsumerMembershipManager createMembershipManager(String groupInstanceId) {
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitEnabled(
+            LOG_CONTEXT,
+            time
+        );
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
             GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
             subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
-            backgroundEventHandler, time, rebalanceMetricsManager, true));
+            backgroundEventHandler, time, rebalanceMetricsManager, threadSafeConsumerState));
         assertMemberIdIsGenerated(manager.memberId());
         return manager;
     }
@@ -154,10 +158,14 @@ public class ConsumerMembershipManagerTest {
         String serverAssignor,
         String rackId
     ) {
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitEnabled(
+            LOG_CONTEXT,
+            time
+        );
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(rackId), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
-                metadata, LOG_CONTEXT, backgroundEventHandler, time, rebalanceMetricsManager, true));
+                metadata, LOG_CONTEXT, backgroundEventHandler, time, rebalanceMetricsManager, threadSafeConsumerState));
         assertMemberIdIsGenerated(manager.memberId());
         manager.transitionToJoining();
         return manager;
@@ -242,10 +250,14 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitEnabled(
+            LOG_CONTEXT,
+            time
+        );
         ConsumerMembershipManager membershipManager = new ConsumerMembershipManager(
                 GROUP_ID, Optional.empty(), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
-            backgroundEventHandler, time, rebalanceMetricsManager, true);
+            backgroundEventHandler, time, rebalanceMetricsManager, threadSafeConsumerState);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 

@@ -138,7 +138,11 @@ public class CommitRequestManagerTest {
     @Test
     public void testOffsetFetchRequestStateToStringBase() {
         ConsumerConfig config = mock(ConsumerConfig.class);
-
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(
+            logContext,
+            config,
+            time
+        );
         CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
                 logContext,
@@ -152,7 +156,8 @@ public class CommitRequestManagerTest {
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
                 metrics,
-                metadata);
+                metadata,
+                threadSafeConsumerState);
 
         commitRequestManager.onMemberEpochUpdated(Optional.of(1), Uuid.randomUuid().toString());
         Set<TopicPartition> requestedPartitions = Collections.singleton(new TopicPartition("topic-1", 1));
@@ -1569,11 +1574,17 @@ public class CommitRequestManagerTest {
         if (autoCommitEnabled)
             props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));
 
+        ConsumerConfig config = new ConsumerConfig(props);
+        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(
+            logContext,
+            config,
+            time
+        );
         return spy(new CommitRequestManager(
                 this.time,
                 this.logContext,
                 this.subscriptionState,
-                new ConsumerConfig(props),
+                config,
                 this.coordinatorRequestManager,
                 this.offsetCommitCallbackInvoker,
                 DEFAULT_GROUP_ID,
@@ -1582,7 +1593,8 @@ public class CommitRequestManagerTest {
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
                 metrics,
-                metadata));
+                metadata,
+                threadSafeConsumerState));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(

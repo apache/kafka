@@ -111,6 +111,16 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     private final ConsumerMetadata metadata;
 
     /**
+     * Keeps track of the auto-commit state.
+     *
+     * <p/>
+     *
+     * <em>Note</em>: per its class name, this state is <em>shared</em> with the application thread, so care must be
+     * taken to evaluate how it's used elsewhere when updating related logic.
+     */
+    protected final ThreadSafeAutoCommitState autoCommitState;
+
+    /**
      * Logger.
      */
     protected final Logger log;
@@ -137,10 +147,17 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile(boolean)} has been triggered
-     * after receiving a heartbeat response, or a metadata update.
+     * assignmentReadyToReconcile. {@link ThreadSafeReconciliationState#isInProgress()} will be true if
+     * {@link #maybeReconcile(boolean)} has been triggered after receiving a heartbeat response, or a metadata update.
+     * Calling code should generally favor {@link #reconciliationInProgress()} for its clarity over direct use of
+     * this state.
+     *
+     * <p/>
+     *
+     * <em>Note</em>: per its class name, this state is <em>shared</em> with the application thread, so care must be
+     * taken to evaluate how it's used elsewhere when updating related logic.
      */
-    private boolean reconciliationInProgress;
+    private final ThreadSafeReconciliationState reconciliationState;
 
     /**
      * True if a reconciliation is in progress and the member rejoined the group since the start
@@ -192,8 +209,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private boolean isPollTimerExpired;
 
-    private final boolean autoCommitEnabled;
-
     /**
      * Indicate the operation on consumer group membership that the consumer will perform when leaving the group.
      * The property should remain {@code GroupMembershipOperation.DEFAULT} until the consumer is closing.
@@ -208,7 +223,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                               Logger log,
                               Time time,
                               RebalanceMetricsManager metricsManager,
-                              boolean autoCommitEnabled) {
+                              ThreadSafeConsumerState threadSafeConsumerState) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.subscriptions = subscriptions;
@@ -220,7 +235,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         this.stateUpdatesListeners = new ArrayList<>();
         this.time = time;
         this.metricsManager = metricsManager;
-        this.autoCommitEnabled = autoCommitEnabled;
+        this.autoCommitState = threadSafeConsumerState.autoCommitState();
+        this.reconciliationState = threadSafeConsumerState.reconciliationState();
     }
 
     /**
@@ -530,7 +546,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                     "the member is in FATAL state");
             return;
         }
-        if (reconciliationInProgress) {
+        if (reconciliationInProgress()) {
             rejoinedWhileReconciliationInProgress = true;
         }
         resetEpoch();
@@ -830,7 +846,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                     "current assignment.");
             return;
         }
-        if (reconciliationInProgress) {
+        if (reconciliationInProgress()) {
             log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. " +
                  "Assignment {} will be handled in the next reconciliation loop.", currentTargetAssignment);
             return;
@@ -850,7 +866,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
-        if (autoCommitEnabled && !canCommit) return;
+        if (autoCommitState.isAutoCommitEnabled() && !canCommit) return;
         markReconciliationInProgress();
 
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
@@ -963,7 +979,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 log.error("Reconciliation failed.", error);
                 markReconciliationCompleted();
             } else {
-                if (reconciliationInProgress && !maybeAbortReconciliation()) {
+                if (reconciliationInProgress() && !maybeAbortReconciliation()) {
                     currentAssignment = resolvedAssignment;
 
                     signalReconciliationCompleting();
@@ -1034,7 +1050,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  Visible for testing.
      */
     void markReconciliationInProgress() {
-        reconciliationInProgress = true;
+        reconciliationState.setInProgress(true);
         rejoinedWhileReconciliationInProgress = false;
     }
 
@@ -1042,7 +1058,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  Visible for testing.
      */
     void markReconciliationCompleted() {
-        reconciliationInProgress = false;
+        reconciliationState.setInProgress(false);
         rejoinedWhileReconciliationInProgress = false;
     }
 
@@ -1372,7 +1388,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * by a call to {@link #maybeReconcile(boolean)}. Visible for testing.
      */
     boolean reconciliationInProgress() {
-        return reconciliationInProgress;
+        return reconciliationState.isInProgress();
     }
 
     /**
