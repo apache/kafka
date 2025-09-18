@@ -337,8 +337,8 @@ public class Formatter {
     /**
      * Calculate the effective feature level for kraft.version. In order to keep existing
      * command-line invocations of StorageTool working, we default this to 0 if no dynamic
-     * voter quorum arguments were provided. As a convenience, if --standalone or --initial-voters
-     * were passed, we set the latest kraft.version. (Currently there is only 1 non-zero version).
+     * voter quorum arguments were provided. As a convenience, if the static voters config is
+     * empty, we set the latest kraft.version. (Currently there is only 1 non-zero version).
      *
      * @param configuredKRaftVersionLevel   The configured level for kraft.version
      * @return                              The effective feature level.
