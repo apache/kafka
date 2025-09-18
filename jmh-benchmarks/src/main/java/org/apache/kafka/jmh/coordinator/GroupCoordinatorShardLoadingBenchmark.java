@@ -156,7 +156,7 @@ public class GroupCoordinatorShardLoadingBenchmark {
                 return 0L;
             }
 
-            return batchCount * batch.length;
+            return (long) batchCount * (long) batch.length;
         }
 
         @Override
@@ -227,7 +227,7 @@ public class GroupCoordinatorShardLoadingBenchmark {
                 return 0L;
             }
 
-            return (batch.length + 1) * batchCount;
+            return (long) (batch.length + 1) * (long) batchCount;
         }
 
         @Override
