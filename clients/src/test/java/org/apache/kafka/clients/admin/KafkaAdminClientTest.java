@@ -8449,8 +8449,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             // listoffsets response from broker 0
-            env.kafkaClient().prepareUnsupportedVersionResponse(
-                request -> request instanceof ListOffsetsRequest);
+            for (int i = 0; i < ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size(); i++) {
+                env.kafkaClient().prepareUnsupportedVersionResponse(
+                        request -> request instanceof ListOffsetsRequest);
+            }
 
             ListOffsetsResult result = env.adminClient().listOffsets(Collections.singletonMap(tp0, OffsetSpec.maxTimestamp()));
 
@@ -8483,8 +8485,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
             // listoffsets response from broker 0
-            env.kafkaClient().prepareUnsupportedVersionResponse(
-                request -> request instanceof ListOffsetsRequest);
+            for (int i = 0; i < ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size(); ++i) {
+                env.kafkaClient().prepareUnsupportedVersionResponse(
+                        request -> request instanceof ListOffsetsRequest);
+            }
 
             ListOffsetsTopicResponse topicResponse = ListOffsetsResponse.singletonListOffsetsTopicResponse(tp1, Errors.NONE, -1L, 345L, 543);
             ListOffsetsResponseData responseData = new ListOffsetsResponseData()
@@ -8619,6 +8623,11 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
                     ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 0));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
+
+            for (int i = 0; i < ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size() - 1; i++) {
+                env.kafkaClient().prepareUnsupportedVersionResponse(
+                        request -> request instanceof ListOffsetsRequest);
+            }
 
             // listoffsets response from broker 0
             env.kafkaClient().prepareUnsupportedVersionResponse(
