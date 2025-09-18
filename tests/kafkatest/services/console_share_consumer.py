@@ -167,7 +167,7 @@ class ConsoleShareConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadSer
             # This will be added in the properties file instead
             cmd += " --timeout-ms %s" % self.share_consumer_timeout_ms
 
-        formatter_property_arg = "--formatter-property" if version.supports_formatter_property else "--property"
+        formatter_property_arg = "--formatter-property" if version.supports_formatter_property() else "--property"
         if self.print_timestamp:
             cmd += " %s print.timestamp=true" % formatter_property_arg
 
