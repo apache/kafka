@@ -467,8 +467,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 return;
             }
             formatter.setReleaseVersion(nodes.bootstrapMetadata().metadataVersion());
-            formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME,
-                nodes.bootstrapMetadata().featureLevel(KRaftVersion.FEATURE_NAME));
             formatter.setUnstableFeatureVersionsEnabled(true);
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
@@ -477,51 +475,39 @@ public class KafkaClusterTestKit implements AutoCloseable {
             } else {
                 formatter.setMetadataLogDirectory(Optional.empty());
             }
-            if (nodes.bootstrapMetadata().featureLevel(KRaftVersion.FEATURE_NAME) > 0) {
-                StringBuilder dynamicVotersBuilder = new StringBuilder();
-                String prefix = "";
-                if (standalone) {
-                    if (nodeId == TestKitDefaults.CONTROLLER_ID_OFFSET) {
-                        final var controllerNode = nodes.controllerNodes().get(nodeId);
-                        dynamicVotersBuilder.append(
-                            String.format(
-                                "%d@localhost:%d:%s",
-                                controllerNode.id(),
-                                socketFactoryManager.
-                                    getOrCreatePortForListener(controllerNode.id(), controllerListenerName),
-                                controllerNode.metadataDirectoryId()
-                            )
-                        );
-                        formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
-                    }
-                } else if (initialVoterSet.isPresent()) {
-                    for (final var controllerNode : initialVoterSet.get().entrySet()) {
-                        final var voterId = controllerNode.getKey();
-                        final var voterDirectoryId = controllerNode.getValue();
-                        dynamicVotersBuilder.append(prefix);
-                        prefix = ",";
-                        dynamicVotersBuilder.append(
-                            String.format(
-                                "%d@localhost:%d:%s",
-                                voterId,
-                                socketFactoryManager.
-                                    getOrCreatePortForListener(voterId, controllerListenerName),
-                                voterDirectoryId
-                            )
-                        );
-                    }
-                    formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
-                } else {
-                    for (TestKitNode controllerNode : nodes.controllerNodes().values()) {
-                        int port = socketFactoryManager.
-                            getOrCreatePortForListener(controllerNode.id(), controllerListenerName);
-                        dynamicVotersBuilder.append(prefix);
-                        prefix = ",";
-                        dynamicVotersBuilder.append(String.format("%d@localhost:%d:%s",
-                            controllerNode.id(), port, controllerNode.metadataDirectoryId()));
-                    }
+            StringBuilder dynamicVotersBuilder = new StringBuilder();
+            String prefix = "";
+            if (standalone) {
+                if (nodeId == TestKitDefaults.CONTROLLER_ID_OFFSET) {
+                    final var controllerNode = nodes.controllerNodes().get(nodeId);
+                    dynamicVotersBuilder.append(
+                        String.format(
+                            "%d@localhost:%d:%s",
+                            controllerNode.id(),
+                            socketFactoryManager.
+                                getOrCreatePortForListener(controllerNode.id(), controllerListenerName),
+                            controllerNode.metadataDirectoryId()
+                        )
+                    );
                     formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
                 }
+            } else if (initialVoterSet.isPresent()) {
+                for (final var controllerNode : initialVoterSet.get().entrySet()) {
+                    final var voterId = controllerNode.getKey();
+                    final var voterDirectoryId = controllerNode.getValue();
+                    dynamicVotersBuilder.append(prefix);
+                    prefix = ",";
+                    dynamicVotersBuilder.append(
+                        String.format(
+                            "%d@localhost:%d:%s",
+                            voterId,
+                            socketFactoryManager.
+                                getOrCreatePortForListener(voterId, controllerListenerName),
+                            voterDirectoryId
+                        )
+                    );
+                }
+                formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
             }
             formatter.run();
         } catch (Exception e) {
