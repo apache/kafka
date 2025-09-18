@@ -140,13 +140,10 @@ class ConsumerPerformanceService(PerformanceService):
         self.security_config.setup_node(node)
 
         cmd = self.start_cmd(node)
-        self.logger.error("Consumer performance %d command: %s", idx, cmd)
+        self.logger.debug("Consumer performance %d command: %s", idx, cmd)
         last = None
         for line in node.account.ssh_capture(cmd):
-            self.logger.error("Consumer performance %d: %s", idx, line)
             last = line
-
-        self.logger.error("Consumer performance %d last line: %s", idx, last)
 
         # Parse and save the last line's information
         if last is not None:
