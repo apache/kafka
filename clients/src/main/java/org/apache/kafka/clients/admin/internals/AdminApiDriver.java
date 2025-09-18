@@ -289,7 +289,8 @@ public class AdminApiDriver<K, V> {
                     // help us to remove lookup and fulfillmentMap, and the downgraded
                     // offsetStamp still in fulfillmentMap so it will generate next request.
                     ListOffsetsHandler listOffsetsHandler = (ListOffsetsHandler) handler;
-                    listOffsetsHandler.downgradeOffsetTimestampVersion();
+                    if (listOffsetsHandler.isOldestTimstamp())
+                        listOffsetsHandler.downgradeOffsetTimestampVersion();
                 }
             } else {
                 Map<K, Throwable> unrecoverableLookupFailures =
@@ -459,6 +460,15 @@ public class AdminApiDriver<K, V> {
         public void setInflight(RequestSpec<K> spec) {
             this.inflightRequest = Optional.of(spec);
             this.tries++;
+        }
+
+        @Override
+        public String toString() {
+            return "RequestState(" +
+                    "inflightRequest:" + inflightRequest +
+                    " tries:" + tries +
+                    " nextAllowedRetryMs:" + nextAllowedRetryMs +
+                    ")";
         }
     }
 

@@ -55,7 +55,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     private final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
     private final int defaultApiTimeoutMs;
-    private final int maxUnsupportedVersionRetry = ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size();
+    private final int maxUnsupportedVersionRetry = ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size() - 1;
     private int unsupportedVersionRetry = 0;
     private long currentUnsupportedVersion = ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.get(unsupportedVersionRetry);
     private final HashMap<TopicPartition, Throwable> accUnsupportedTimestampPartition = new HashMap<>();
@@ -230,8 +230,8 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     }
 
     public void downgradeOffsetTimestampVersion() {
-        if (unsupportedVersionRetry >= maxUnsupportedVersionRetry) {
-            throw new IllegalStateException("should not larger " + ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size());
+        if (unsupportedVersionRetry > maxUnsupportedVersionRetry) {
+            throw new IllegalStateException("Index should not larger than " + maxUnsupportedVersionRetry);
         }
 
         unsupportedVersionRetry += 1;
@@ -242,6 +242,11 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         currentUnsupportedVersion = ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.get(0);
         unsupportedVersionRetry = 0;
         accUnsupportedTimestampPartition.clear();
+    }
+
+    public boolean isOldestTimstamp() {
+        return currentUnsupportedVersion != ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.get(
+                ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size() - 1);
     }
 
     // Visible for test

@@ -142,6 +142,13 @@ public interface AdminApiHandler<K, V> {
                 Collections.emptyList()
             );
         }
+
+        @Override
+        public String toString() {
+            return "ApiResult(" + " completedKeys " + completedKeys +
+                    " failedKeys " + failedKeys +
+                    "unmappedKeys" + unmappedKeys + ")";
+        }
     }
 
     class RequestAndKeys<K> {
