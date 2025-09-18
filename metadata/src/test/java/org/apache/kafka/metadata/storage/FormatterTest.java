@@ -500,10 +500,8 @@ public class FormatterTest {
                     parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setStaticVotersEmpty(true);
-            assertEquals("kraft.version could not be set to 1 because it depends on " +
-                "metadata.version level 21",
-                    assertThrows(IllegalArgumentException.class,
-                        formatter1.formatter::run).getMessage());
+            formatter1.formatter.run();
+            assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
         }
     }
 
@@ -515,13 +513,11 @@ public class FormatterTest {
             formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_8_IV0);
             // This MV does not support kraft.version = 1
             formatter1.formatter.setStaticVotersEmpty(emptyStaticVoters);
+            formatter1.formatter.run();
             if (emptyStaticVoters) {
-                assertEquals("kraft.version could not be set to 1 because it depends on " +
-                        "metadata.version level 21",
-                    assertThrows(IllegalArgumentException.class,
-                        formatter1.formatter::run).getMessage());
+                assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
             } else {
-                formatter1.formatter.run();
+                assertEquals((short) 0, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 1));
             }
         }
     }

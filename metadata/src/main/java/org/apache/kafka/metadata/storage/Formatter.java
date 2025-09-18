@@ -306,15 +306,15 @@ public class Formatter {
                             ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
                 }
             }
-            newFeatureLevels.put(featureName, level);
+            if (!featureName.equals(KRaftVersion.FEATURE_NAME)) {
+                newFeatureLevels.put(featureName, level);
+            }
         }
         newFeatureLevels.put(MetadataVersion.FEATURE_NAME, releaseVersion.featureLevel());
         // Add default values for features that were not specified.
         supportedFeatures.forEach(supportedFeature -> {
-            if (supportedFeature.featureName().equals(KRaftVersion.FEATURE_NAME)) {
-                newFeatureLevels.put(KRaftVersion.FEATURE_NAME, effectiveKRaftFeatureLevel(
-                    Optional.ofNullable(newFeatureLevels.get(KRaftVersion.FEATURE_NAME))));
-            } else if (!newFeatureLevels.containsKey(supportedFeature.featureName())) {
+            if (!newFeatureLevels.containsKey(supportedFeature.featureName()) &&
+                !supportedFeature.featureName().equals(KRaftVersion.FEATURE_NAME)) {
                 newFeatureLevels.put(supportedFeature.featureName(),
                     supportedFeature.defaultLevel(releaseVersion));
             }
@@ -331,6 +331,10 @@ public class Formatter {
                 Feature.validateVersion(featureVersion, newFeatureLevels);
             }
         }
+        // Only add kraft.version after validation, because it only depends
+        // on format arguments, not the release version.
+        newFeatureLevels.put(KRaftVersion.FEATURE_NAME, effectiveKRaftFeatureLevel(
+            Optional.ofNullable(featureLevels.get(KRaftVersion.FEATURE_NAME))));
         return newFeatureLevels;
     }
 
