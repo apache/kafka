@@ -35,9 +35,8 @@
 
     <p>
         Upgrading from any older version to {{fullDotVersion}} is possible: if upgrading from 3.4 or below, you will need to do two rolling bounces, where during the first rolling bounce phase you set the config <code>upgrade.from="older version"</code>
-        (possible values are <code>"0.10.0" - "3.4"</code>) and during the second you remove it. This is required to safely handle 3 changes. The first is introduction of the new cooperative rebalancing protocol of the embedded consumer. The second is a change in foreign-key join serialization format.
-        Note that you will remain using the old eager rebalancing protocol if you skip or delay the second rolling bounce, but you can safely switch over to cooperative at any time once the entire group is on 2.4+ by removing the config value and bouncing. For more details please refer to
-        <a href="https://cwiki.apache.org/confluence/x/vAclBg">KIP-429</a>. The third is a change in the serialization format for an internal repartition topic. For more details, please refer to <a href="https://cwiki.apache.org/confluence/x/P5VbDg">KIP-904</a>:
+        (possible values are <code>"2.4" - "3.4"</code>) and during the second you remove it. This is required to safely handle 2 changes. The first is a change in foreign-key join serialization format.
+        The second is a change in the serialization format for an internal repartition topic. For more details, please refer to <a href="https://cwiki.apache.org/confluence/x/P5VbDg">KIP-904</a>:
     </p>
     <ul>
         <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade.</li>
@@ -51,18 +50,6 @@
         <li> update your code and swap old code and jar file with new code and new jar file </li>
         <li> restart all new ({{fullDotVersion}}) application instances </li>
     </ul>
-    <p>
-        Note: The cooperative rebalancing protocol has been the default since 2.4, but we have continued to support the
-        eager rebalancing protocol to provide users an upgrade path. This support will be dropped in a future release,
-        so any users still on the eager protocol should prepare to finish upgrading their applications to the cooperative protocol in version 3.1.
-        This only affects users who are still on a version older than 2.4, and users who have upgraded already but have not yet
-        removed the <code>upgrade.from</code> config that they set when upgrading from a version below 2.4.
-        Users fitting into the latter case will simply need to unset this config when upgrading beyond 3.1,
-        while users in the former case will need to follow a slightly different upgrade path if they attempt to upgrade from 2.3 or below to a version above 3.1.
-        Those applications will need to go through a bridge release, by first upgrading to a version between 2.4 - 3.1 and setting the <code>upgrade.from</code> config,
-        then removing that config and upgrading to the final version above 3.1. See <a href="https://issues.apache.org/jira/browse/KAFKA-8575">KAFKA-8575</a>
-        for more details.
-    </p>
 
     <p>For a table that shows Streams API compatibility with Kafka broker versions, see <a href="#streams_api_broker_compat">Broker Compatibility</a>.</p>
 
