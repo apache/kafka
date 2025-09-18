@@ -44,7 +44,8 @@ public interface Headers extends Iterable<Header> {
     Headers add(String key, byte[] value) throws IllegalStateException;
 
     /**
-     * Removes all headers for the given key returning if the operation succeeded.
+     * Removes all headers for the given key returning if the operation succeeded,
+     * while preserving the insertion order of the remaining headers.
      * 
      * @param key to remove all headers for; must not be null.
      * @return this instance of the Headers, once the header is removed.
