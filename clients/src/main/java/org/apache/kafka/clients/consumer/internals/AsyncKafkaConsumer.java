@@ -427,10 +427,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
-
-            ;
             this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
-                ThreadSafeAutoCommitState.fromConfig(logContext, config, time),
+                ThreadSafeAutoCommitState.fromConfig(
+                    logContext,
+                    config,
+                    time
+                ),
                 logContext,
                 metadata,
                 subscriptions,
@@ -634,7 +636,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
         ApiVersions apiVersions = new ApiVersions();
         this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
-            ThreadSafeAutoCommitState.fromConfig(logContext, config, time),
+            ThreadSafeAutoCommitState.fromConfig(
+                logContext,
+                config,
+                time
+            ),
             logContext,
             metadata,
             subscriptions,
@@ -854,7 +860,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
-
 
             do {
                 sendPollEvent(timer);

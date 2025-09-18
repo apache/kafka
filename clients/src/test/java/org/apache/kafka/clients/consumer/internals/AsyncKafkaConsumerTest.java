@@ -257,9 +257,8 @@ public class AsyncKafkaConsumerTest {
         long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
-        LogContext logContext = new LogContext();
         return new AsyncKafkaConsumer<>(
-            logContext,
+            new LogContext(),
             "client-id",
             new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics),
             fetchBuffer,
@@ -277,7 +276,7 @@ public class AsyncKafkaConsumerTest {
             requestTimeoutMs,
             defaultApiTimeoutMs,
             "group-id",
-            new ThreadSafeAsyncConsumerState(AUTO_COMMIT_DISABLED, logContext, metadata, subscriptions, time, retryBackoffMs, new ApiVersions()));
+            new ThreadSafeAsyncConsumerState(AUTO_COMMIT_DISABLED, new LogContext(), metadata, subscriptions, time, retryBackoffMs, new ApiVersions()));
     }
 
     @Test

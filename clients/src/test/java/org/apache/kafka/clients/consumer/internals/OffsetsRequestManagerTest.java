@@ -799,7 +799,6 @@ public class OffsetsRequestManagerTest {
         int requestTimeoutMs = 100;
         int defaultApiTimeoutMs = 500;
         // Overriding the requestManager to provide different request and default API timeout
-        LogContext logContext = new LogContext();
         requestManager = new OffsetsRequestManager(
                 subscriptionState,
                 metadata,
@@ -811,10 +810,10 @@ public class OffsetsRequestManagerTest {
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
                 new ThreadSafeAsyncConsumerState(
-                    new ThreadSafeAutoCommitState.AutoCommitEnabled(logContext, time, 1000),
-                    logContext, metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions
+                    new ThreadSafeAutoCommitState.AutoCommitEnabled(new LogContext(), time, 1000),
+                    new LogContext(), metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions
                 ),
-                logContext
+                new LogContext()
         );
 
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,
