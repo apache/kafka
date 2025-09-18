@@ -71,6 +71,13 @@ ext {
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
 
+  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
+    // Spotbugs is not compatible with Java 25+ so Gradle related tasks are disabled
+    // until version can be upgraded: https://github.com/spotbugs/spotbugs/issues/3564
+    project.gradle.startParameter.excludedTaskNames.add("spotbugsMain")
+    project.gradle.startParameter.excludedTaskNames.add("spotbugsTest")
+  }    
+
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
       Math.min(Runtime.runtime.availableProcessors(), 8)

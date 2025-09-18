@@ -43,8 +43,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Make sure these match build.yml
-        java: [ 24, 17 ]
+        # Make sure these match build.yml and also keep in mind that Java version change in PR is not honored by CI
+        # (i.e. GitHub actions build will always use trunk branch version)
+        java: [ 25, 17 ]
         run-flaky: [ true, false ]
         run-new: [ true, false ]
         exclude:

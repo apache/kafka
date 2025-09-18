@@ -13,7 +13,7 @@
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with 17 and 24. The `release` parameter in javac is set to `11` for the clients 
+We build and test Apache Kafka with 17 and 25. The `release` parameter in javac is set to `11` for the clients 
 and streams modules, and `17` for the rest, ensuring compatibility with their respective
 minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
 for the rest.
