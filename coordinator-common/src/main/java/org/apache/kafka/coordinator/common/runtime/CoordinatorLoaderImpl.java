@@ -138,7 +138,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
             long currentOffset = log.logStartOffset();
             LoadStats stats = new LoadStats();
 
-            long previousHighWatermark = -1L;
+            long lastCommittedOffset = -1L;
             while (shouldFetchNextBatch(currentOffset, logEndOffset(tp), stats.readAtLeastOneRecord)) {
                 FetchDataInfo fetchDataInfo = log.read(currentOffset, loadBufferSize, FetchIsolation.LOG_END, true);
 
@@ -150,9 +150,9 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                     buffer = memoryRecords.buffer();
                 }
 
-                ReplayResult replayResult = processMemoryRecords(tp, log, memoryRecords, coordinator, stats, currentOffset, previousHighWatermark);
+                ReplayResult replayResult = processMemoryRecords(tp, log, memoryRecords, coordinator, stats, currentOffset, lastCommittedOffset);
                 currentOffset = replayResult.nextOffset;
-                previousHighWatermark = replayResult.highWatermark;
+                lastCommittedOffset = replayResult.lastCommittedOffset;
             }
 
             long endTimeMs = time.milliseconds();
@@ -224,7 +224,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
         CoordinatorPlayback<T> coordinator,
         LoadStats loadStats,
         long currentOffset,
-        long previousHighWatermark
+        long lastCommittedOffset
     ) {
         for (MutableRecordBatch batch : memoryRecords.batches()) {
             if (batch.isControlBatch()) {
@@ -303,18 +303,18 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
             if (currentOffset >= currentHighWatermark) {
                 coordinator.updateLastWrittenOffset(currentOffset);
 
-                if (currentHighWatermark > previousHighWatermark) {
+                if (currentHighWatermark > lastCommittedOffset) {
                     coordinator.updateLastCommittedOffset(currentHighWatermark);
-                    previousHighWatermark = currentHighWatermark;
+                    lastCommittedOffset = currentHighWatermark;
                 }
-            } else if (currentOffset - previousHighWatermark >= commitIntervalOffsets) {
+            } else if (currentOffset - lastCommittedOffset >= commitIntervalOffsets) {
                 coordinator.updateLastWrittenOffset(currentOffset);
                 coordinator.updateLastCommittedOffset(currentOffset);
-                previousHighWatermark = currentOffset;
+                lastCommittedOffset = currentOffset;
             }
         }
         loadStats.numBytes += memoryRecords.sizeInBytes();
-        return new ReplayResult(currentOffset, previousHighWatermark);
+        return new ReplayResult(currentOffset, lastCommittedOffset);
     }
 
     /**
@@ -347,5 +347,5 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
         }
     }
 
-    private record ReplayResult(long nextOffset, long highWatermark) { }
+    private record ReplayResult(long nextOffset, long lastCommittedOffset) { }
 }
