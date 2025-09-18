@@ -882,7 +882,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
                 prepareFetch(timer);
-                final Fetch<K, V> fetch = pollForFetches(timer);
+                final Fetch<K, V> fetch = collectFetch();
                 if (!fetch.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
@@ -916,8 +916,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         log.debug("prepareFetch - timer: {}", timer.remainingMs());
 
-        Timer blockerTimer = time.timer(defaultApiTimeoutMs.toMillis());
-
         while (true) {
             CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextEventType);
             applicationEventHandler.add(event);
@@ -926,6 +924,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             wakeupTrigger.setFetchAction(event);
 
             try {
+                Timer blockerTimer = time.timer(defaultApiTimeoutMs.toMillis());
                 state = event.blocker().await(blockerTimer);
             } catch (TimeoutException e) {
                 // Timeouts are OK, there's just no data to return on this pass.
@@ -934,7 +933,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.trace("Interrupt during composite poll", e);
                 throw e;
             } finally {
-                timer.update(blockerTimer.currentTimeMs());
+                timer.update();
                 wakeupTrigger.clearTask();
             }
 
@@ -1879,12 +1878,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * done as an optimization so that the <em>next round of data can be pre-fetched</em>.
      */
     private Fetch<K, V> collectFetch() {
-        final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
-
-        // Notify the network thread to wake up and start the next round of fetching.
-        applicationEventHandler.wakeupNetworkThread();
-
-        return fetch;
+        return fetchCollector.collectFetch(fetchBuffer);
     }
 
     /**
