@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
@@ -141,9 +142,18 @@ public class ConsumerMembershipManagerTest {
     }
 
     private ConsumerMembershipManager createMembershipManager(String groupInstanceId) {
-        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitEnabled(
+        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
+            new ThreadSafeAutoCommitState.AutoCommitEnabled(
+                LOG_CONTEXT,
+                time,
+                1000
+            ),
             LOG_CONTEXT,
-            time
+            metadata,
+            subscriptionState,
+            time,
+            1000,
+            new ApiVersions()
         );
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
             GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
@@ -158,9 +168,9 @@ public class ConsumerMembershipManagerTest {
         String serverAssignor,
         String rackId
     ) {
-        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitEnabled(
-            LOG_CONTEXT,
-            time
+        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
+            new ThreadSafeAutoCommitState.AutoCommitEnabled(LOG_CONTEXT, time, 1000),
+            LOG_CONTEXT, metadata, subscriptionState, time, 1000, new ApiVersions()
         );
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(rackId), REBALANCE_TIMEOUT,
@@ -250,9 +260,9 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
-        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitEnabled(
-            LOG_CONTEXT,
-            time
+        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
+            new ThreadSafeAutoCommitState.AutoCommitEnabled(LOG_CONTEXT, time, 1000),
+            LOG_CONTEXT, metadata, subscriptionState, time, 1000, new ApiVersions()
         );
         ConsumerMembershipManager membershipManager = new ConsumerMembershipManager(
                 GROUP_ID, Optional.empty(), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),

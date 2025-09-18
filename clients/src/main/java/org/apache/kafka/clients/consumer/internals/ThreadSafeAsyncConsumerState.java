@@ -16,77 +16,69 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.ApiVersions;
+
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
-import static java.util.Objects.requireNonNull;
-import static org.apache.kafka.clients.consumer.internals.ThreadSafeAutoCommitState.AUTO_COMMIT_DISABLED;
-
-/**
- * This class stores shared state needed by both the application thread ({@link AsyncKafkaConsumer}) and the
- * network thread ({@link ConsumerNetworkThread}) for the {@link AsyncKafkaConsumer}.
- */
 public class ThreadSafeAsyncConsumerState extends ThreadSafeConsumerState {
 
+    private final SubscriptionState subscriptions;
+    private final OffsetFetcherUtils offsetFetcherUtils;
     private final ThreadSafeAutoCommitState autoCommitState;
 
-    public ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState autoCommitState) {
-        this.autoCommitState = requireNonNull(autoCommitState);
-    }
+    /**
+     * Exception that occurred while updating positions after the triggering event had already
+     * expired. It will be propagated and cleared on the next call to update fetch positions.
+     */
+    private final ThreadSafeExceptionReference positionsUpdateError;
 
-    public static ThreadSafeAsyncConsumerState fromConfig(LogContext logContext, ConsumerConfig config, Time time) {
-        return new ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState.fromConfig(logContext, config, time));
-    }
-
-    static ThreadSafeAsyncConsumerState withAutoCommitEnabled(final LogContext logContext, final Time time) {
-        int defaultAutoCommitIntervalMs = 5000;     // This is as defined in ConsumerConfig
-        return new ThreadSafeAsyncConsumerState(
-            new ThreadSafeAutoCommitState.AutoCommitEnabled(
-                logContext,
-                time,
-                defaultAutoCommitIntervalMs
-            )
+    public ThreadSafeAsyncConsumerState(ThreadSafeAutoCommitState autoCommitState,
+                                        LogContext logContext,
+                                        ConsumerMetadata metadata,
+                                        SubscriptionState subscriptions,
+                                        Time time,
+                                        long retryBackoffMs,
+                                        ApiVersions apiVersions) {
+        this.autoCommitState = autoCommitState;
+        this.subscriptions = subscriptions;
+        this.offsetFetcherUtils = new OffsetFetcherUtils(
+            logContext,
+            metadata,
+            subscriptions,
+            time,
+            retryBackoffMs,
+            apiVersions
         );
-    }
-
-    static ThreadSafeAsyncConsumerState withAutoCommitDisabled() {
-        return new ThreadSafeAsyncConsumerState(AUTO_COMMIT_DISABLED);
+        this.positionsUpdateError = new ThreadSafeExceptionReference();
     }
 
     public ThreadSafeAutoCommitState autoCommitState() {
         return autoCommitState;
     }
 
-    /**
-     * This method is used by {@code AsyncKafkaConsumer#poll()} to determine if it can skip waiting for the
-     * {@link PollEvent}. Sending the {@link PollEvent} is in the critical path, and if the application thread
-     * can determine that it doesn't need to wait for it to complete before continuing, that is a big performance
-     * savings.
-     *
-     * <p/>
-     *
-     * This method performs similar checks to the start of {@code ApplicationEventProcessor#process(PollEvent)}:
-     *
-     * <ol>
-     *     <li>
-     *         Checks if there is already a reconciliation in process in
-     *         {@link AbstractMembershipManager#maybeReconcile(boolean)}
-     *     </li>
-     *     <li>
-     *         Checks if the auto-commit's interval has expired and needs to perform a commit offsets operation
-     *         in {@link CommitRequestManager#updateTimerAndMaybeCommit(long)}
-     *     </li>
-     * </ol>
-     *
-     * If either of the above tests are satisfied, this method will return {@code false} to let the application thread
-     * know that it needs to block for the {@link PollEvent} to complete. Otherwise, this method will return
-     * {@code true}, which signals to the application thread that it can enqueue a {@link PollEvent} but it should
-     * not wait for it to complete.
-     *
-     * @return true if all checks pass, false if either of the latter two checks fail
-     */
+    OffsetFetcherUtils offsetFetcherUtils() {
+        return offsetFetcherUtils;
+    }
+
+    public ThreadSafeExceptionReference positionsUpdateError() {
+        return positionsUpdateError;
+    }
+
+    public boolean canSkipUpdateFetchPositions() {
+        positionsUpdateError.maybeThrowException();
+        metadataError.maybeClearAndThrowException();
+
+        // In cases of metadata updates, getPartitionsToValidate() will review the partitions and
+        // determine which, if any, need to be validated. If any partitions require validation, the
+        // update fetch positions step can't be skipped.
+        if (!offsetFetcherUtils.getPartitionsToValidate().isEmpty())
+            return false;
+
+        // If there are no partitions in the AWAIT_RESET, AWAIT_VALIDATION, or INITIALIZING states, it's ok to skip.
+        return subscriptions.hasAllFetchPositions();
+    }
+
     public boolean canSkipWaitingOnPoll(long currentTimeMs) {
         if (reconciliationState.isInProgress())
             return false;

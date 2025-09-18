@@ -112,12 +112,15 @@ public class OffsetsRequestManagerTest {
                 metadata,
                 DEFAULT_ISOLATION_LEVEL,
                 time,
-                RETRY_BACKOFF_MS,
                 REQUEST_TIMEOUT_MS,
                 DEFAULT_API_TIMEOUT_MS,
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
+                new ThreadSafeAsyncConsumerState(
+                    new ThreadSafeAutoCommitState.AutoCommitEnabled(logContext, time, 1000),
+                    logContext, metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions
+                ),
                 logContext
         );
     }
@@ -676,7 +679,7 @@ public class OffsetsRequestManagerTest {
         // Call to updateFetchPositions. Should send an OffsetFetch request and use the response to set positions
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
         when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
-        CompletableFuture<Boolean> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+        CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
         assertFalse(updatePositions1.isDone(), "Update positions should wait for the OffsetFetch request");
         verify(commitRequestManager).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
 
@@ -705,13 +708,13 @@ public class OffsetsRequestManagerTest {
         // call to updateFetchPositions. Should send an OffsetFetch request
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
         when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
-        CompletableFuture<Boolean> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+        CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
         assertFalse(updatePositions1.isDone(), "Update positions should wait for the OffsetFetch request");
         verify(commitRequestManager).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
         clearInvocations(commitRequestManager);
 
         // Call to updateFetchPositions again with the same set of initializing partitions should reuse request
-        CompletableFuture<Boolean> updatePositions2 = requestManager.updateFetchPositions(time.milliseconds());
+        CompletableFuture<Void> updatePositions2 = requestManager.updateFetchPositions(time.milliseconds());
         verify(commitRequestManager, never()).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
 
         // Receive response with committed offsets, should complete both calls
@@ -738,7 +741,7 @@ public class OffsetsRequestManagerTest {
         // call to updateFetchPositions will trigger an OffsetFetch request for tp1 (won't complete just yet)
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
         when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
-        CompletableFuture<Boolean> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+        CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
         assertFalse(updatePositions1.isDone());
         verify(commitRequestManager).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
         clearInvocations(commitRequestManager);
@@ -766,7 +769,7 @@ public class OffsetsRequestManagerTest {
         // call to updateFetchPositions will trigger an OffsetFetch request for tp1 (won't complete just yet)
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchResult = new CompletableFuture<>();
         when(commitRequestManager.fetchOffsets(initPartitions1, internalFetchCommittedTimeout)).thenReturn(fetchResult);
-        CompletableFuture<Boolean> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
+        CompletableFuture<Void> updatePositions1 = requestManager.updateFetchPositions(time.milliseconds());
         assertFalse(updatePositions1.isDone());
         verify(commitRequestManager).fetchOffsets(initPartitions1, internalFetchCommittedTimeout);
         clearInvocations(commitRequestManager);
@@ -796,18 +799,22 @@ public class OffsetsRequestManagerTest {
         int requestTimeoutMs = 100;
         int defaultApiTimeoutMs = 500;
         // Overriding the requestManager to provide different request and default API timeout
+        LogContext logContext = new LogContext();
         requestManager = new OffsetsRequestManager(
                 subscriptionState,
                 metadata,
                 DEFAULT_ISOLATION_LEVEL,
                 time,
-                RETRY_BACKOFF_MS,
                 requestTimeoutMs,
                 defaultApiTimeoutMs,
                 apiVersions,
                 mock(NetworkClientDelegate.class),
                 commitRequestManager,
-                new LogContext()
+                new ThreadSafeAsyncConsumerState(
+                    new ThreadSafeAutoCommitState.AutoCommitEnabled(logContext, time, 1000),
+                    logContext, metadata, subscriptionState, time, RETRY_BACKOFF_MS, apiVersions
+                ),
+                logContext
         );
 
         Map<TopicPartition, Long> timestampsToSearch = Collections.singletonMap(TEST_PARTITION_1,

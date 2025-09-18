@@ -31,6 +31,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.apache.kafka.clients.consumer.internals.ThreadSafeAutoCommitState.AUTO_COMMIT_DISABLED;
 import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,17 +51,22 @@ public class RequestManagersTest {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
-        final ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitDisabled();
+        LogContext logContext = new LogContext();
+        MockTime time = new MockTime();
+        ConsumerMetadata metadata = mock(ConsumerMetadata.class);
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        ApiVersions apiVersions = mock(ApiVersions.class);
+        long retryBackoffMs = 1000L;
         final RequestManagers requestManagers = RequestManagers.supplier(
-            new MockTime(),
-            new LogContext(),
+            time,
+            logContext,
             mock(BackgroundEventHandler.class),
-            mock(ConsumerMetadata.class),
-            mock(SubscriptionState.class),
+            metadata,
+            subscriptions,
             mock(FetchBuffer.class),
             config,
             groupRebalanceConfig,
-            mock(ApiVersions.class),
+            apiVersions,
             mock(FetchMetricsManager.class),
             () -> mock(NetworkClientDelegate.class),
             Optional.empty(),
@@ -68,7 +74,7 @@ public class RequestManagersTest {
             mock(OffsetCommitCallbackInvoker.class),
             listener,
             Optional.empty(),
-            threadSafeConsumerState
+            new ThreadSafeAsyncConsumerState(AUTO_COMMIT_DISABLED, logContext, metadata, subscriptions, time, retryBackoffMs, apiVersions)
         ).get();
         assertTrue(requestManagers.consumerMembershipManager.isPresent());
         assertTrue(requestManagers.streamsMembershipManager.isEmpty());
@@ -92,17 +98,22 @@ public class RequestManagersTest {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
-        final ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.withAutoCommitDisabled();
+        LogContext logContext = new LogContext();
+        MockTime time = new MockTime();
+        ConsumerMetadata metadata = mock(ConsumerMetadata.class);
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        ApiVersions apiVersions = mock(ApiVersions.class);
+        long retryBackoffMs = 1000L;
         final RequestManagers requestManagers = RequestManagers.supplier(
-            new MockTime(),
-            new LogContext(),
+            time,
+            logContext,
             mock(BackgroundEventHandler.class),
-            mock(ConsumerMetadata.class),
-            mock(SubscriptionState.class),
+            metadata,
+            subscriptions,
             mock(FetchBuffer.class),
             config,
             groupRebalanceConfig,
-            mock(ApiVersions.class),
+            apiVersions,
             mock(FetchMetricsManager.class),
             () -> mock(NetworkClientDelegate.class),
             Optional.empty(),
@@ -110,7 +121,7 @@ public class RequestManagersTest {
             mock(OffsetCommitCallbackInvoker.class),
             listener,
             Optional.of(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of())),
-            threadSafeConsumerState
+            new ThreadSafeAsyncConsumerState(AUTO_COMMIT_DISABLED, logContext, metadata, subscriptions, time, retryBackoffMs, apiVersions)
         ).get();
         assertTrue(requestManagers.streamsMembershipManager.isPresent());
         assertTrue(requestManagers.streamsGroupHeartbeatRequestManager.isPresent());

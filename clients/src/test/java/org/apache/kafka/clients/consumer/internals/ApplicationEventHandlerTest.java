@@ -44,6 +44,7 @@ public class ApplicationEventHandlerTest {
     private final NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
     private final RequestManagers requestManagers = mock(RequestManagers.class);
     private final CompletableEventReaper applicationEventReaper = mock(CompletableEventReaper.class);
+    private final ThreadSafeConsumerState threadSafeConsumerState = mock(ThreadSafeConsumerState.class);
 
     @ParameterizedTest
     @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")
@@ -58,7 +59,8 @@ public class ApplicationEventHandlerTest {
                      () -> applicationEventProcessor,
                      () -> networkClientDelegate,
                      () -> requestManagers,
-                     asyncConsumerMetrics
+                     asyncConsumerMetrics,
+                     threadSafeConsumerState
              )) {
             // add event
             applicationEventHandler.add(new PollEvent(time.milliseconds()));

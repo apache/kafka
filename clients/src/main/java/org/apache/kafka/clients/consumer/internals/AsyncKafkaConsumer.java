@@ -325,8 +325,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
-    // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
-    private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
@@ -429,6 +427,17 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
+
+            ;
+            this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
+                ThreadSafeAutoCommitState.fromConfig(logContext, config, time),
+                logContext,
+                metadata,
+                subscriptions,
+                time,
+                retryBackoffMs,
+                apiVersions
+            );
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
                     logContext,
                     metadata,
@@ -439,11 +448,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
                     backgroundEventHandler,
                     false,
-                    asyncConsumerMetrics
+                    asyncConsumerMetrics,
+                    threadSafeConsumerState
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
-            this.threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(logContext, config, time);
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
                     backgroundEventHandler,
@@ -460,7 +469,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker,
                     memberStateListener,
                     streamsRebalanceData,
-                threadSafeConsumerState
+                    threadSafeConsumerState
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -474,7 +483,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier,
-                    asyncConsumerMetrics
+                    asyncConsumerMetrics,
+                    threadSafeConsumerState
             );
             this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
@@ -623,6 +633,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             new RebalanceCallbackMetricsManager(metrics)
         );
         ApiVersions apiVersions = new ApiVersions();
+        this.threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
+            ThreadSafeAutoCommitState.fromConfig(logContext, config, time),
+            logContext,
+            metadata,
+            subscriptions,
+            time,
+            retryBackoffMs,
+            apiVersions
+        );
         Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
             time,
             config,
@@ -631,10 +650,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             metadata,
             backgroundEventHandler,
             false,
-            asyncConsumerMetrics
+            asyncConsumerMetrics,
+            threadSafeConsumerState
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
-        this.threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(logContext, config, time);
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,
@@ -667,7 +686,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
-                asyncConsumerMetrics);
+                asyncConsumerMetrics,
+                threadSafeConsumerState);
         this.streamsRebalanceListenerInvoker = Optional.empty();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
         this.backgroundEventReaper = new CompletableEventReaper(logContext);
@@ -684,7 +704,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
             final Supplier<RequestManagers> requestManagersSupplier,
-            final AsyncConsumerMetrics asyncConsumerMetrics
+            final AsyncConsumerMetrics asyncConsumerMetrics,
+            final ThreadSafeConsumerState threadSafeConsumerState
         );
 
     }
@@ -1796,9 +1817,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
 
-        // NOTE: the use of cachedSubscriptionHasAllFetchPositions means we MUST call
+        // NOTE: for hasAllFetchPositions to return the correct answer, we MUST call
         // updateAssignmentMetadataIfNeeded before this method.
-        if (!cachedSubscriptionHasAllFetchPositions && pollTimeout > retryBackoffMs) {
+        if (!subscriptions.hasAllFetchPositions() && pollTimeout > retryBackoffMs) {
             pollTimeout = retryBackoffMs;
         }
 
@@ -1853,11 +1874,21 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                                       defined
      */
     private boolean updateFetchPositions(final Timer timer) {
-        cachedSubscriptionHasAllFetchPositions = false;
+        // Fetch position validation is in the hot path for poll() and the cost of thread interaction for
+        // event processing is *very* heavy, CPU-wise. In a stable system, the positions are valid; having the
+        // network thread check the validity yields the same answer 99%+ of the time. But calling the
+        // network thread to determine that is very expensive.
+        //
+        // Instead, let the *application thread* determine if any partitions need their positions updated. If not,
+        // the application thread can skip sending an event to the network thread that will simply end up coming
+        // to the same conclusion, albeit much slower.
+        if (threadSafeConsumerState.canSkipUpdateFetchPositions())
+            return true;
+
         try {
             CheckAndUpdatePositionsEvent checkAndUpdatePositionsEvent = new CheckAndUpdatePositionsEvent(calculateDeadlineMs(timer));
             wakeupTrigger.setActiveTask(checkAndUpdatePositionsEvent.future());
-            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(checkAndUpdatePositionsEvent);
+            applicationEventHandler.addAndGet(checkAndUpdatePositionsEvent);
         } catch (TimeoutException e) {
             return false;
         } finally {

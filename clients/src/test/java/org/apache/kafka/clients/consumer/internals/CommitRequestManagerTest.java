@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -138,10 +139,18 @@ public class CommitRequestManagerTest {
     @Test
     public void testOffsetFetchRequestStateToStringBase() {
         ConsumerConfig config = mock(ConsumerConfig.class);
-        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(
+        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
+            ThreadSafeAutoCommitState.fromConfig(
+                logContext,
+                config,
+                time
+            ),
             logContext,
-            config,
-            time
+            metadata,
+            subscriptionState,
+            time,
+            retryBackoffMs,
+            new ApiVersions()
         );
         CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
@@ -1575,10 +1584,18 @@ public class CommitRequestManagerTest {
             props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));
 
         ConsumerConfig config = new ConsumerConfig(props);
-        ThreadSafeConsumerState threadSafeConsumerState = ThreadSafeAsyncConsumerState.fromConfig(
+        ThreadSafeConsumerState threadSafeConsumerState = new ThreadSafeAsyncConsumerState(
+            ThreadSafeAutoCommitState.fromConfig(
+                logContext,
+                config,
+                time
+            ),
             logContext,
-            config,
-            time
+            metadata,
+            subscriptionState,
+            time,
+            retryBackoffMs,
+            new ApiVersions()
         );
         return spy(new CommitRequestManager(
                 this.time,

@@ -54,7 +54,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -93,12 +92,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
-
-    /**
-     * Exception that occurred while updating positions after the triggering event had already
-     * expired. It will be propagated and cleared on the next call to update fetch positions.
-     */
-    private final AtomicReference<Throwable> cachedUpdatePositionsException = new AtomicReference<>();
+    private final ThreadSafeExceptionReference positionsUpdateError;
 
     /**
      * This holds the last OffsetFetch request triggered to retrieve committed offsets to update
@@ -113,12 +107,12 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final ConsumerMetadata metadata,
                                  final IsolationLevel isolationLevel,
                                  final Time time,
-                                 final long retryBackoffMs,
                                  final int requestTimeoutMs,
                                  final long defaultApiTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final CommitRequestManager commitRequestManager,
+                                 final ThreadSafeAsyncConsumerState threadSafeConsumerState,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
@@ -139,13 +133,13 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
-        this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
-                time, retryBackoffMs, apiVersions);
+        this.offsetFetcherUtils = threadSafeConsumerState.offsetFetcherUtils();
         // Register the cluster metadata update callback. Note this only relies on the
         // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.
         this.metadata.addClusterUpdateListener(this);
         this.commitRequestManager = commitRequestManager;
+        this.positionsUpdateError = threadSafeConsumerState.positionsUpdateError();
     }
 
     private static class PendingFetchCommittedRequest {
@@ -231,8 +225,8 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * on {@link SubscriptionState#hasAllFetchPositions()}). It will complete immediately, with true, if all positions
      * are already available. If some positions are missing, the future will complete once the offsets are retrieved and positions are updated.
      */
-    public CompletableFuture<Boolean> updateFetchPositions(long deadlineMs) {
-        CompletableFuture<Boolean> result = new CompletableFuture<>();
+    public CompletableFuture<Void> updateFetchPositions(long deadlineMs) {
+        CompletableFuture<Void> result = new CompletableFuture<>();
 
         try {
             if (maybeCompleteWithPreviousException(result)) {
@@ -243,7 +237,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             if (subscriptionState.hasAllFetchPositions()) {
                 // All positions are already available
-                result.complete(true);
+                result.complete(null);
                 return result;
             }
 
@@ -252,7 +246,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 if (error != null) {
                     result.completeExceptionally(error);
                 } else {
-                    result.complete(subscriptionState.hasAllFetchPositions());
+                    result.complete(null);
                 }
             });
 
@@ -262,13 +256,8 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         return result;
     }
 
-    private boolean maybeCompleteWithPreviousException(CompletableFuture<Boolean> result) {
-        Throwable cachedException = cachedUpdatePositionsException.getAndSet(null);
-        if (cachedException != null) {
-            result.completeExceptionally(cachedException);
-            return true;
-        }
-        return false;
+    private boolean maybeCompleteWithPreviousException(CompletableFuture<Void> result) {
+        return positionsUpdateError.getClearAndRun(result::completeExceptionally);
     }
 
     /**
@@ -318,7 +307,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         result.whenComplete((__, error) -> {
             boolean updatePositionsExpired = time.milliseconds() >= deadlineMs;
             if (error != null && updatePositionsExpired) {
-                cachedUpdatePositionsException.set(error);
+                positionsUpdateError.set(error);
             }
         });
     }
