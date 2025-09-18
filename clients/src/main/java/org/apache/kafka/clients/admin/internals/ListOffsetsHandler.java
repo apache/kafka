@@ -245,7 +245,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     }
 
     public boolean isOldestTimstamp() {
-        return currentUnsupportedVersion != ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.get(
+        return currentUnsupportedVersion == ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.get(
                 ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size() - 1);
     }
 
