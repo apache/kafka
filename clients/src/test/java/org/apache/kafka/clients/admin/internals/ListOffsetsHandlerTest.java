@@ -248,9 +248,6 @@ public final class ListOffsetsHandlerTest {
         final Map<TopicPartition, Long> nonSpecificTimestampPartitions = new HashMap<>(offsetTimestampsByPartition);
         specificTimestampPartitions.forEach((k, v) -> nonSpecificTimestampPartitions.remove(k));
 
-        System.err.println("specificTimestampPartitions " + specificTimestampPartitions);
-        System.err.println("nonSpecificTimestampPartitions " + nonSpecificTimestampPartitions);
-
         // Unsupported version exceptions currently cannot be handled if there's no partition with a
         // MAX_TIMESTAMP spec...
         // TODO: fix the logic
