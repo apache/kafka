@@ -150,7 +150,7 @@ object StorageTool extends Logging {
     val initialControllers = namespace.getString("initial_controllers")
     val isStandalone = namespace.getBoolean("standalone")
     val staticVotersEmpty = config.quorumConfig.voters().isEmpty
-    formatter.setStaticVotersEmpty(staticVotersEmpty)
+    formatter.setHasDynamicQuorum(staticVotersEmpty)
     if (!staticVotersEmpty && (Option(initialControllers).isDefined || isStandalone)) {
       throw new TerseFailure("You cannot specify " +
         QuorumConfig.QUORUM_VOTERS_CONFIG + " and format the node " +

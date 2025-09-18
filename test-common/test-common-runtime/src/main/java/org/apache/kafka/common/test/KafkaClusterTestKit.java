@@ -503,7 +503,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     );
                     formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
                 }
-                formatter.setStaticVotersEmpty(true);
+                formatter.setHasDynamicQuorum(true);
             } else if (initialVoterSet.isPresent()) {
                 for (final var controllerNode : initialVoterSet.get().entrySet()) {
                     final var voterId = controllerNode.getKey();
@@ -521,7 +521,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     );
                 }
                 formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
-                formatter.setStaticVotersEmpty(true);
+                formatter.setHasDynamicQuorum(true);
             }
             formatter.run();
         } catch (Exception e) {

@@ -131,7 +131,7 @@ public class Formatter {
      * The initial KIP-853 voters.
      */
     private Optional<DynamicVoters> initialControllers = Optional.empty();
-    private boolean staticVotersEmpty = false;
+    private boolean hasDynamicQuorum = false;
 
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
@@ -217,8 +217,8 @@ public class Formatter {
         return this;
     }
 
-    public Formatter setStaticVotersEmpty(boolean staticVotersEmpty) {
-        this.staticVotersEmpty = staticVotersEmpty;
+    public Formatter setHasDynamicQuorum(boolean staticVotersEmpty) {
+        this.hasDynamicQuorum = staticVotersEmpty;
         return this;
     }
 
@@ -227,7 +227,7 @@ public class Formatter {
     }
 
     boolean hasDynamicQuorum() {
-        return staticVotersEmpty;
+        return hasDynamicQuorum;
     }
 
     public BootstrapMetadata bootstrapMetadata() {

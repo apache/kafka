@@ -200,7 +200,7 @@ public class FormatterTest {
             String newDirectoryId = Uuid.randomUuid().toString();
             formatter1.formatter
                 .setInitialControllers(DynamicVoters.parse("1@localhost:8020:" + originalDirectoryId))
-                .setStaticVotersEmpty(true)
+                .setHasDynamicQuorum(true)
                 .run();
             assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
                     "\nFormatting dynamic metadata voter directory " + testEnv.directory(0) +
@@ -428,7 +428,7 @@ public class FormatterTest {
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setInitialControllers(DynamicVoters.
                 parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
-            formatter1.formatter.setStaticVotersEmpty(true);
+            formatter1.formatter.setHasDynamicQuorum(true);
             formatter1.formatter.run();
             assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
             assertEquals(List.of(
@@ -462,7 +462,7 @@ public class FormatterTest {
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setInitialControllers(DynamicVoters.
                     parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
-            formatter1.formatter.setStaticVotersEmpty(true);
+            formatter1.formatter.setHasDynamicQuorum(true);
             assertTrue(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
                 "Cannot set kraft.version to 0 if controller.quorum.voters is empty " +
@@ -499,7 +499,7 @@ public class FormatterTest {
             formatter1.formatter.setInitialControllers(DynamicVoters.
                     parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
-            formatter1.formatter.setStaticVotersEmpty(true);
+            formatter1.formatter.setHasDynamicQuorum(true);
             formatter1.formatter.run();
             assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
         }
@@ -512,7 +512,7 @@ public class FormatterTest {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_8_IV0);
             // This MV does not support kraft.version = 1
-            formatter1.formatter.setStaticVotersEmpty(emptyStaticVoters);
+            formatter1.formatter.setHasDynamicQuorum(emptyStaticVoters);
             formatter1.formatter.run();
             if (emptyStaticVoters) {
                 assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
@@ -539,7 +539,7 @@ public class FormatterTest {
             formatter1.formatter.setFeatureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 1);
             formatter1.formatter.setInitialControllers(DynamicVoters.
                 parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
-            formatter1.formatter.setStaticVotersEmpty(true);
+            formatter1.formatter.setHasDynamicQuorum(true);
             if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_0_IV1)) {
                 assertDoesNotThrow(formatter1.formatter::run);
             } else {
