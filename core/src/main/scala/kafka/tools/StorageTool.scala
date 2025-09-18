@@ -149,8 +149,9 @@ object StorageTool extends Logging {
       })
     val initialControllers = namespace.getString("initial_controllers")
     val isStandalone = namespace.getBoolean("standalone")
-    if (!config.quorumConfig.voters().isEmpty &&
-      (Option(initialControllers).isDefined || isStandalone)) {
+    val staticVotersEmpty = config.quorumConfig.voters().isEmpty
+    formatter.setStaticVotersEmpty(staticVotersEmpty)
+    if (!staticVotersEmpty && (Option(initialControllers).isDefined || isStandalone)) {
       throw new TerseFailure("You cannot specify " +
         QuorumConfig.QUORUM_VOTERS_CONFIG + " and format the node " +
         "with --initial-controllers or --standalone. " +
@@ -165,8 +166,7 @@ object StorageTool extends Logging {
     }
     if (!namespace.getBoolean("no_initial_controllers") &&
       config.processRoles.contains(ProcessRole.ControllerRole) &&
-      config.quorumConfig.voters().isEmpty &&
-      formatter.initialVoters().isEmpty) {
+      staticVotersEmpty && formatter.initialVoters().isEmpty) {
           throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
             " is not set on this controller, you must specify one of the following: " +
             "--standalone, --initial-controllers, or --no-initial-controllers.");

@@ -181,18 +181,31 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.putIfAbsent(INTER_BROKER_LISTENER_NAME_CONFIG, brokerListenerName);
             props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, controllerListenerName);
 
-            StringBuilder quorumVoterStringBuilder = new StringBuilder();
-            String prefix = "";
-            for (int nodeId : nodes.controllerNodes().keySet()) {
-                quorumVoterStringBuilder.append(prefix).
-                    append(nodeId).
-                    append("@").
-                    append("localhost").
-                    append(":").
-                    append(socketFactoryManager.getOrCreatePortForListener(nodeId, controllerListenerName));
-                prefix = ",";
+            if (!standalone && initialVoterSet.isEmpty()) {
+                StringBuilder quorumVoterStringBuilder = new StringBuilder();
+                String prefix = "";
+                for (int nodeId : nodes.controllerNodes().keySet()) {
+                    quorumVoterStringBuilder.append(prefix).
+                        append(nodeId).
+                        append("@").
+                        append("localhost").
+                        append(":").
+                        append(socketFactoryManager.getOrCreatePortForListener(nodeId, controllerListenerName));
+                    prefix = ",";
+                }
+                props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, quorumVoterStringBuilder.toString());
+            } else {
+                StringBuilder bootstrapServersStringBuilder = new StringBuilder();
+                String prefix = "";
+                for (int nodeId : nodes.controllerNodes().keySet()) {
+                    bootstrapServersStringBuilder.append(prefix).
+                        append("localhost").
+                        append(":").
+                        append(socketFactoryManager.getOrCreatePortForListener(nodeId, controllerListenerName));
+                    prefix = ",";
+                }
+                props.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, bootstrapServersStringBuilder.toString());
             }
-            props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, quorumVoterStringBuilder.toString());
 
             // reduce log cleaner offset map memory usage
             props.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
@@ -276,7 +289,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Time.SYSTEM,
                         new Metrics(),
                         CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                        List.of(),
+                        QuorumConfig.parseBootstrapServers(config.quorumConfig().bootstrapServers()),
                         faultHandlerFactory,
                         socketFactoryManager.getOrCreateSocketFactory(node.id())
                     );
@@ -304,7 +317,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             Time.SYSTEM,
                             new Metrics(),
                             CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                            List.of(),
+                            QuorumConfig.parseBootstrapServers(config.quorumConfig().bootstrapServers()),
                             faultHandlerFactory,
                             socketFactoryManager.getOrCreateSocketFactory(node.id())
                         );
@@ -489,6 +502,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         )
                     );
                     formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
+                    formatter.setStaticVotersEmpty(true);
                 }
             } else if (initialVoterSet.isPresent()) {
                 for (final var controllerNode : initialVoterSet.get().entrySet()) {
@@ -507,6 +521,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     );
                 }
                 formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
+                formatter.setStaticVotersEmpty(true);
             }
             formatter.run();
         } catch (Exception e) {
