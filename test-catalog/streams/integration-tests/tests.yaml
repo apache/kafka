@@ -71,17 +71,13 @@ org.apache.kafka.streams.integration.IQv2EndpointToPartitionsIntegrationTest:
 - CLASSIC
 - STREAMS
 org.apache.kafka.streams.integration.IQv2IntegrationTest:
-- shouldFailNotStarted
-- shouldFailStopped
-- shouldFailUnknownStore
-- shouldFetchExplicitlyFromAllPartitions
-- shouldFetchFromPartition
-- shouldNotRequireQueryHandler
-- shouldRejectNonRunningActive
+- CLASSIC
+- STREAMS
 org.apache.kafka.streams.integration.IQv2StoreIntegrationTest:
 - verifyStore
 org.apache.kafka.streams.integration.IQv2VersionedStoreIntegrationTest:
-- verifyStore
+- CLASSIC
+- STREAMS
 org.apache.kafka.streams.integration.InternalTopicIntegrationTest:
 - shouldCompactAndDeleteTopicsForWindowStoreChangelogs
 - shouldCompactTopicsForKeyValueStoreChangelogs
