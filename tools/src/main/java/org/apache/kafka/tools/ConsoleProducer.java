@@ -131,8 +131,12 @@ public class ConsoleProducer {
         private final OptionSpec<Integer> socketBufferSizeOpt;
         private final OptionSpec<String> propertyOpt;
         private final OptionSpec<String> readerConfigOpt;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> producerPropertyOpt;
+        private OptionSpec<String> commandPropertyOpt;
+        @Deprecated(since = "4.2", forRemoval = true)
         private final OptionSpec<String> producerConfigOpt;
+        private OptionSpec<String> commandConfigOpt;
 
         public ConsoleProducerOptions(String[] args) {
             super(args);
@@ -250,11 +254,20 @@ public class ConsoleProducer {
                     .withRequiredArg()
                     .describedAs("config file")
                     .ofType(String.class);
-            producerPropertyOpt = parser.accepts("producer-property", "A mechanism to pass user-defined properties in the form key=value to the producer. ")
+            producerPropertyOpt = parser.accepts("producer-property", "(DEPRECATED) A mechanism to pass user-defined properties in the form key=value to the producer." +
+                            "This option will be removed in a future version. Use --command-property instead.")
                     .withRequiredArg()
                     .describedAs("producer_prop")
                     .ofType(String.class);
-            producerConfigOpt = parser.accepts("producer.config", "Producer config properties file. Note that " + producerPropertyOpt + " takes precedence over this config.")
+            commandPropertyOpt = parser.accepts("command-property", "A mechanism to pass user-defined properties in the form key=value to the producer.")
+                    .withRequiredArg()
+                    .describedAs("producer_prop")
+                    .ofType(String.class);
+            producerConfigOpt = parser.accepts("producer.config", "(DEPRECATED) Producer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config. This option will be removed in a future version. Use --command-config instead.")
+                    .withRequiredArg()
+                    .describedAs("config file")
+                    .ofType(String.class);
+            commandConfigOpt = parser.accepts("command-config", "Producer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config.")
                     .withRequiredArg()
                     .describedAs("config file")
                     .ofType(String.class);
@@ -272,6 +285,23 @@ public class ConsoleProducer {
             CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from standard input and publish it to Kafka.");
 
             CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
+
+            if (options.has(commandConfigOpt) && options.has(producerConfigOpt)) {
+                CommandLineUtils.printUsageAndExit(parser, "Options --command-config and --producer.config cannot be specified together.");
+            }
+            if (options.has(commandPropertyOpt) && options.has(producerPropertyOpt)) {
+                CommandLineUtils.printUsageAndExit(parser, "Options --command-property and --producer-property cannot be specified together.");
+            }
+
+            if (options.has(producerPropertyOpt)) {
+                System.out.println("Warning: --producer-property is deprecated and will be removed in a future version. Use --command-property instead.");
+                commandPropertyOpt = producerPropertyOpt;
+            }
+
+            if (options.has(producerConfigOpt)) {
+                System.out.println("Warning: --producer.config is deprecated and will be removed in a future version. Use --command-config instead.");
+                commandConfigOpt = producerConfigOpt;
+            }
 
             try {
                 ToolsUtils.validateBootstrapServer(options.valueOf(bootstrapServerOpt));
@@ -314,11 +344,11 @@ public class ConsoleProducer {
         Properties producerProps() throws IOException {
             Properties props = new Properties();
 
-            if (options.has(producerConfigOpt)) {
-                props.putAll(loadProps(options.valueOf(producerConfigOpt)));
+            if (options.has(commandConfigOpt)) {
+                props.putAll(loadProps(options.valueOf(commandConfigOpt)));
             }
 
-            props.putAll(parseKeyValueArgs(options.valuesOf(producerPropertyOpt)));
+            props.putAll(parseKeyValueArgs(options.valuesOf(commandPropertyOpt)));
             props.put(BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOpt));
             props.put(COMPRESSION_TYPE_CONFIG, compressionCodec());
 
