@@ -77,7 +77,7 @@ class ShareConsumerPerformanceService(PerformanceService):
         """Dictionary of arguments used to start the Share Consumer Performance script."""
         args = {
             'topic': self.topic,
-            'messages': self.messages,
+            'num-records': self.messages,
             'bootstrap-server': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'group': self.group,
             'timeout': self.timeout
