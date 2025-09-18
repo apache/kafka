@@ -102,6 +102,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -169,6 +171,7 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("unchecked")
 public class AsyncKafkaConsumerTest {
 
+    private static final Logger log = LoggerFactory.getLogger(AsyncKafkaConsumerTest.class);
     private AsyncKafkaConsumer<String, String> consumer = null;
     private Time time = new MockTime(0);
     private final Metrics metrics = new Metrics();
@@ -1677,7 +1680,7 @@ public class AsyncKafkaConsumerTest {
         markReconcileAndAutoCommitCompleteForPollEvent();
         markResultForCompositePollEvent(CompositePollEvent.State.COMPLETE);
         consumer.poll(Duration.ofMillis(100));
-        verify(applicationEventHandler).addAndGet(any(CompositePollEvent.class));
+        verify(applicationEventHandler).add(any(CompositePollEvent.class));
     }
 
     private Properties requiredConsumerConfigAndGroupId(final String groupId) {
@@ -2255,26 +2258,33 @@ public class AsyncKafkaConsumerTest {
 
     private void markResultForCompositePollEvent(CompositePollEvent.State state) {
         doAnswer(invocation -> {
-            if (Thread.currentThread().isInterrupted())
-                throw new InterruptException("Test interrupt");
+            CompositePollEvent event = invocation.getArgument(0);
+            log.error("Am I invoked: {}", event);
 
+            if (Thread.currentThread().isInterrupted())
+                event.blocker().completeExceptionally(new InterruptException("Test interrupt"));
+
+            event.blocker().complete(state);
             return state;
-        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(CompositePollEvent.class));
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CompositePollEvent.class));
     }
 
     private void markResultForCompositePollEvent(Collection<CompositePollEvent.State> states) {
         LinkedList<CompositePollEvent.State> statesQueue = new LinkedList<>(states);
 
         doAnswer(invocation -> {
+            CompositePollEvent event = invocation.getArgument(0);
+            log.error("Am I invoked: {}", event);
             CompositePollEvent.State state = statesQueue.poll();
 
             if (state == null)
-                throw new IllegalStateException("The array of " + CompositePollEvent.State.class.getSimpleName() + " did not provide enough values");
+                event.blocker().completeExceptionally(new KafkaException("The array of " + CompositePollEvent.State.class.getSimpleName() + " did not provide enough values"));
 
             if (Thread.currentThread().isInterrupted())
-                throw new InterruptException("Test interrupt");
+                event.blocker().completeExceptionally(new InterruptException("Test interrupt"));
 
+            event.blocker().complete(state);
             return state;
-        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(CompositePollEvent.class));
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CompositePollEvent.class));
     }
 }

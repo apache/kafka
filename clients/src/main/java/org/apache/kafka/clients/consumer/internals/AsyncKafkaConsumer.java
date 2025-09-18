@@ -882,7 +882,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
                 prepareFetch(timer);
-                final Fetch<K, V> fetch = collectFetch();
+                final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
@@ -914,31 +914,42 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long deadlineMs = calculateDeadlineMs(timer);
         ApplicationEvent.Type nextEventType = ApplicationEvent.Type.POLL;
 
+        log.debug("prepareFetch - timer: {}", timer.remainingMs());
+
+        Timer blockerTimer = time.timer(defaultApiTimeoutMs.toMillis());
+
         while (true) {
             CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextEventType);
+            applicationEventHandler.add(event);
+
             CompositePollEvent.State state;
+            wakeupTrigger.setFetchAction(event);
 
             try {
-                state = applicationEventHandler.addAndGet(event);
+                state = event.blocker().await(blockerTimer);
             } catch (TimeoutException e) {
                 // Timeouts are OK, there's just no data to return on this pass.
-                break;
+                return;
+            } catch (InterruptException e) {
+                log.trace("Interrupt during composite poll", e);
+                throw e;
+            } finally {
+                timer.update(blockerTimer.currentTimeMs());
+                wakeupTrigger.clearTask();
             }
 
-            if (state == CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED) {
+            if (state == null || state == CompositePollEvent.State.COMPLETE) {
+                break;
+            } else if (state == CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED) {
                 offsetCommitCallbackInvoker.executeCallbacks();
                 nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
             } else if (state == CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED) {
                 processBackgroundEvents();
                 nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
-            } else if (state == CompositePollEvent.State.COMPLETE) {
-                break;
             } else {
                 throw new IllegalStateException("Unexpected state: " + state);
             }
         }
-
-        timer.update();
     }
 
     /**

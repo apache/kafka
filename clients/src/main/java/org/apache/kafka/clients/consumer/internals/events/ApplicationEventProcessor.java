@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.OffsetCommitCallbackInvoker;
@@ -48,6 +49,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -292,14 +294,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
             // This is a bit tricky... The CompositePollEvent should be "paused" from being reaped while the code
             // for new CheckAndUpdatePositionsEvent is in flight.
-            applicationEventReaper.pause(event);
             CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs());
             applicationEventReaper.add(new CompositePollPsuedoEvent<>(updatePositionsFuture, event.deadlineMs()));
 
             updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
                 // Make sure to resume the CompositePollEvent *before* checking for failure so that it is assured
                 // to be resumed.
-                applicationEventReaper.resume(event);
 
                 if (maybeFailCompositePoll(event, updatePositionsError))
                     return;
@@ -309,15 +309,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                     if (maybeFailCompositePoll(event, fetchError))
                         return;
 
-                    log.trace("Completing CompositePollEvent {}", event);
-                    event.future().complete(CompositePollEvent.State.COMPLETE);
+                    event.blocker().complete(CompositePollEvent.State.COMPLETE);
+                    log.trace("Completed CompositePollEvent {}", event);
                 });
             });
 
             return;
         }
 
-        event.future().completeExceptionally(new IllegalArgumentException("Unknown next step for composite poll: " + nextEventType));
+        event.blocker().completeExceptionally(new KafkaException("Unknown next step for composite poll: " + nextEventType));
     }
 
     private boolean maybePauseCompositePoll(CompositePollEvent event, RequiresApplicationThreadExecution test) {
@@ -325,8 +325,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return false;
 
         CompositePollEvent.State targetState = test.targetState();
+        event.blocker().complete(targetState);
         log.trace("Pausing CompositePollEvent {} to process logic for target state {}", event, targetState);
-        event.future().complete(targetState);
         return true;
     }
 
@@ -342,8 +342,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return false;
         }
 
+        if (t instanceof CompletionException) {
+            t = t.getCause();
+        }
+
+        event.blocker().completeExceptionally(ConsumerUtils.maybeWrapAsKafkaException(t));
         log.trace("Failing CompositePollEvent {}", event, t);
-        event.future().completeExceptionally(t);
         return true;
     }
 
@@ -353,7 +357,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (exception.isPresent()) {
             Exception e = exception.get();
             log.trace("Failing CompositePollEvent {} with error from NetworkClient", event, e);
-            event.future().completeExceptionally(e);
+            event.blocker().completeExceptionally(ConsumerUtils.maybeWrapAsKafkaException(e));
             return true;
         }
 
