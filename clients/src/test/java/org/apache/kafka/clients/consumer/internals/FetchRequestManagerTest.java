@@ -4127,7 +4127,7 @@ public class FetchRequestManagerTest {
         properties.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
         properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConsumerConfig config = new ConsumerConfig(properties);
-        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, true));
+        networkClientDelegate = spy(new TestableNetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler));
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {
@@ -4212,9 +4212,8 @@ public class FetchRequestManagerTest {
                                              LogContext logContext,
                                              KafkaClient client,
                                              Metadata metadata,
-                                             BackgroundEventHandler backgroundEventHandler,
-                                             boolean notifyMetadataErrorsViaErrorQueue) {
-            super(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));
+                                             BackgroundEventHandler backgroundEventHandler) {
+            super(time, config, logContext, client, metadata, backgroundEventHandler, mock(AsyncConsumerMetrics.class));
         }
 
         @Override

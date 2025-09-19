@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.events.CompositePollEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
 
@@ -50,10 +49,6 @@ public class WakeupTrigger {
                 // will be ignored. If it was already completed, we then need to return a new WakeupFuture so that the
                 // next call to setActiveTask will throw the WakeupException.
                 return wasTriggered ? null : new WakeupFuture();
-            } else if (task instanceof CompositePollEventAction) {
-                CompositePollEventAction compositePollEventAction = (CompositePollEventAction) task;
-                compositePollEventAction.event().blocker().completeExceptionally(new WakeupException());
-                return new WakeupFuture();
             } else if (task instanceof FetchAction) {
                 FetchAction fetchAction = (FetchAction) task;
                 fetchAction.fetchBuffer().wakeup();
@@ -92,25 +87,6 @@ public class WakeupTrigger {
             throw new KafkaException("Last active task is still active");
         });
         return currentTask;
-    }
-
-    public void setFetchAction(final CompositePollEvent event) {
-        final AtomicBoolean throwWakeupException = new AtomicBoolean(false);
-        pendingTask.getAndUpdate(task -> {
-            if (task == null) {
-                return new CompositePollEventAction(event);
-            } else if (task instanceof WakeupFuture) {
-                throwWakeupException.set(true);
-                return null;
-            } else if (task instanceof DisabledWakeups) {
-                return task;
-            }
-            // last active state is still active
-            throw new IllegalStateException("Last active task is still active");
-        });
-        if (throwWakeupException.get()) {
-            throw new WakeupException();
-        }
     }
 
     public void setFetchAction(final FetchBuffer fetchBuffer) {
@@ -159,7 +135,7 @@ public class WakeupTrigger {
         pendingTask.getAndUpdate(task -> {
             if (task == null) {
                 return null;
-            } else if (task instanceof ActiveFuture || task instanceof CompositePollEventAction || task instanceof FetchAction || task instanceof ShareFetchAction) {
+            } else if (task instanceof ActiveFuture || task instanceof FetchAction || task instanceof ShareFetchAction) {
                 return null;
             }
             return task;
@@ -205,19 +181,6 @@ public class WakeupTrigger {
     }
 
     static class WakeupFuture implements Wakeupable { }
-
-    static class CompositePollEventAction implements Wakeupable {
-
-        private final CompositePollEvent event;
-
-        public CompositePollEventAction(CompositePollEvent event) {
-            this.event = event;
-        }
-
-        public CompositePollEvent event() {
-            return event;
-        }
-    }
 
     static class FetchAction implements Wakeupable {
 

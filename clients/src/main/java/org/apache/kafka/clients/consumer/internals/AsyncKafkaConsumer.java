@@ -362,8 +362,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
-    // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
-    private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
@@ -475,7 +473,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     fetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
                     backgroundEventHandler,
-                    false,
                     asyncConsumerMetrics
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
@@ -669,7 +666,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             client,
             metadata,
             backgroundEventHandler,
-            false,
             asyncConsumerMetrics
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
@@ -882,7 +878,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
                 prepareFetch(timer);
-                final Fetch<K, V> fetch = collectFetch();
+                final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
@@ -916,39 +912,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         log.debug("prepareFetch - timer: {}", timer.remainingMs());
 
-        while (true) {
-            CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextEventType);
-            applicationEventHandler.add(event);
+        processBackgroundEvents();
+        offsetCommitCallbackInvoker.executeCallbacks();
 
-            CompositePollEvent.State state;
-            wakeupTrigger.setFetchAction(event);
-
-            try {
-                Timer blockerTimer = time.timer(defaultApiTimeoutMs.toMillis());
-                state = event.blocker().await(blockerTimer);
-            } catch (TimeoutException e) {
-                // Timeouts are OK, there's just no data to return on this pass.
-                return;
-            } catch (InterruptException e) {
-                log.trace("Interrupt during composite poll", e);
-                throw e;
-            } finally {
-                timer.update();
-                wakeupTrigger.clearTask();
-            }
-
-            if (state == null || state == CompositePollEvent.State.COMPLETE) {
-                break;
-            } else if (state == CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED) {
-                offsetCommitCallbackInvoker.executeCallbacks();
-                nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
-            } else if (state == CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED) {
-                processBackgroundEvents();
-                nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
-            } else {
-                throw new IllegalStateException("Unexpected state: " + state);
-            }
-        }
+        CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextEventType);
+        applicationEventHandler.add(event);
     }
 
     /**
@@ -1191,6 +1159,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 Map<String, List<PartitionInfo>> topicMetadata =
                         applicationEventHandler.addAndGet(topicMetadataEvent);
 
+                processBackgroundEvents();
                 return topicMetadata.getOrDefault(topic, Collections.emptyList());
             } finally {
                 wakeupTrigger.clearTask();
@@ -1216,7 +1185,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final AllTopicsMetadataEvent topicMetadataEvent = new AllTopicsMetadataEvent(calculateDeadlineMs(time, timeout));
             wakeupTrigger.setActiveTask(topicMetadataEvent.future());
             try {
-                return applicationEventHandler.addAndGet(topicMetadataEvent);
+                Map<String, List<PartitionInfo>> map = applicationEventHandler.addAndGet(topicMetadataEvent);
+                processBackgroundEvents();
+                return map;
             } finally {
                 wakeupTrigger.clearTask();
             }
@@ -1298,6 +1269,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             try {
                 Map<TopicPartition, OffsetAndTimestampInternal> offsets = applicationEventHandler.addAndGet(listOffsetsEvent);
+                processBackgroundEvents();
                 Map<TopicPartition, OffsetAndTimestamp> results = new HashMap<>(offsets.size());
                 offsets.forEach((k, v) -> results.put(k, v != null ? v.buildOffsetAndTimestamp() : null));
                 return results;
@@ -1363,6 +1335,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
             try {
                 offsetAndTimestampMap = applicationEventHandler.addAndGet(listOffsetsEvent);
+                processBackgroundEvents();
                 return offsetAndTimestampMap.entrySet()
                     .stream()
                     .collect(Collectors.toMap(
@@ -1833,18 +1806,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return fetch;
         }
 
-        // send any new fetches (won't resend pending fetches)
-        sendFetches(timer);
-
-        // We do not want to be stuck blocking in poll if we are missing some positions
-        // since the offset lookup may be backing off after a failure
-
-        // NOTE: the use of cachedSubscriptionHasAllFetchPositions means we MUST call
-        // updateAssignmentMetadataIfNeeded before this method.
-        if (!cachedSubscriptionHasAllFetchPositions && pollTimeout > retryBackoffMs) {
-            pollTimeout = retryBackoffMs;
-        }
-
         log.trace("Polling for fetches with timeout {}", pollTimeout);
 
         Timer pollTimer = time.timer(pollTimeout);
@@ -1891,11 +1852,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *                                       defined
      */
     private boolean updateFetchPositions(final Timer timer) {
-        cachedSubscriptionHasAllFetchPositions = false;
         try {
             CheckAndUpdatePositionsEvent checkAndUpdatePositionsEvent = new CheckAndUpdatePositionsEvent(calculateDeadlineMs(timer));
             wakeupTrigger.setActiveTask(checkAndUpdatePositionsEvent.future());
-            cachedSubscriptionHasAllFetchPositions = applicationEventHandler.addAndGet(checkAndUpdatePositionsEvent);
+            applicationEventHandler.addAndGet(checkAndUpdatePositionsEvent);
         } catch (TimeoutException e) {
             return false;
         } finally {
@@ -1911,41 +1871,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private boolean isCommittedOffsetsManagementEnabled() {
         return groupMetadata.get().isPresent();
-    }
-
-    /**
-     * This method signals the background thread to {@link CreateFetchRequestsEvent create fetch requests}.
-     *
-     * <p/>
-     *
-     * This method takes the following steps to maintain compatibility with the {@link ClassicKafkaConsumer} method
-     * of the same name:
-     *
-     * <ul>
-     *     <li>
-     *         The method will wait for confirmation of the request creation before continuing.
-     *     </li>
-     *     <li>
-     *         The method will throw exceptions encountered during request creation to the user <b>immediately</b>.
-     *     </li>
-     *     <li>
-     *         The method will suppress {@link TimeoutException}s that occur while waiting for the confirmation.
-     *         Timeouts during request creation are a byproduct of this consumer's thread communication mechanisms.
-     *         That exception type isn't thrown in the request creation step of the {@link ClassicKafkaConsumer}.
-     *         Additionally, timeouts will not impact the logic of {@link #pollForFetches(Timer) blocking requests}
-     *         as it can handle requests that are created after the timeout.
-     *     </li>
-     * </ul>
-     *
-     * @param timer Timer used to bound how long the consumer waits for the requests to be created, which in practice
-     *              is used to avoid using {@link Long#MAX_VALUE} to wait "forever"
-     */
-    private void sendFetches(Timer timer) {
-        try {
-            applicationEventHandler.addAndGet(new CreateFetchRequestsEvent(calculateDeadlineMs(timer)));
-        } catch (TimeoutException swallow) {
-            // Can be ignored, per above comments.
-        }
     }
 
     /**

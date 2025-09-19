@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.Blocker;
-
 public class CompositePollEvent extends ApplicationEvent {
 
     public enum State {
@@ -30,14 +28,12 @@ public class CompositePollEvent extends ApplicationEvent {
     private final long deadlineMs;
     private final long pollTimeMs;
     private final Type nextEventType;
-    private final Blocker<State> blocker;
 
     public CompositePollEvent(long deadlineMs, long pollTimeMs, Type nextEventType) {
         super(Type.COMPOSITE_POLL);
         this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
         this.nextEventType = nextEventType;
-        this.blocker = new Blocker<>();
     }
 
     public long deadlineMs() {
@@ -52,12 +48,8 @@ public class CompositePollEvent extends ApplicationEvent {
         return nextEventType;
     }
 
-    public Blocker<State> blocker() {
-        return blocker;
-    }
-
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", deadlineMs=" + deadlineMs + ", pollTimeMs=" + pollTimeMs + ", nextEventType=" + nextEventType + ", blocker=" + blocker;
+        return super.toStringBase() + ", deadlineMs=" + deadlineMs + ", pollTimeMs=" + pollTimeMs + ", nextEventType=" + nextEventType;
     }
 }

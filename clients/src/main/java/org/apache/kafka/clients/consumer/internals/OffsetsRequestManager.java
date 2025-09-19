@@ -26,6 +26,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
@@ -53,8 +55,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -84,6 +86,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final Logger log;
     private final OffsetFetcherUtils offsetFetcherUtils;
     private final SubscriptionState subscriptionState;
+    private final BackgroundEventHandler backgroundEventHandler;
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
@@ -93,12 +96,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private final NetworkClientDelegate networkClientDelegate;
     private final CommitRequestManager commitRequestManager;
     private final long defaultApiTimeoutMs;
-
-    /**
-     * Exception that occurred while updating positions after the triggering event had already
-     * expired. It will be propagated and cleared on the next call to update fetch positions.
-     */
-    private final AtomicReference<Throwable> cachedUpdatePositionsException = new AtomicReference<>();
 
     /**
      * This holds the last OffsetFetch request triggered to retrieve committed offsets to update
@@ -111,6 +108,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
                                  final ConsumerMetadata metadata,
+                                 final BackgroundEventHandler backgroundEventHandler,
                                  final IsolationLevel isolationLevel,
                                  final Time time,
                                  final long retryBackoffMs,
@@ -122,6 +120,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
+        requireNonNull(backgroundEventHandler);
         requireNonNull(isolationLevel);
         requireNonNull(time);
         requireNonNull(apiVersions);
@@ -134,6 +133,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.requestsToRetry = new HashSet<>();
         this.requestsToSend = new ArrayList<>();
         this.subscriptionState = subscriptionState;
+        this.backgroundEventHandler = backgroundEventHandler;
         this.time = time;
         this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
@@ -235,10 +235,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         CompletableFuture<Boolean> result = new CompletableFuture<>();
 
         try {
-            if (maybeCompleteWithPreviousException(result)) {
-                return result;
-            }
-
             validatePositionsIfNeeded();
 
             if (subscriptionState.hasAllFetchPositions()) {
@@ -260,15 +256,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             result.completeExceptionally(maybeWrapAsKafkaException(e));
         }
         return result;
-    }
-
-    private boolean maybeCompleteWithPreviousException(CompletableFuture<Boolean> result) {
-        Throwable cachedException = cachedUpdatePositionsException.getAndSet(null);
-        if (cachedException != null) {
-            result.completeExceptionally(cachedException);
-            return true;
-        }
-        return false;
     }
 
     /**
@@ -318,7 +305,12 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         result.whenComplete((__, error) -> {
             boolean updatePositionsExpired = time.milliseconds() >= deadlineMs;
             if (error != null && updatePositionsExpired) {
-                cachedUpdatePositionsException.set(error);
+                log.debug("Adding error: {}", error.getClass());
+
+                if (error instanceof CompletionException)
+                    error = error.getCause();
+
+                backgroundEventHandler.add(new ErrorEvent(error));
             }
         });
     }
@@ -334,12 +326,19 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * @throws NoOffsetForPartitionException If no reset strategy is configured.
      */
     private CompletableFuture<Void> initWithPartitionOffsetsIfNeeded(Set<TopicPartition> initializingPartitions) {
+        log.debug("initWithPartitionOffsetsIfNeeded - initializingPartitions: {}", initializingPartitions);
         CompletableFuture<Void> result = new CompletableFuture<>();
         try {
             // Mark partitions that need reset, using the configured reset strategy. If no
             // strategy is defined, this will raise a NoOffsetForPartitionException exception.
             subscriptionState.resetInitializingPositions(initializingPartitions::contains);
         } catch (Exception e) {
+            Throwable t = e;
+
+            if (t instanceof CompletionException)
+                t = t.getCause();
+
+            backgroundEventHandler.add(new ErrorEvent(t));
             result.completeExceptionally(e);
             return result;
         }
@@ -366,7 +365,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             return CompletableFuture.completedFuture(null);
         }
 
-        log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
+        log.debug("initWithCommittedOffsetsIfNeeded - initializingPartitions: {}", initializingPartitions);
         CompletableFuture<Void> result = new CompletableFuture<>();
 
         // The shorter the timeout provided to poll(), the more likely the offsets fetch will time out. To handle
@@ -374,6 +373,8 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
         // case it times out, subsequent attempts will also use the event in order to wait for the results.
         if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
+            log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
+
             // Generate a new OffsetFetch request and update positions when a response is received
             final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsets =
@@ -409,11 +410,14 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private void refreshOffsets(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                 final Throwable error,
                                 final CompletableFuture<Void> result) {
+        log.debug("refreshOffsets - offsets: {}, partitions: {}", offsets, String.valueOf(error));
+
         if (error == null) {
 
             // Ensure we only set positions for the partitions that still require one (ex. some partitions may have
             // been assigned a position manually)
             Map<TopicPartition, OffsetAndMetadata> offsetsToApply = offsetsForInitializingPartitions(offsets);
+            log.debug("refreshOffsets - offsetsToApply: {}", offsetsToApply);
 
             refreshCommittedOffsets(offsetsToApply, metadata, subscriptionState);
 
@@ -458,6 +462,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             return false;
         }
 
+        log.debug("canReusePendingOffsetFetchEvent - pendingOffsetFetchEvent.requestedPartitions: {}, partitions: {}", pendingOffsetFetchEvent.requestedPartitions, partitions);
         return pendingOffsetFetchEvent.requestedPartitions.equals(partitions);
     }
 
@@ -472,11 +477,15 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
      */
     CompletableFuture<Void> resetPositionsIfNeeded() {
+        log.debug("resetPositionsIfNeeded");
         Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap;
 
         try {
             partitionAutoOffsetResetStrategyMap = offsetFetcherUtils.getOffsetResetStrategyForPartitions();
         } catch (Exception e) {
+            log.debug("resetPositionsIfNeeded - e: {}", e.toString());
+
+            backgroundEventHandler.add(new ErrorEvent(e.getCause()));
             CompletableFuture<Void> result = new CompletableFuture<>();
             result.completeExceptionally(e);
             return result;

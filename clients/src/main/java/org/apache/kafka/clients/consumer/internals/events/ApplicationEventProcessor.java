@@ -69,6 +69,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final RequiresApplicationThreadExecution backgroundEventProcessingRequiredTest;
     private final RequiresApplicationThreadExecution offsetCommitCallbackInvocationRequiredTest;
     private final CompletableEventReaper applicationEventReaper;
+    private final BackgroundEventHandler backgroundEventHandler;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
@@ -85,33 +86,14 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.applicationEventReaper = applicationEventReaper;
+        this.backgroundEventHandler = backgroundEventHandler;
         this.metadataVersionSnapshot = metadata.updateVersion();
 
         // If there are background events to process, exit to the application thread.
-        this.backgroundEventProcessingRequiredTest = new RequiresApplicationThreadExecution() {
-            @Override
-            public boolean requiresApplicationThread() {
-                return backgroundEventHandler.size() > 0;
-            }
-
-            @Override
-            public CompositePollEvent.State targetState() {
-                return CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED;
-            }
-        };
+        this.backgroundEventProcessingRequiredTest = () -> backgroundEventHandler.size() > 0;
 
         // If there are enqueued callbacks to invoke, exit to the application thread.
-        this.offsetCommitCallbackInvocationRequiredTest = new RequiresApplicationThreadExecution() {
-            @Override
-            public boolean requiresApplicationThread() {
-                return offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
-            }
-
-            @Override
-            public CompositePollEvent.State targetState() {
-                return CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED;
-            }
-        };
+        this.offsetCommitCallbackInvocationRequiredTest = () -> offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "JavaNCSSCheck"})
@@ -264,7 +246,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final CompositePollEvent event) {
-        if (maybeFailCompositePoll(event))
+        if (maybePauseCompositePoll())
             return;
 
         ApplicationEvent.Type nextEventType = event.nextEventType();
@@ -272,9 +254,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (nextEventType == ApplicationEvent.Type.POLL) {
             processPollEvent(event.pollTimeMs());
 
-            if (maybeFailCompositePoll(event))
-                return;
-            else if (maybePauseCompositePoll(event, offsetCommitCallbackInvocationRequiredTest))
+            if (maybePauseCompositePoll())
                 return;
 
             nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
@@ -283,33 +263,25 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (nextEventType == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
             processUpdatePatternSubscriptionEvent();
 
-            if (maybeFailCompositePoll(event))
-                return;
-            else if (maybePauseCompositePoll(event, backgroundEventProcessingRequiredTest))
+            if (maybePauseCompositePoll())
                 return;
 
             nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
         }
 
         if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
-            // This is a bit tricky... The CompositePollEvent should be "paused" from being reaped while the code
-            // for new CheckAndUpdatePositionsEvent is in flight.
             CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs());
             applicationEventReaper.add(new CompositePollPsuedoEvent<>(updatePositionsFuture, event.deadlineMs()));
 
             updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
-                // Make sure to resume the CompositePollEvent *before* checking for failure so that it is assured
-                // to be resumed.
-
-                if (maybeFailCompositePoll(event, updatePositionsError))
+                if (maybeFailCompositePoll(event, updatePositionsError) || maybePauseCompositePoll())
                     return;
 
                 // If needed, create a fetch request if there's no data in the FetchBuffer.
                 requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
-                    if (maybeFailCompositePoll(event, fetchError))
+                    if (maybeFailCompositePoll(event, fetchError) || maybePauseCompositePoll())
                         return;
 
-                    event.blocker().complete(CompositePollEvent.State.COMPLETE);
                     log.trace("Completed CompositePollEvent {}", event);
                 });
             });
@@ -317,23 +289,20 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
 
-        event.blocker().completeExceptionally(new KafkaException("Unknown next step for composite poll: " + nextEventType));
+        log.warn("Unknown next step for composite poll: {}", nextEventType);
     }
 
-    private boolean maybePauseCompositePoll(CompositePollEvent event, RequiresApplicationThreadExecution test) {
-        if (!test.requiresApplicationThread())
-            return false;
+    private boolean maybePauseCompositePoll() {
+        if (backgroundEventProcessingRequiredTest.requiresApplicationThread())
+            return true;
 
-        CompositePollEvent.State targetState = test.targetState();
-        event.blocker().complete(targetState);
-        log.trace("Pausing CompositePollEvent {} to process logic for target state {}", event, targetState);
-        return true;
+        if (offsetCommitCallbackInvocationRequiredTest.requiresApplicationThread())
+            return true;
+
+        return false;
     }
 
     private boolean maybeFailCompositePoll(CompositePollEvent event, Throwable t) {
-        if (maybeFailCompositePoll(event))
-            return true;
-
         if (t == null)
             return false;
 
@@ -346,22 +315,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             t = t.getCause();
         }
 
-        event.blocker().completeExceptionally(ConsumerUtils.maybeWrapAsKafkaException(t));
+        backgroundEventHandler.add(new ErrorEvent(t));
         log.trace("Failing CompositePollEvent {}", event, t);
         return true;
-    }
-
-    private boolean maybeFailCompositePoll(CompositePollEvent event) {
-        Optional<Exception> exception = networkClientDelegate.getAndClearMetadataError();
-
-        if (exception.isPresent()) {
-            Exception e = exception.get();
-            log.trace("Failing CompositePollEvent {} with error from NetworkClient", event, e);
-            event.blocker().completeExceptionally(ConsumerUtils.maybeWrapAsKafkaException(e));
-            return true;
-        }
-
-        return false;
     }
 
     private void process(final PollEvent event) {
@@ -962,8 +918,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private interface RequiresApplicationThreadExecution {
 
         boolean requiresApplicationThread();
-
-        CompositePollEvent.State targetState();
     }
 
     private static class CompositePollPsuedoEvent<T> implements CompletableEvent<T> {
