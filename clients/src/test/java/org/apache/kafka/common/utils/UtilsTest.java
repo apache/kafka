@@ -42,6 +42,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.spi.FileSystemProvider;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
@@ -106,68 +108,31 @@ public class UtilsTest {
     @Test
     public void testMurmur2() {
         Map<byte[], Integer> cases = new java.util.HashMap<>();
-        cases.put("".getBytes(), 275646681);
-        cases.put("7".getBytes(), -1961297549);
         cases.put("21".getBytes(), -973932308);
-        cases.put("abc".getBytes(), 479470107);
-        cases.put("|;‑)".getBytes(), -2060539007);
-        cases.put("12345".getBytes(), -1188365604);
         cases.put("foobar".getBytes(), -790332482);
-        cases.put("7654321".getBytes(), -951606273);
-        cases.put("universe".getBytes(), 609568444);
         cases.put("a-little-bit-long-string".getBytes(), -985981536);
         cases.put("a-little-bit-longer-string".getBytes(), -1486304829);
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
+        cases.put(new byte[] {'a', 'b', 'c'}, 479470107);
 
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
             assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
         }
     }
 
-    private static final int M32 = 0x5bd1e995;
-    private static final int R32 = 24;
-
-    // Murmur2 reference implementation, compare
-    // https://github.com/apache/commons-codec/blob/6d959482247761cc6c8a8a3ebf651d8e85473964/src/main/java/org/apache/commons/codec/digest/MurmurHash2.java#L79-L121
-    private static int murmur2ReferenceImplementation(final byte[] data, final int length, final int seed) {
-
-        // Initialize the hash to a random value
-        int h = seed ^ length;
-        // Mix 4 bytes at a time into the hash
-        final int nblocks = length >> 2;
-        // body
-        for (int i = 0; i < nblocks; i++) {
-            final int index = i << 2;
-            int k = (data[index + 0] & 0xff) + ((data[index + 1] & 0xff) << 8) + ((data[index + 2] & 0xff) << 16) + ((data[index + 3] & 0xff) << 24);
-            k *= M32;
-            k ^= k >>> R32;
-            k *= M32;
-            h *= M32;
-            h ^= k;
+    private static String toHexString(byte[] buf) {
+        StringBuilder bld = new StringBuilder();
+        for (byte b : buf) {
+            bld.append(String.format("%02x", b));
         }
-        // Handle the last few bytes of the input array
-        final int index = nblocks << 2;
-        switch (length - index) {
-            case 3:
-                h ^= (data[index + 2] & 0xff) << 16;
-                // falls-through
-            case 2:
-                h ^= (data[index + 1] & 0xff) << 8;
-                // falls-through
-            case 1:
-                h ^= data[index] & 0xff;
-                h *= M32;
-        }
-        // Do a few final mixes of the hash to ensure the last few
-        // bytes are well-incorporated.
-        h ^= h >>> 13;
-        h *= M32;
-        h ^= h >>> 15;
-        return h;
+        return bld.toString();
     }
 
     @Test
-    public void testMurmur2AgainstReferenceImplementation() {
+    public void testMurmur2Checksum() throws NoSuchAlgorithmException {
+        // calculates the checksum of hashes of many different random byte arrays of variable length
+        // this test detects any incompatible changes to the Murmur2 implementation with near certainty
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
         int numTrials = 100;
         int maxLen = 1000;
         SplittableRandom random = new SplittableRandom(0xbd4458b165652255L);
@@ -176,11 +141,15 @@ public class UtilsTest {
             byte[] data = new byte[len];
             for (int i = 0; i < numTrials; ++i) {
                 random.nextBytes(data);
-                int expectedHash = murmur2ReferenceImplementation(data, len, 0x9747b28c);
-                int actualHash = Utils.murmur2(data);
-                assertEquals(expectedHash, actualHash);
+                int hash = Utils.murmur2(data);
+                md.update((byte) (hash >>> 0));
+                md.update((byte) (hash >>> 8));
+                md.update((byte) (hash >>> 16));
+                md.update((byte) (hash >>> 24));
             }
         }
+
+        assertEquals(toHexString(md.digest()), "647f78f4a7942bf4d23d2f226458809dda799795513a0532a1ed999014f5f113");
     }
 
     @ParameterizedTest

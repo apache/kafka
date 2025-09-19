@@ -494,8 +494,9 @@ public final class Utils {
      * @param data byte array to hash
      * @return 32 bit hash of the given array
      */
+    @SuppressWarnings("fallthrough")
     public static int murmur2(final byte[] data) {
-        final int length = data.length;
+        int length = data.length;
         int seed = 0x9747b28c;
         // 'm' and 'r' are mixing constants generated offline.
         // They're not really 'magic', they just happen to work well.
@@ -504,24 +505,11 @@ public final class Utils {
 
         // Initialize the hash to a random value
         int h = seed ^ length;
+        int length4 = length >> 2;
 
-        if (length < 4) {
-            if (length != 0) {
-                h ^= data[0] & 0xff;
-                if (length != 1) {
-                    h ^= (data[1] & 0xff) << 8;
-                    if (length != 2) h ^= (data[2] & 0xff) << 16;
-                }
-                h *= m;
-            }
-            h ^= h >>> 13;
-            h *= m;
-            h ^= h >>> 15;
-            return h;
-        }
-
-        for (int i = 0; i <= length - 4; i += 4) {
-            int k = (int) INT_HANDLE.get(data, i);
+        for (int i = 0; i < length4; i++) {
+            final int i4 = i << 2;
+            int k = (int) INT_HANDLE.get(data, i4);
             k *= m;
             k ^= k >>> r;
             k *= m;
@@ -530,10 +518,17 @@ public final class Utils {
         }
 
         // Handle the last few bytes of the input array
-        if ((length & 3) != 0) {
-            h ^= (int) INT_HANDLE.get(data, length - 4) >>> -(length << 3);
-            h *= m;
+        int index = length4 << 2;
+        switch (length - index) {
+            case 3:
+                h ^= (data[index + 2] & 0xff) << 16;
+            case 2:
+                h ^= (data[index + 1] & 0xff) << 8;
+            case 1:
+                h ^= data[index] & 0xff;
+                h *= m;
         }
+
         h ^= h >>> 13;
         h *= m;
         h ^= h >>> 15;
