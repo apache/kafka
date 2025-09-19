@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -127,6 +130,15 @@ public interface RaftClient<T> extends AutoCloseable {
      * @return optional node id
      */
     OptionalInt nodeId();
+
+    /**
+     * Returns the node information for a given voter id and listener.
+     *
+     * @param id the id of the voter
+     * @param listenerName the name of the listener
+     * @return the node information if it exists, otherwise {@code Optional.empty()}
+     */
+    Optional<Node> voterNode(int id, ListenerName listenerName);
 
     /**
      * Prepare a list of records to be appended to the log.

@@ -180,7 +180,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final Logger logger;
     private final Time time;
     private final int fetchMaxWaitMs;
-    private final boolean followersAlwaysFlush;
+    private final boolean canBecomeVoter;
     private final String clusterId;
     private final Endpoints localListeners;
     private final SupportedVersionRange localSupportedKRaftVersion;
@@ -229,7 +229,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * non-participating observer.
      *
      * @param nodeDirectoryId the node directory id, cannot be the zero uuid
-     * @param followersAlwaysFlush instruct followers to always fsync when appending to the log
+     * @param canBecomeVoter instruct followers to always fsync when appending to the log
      */
     public KafkaRaftClient(
         OptionalInt nodeId,
@@ -240,7 +240,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Time time,
         ExpirationService expirationService,
         LogContext logContext,
-        boolean followersAlwaysFlush,
+        boolean canBecomeVoter,
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
@@ -258,7 +258,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             time,
             expirationService,
             MAX_FETCH_WAIT_MS,
-            followersAlwaysFlush,
+            canBecomeVoter,
             clusterId,
             bootstrapServers,
             localListeners,
@@ -280,7 +280,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Time time,
         ExpirationService expirationService,
         int fetchMaxWaitMs,
-        boolean followersAlwaysFlush,
+        boolean canBecomeVoter,
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
@@ -308,7 +308,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.localListeners = localListeners;
         this.localSupportedKRaftVersion = localSupportedKRaftVersion;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
-        this.followersAlwaysFlush = followersAlwaysFlush;
+        this.canBecomeVoter = canBecomeVoter;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
         this.quorumConfig = quorumConfig;
@@ -1839,7 +1839,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        if (quorum.isVoter() || followersAlwaysFlush) {
+        if (quorum.isVoter() || canBecomeVoter) {
             // the leader only requires that voters have flushed their log before sending a Fetch
             // request. Because of reconfiguration some observers (that are getting added to the
             // voter set) need to flush the disk because the leader may assume that they are in the
@@ -2262,6 +2262,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             quorum.leaderStateOrThrow(),
             newVoter.get(),
             newVoterEndpoints,
+            data.ackWhenCommitted(),
             currentTimeMs
         );
     }
@@ -2288,6 +2289,25 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             supportedKraftVersions,
             currentTimeMs
         );
+    }
+
+    private boolean handleAddVoterResponse(
+        RaftResponse.Inbound responseMetadata,
+        long currentTimeMs
+    ) {
+        final AddRaftVoterResponseData data = (AddRaftVoterResponseData) responseMetadata.data();
+        final Errors error = Errors.forCode(data.errorCode());
+
+        /* These error codes indicate the replica was successfully added or the leader is unable to
+         * process the request. In either case, reset the update voter set timer to back off.
+         */
+        if (error == Errors.NONE || error == Errors.REQUEST_TIMED_OUT ||
+            error == Errors.DUPLICATE_VOTER) {
+            quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
+            return true;
+        } else {
+            return handleUnexpectedError(error, responseMetadata);
+        }
     }
 
     private CompletableFuture<RemoveRaftVoterResponseData> handleRemoveVoterRequest(
@@ -2331,6 +2351,25 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             oldVoter.get(),
             currentTimeMs
         );
+    }
+
+    private boolean handleRemoveVoterResponse(
+        RaftResponse.Inbound responseMetadata,
+        long currentTimeMs
+    ) {
+        final RemoveRaftVoterResponseData data = (RemoveRaftVoterResponseData) responseMetadata.data();
+        final Errors error = Errors.forCode(data.errorCode());
+
+        /* These error codes indicate the replica was successfully removed or the leader is unable to
+         * process the request. In either case, reset the update voter set timer to back off.
+         */
+        if (error == Errors.NONE || error == Errors.REQUEST_TIMED_OUT ||
+            error == Errors.VOTER_NOT_FOUND) {
+            quorum.followerStateOrThrow().resetUpdateVoterSetPeriod(currentTimeMs);
+            return true;
+        } else {
+            return handleUnexpectedError(error, responseMetadata);
+        }
     }
 
     private CompletableFuture<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
@@ -2569,7 +2608,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 transitionToUnattached(epoch, OptionalInt.empty());
             }
         } else if (
-                leaderId.isPresent() &&
+            leaderId.isPresent() &&
                 (!quorum.hasLeader() || leaderEndpoints.size() > quorum.leaderEndpoints().size())
         ) {
             // The request or response indicates the leader of the current epoch
@@ -2597,40 +2636,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void handleResponse(RaftResponse.Inbound response, long currentTimeMs) {
         // The response epoch matches the local epoch, so we can handle the response
         ApiKeys apiKey = ApiKeys.forId(response.data().apiKey());
-        final boolean handledSuccessfully;
-
-        switch (apiKey) {
-            case FETCH:
-                handledSuccessfully = handleFetchResponse(response, currentTimeMs);
-                break;
-
-            case VOTE:
-                handledSuccessfully = handleVoteResponse(response, currentTimeMs);
-                break;
-
-            case BEGIN_QUORUM_EPOCH:
-                handledSuccessfully = handleBeginQuorumEpochResponse(response, currentTimeMs);
-                break;
-
-            case END_QUORUM_EPOCH:
-                handledSuccessfully = handleEndQuorumEpochResponse(response, currentTimeMs);
-                break;
-
-            case FETCH_SNAPSHOT:
-                handledSuccessfully = handleFetchSnapshotResponse(response, currentTimeMs);
-                break;
-
-            case API_VERSIONS:
-                handledSuccessfully = handleApiVersionsResponse(response, currentTimeMs);
-                break;
-
-            case UPDATE_RAFT_VOTER:
-                handledSuccessfully = handleUpdateVoterResponse(response, currentTimeMs);
-                break;
-
-            default:
-                throw new IllegalArgumentException("Received unexpected response type: " + apiKey);
-        }
+        final boolean handledSuccessfully = switch (apiKey) {
+            case FETCH -> handleFetchResponse(response, currentTimeMs);
+            case VOTE -> handleVoteResponse(response, currentTimeMs);
+            case BEGIN_QUORUM_EPOCH -> handleBeginQuorumEpochResponse(response, currentTimeMs);
+            case END_QUORUM_EPOCH -> handleEndQuorumEpochResponse(response, currentTimeMs);
+            case FETCH_SNAPSHOT -> handleFetchSnapshotResponse(response, currentTimeMs);
+            case API_VERSIONS -> handleApiVersionsResponse(response, currentTimeMs);
+            case UPDATE_RAFT_VOTER -> handleUpdateVoterResponse(response, currentTimeMs);
+            case ADD_RAFT_VOTER -> handleAddVoterResponse(response, currentTimeMs);
+            case REMOVE_RAFT_VOTER -> handleRemoveVoterResponse(response, currentTimeMs);
+            default -> throw new IllegalArgumentException("Received unexpected response type: " + apiKey);
+        };
 
         requestManager.onResponseResult(
             response.source(),
@@ -2693,48 +2710,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void handleRequest(RaftRequest.Inbound request, long currentTimeMs) {
         ApiKeys apiKey = ApiKeys.forId(request.data().apiKey());
-        final CompletableFuture<? extends ApiMessage> responseFuture;
-
-        switch (apiKey) {
-            case FETCH:
-                responseFuture = handleFetchRequest(request, currentTimeMs);
-                break;
-
-            case VOTE:
-                responseFuture = completedFuture(handleVoteRequest(request));
-                break;
-
-            case BEGIN_QUORUM_EPOCH:
-                responseFuture = completedFuture(handleBeginQuorumEpochRequest(request, currentTimeMs));
-                break;
-
-            case END_QUORUM_EPOCH:
-                responseFuture = completedFuture(handleEndQuorumEpochRequest(request, currentTimeMs));
-                break;
-
-            case DESCRIBE_QUORUM:
-                responseFuture = completedFuture(handleDescribeQuorumRequest(request, currentTimeMs));
-                break;
-
-            case FETCH_SNAPSHOT:
-                responseFuture = completedFuture(handleFetchSnapshotRequest(request, currentTimeMs));
-                break;
-
-            case ADD_RAFT_VOTER:
-                responseFuture = handleAddVoterRequest(request, currentTimeMs);
-                break;
-
-            case REMOVE_RAFT_VOTER:
-                responseFuture = handleRemoveVoterRequest(request, currentTimeMs);
-                break;
-
-            case UPDATE_RAFT_VOTER:
-                responseFuture = handleUpdateVoterRequest(request, currentTimeMs);
-                break;
-
-            default:
-                throw new IllegalArgumentException("Unexpected request type " + apiKey);
-        }
+        final CompletableFuture<? extends ApiMessage> responseFuture = switch (apiKey) {
+            case FETCH -> handleFetchRequest(request, currentTimeMs);
+            case VOTE -> completedFuture(handleVoteRequest(request));
+            case BEGIN_QUORUM_EPOCH -> completedFuture(handleBeginQuorumEpochRequest(request, currentTimeMs));
+            case END_QUORUM_EPOCH -> completedFuture(handleEndQuorumEpochRequest(request, currentTimeMs));
+            case DESCRIBE_QUORUM -> completedFuture(handleDescribeQuorumRequest(request, currentTimeMs));
+            case FETCH_SNAPSHOT -> completedFuture(handleFetchSnapshotRequest(request, currentTimeMs));
+            case ADD_RAFT_VOTER -> handleAddVoterRequest(request, currentTimeMs);
+            case REMOVE_RAFT_VOTER -> handleRemoveVoterRequest(request, currentTimeMs);
+            case UPDATE_RAFT_VOTER -> handleUpdateVoterRequest(request, currentTimeMs);
+            default -> throw new IllegalArgumentException("Unexpected request type " + apiKey);
+        };
 
         responseFuture.whenComplete((response, exception) -> {
             ApiMessage message = response;
@@ -3098,7 +3085,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return 0L;
         }
 
-        long timeUtilVoterChangeExpires = state.maybeExpirePendingOperation(currentTimeMs);
+        long timeUntilVoterChangeExpires = state.maybeExpirePendingOperation(currentTimeMs);
 
         long timeUntilFlush = maybeAppendBatches(
             state,
@@ -3116,7 +3103,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 timeUntilNextBeginQuorumSend,
                 Math.min(
                     timeUntilCheckQuorumExpires,
-                    timeUtilVoterChangeExpires
+                    timeUntilVoterChangeExpires
                 )
             )
         );
@@ -3246,7 +3233,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logger.info("Transitioning to Prospective state due to fetch timeout");
             transitionToProspective(currentTimeMs);
             backoffMs = 0;
-        } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs)) {
+        } else if (state.hasUpdateVoterSetPeriodExpired(currentTimeMs)) {
             final boolean resetUpdateVoterTimer;
             if (shouldSendUpdateVoteRequest(state)) {
                 var sendResult = maybeSendUpdateVoterRequest(state, currentTimeMs);
@@ -3260,7 +3247,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             }
 
             if (resetUpdateVoterTimer) {
-                state.resetUpdateVoterPeriod(currentTimeMs);
+                state.resetUpdateVoterSetPeriod(currentTimeMs);
             }
         } else {
             backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
@@ -3268,16 +3255,47 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         return Math.min(
             backoffMs,
-            Math.min(
-                state.remainingFetchTimeMs(currentTimeMs),
-                state.remainingUpdateVoterPeriodMs(currentTimeMs)
-            )
+            state.remainingFetchTimeMs(currentTimeMs)
         );
     }
 
+    private boolean shouldSendAddOrRemoveVoterRequest(FollowerState state, long currentTimeMs) {
+        /* When the cluster supports reconfiguration, only replicas that can become a voter
+         * and are configured to auto join should attempt to automatically join the voter
+         * set for the configured topic partition.
+         */
+        return partitionState.lastKraftVersion().isReconfigSupported() && canBecomeVoter &&
+            quorumConfig.autoJoin() && state.hasUpdateVoterSetPeriodExpired(currentTimeMs);
+    }
+
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
-        if (state.hasFetchTimeoutExpired(currentTimeMs)) {
-            return maybeSendFetchToAnyBootstrap(currentTimeMs);
+        GracefulShutdown shutdown = this.shutdown.get();
+        if (shutdown != null) {
+            // If we are an observer, then we can shutdown immediately. We want to
+            // skip potentially sending any add or remove voter RPCs.
+            return 0;
+        } else if (shouldSendAddOrRemoveVoterRequest(state, currentTimeMs)) {
+            final var localReplicaKey = quorum.localReplicaKeyOrThrow();
+            final var voters = partitionState.lastVoterSet();
+            final RequestSendResult sendResult;
+            if (voters.voterIds().contains(localReplicaKey.id())) {
+                /* The replica's id is in the voter set but the replica is not a voter because
+                 * the directory id of the voter set entry is different. Remove the old voter.
+                 * Local replica is not in the voter set because the replica is an observer.
+                 */
+                final var oldVoter = voters.voterKeys()
+                    .stream()
+                    .filter(replicaKey -> replicaKey.id() == localReplicaKey.id())
+                    .findFirst()
+                    .get();
+                sendResult = maybeSendRemoveVoterRequest(state, oldVoter, currentTimeMs);
+            } else {
+                sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
+            }
+            if (sendResult.requestSent()) {
+                state.resetUpdateVoterSetPeriod(currentTimeMs);
+            }
+            return sendResult.timeToWaitMs();
         } else {
             return maybeSendFetchToBestNode(state, currentTimeMs);
         }
@@ -3332,11 +3350,51 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
+    private AddRaftVoterRequestData buildAddVoterRequest() {
+        return RaftUtil.addVoterRequest(
+            clusterId,
+            quorumConfig.requestTimeoutMs(),
+            quorum.localReplicaKeyOrThrow(),
+            localListeners,
+            false
+        );
+    }
+
+    private RemoveRaftVoterRequestData buildRemoveVoterRequest(ReplicaKey replicaKey) {
+        return RaftUtil.removeVoterRequest(
+            clusterId,
+            replicaKey
+        );
+    }
+
     private RequestSendResult maybeSendUpdateVoterRequest(FollowerState state, long currentTimeMs) {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
             this::buildUpdateVoterRequest
+        );
+    }
+
+    private RequestSendResult maybeSendAddVoterRequest(
+        FollowerState state,
+        long currentTimeMs
+    ) {
+        return maybeSendRequest(
+            currentTimeMs,
+            state.leaderNode(channel.listenerName()),
+            this::buildAddVoterRequest
+        );
+    }
+
+    private RequestSendResult maybeSendRemoveVoterRequest(
+        FollowerState state,
+        ReplicaKey replicaKey,
+        long currentTimeMs
+    ) {
+        return maybeSendRequest(
+            currentTimeMs,
+            state.leaderNode(channel.listenerName()),
+            () -> buildRemoveVoterRequest(replicaKey)
         );
     }
 
@@ -3663,7 +3721,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return new RecordsSnapshotWriter.Builder()
                 .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                 .setTime(time)
-                .setMaxBatchSize(MAX_BATCH_SIZE_BYTES)
+                .setMaxBatchSizeBytes(MAX_BATCH_SIZE_BYTES)
                 .setMemoryPool(memoryPool)
                 .setRawSnapshotWriter(wrappedWriter)
                 .setKraftVersion(partitionState.kraftVersionAtOffset(lastContainedLogOffset))
@@ -3735,6 +3793,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    @Override
     public Optional<Node> voterNode(int id, ListenerName listenerName) {
         return partitionState.lastVoterSet().voterNode(id, listenerName);
     }

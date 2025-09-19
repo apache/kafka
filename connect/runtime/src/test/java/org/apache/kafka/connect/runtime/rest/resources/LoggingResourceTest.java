@@ -32,8 +32,8 @@ import org.mockito.quality.Strictness;
 import org.slf4j.event.Level;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.ws.rs.core.Response;
 
@@ -90,7 +90,7 @@ public class LoggingResourceTest {
                     BadRequestException.class,
                     () -> loggingResource.setLevel(
                             "@root",
-                            Collections.emptyMap(),
+                            Map.of(),
                             scope
                     )
             );
@@ -104,7 +104,7 @@ public class LoggingResourceTest {
                     NotFoundException.class,
                     () -> loggingResource.setLevel(
                             "@root",
-                            Collections.singletonMap("level", "HIGH"),
+                            Map.of("level", "HIGH"),
                             scope
                     )
             );
@@ -130,7 +130,7 @@ public class LoggingResourceTest {
     private void testSetLevelWorkerScope(String scope, boolean expectWarning) {
         final String logger = "org.apache.kafka.connect";
         final String level = "TRACE";
-        final List<String> expectedLoggers = Arrays.asList(
+        final List<String> expectedLoggers = List.of(
                 "org.apache.kafka.connect",
                 "org.apache.kafka.connect.runtime.distributed.DistributedHerder"
         );
@@ -138,7 +138,7 @@ public class LoggingResourceTest {
 
         List<String> actualLoggers;
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(LoggingResource.class)) {
-            Response response = loggingResource.setLevel(logger, Collections.singletonMap("level", level), scope);
+            Response response = loggingResource.setLevel(logger, Map.of("level", level), scope);
             assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
             actualLoggers = (List<String>) response.getEntity();
             long warningMessages = logCaptureAppender.getEvents().stream()
@@ -159,7 +159,7 @@ public class LoggingResourceTest {
         final String logger = "org.apache.kafka.connect";
         final String level = "TRACE";
 
-        Response response = loggingResource.setLevel(logger, Collections.singletonMap("level", level), "cluster");
+        Response response = loggingResource.setLevel(logger, Map.of("level", level), "cluster");
 
         assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
         assertNull(response.getEntity());

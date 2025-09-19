@@ -857,7 +857,7 @@ public final class Utils {
     public static void delete(final File rootFile) throws IOException {
         if (rootFile == null)
             return;
-        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
+        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
                 if (exc instanceof NoSuchFileException) {
@@ -1403,7 +1403,7 @@ public final class Utils {
      * @return new Collector<Map.Entry<K, V>, M, M>
      */
     public static <K, V, M extends Map<K, V>> Collector<Map.Entry<K, V>, M, M> entriesToMap(final Supplier<M> mapSupplier) {
-        return new Collector<Map.Entry<K, V>, M, M>() {
+        return new Collector<>() {
             @Override
             public Supplier<M> supplier() {
                 return mapSupplier;
@@ -1718,5 +1718,18 @@ public final class Utils {
     @FunctionalInterface
     public interface ThrowingRunnable {
         void run() throws Exception;
+    }
+
+    /**
+     * convert millisecond to nanosecond, or throw exception if overflow
+     * @param timeMs the time in millisecond
+     * @return the converted nanosecond
+     */
+    public static long msToNs(long timeMs) {
+        try {
+            return Math.multiplyExact(1000 * 1000, timeMs);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Cannot convert " + timeMs + " millisecond to nanosecond due to arithmetic overflow", e);
+        }
     }
 }

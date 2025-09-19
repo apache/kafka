@@ -263,8 +263,10 @@ abstract class QuorumTestHarness extends Logging {
     val listeners = extraControllerSecurityProtocols().map(sc => sc + "://localhost:0").mkString(",")
     val listenerNames = extraControllerSecurityProtocols().mkString(",")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"CONTROLLER:$proto,$securityProtocolMaps")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0,$listeners")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, s"CONTROLLER,$listenerNames")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG,
+      if (listeners.isEmpty) "CONTROLLER://localhost:0" else s"CONTROLLER://localhost:0,$listeners")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG,
+      if (listeners.isEmpty) "CONTROLLER" else s"CONTROLLER,$listenerNames")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
     props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     val config = new KafkaConfig(props)

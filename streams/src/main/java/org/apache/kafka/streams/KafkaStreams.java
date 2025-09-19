@@ -236,7 +236,7 @@ public class KafkaStreams implements AutoCloseable {
      *   </li>
      *   <li>
      *     REBALANCING state will transit to RUNNING if all of its threads are in RUNNING state
-     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are are ready for processing.
+     *     (Note: a thread transits to RUNNING state, if all active tasks got restored are ready for processing.
      *     Standby tasks are not considered.)
      *   </li>
      *   <li>

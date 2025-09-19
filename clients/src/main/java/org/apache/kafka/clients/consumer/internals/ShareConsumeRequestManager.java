@@ -758,6 +758,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (response.error() == Errors.UNKNOWN_TOPIC_ID) {
                     metadata.requestUpdate(false);
                 }
+                // Complete any inFlight acknowledgements with the error code from the response.
+                Map<TopicIdPartition, Acknowledgements> nodeAcknowledgementsInFlight = fetchAcknowledgementsInFlight.get(fetchTarget.id());
+                if (nodeAcknowledgementsInFlight != null) {
+                    nodeAcknowledgementsInFlight.forEach((tip, acks) -> {
+                        acks.complete(Errors.forCode(response.error().code()).exception());
+                        metricsManager.recordFailedAcknowledgements(acks.size());
+                    });
+                    maybeSendShareAcknowledgeCommitCallbackEvent(nodeAcknowledgementsInFlight);
+                    nodeAcknowledgementsInFlight.clear();
+                }
                 return;
             }
 
@@ -1076,6 +1086,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
     protected void closeInternal() {
         Utils.closeQuietly(shareFetchBuffer, "shareFetchBuffer");
+        Utils.closeQuietly(metricsManager, "shareFetchMetricsManager");
     }
 
     public void close() {
