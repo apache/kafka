@@ -503,6 +503,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     );
                     formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
                 }
+                // when the nodeId != TestKitDefaults.CONTROLLER_ID_OFFSET, the node is formatting with
+                // the --no-initial-controllers flag
                 formatter.setHasDynamicQuorum(true);
             } else if (initialVoterSet.isPresent()) {
                 for (final var controllerNode : initialVoterSet.get().entrySet()) {
