@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.metrics;
 
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
@@ -28,7 +29,9 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
+import java.util.Collection;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
@@ -117,7 +120,8 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
     /**
      * Register metric to track the number of assigned partitions.
      * It will consider partitions assigned to the consumer
-     * regardless of whether they were assigned via consumer.subscribe or consumer.assign
+     * regardless of whether they were assigned via {@link KafkaConsumer#subscribe(Pattern)} or
+     * {@link KafkaConsumer#assign(Collection)}
      */
     private void registerAssignedPartitionCount(SubscriptionState subscriptions) {
         Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
