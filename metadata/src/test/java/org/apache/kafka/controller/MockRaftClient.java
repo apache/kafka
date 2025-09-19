@@ -17,6 +17,8 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
@@ -756,6 +758,11 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
     @Override
     public OptionalInt nodeId() {
         return OptionalInt.of(nodeId);
+    }
+
+    @Override
+    public Optional<Node> voterNode(int id, ListenerName listenerName) {
+        return Optional.empty();
     }
 
     public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {

@@ -51,38 +51,25 @@ public class AclEntry {
         .collect(Collectors.toSet());
 
     public static Set<AclOperation> supportedOperations(ResourceType resourceType) {
-        switch (resourceType) {
-            case TOPIC:
-                return Set.of(READ, WRITE, CREATE, DESCRIBE, DELETE, ALTER, DESCRIBE_CONFIGS, ALTER_CONFIGS);
-            case GROUP:
-                return Set.of(READ, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS);
-            case CLUSTER:
-                return Set.of(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE);
-            case TRANSACTIONAL_ID:
-                return Set.of(DESCRIBE, WRITE, TWO_PHASE_COMMIT);
-            case DELEGATION_TOKEN:
-                return Set.of(DESCRIBE);
-            case USER:
-                return Set.of(CREATE_TOKENS, DESCRIBE_TOKENS);
-            default:
-                throw new IllegalArgumentException("Not a concrete resource type");
-        }
+        return switch (resourceType) {
+            case TOPIC -> Set.of(READ, WRITE, CREATE, DESCRIBE, DELETE, ALTER, DESCRIBE_CONFIGS, ALTER_CONFIGS);
+            case GROUP -> Set.of(READ, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS);
+            case CLUSTER -> Set.of(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE);
+            case TRANSACTIONAL_ID -> Set.of(DESCRIBE, WRITE, TWO_PHASE_COMMIT);
+            case DELEGATION_TOKEN -> Set.of(DESCRIBE);
+            case USER -> Set.of(CREATE_TOKENS, DESCRIBE_TOKENS);
+            default -> throw new IllegalArgumentException("Not a concrete resource type");
+        };
     }
 
     public static Errors authorizationError(ResourceType resourceType) {
-        switch (resourceType) {
-            case TOPIC:
-                return Errors.TOPIC_AUTHORIZATION_FAILED;
-            case GROUP:
-                return Errors.GROUP_AUTHORIZATION_FAILED;
-            case CLUSTER:
-                return Errors.CLUSTER_AUTHORIZATION_FAILED;
-            case TRANSACTIONAL_ID:
-                return Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED;
-            case DELEGATION_TOKEN:
-                return Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED;
-            default:
-                throw new IllegalArgumentException("Authorization error type not known");
-        }
+        return switch (resourceType) {
+            case TOPIC -> Errors.TOPIC_AUTHORIZATION_FAILED;
+            case GROUP -> Errors.GROUP_AUTHORIZATION_FAILED;
+            case CLUSTER -> Errors.CLUSTER_AUTHORIZATION_FAILED;
+            case TRANSACTIONAL_ID -> Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED;
+            case DELEGATION_TOKEN -> Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED;
+            default -> throw new IllegalArgumentException("Authorization error type not known");
+        };
     }
 }

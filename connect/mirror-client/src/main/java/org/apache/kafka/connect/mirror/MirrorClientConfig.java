@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 
 /**
  * Configuration required for {@link MirrorClient} to talk to a given target cluster.
@@ -105,7 +106,7 @@ public class MirrorClientConfig extends AbstractConfig {
     public Map<String, Object> producerConfig() {
         return clientConfig(PRODUCER_CLIENT_PREFIX);
     }
-    
+
     private Map<String, Object> clientConfig(String prefix) {
         Map<String, Object> props = new HashMap<>(valuesWithPrefixOverride(prefix));
         props.keySet().retainAll(CLIENT_CONFIG_DEF.names());
@@ -117,7 +118,8 @@ public class MirrorClientConfig extends AbstractConfig {
     static final ConfigDef CLIENT_CONFIG_DEF = new ConfigDef()
         .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
             Type.LIST,
-            null,
+            NO_DEFAULT_VALUE,
+            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
             Importance.HIGH,
             CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
         // security support
@@ -129,13 +131,14 @@ public class MirrorClientConfig extends AbstractConfig {
             CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .withClientSslSupport()
         .withClientSaslSupport();
- 
+
     static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-            Type.STRING,
-            null,
+            Type.LIST,
+            NO_DEFAULT_VALUE,
+            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
             Importance.HIGH,
-            CommonClientConfigs.BOOTSTRAP_SERVERS_DOC) 
+            CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
         .define(
             REPLICATION_POLICY_CLASS,
             ConfigDef.Type.CLASS,

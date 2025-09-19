@@ -89,6 +89,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
             taskManager.handleAssignment(activeTasksWithPartitions, standbyTasksWithPartitions);
             streamThread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
             taskManager.handleRebalanceComplete();
+            streamsRebalanceData.setReconciledAssignment(assignment);
         } catch (final Exception exception) {
             return Optional.of(exception);
         }
@@ -99,6 +100,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
     public Optional<Exception> onAllTasksLost() {
         try {
             taskManager.handleLostAll();
+            streamsRebalanceData.setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
         } catch (final Exception exception) {
             return Optional.of(exception);
         }
