@@ -799,6 +799,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testAssignOnEmptyTopicPartition
 - testAssignOnNullTopicInPartition
 - testAssignOnNullTopicPartition
+- testAssignedPartitionsMetrics
 - testAssignorNameConflict
 - testAutoCommitSentBeforePositionUpdate
 - testBeginningOffsetsAuthenticationFailure
@@ -1312,6 +1313,7 @@ org.apache.kafka.clients.consumer.internals.ConsumerInterceptorsTest:
 org.apache.kafka.clients.consumer.internals.ConsumerMembershipManagerTest:
 - testAddedPartitionsNotEnabledAfterFailedOnPartitionsAssignedCallback
 - testAddedPartitionsTemporarilyDisabledAwaitingOnPartitionsAssignedCallback
+- testAssignedPartitionCountMetricRegistered
 - testDelayedMetadataUsedToCompleteAssignment
 - testDelayedReconciliationResultAppliedWhenTargetChangedWithMetadataUpdate
 - testDelayedReconciliationResultAppliedWhenTargetChangedWithNewAssignment
@@ -2388,6 +2390,7 @@ org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerT
 - testUnsupportedVersionFailureWhileSending
 org.apache.kafka.clients.consumer.internals.StreamsMembershipManagerTest:
 - testActiveTasksAreNullInHeartbeatResponse
+- testAssignedPartitionCountMetricRegistered
 - testConsumerPollWhenNotJoining
 - testConsumerPollWhenSubscriptionNotUpdated
 - testForDuplicateRegistrationOfSameStateListener
@@ -2668,6 +2671,8 @@ org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest:
 - shouldRecordTimeBetweenNetworkThreadPoll
 - shouldRecordUnsentRequestsQueueSize
 - shouldRecordUnsentRequestsQueueTime
+org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManagerTest:
+- testAssignedPartitionCountMetric
 org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManagerTest:
 - testHeartbeatMetrics
 org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManagerTest:
