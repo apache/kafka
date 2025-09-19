@@ -1104,14 +1104,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("Initializing processor nodes of the topology");
         for (final ProcessorNode<?, ?, ?, ?> node : topology.processors()) {
-            final ProcessorRecordContext recordContext = new ProcessorRecordContext(
-                    time.milliseconds(),
-                    -1L,
-                    -1,
-                    null,
-                    new RecordHeaders()
-            );
-            updateProcessorContext(node, time.milliseconds(), recordContext);
+            final InitProcessorRecordContext initContext = new InitProcessorRecordContext(time);
+            updateProcessorContext(node, time.milliseconds(), initContext);
             try {
                 node.init(processorContext, processingExceptionHandler);
             } finally {
