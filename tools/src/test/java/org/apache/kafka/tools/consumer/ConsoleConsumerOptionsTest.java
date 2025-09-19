@@ -172,7 +172,7 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldParseValidConsumerConfigWithAutoOffsetResetLatest() throws IOException {
+    public void shouldParseValidConsumerConfigWithAutoOffsetResetLatestDeprecated() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -189,7 +189,7 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldParseValidConsumerConfigWithAutoOffsetResetEarliest() throws IOException {
+    public void shouldParseValidConsumerConfigWithAutoOffsetResetEarliestDeprecated() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -206,7 +206,7 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldParseValidConsumerConfigWithAutoOffsetResetAndMatchingFromBeginning() throws IOException {
+    public void shouldParseValidConsumerConfigWithAutoOffsetResetAndMatchingFromBeginningDeprecated() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -240,7 +240,7 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginning() {
+    public void shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningDeprecated() {
         Exit.setExitProcedure((code, message) -> {
             throw new IllegalArgumentException(message);
         });
@@ -259,7 +259,7 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldParseConfigsFromFile() throws IOException {
+    public void shouldParseConfigsFromFileDeprecated() throws IOException {
         Map<String, String> configs = new HashMap<>();
         configs.put("request.timeout.ms", "1000");
         configs.put("group.id", "group1");
@@ -276,80 +276,82 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void groupIdsProvidedInDifferentPlacesMustMatch() throws IOException {
+    public void groupIdsProvidedInDifferentPlacesMustMatchDeprecated() throws IOException {
         Exit.setExitProcedure((code, message) -> {
             throw new IllegalArgumentException(message);
         });
+        try {
 
-        // different in all three places
-        File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
-        final String[] args = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments",
-            "--consumer-property", "group.id=group-from-properties",
-            "--consumer.config", propsFile.getAbsolutePath()
-        };
+            // different in all three places
+            File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "group-from-arguments",
+                "--consumer-property", "group.id=group-from-properties",
+                "--consumer.config", propsFile.getAbsolutePath()
+            };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
 
-        // the same in all three places
-        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "test-group"));
-        final String[] args1 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "test-group",
-            "--consumer-property", "group.id=test-group",
-            "--consumer.config", propsFile.getAbsolutePath()
-        };
+            // the same in all three places
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "test-group"));
+            final String[] args1 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "test-group",
+                "--consumer-property", "group.id=test-group",
+                "--consumer.config", propsFile.getAbsolutePath()
+            };
 
-        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args1);
-        Properties props = config.consumerProps();
-        assertEquals("test-group", props.getProperty("group.id"));
+            ConsoleConsumerOptions config = new ConsoleConsumerOptions(args1);
+            Properties props = config.consumerProps();
+            assertEquals("test-group", props.getProperty("group.id"));
 
-        // different via --consumer-property and --consumer.config
-        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
-        final String[] args2 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--consumer-property", "group.id=group-from-properties",
-            "--consumer.config", propsFile.getAbsolutePath()
-        };
+            // different via --consumer-property and --consumer.config
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args2 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--consumer-property", "group.id=group-from-properties",
+                "--consumer.config", propsFile.getAbsolutePath()
+            };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args2));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args2));
 
-        // different via --consumer-property and --group
-        final String[] args3 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments",
-            "--consumer-property", "group.id=group-from-properties"
-        };
+            // different via --consumer-property and --group
+            final String[] args3 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "group-from-arguments",
+                "--consumer-property", "group.id=group-from-properties"
+            };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args3));
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args3));
 
-        // different via --group and --consumer.config
-        propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
-        final String[] args4 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments",
-            "--consumer.config", propsFile.getAbsolutePath()
-        };
-        assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args4));
+            // different via --group and --consumer.config
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args4 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "group-from-arguments",
+                "--consumer.config", propsFile.getAbsolutePath()
+            };
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args4));
 
-        // via --group only
-        final String[] args5 = new String[]{
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--group", "group-from-arguments"
-        };
+            // via --group only
+            final String[] args5 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "group-from-arguments"
+            };
 
-        config = new ConsoleConsumerOptions(args5);
-        props = config.consumerProps();
-        assertEquals("group-from-arguments", props.getProperty("group.id"));
-
-        Exit.resetExitProcedure();
+            config = new ConsoleConsumerOptions(args5);
+            props = config.consumerProps();
+            assertEquals("group-from-arguments", props.getProperty("group.id"));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test
@@ -508,7 +510,7 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void testClientIdOverride() throws IOException {
+    public void testClientIdOverrideDeprecated() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -617,5 +619,235 @@ public class ConsoleConsumerOptionsTest {
             "--partition", "0",
             "--formatter", formatter,
         };
+    }
+
+    @Test
+    public void shouldExitOnBothConsumerPropertyAndCommandProperty() {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--consumer-property", "auto.offset.reset=latest",
+            "--command-property", "session.timeout.ms=10000"
+        };
+
+        try {
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void shouldExitOnBothConsumerConfigAndCommandConfig() throws IOException {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+
+        Map<String, String> configs = new HashMap<>();
+        configs.put("request.timeout.ms", "1000");
+        File propsFile = ToolsTestUtils.tempPropertiesFile(configs);
+
+        Map<String, String> configs2 = new HashMap<>();
+        configs2.put("session.timeout.ms", "10000");
+        File propsFile2 = ToolsTestUtils.tempPropertiesFile(configs2);
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--consumer.config", propsFile.getAbsolutePath(),
+            "--command-config", propsFile2.getAbsolutePath()
+        };
+
+        try {
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void shouldParseValidConsumerConfigWithAutoOffsetResetLatestUsingCommandProperty() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-property", "auto.offset.reset=latest"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+        Properties consumerProperties = config.consumerProps();
+
+        assertEquals("localhost:9092", config.bootstrapServer());
+        assertEquals("test", config.topicArg().orElse(""));
+        assertFalse(config.fromBeginning());
+        assertEquals("latest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+    }
+
+    @Test
+    public void shouldParseValidConsumerConfigWithAutoOffsetResetEarliestUsingCommandProperty() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-property", "auto.offset.reset=earliest"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+        Properties consumerProperties = config.consumerProps();
+
+        assertEquals("localhost:9092", config.bootstrapServer());
+        assertEquals("test", config.topicArg().orElse(""));
+        assertFalse(config.fromBeginning());
+        assertEquals("earliest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+    }
+
+    @Test
+    public void shouldParseValidConsumerConfigWithAutoOffsetResetAndMatchingFromBeginningUsingCommandProperty() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-property", "auto.offset.reset=earliest",
+            "--from-beginning"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+        Properties consumerProperties = config.consumerProps();
+
+        assertEquals("localhost:9092", config.bootstrapServer());
+        assertEquals("test", config.topicArg().orElse(""));
+        assertTrue(config.fromBeginning());
+        assertEquals("earliest", consumerProperties.getProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+    }
+
+    @Test
+    public void shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningUsingCommandProperty() {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-property", "auto.offset.reset=latest",
+            "--from-beginning"
+        };
+        try {
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void shouldParseConfigsFromFileUsingCommandConfig() throws IOException {
+        Map<String, String> configs = new HashMap<>();
+        configs.put("request.timeout.ms", "1000");
+        configs.put("group.id", "group1");
+        File propsFile = ToolsTestUtils.tempPropertiesFile(configs);
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--command-config", propsFile.getAbsolutePath()
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+        assertEquals("1000", config.consumerProps().get("request.timeout.ms"));
+        assertEquals("group1", config.consumerProps().get("group.id"));
+    }
+
+    @Test
+    public void groupIdsProvidedInDifferentPlacesMustMatchUsingCommandConfig() throws IOException {
+        Exit.setExitProcedure((code, message) -> {
+            throw new IllegalArgumentException(message);
+        });
+
+        try {
+            // different in all three places
+            File propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "group-from-arguments",
+                "--command-property", "group.id=group-from-properties",
+                "--command-config", propsFile.getAbsolutePath()
+            };
+
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args));
+
+            // the same in all three places
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "test-group"));
+            final String[] args1 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "test-group",
+                "--command-property", "group.id=test-group",
+                "--command-config", propsFile.getAbsolutePath()
+            };
+
+            ConsoleConsumerOptions config = new ConsoleConsumerOptions(args1);
+            Properties props = config.consumerProps();
+            assertEquals("test-group", props.getProperty("group.id"));
+
+            // different via --command-property and --command-config
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args2 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--command-property", "group.id=group-from-properties",
+                "--command-config", propsFile.getAbsolutePath()
+            };
+
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args2));
+
+            // different via --command-property and --group
+            final String[] args3 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "group-from-arguments",
+                "--command-property", "group.id=group-from-properties"
+            };
+
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args3));
+
+            // different via --group and --command-config
+            propsFile = ToolsTestUtils.tempPropertiesFile(Map.of("group.id", "group-from-file"));
+            final String[] args4 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "group-from-arguments",
+                "--command-config", propsFile.getAbsolutePath()
+            };
+            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(args4));
+
+            // via --group only
+            final String[] args5 = new String[]{
+                "--bootstrap-server", "localhost:9092",
+                "--topic", "test",
+                "--group", "group-from-arguments"
+            };
+
+            config = new ConsoleConsumerOptions(args5);
+            props = config.consumerProps();
+            assertEquals("group-from-arguments", props.getProperty("group.id"));
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @Test
+    public void testClientIdOverrideUsingCommandProperty() throws IOException {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--from-beginning",
+            "--command-property", "client.id=consumer-1"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+        Properties consumerProperties = config.consumerProps();
+
+        assertEquals("consumer-1", consumerProperties.getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
     }
 }
