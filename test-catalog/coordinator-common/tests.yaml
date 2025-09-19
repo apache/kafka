@@ -15,6 +15,7 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorLoaderImplTest:
 - testPartitionGoesOfflineDuringLoad
 - testUnknownRecordTypeAreIgnored
 - testUpdateLastWrittenOffsetAndUpdateLastCommittedOffsetNoRecordsRead
+- testUpdateLastWrittenOffsetCommitInterval
 - testUpdateLastWrittenOffsetOnBatchLoaded
 - testUpdateLastWrittenOffsetOnBatchLoadedWhileHighWatermarkAhead
 org.apache.kafka.coordinator.common.runtime.CoordinatorRecordTest:
