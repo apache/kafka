@@ -164,6 +164,17 @@ public class RecordHeadersTest {
     }
 
     @Test
+    public void testHeadersIteratorRemove() {
+        Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("key", "value".getBytes()));
+
+        Iterator<Header> headersIterator = headers.headers("key").iterator();
+        headersIterator.next();
+        assertThrows(UnsupportedOperationException.class,
+            headersIterator::remove);
+    }
+
+    @Test
     public void testReadOnly() {
         RecordHeaders headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
