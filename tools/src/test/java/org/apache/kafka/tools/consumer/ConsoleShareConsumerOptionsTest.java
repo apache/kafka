@@ -247,11 +247,11 @@ public class ConsoleShareConsumerOptionsTest {
     @Test
     public void testCustomPropertyShouldBePassedToConfigureMethod() throws Exception {
         String[] args = new String[]{
-                "--bootstrap-server", "localhost:9092",
-                "--topic", "test",
-                "--formatter-property", "print.key=true",
-                "--formatter-property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
-                "--formatter-property", "key.deserializer.my-props=abc"
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--formatter-property", "print.key=true",
+            "--formatter-property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
+            "--formatter-property", "key.deserializer.my-props=abc"
         };
 
         ConsoleShareConsumerOptions config = new ConsoleShareConsumerOptions(args);
@@ -274,11 +274,11 @@ public class ConsoleShareConsumerOptionsTest {
         configs.put("print.key", "false");
         File propsFile = ToolsTestUtils.tempPropertiesFile(configs);
         String[] args = new String[]{
-                "--bootstrap-server", "localhost:9092",
-                "--topic", "test",
-                "--property", "print.key=true",
-                "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
-                "--formatter-config", propsFile.getAbsolutePath()
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--property", "print.key=true",
+            "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
+            "--formatter-config", propsFile.getAbsolutePath()
         };
 
         ConsoleShareConsumerOptions config = new ConsoleShareConsumerOptions(args);
