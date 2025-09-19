@@ -33,7 +33,10 @@ public enum AcknowledgeType {
     RELEASE((byte) 2),
 
     /** The record was not consumed successfully. Reject it and do not release it for another delivery attempt. */
-    REJECT((byte) 3);
+    REJECT((byte) 3),
+
+    /** Consumer needs more time to process the record. Renew the lease. */
+    RENEW((byte) 4);
 
     public final byte id;
 
@@ -55,6 +58,8 @@ public enum AcknowledgeType {
                 return RELEASE;
             case 3:
                 return REJECT;
+            case 4:
+                return RENEW;
             default:
                 throw new IllegalArgumentException("Unknown acknowledge type id: " + id);
         }

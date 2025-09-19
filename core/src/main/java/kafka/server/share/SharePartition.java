@@ -19,6 +19,7 @@ package kafka.server.share;
 import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
@@ -1750,8 +1751,14 @@ public class SharePartition {
         // for each offset in the batch, if single acknowledge type is sent, the map will have only one entry.
         Map<Long, RecordState> recordStateMap = new HashMap<>();
         for (int index = 0; index < batch.acknowledgeTypes().size(); index++) {
+            // The record state RENEW does not alter delivery state (only renew acq lock) so we must ignore
+            // it while constructing the map.
+            byte ackType = batch.acknowledgeTypes().get(index);
+            if (ackType == AcknowledgeType.RENEW.id) {
+                continue;
+            }
             recordStateMap.put(batch.firstOffset() + index,
-                fetchRecordState(batch.acknowledgeTypes().get(index)));
+                fetchRecordState(ackType));
         }
         return recordStateMap;
     }
@@ -1854,6 +1861,30 @@ public class SharePartition {
                 // Determine if the in-flight batch is a full match from the request batch.
                 boolean fullMatch = checkForFullMatch(inFlightBatch, batch.firstOffset(), batch.lastOffset());
                 boolean isPerOffsetClientAck = batch.acknowledgeTypes().size() > 1;
+
+                // If the request is a full-batch RENEW acknowledgement (ack type 4), then renew the
+                // acquisition lock without changing the state or persisting anything.
+                boolean isHoldFullBatch = !isPerOffsetClientAck
+                    && batch.acknowledgeTypes().size() == 1
+                    && batch.acknowledgeTypes().get(0) == (byte) 4;
+                if (fullMatch && inFlightBatch.offsetState() == null && isHoldFullBatch) {
+                    if (inFlightBatch.batchState() != RecordState.ACQUIRED) {
+                        log.debug("The batch with RENEW ack is not in the acquired state: {} for share partition: {}-{}",
+                            inFlightBatch, groupId, topicIdPartition);
+                        return Optional.of(new InvalidRecordStateException(
+                            "The batch cannot be RENEW acknowledged. The batch is not in the acquired state."));
+                    }
+                    // Renew the acquisition lock timer for the complete batch.
+                    log.debug("Renewing acq lock for {}-{} with offsets {}-{} for member {}.",
+                        groupId, topicIdPartition, inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), memberId);
+                    inFlightBatch.cancelAndClearAcquisitionLockTimeoutTask();
+                    AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId,
+                        inFlightBatch.firstOffset(), inFlightBatch.lastOffset());
+                    inFlightBatch.updateAcquisitionLockTimeout(renewalTask);
+                    // Nothing to persist; continue to next batch in submap.
+                    continue;
+                }
+
                 boolean hasStartOffsetMoved = checkForStartOffsetWithinBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset());
 
                 // Maintain state per offset if the inflight batch is not a full match or the
@@ -1968,11 +1999,39 @@ public class SharePartition {
                         new InvalidRecordStateException("Member is not the owner of offset"));
                 }
 
+                // If RENEW, renew the acquisition lock timer for this offset and continue without changing state.
+                Optional<Byte> ackTypeForOffset = ackTypeForOffset(offsetState.getKey(), batch);
+                if (ackTypeForOffset.isPresent() && ackTypeForOffset.get() == AcknowledgeType.RENEW.id) {
+                    // Only valid for ACQUIRED offsets; the check above ensures this.
+                    long key = offsetState.getKey();
+                    InFlightState state = offsetState.getValue();
+                    log.debug("Renewing acq lock for {}-{} with offsets {}-{} for member {}.",
+                        groupId, topicIdPartition, key, key, memberId);
+                    state.cancelAndClearAcquisitionLockTimeoutTask();
+                    AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId, key, key);
+                    state.updateAcquisitionLockTimeoutTask(renewalTask);
+                    // No persister update for RENEW; move to next offset.
+                    continue;
+                }
+
                 // Determine the record state for the offset. If the per offset record state is not provided
                 // by the client, then use the batch record state.
-                RecordState recordState =
-                    recordStateMap.size() > 1 ? recordStateMap.get(offsetState.getKey()) :
-                        recordStateDefault;
+                RecordState recordState = recordStateMap.get(offsetState.getKey());
+                if (recordState == null) {
+                    if (recordStateMap.size() > 1) {
+                        // Per offset acks but some entries may be RENEW which were skipped in the map; fallback to ack type.
+                        if (ackTypeForOffset.isPresent()) {
+                            recordState = fetchRecordState(ackTypeForOffset.get()); // This will always be non-RENEW.
+                        }
+                    } else {
+                        recordState = recordStateDefault;
+                    }
+                }
+                if (recordState == null) {
+                    log.debug("Unable to determine record state for offset: {} in batch: {} for share partition: {}-{}",
+                        offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
+                    return Optional.of(new InvalidRecordStateException("Unable to determine record state for the offset"));
+                }
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
                     recordState,
                     DeliveryCountOps.NO_OP,
@@ -1993,6 +2052,17 @@ public class SharePartition {
             }
         } finally {
             lock.writeLock().unlock();
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Byte> ackTypeForOffset(long offsetIndex, ShareAcknowledgementBatch batch) {
+        if (batch.acknowledgeTypes().size() == 1) {
+            return Optional.of(batch.acknowledgeTypes().get(0));
+        }
+        int idx = (int) (offsetIndex - batch.firstOffset());
+        if (0 <= idx && idx < batch.acknowledgeTypes().size()) {
+            return Optional.of(batch.acknowledgeTypes().get(idx));
         }
         return Optional.empty();
     }
