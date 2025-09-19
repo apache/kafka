@@ -95,7 +95,6 @@ public class ApplicationEventProcessorTest {
     private final StreamsMembershipManager streamsMembershipManager = mock(StreamsMembershipManager.class);
     private final BackgroundEventHandler backgroundEventHandler = mock(BackgroundEventHandler.class);
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
-    private final NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
     private final CompletableEventReaper applicationEventReaper = mock(CompletableEventReaper.class);
     private ApplicationEventProcessor processor;
 
@@ -115,7 +114,6 @@ public class ApplicationEventProcessorTest {
         processor = new ApplicationEventProcessor(
                 new LogContext(),
                 requestManagers,
-                networkClientDelegate,
                 metadata,
                 subscriptionState,
                 backgroundEventHandler,
@@ -140,7 +138,6 @@ public class ApplicationEventProcessorTest {
         processor = new ApplicationEventProcessor(
             new LogContext(),
             requestManagers,
-            networkClientDelegate,
             metadata,
             subscriptionState,
             backgroundEventHandler,

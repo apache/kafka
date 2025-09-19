@@ -305,8 +305,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         result.whenComplete((__, error) -> {
             boolean updatePositionsExpired = time.milliseconds() >= deadlineMs;
             if (error != null && updatePositionsExpired) {
-                log.debug("Adding error: {}", error.getClass());
-
                 if (error instanceof CompletionException)
                     error = error.getCause();
 
@@ -326,20 +324,17 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * @throws NoOffsetForPartitionException If no reset strategy is configured.
      */
     private CompletableFuture<Void> initWithPartitionOffsetsIfNeeded(Set<TopicPartition> initializingPartitions) {
-        log.debug("initWithPartitionOffsetsIfNeeded - initializingPartitions: {}", initializingPartitions);
         CompletableFuture<Void> result = new CompletableFuture<>();
         try {
             // Mark partitions that need reset, using the configured reset strategy. If no
             // strategy is defined, this will raise a NoOffsetForPartitionException exception.
             subscriptionState.resetInitializingPositions(initializingPartitions::contains);
-        } catch (Exception e) {
-            Throwable t = e;
-
+        } catch (Throwable t) {
             if (t instanceof CompletionException)
                 t = t.getCause();
 
             backgroundEventHandler.add(new ErrorEvent(t));
-            result.completeExceptionally(e);
+            result.completeExceptionally(t);
             return result;
         }
 
@@ -365,7 +360,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             return CompletableFuture.completedFuture(null);
         }
 
-        log.debug("initWithCommittedOffsetsIfNeeded - initializingPartitions: {}", initializingPartitions);
+        log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         CompletableFuture<Void> result = new CompletableFuture<>();
 
         // The shorter the timeout provided to poll(), the more likely the offsets fetch will time out. To handle
@@ -373,8 +368,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
         // case it times out, subsequent attempts will also use the event in order to wait for the results.
         if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
-            log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
-
             // Generate a new OffsetFetch request and update positions when a response is received
             final long fetchCommittedDeadlineMs = Math.max(deadlineMs, time.milliseconds() + defaultApiTimeoutMs);
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> fetchOffsets =
@@ -410,14 +403,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
     private void refreshOffsets(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                 final Throwable error,
                                 final CompletableFuture<Void> result) {
-        log.debug("refreshOffsets - offsets: {}, partitions: {}", offsets, String.valueOf(error));
-
         if (error == null) {
 
             // Ensure we only set positions for the partitions that still require one (ex. some partitions may have
             // been assigned a position manually)
             Map<TopicPartition, OffsetAndMetadata> offsetsToApply = offsetsForInitializingPartitions(offsets);
-            log.debug("refreshOffsets - offsetsToApply: {}", offsetsToApply);
 
             refreshCommittedOffsets(offsetsToApply, metadata, subscriptionState);
 
@@ -462,7 +452,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             return false;
         }
 
-        log.debug("canReusePendingOffsetFetchEvent - pendingOffsetFetchEvent.requestedPartitions: {}, partitions: {}", pendingOffsetFetchEvent.requestedPartitions, partitions);
         return pendingOffsetFetchEvent.requestedPartitions.equals(partitions);
     }
 
@@ -477,17 +466,17 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
      */
     CompletableFuture<Void> resetPositionsIfNeeded() {
-        log.debug("resetPositionsIfNeeded");
         Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap;
 
         try {
             partitionAutoOffsetResetStrategyMap = offsetFetcherUtils.getOffsetResetStrategyForPartitions();
-        } catch (Exception e) {
-            log.debug("resetPositionsIfNeeded - e: {}", e.toString());
+        } catch (Throwable t) {
+            if (t instanceof CompletionException)
+                t = t.getCause();
 
-            backgroundEventHandler.add(new ErrorEvent(e.getCause()));
+            backgroundEventHandler.add(new ErrorEvent(t));
             CompletableFuture<Void> result = new CompletableFuture<>();
-            result.completeExceptionally(e);
+            result.completeExceptionally(t);
             return result;
         }
 

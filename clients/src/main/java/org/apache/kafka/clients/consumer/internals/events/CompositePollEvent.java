@@ -18,13 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 public class CompositePollEvent extends ApplicationEvent {
 
-    public enum State {
-
-        OFFSET_COMMIT_CALLBACKS_REQUIRED,
-        BACKGROUND_EVENT_PROCESSING_REQUIRED,
-        COMPLETE
-    }
-
     private final long deadlineMs;
     private final long pollTimeMs;
     private final Type nextEventType;

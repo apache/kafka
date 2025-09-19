@@ -463,7 +463,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
-                    networkClientDelegateSupplier,
                     backgroundEventHandler,
                     Optional.of(offsetCommitCallbackInvoker),
                     applicationEventReaper
@@ -660,7 +659,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
-                networkClientDelegateSupplier,
                 backgroundEventHandler,
                 Optional.of(offsetCommitCallbackInvoker),
                 applicationEventReaper
@@ -874,16 +872,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void prepareFetch(Timer timer) {
-        long pollTimeMs = timer.currentTimeMs();
-        long deadlineMs = calculateDeadlineMs(timer);
-        ApplicationEvent.Type nextEventType = ApplicationEvent.Type.POLL;
-
-        log.debug("prepareFetch - timer: {}", timer.remainingMs());
-
         processBackgroundEvents();
         offsetCommitCallbackInvoker.executeCallbacks();
 
-        CompositePollEvent event = new CompositePollEvent(deadlineMs, pollTimeMs, nextEventType);
+        long pollTimeMs = timer.currentTimeMs();
+
+        CompositePollEvent event = new CompositePollEvent(
+            calculateDeadlineMs(timer),
+            pollTimeMs,
+            ApplicationEvent.Type.POLL
+        );
         applicationEventHandler.add(event);
     }
 

@@ -22,8 +22,6 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.OffsetCommitCallbackInvoker;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
@@ -65,7 +63,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
-    private final NetworkClientDelegate networkClientDelegate;
     private final RequiresApplicationThreadExecution backgroundEventProcessingRequiredTest;
     private final RequiresApplicationThreadExecution offsetCommitCallbackInvocationRequiredTest;
     private final CompletableEventReaper applicationEventReaper;
@@ -74,7 +71,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
-                                     final NetworkClientDelegate networkClientDelegate,
                                      final ConsumerMetadata metadata,
                                      final SubscriptionState subscriptions,
                                      final BackgroundEventHandler backgroundEventHandler,
@@ -82,7 +78,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                                      final CompletableEventReaper applicationEventReaper) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
-        this.networkClientDelegate = networkClientDelegate;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.applicationEventReaper = applicationEventReaper;
@@ -814,7 +809,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                                                                final ConsumerMetadata metadata,
                                                                final SubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier,
-                                                               final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                                final BackgroundEventHandler backgroundEventHandler,
                                                                final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker,
                                                                final CompletableEventReaper applicationEventReaper) {
@@ -822,12 +816,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             @Override
             protected ApplicationEventProcessor create() {
                 RequestManagers requestManagers = requestManagersSupplier.get();
-                NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
 
                 return new ApplicationEventProcessor(
                         logContext,
                         requestManagers,
-                        networkClientDelegate,
                         metadata,
                         subscriptions,
                         backgroundEventHandler,
