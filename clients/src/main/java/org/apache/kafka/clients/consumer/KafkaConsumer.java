@@ -661,7 +661,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
      *
      * <p>
-     * As part of group management, the consumer will keep track of the list of consumers that belong to a particular
+     * As part of group management, the group coordinator will keep track of the list of consumers that belong to a particular
      * group and will trigger a rebalance operation if any one of the following events are triggered:
      * <ul>
      * <li>Number of partitions change for any of the subscribed topics
@@ -670,8 +670,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <li>A new member is added to the consumer group
      * </ul>
      * <p>
-     * When any of these events are triggered, the provided listener will be invoked first to indicate that
-     * the consumer's assignment has been revoked, and then again when the new assignment has been received.
+     * When any of these events are triggered, the provided listener will be invoked in this way:
+     * <ul>
+     *     <li>{@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} will be invoked with the partitions to revoke, before re-assigning those partitions to another consumer.</li>
+     *     <li>{@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)} will be invoked when the rebalance completes (even if no new partitions are assigned to the consumer)</li>
+     * </ul>
      * Note that rebalances will only occur during an active call to {@link #poll(Duration)}, so callbacks will
      * also only be invoked during that time.
      *
