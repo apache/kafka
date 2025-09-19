@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller.metrics;
 
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.metrics.TimeRatio;
@@ -71,7 +70,6 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     private static final String TIME_SINCE_LAST_HEARTBEAT_RECEIVED_METRIC_NAME = "TimeSinceLastHeartbeatReceivedMs";
     private static final String BROKER_ID_TAG = "broker";
-    private static final MetricConfig METRIC_CONFIG = new MetricConfig();
 
     private final Optional<MetricsRegistry> registry;
     private final Time time;
@@ -168,13 +166,13 @@ public class QuorumControllerMetrics implements AutoCloseable {
         registry.ifPresent(r -> r.newGauge(AVERAGE_IDLE_RATIO, new Gauge<Double>() {
             @Override
             public Double value() {
-                return avgIdleTimeRatio.measure(METRIC_CONFIG, time.milliseconds());
+                return avgIdleTimeRatio.measure();
             }
         }));
     }
 
     public void updateIdleTime(long idleDurationMs) {
-        avgIdleTimeRatio.record(METRIC_CONFIG, (double) idleDurationMs, time.milliseconds());
+        avgIdleTimeRatio.record((double) idleDurationMs, time.milliseconds());
     }
 
     public void addTimeSinceLastHeartbeatMetric(int brokerId) {

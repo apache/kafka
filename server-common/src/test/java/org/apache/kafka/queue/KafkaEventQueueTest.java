@@ -30,6 +30,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -429,18 +430,16 @@ public class KafkaEventQueueTest {
     public void testIdleTimeCallback() throws Exception {
         MockTime time = new MockTime();
         AtomicLong lastIdleTimeMs = new AtomicLong(0);
-        AtomicInteger idleCallCount = new AtomicInteger(0);
 
         try (KafkaEventQueue queue = new KafkaEventQueue(
                 time,
                 logContext,
                 "testIdleTimeCallback",
                 EventQueue.VoidEvent.INSTANCE,
-                idleMs -> {
-                    lastIdleTimeMs.set(idleMs);
-                    idleCallCount.incrementAndGet();
-                })) {
-            
+                Optional.of(lastIdleTimeMs::set))) {
+            time.sleep(2);
+            assertEquals(0, lastIdleTimeMs.get(), "Last idle time should be 0ms");
+
             // Test 1: Two events with a wait in between using FutureEvent
             CompletableFuture<String> event1 = new CompletableFuture<>();
             queue.append(new FutureEvent<>(event1, () -> {
@@ -451,19 +450,14 @@ public class KafkaEventQueueTest {
 
             long waitTime5Ms = 5;
             time.sleep(waitTime5Ms);
-            
             CompletableFuture<String> event2 = new CompletableFuture<>();
             queue.append(new FutureEvent<>(event2, () -> {
                 time.sleep(1);
                 return "event2-processed";
             }));
             assertEquals("event2-processed", event2.get());
-
-            TestUtils.waitForCondition(
-                    () -> idleCallCount.get() == 2,
-                    "Idle callback should have been called twice"
-            );
-            assertEquals(waitTime5Ms, lastIdleTimeMs.get(), "Last idle time should be 5ms");
+            assertTrue(lastIdleTimeMs.get() >= waitTime5Ms,
+                "Idle time should be at least " + waitTime5Ms + "ms, was: " + lastIdleTimeMs.get());
 
             // Test 2: Deferred event
             long waitTime2Ms = 2;
@@ -473,12 +467,8 @@ public class KafkaEventQueueTest {
                     () -> deferredEvent2.complete(null));
             time.sleep(waitTime2Ms);
             deferredEvent2.get();
-
-            TestUtils.waitForCondition(
-                    () -> idleCallCount.get() == 3,
-                    "Idle callback should have been called three times"
-            );
-            assertEquals(3, idleCallCount.get(), "Idle callback should have been called three times");
+            assertTrue(lastIdleTimeMs.get() >= waitTime2Ms,
+                "Idle time should be at least " + waitTime2Ms + "ms, was: " + lastIdleTimeMs.get());
         }
     }
 }

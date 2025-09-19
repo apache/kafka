@@ -288,9 +288,10 @@ public final class KafkaEventQueue implements EventQueue {
                             cond.awaitNanos(awaitNs);
                         }
                     } catch (InterruptedException e) {
-
-                        log.warn("Interrupted while waiting for a {} event. " +
-                                "Shutting down event queue", (awaitNs == Long.MAX_VALUE) ? "new" : "deferred");
+                        log.warn(
+                                "Interrupted while waiting for a {} event. Shutting down event queue",
+                                (awaitNs == Long.MAX_VALUE) ? "new" : "deferred"
+                        );
                         interrupted = true;
                     } finally {
                         idleTimeCallback.accept(Math.max(time.milliseconds() - startIdleMs, 0));
@@ -451,7 +452,7 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix
     ) {
-        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, null);
+        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, Optional.empty());
     }
 
     public KafkaEventQueue(
@@ -460,7 +461,7 @@ public final class KafkaEventQueue implements EventQueue {
         String threadNamePrefix,
         Event cleanupEvent
     ) {
-        this(time, logContext, threadNamePrefix, cleanupEvent, null);
+        this(time, logContext, threadNamePrefix, cleanupEvent, Optional.empty());
     }
 
     public KafkaEventQueue(
@@ -468,7 +469,7 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix,
         Event cleanupEvent,
-        Consumer<Long> idleTimeCallback
+        Optional<Consumer<Long>> idleTimeCallback
     ) {
         this.time = time;
         this.cleanupEvent = Objects.requireNonNull(cleanupEvent);
@@ -479,7 +480,7 @@ public final class KafkaEventQueue implements EventQueue {
             this.eventHandler, false);
         this.shuttingDown = false;
         this.interrupted = false;
-        this.idleTimeCallback = idleTimeCallback != null ? idleTimeCallback : __ -> { };
+        this.idleTimeCallback = idleTimeCallback.orElse(__ -> { });
         this.eventHandlerThread.start();
     }
 
