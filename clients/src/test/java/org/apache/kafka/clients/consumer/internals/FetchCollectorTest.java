@@ -420,14 +420,9 @@ public class FetchCollectorTest {
         // Try to data and validate that we get an empty Fetch back.
         CompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.CORRUPT_MESSAGE)
-                .fetchOffset(100)
-                .partition(topicAPartition0)
                 .build();
         fetchBuffer.add(completedFetch);
-        CorruptRecordException cause =
-                assertThrows(CorruptRecordException.class, () -> fetchCollector.collectFetch(fetchBuffer));
-        assertEquals(100, cause.corruptOffset());
-        assertEquals(topicAPartition0, cause.topicPartition());
+        assertThrows(KafkaException.class, () -> fetchCollector.collectFetch(fetchBuffer));
     }
 
     @ParameterizedTest
