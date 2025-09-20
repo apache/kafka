@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.TopicPartition;
-
 /**
  * This exception indicates a record has failed its internal CRC check, this generally indicates network or disk
  * corruption.
@@ -25,9 +23,6 @@ import org.apache.kafka.common.TopicPartition;
 public class CorruptRecordException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
-
-    private TopicPartition topicPartition;
-    private long corruptOffset;
 
     public CorruptRecordException() {
         super("This message has failed its CRC checksum, exceeds the valid size, has a null key for a compacted topic, or is otherwise corrupt.");
@@ -45,17 +40,4 @@ public class CorruptRecordException extends RetriableException {
         super(message, cause);
     }
 
-    public CorruptRecordException(String message, Throwable cause, TopicPartition topicPartition, long corruptOffset) {
-        super(message, cause);
-        this.topicPartition = topicPartition;
-        this.corruptOffset = corruptOffset;
-    }
-
-    public TopicPartition topicPartition() {
-        return topicPartition;
-    }
-
-    public long corruptOffset() {
-        return corruptOffset;
-    }
 }
