@@ -114,6 +114,7 @@ public class ApplicationEventProcessorTest {
         processor = new ApplicationEventProcessor(
                 new LogContext(),
                 requestManagers,
+                mock(NetworkClientDelegate.class),
                 metadata,
                 subscriptionState,
                 backgroundEventHandler,
@@ -138,6 +139,7 @@ public class ApplicationEventProcessorTest {
         processor = new ApplicationEventProcessor(
             new LogContext(),
             requestManagers,
+            mock(NetworkClientDelegate.class),
             metadata,
             subscriptionState,
             backgroundEventHandler,

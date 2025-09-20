@@ -303,6 +303,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
+                    networkClientDelegateSupplier,
                     backgroundEventHandler,
                     Optional.empty(),
                     applicationEventReaper
@@ -413,6 +414,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
+                networkClientDelegateSupplier,
                 backgroundEventHandler,
                 Optional.empty(),
                 applicationEventReaper
