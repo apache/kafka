@@ -241,7 +241,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final CompositePollEvent event) {
-        if (maybePauseCompositePoll())
+        if (maybePauseCompositePoll(event))
             return;
 
         ApplicationEvent.Type nextEventType = event.nextEventType();
@@ -249,7 +249,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (nextEventType == ApplicationEvent.Type.POLL) {
             processPollEvent(event.pollTimeMs());
 
-            if (maybePauseCompositePoll())
+            if (maybePauseCompositePoll(event))
                 return;
 
             nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
@@ -258,7 +258,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (nextEventType == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
             processUpdatePatternSubscriptionEvent();
 
-            if (maybePauseCompositePoll())
+            if (maybePauseCompositePoll(event))
                 return;
 
             nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
@@ -269,14 +269,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             applicationEventReaper.add(new CompositePollPsuedoEvent<>(updatePositionsFuture, event.deadlineMs()));
 
             updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
-                if (maybeFailCompositePoll(event, updatePositionsError) || maybePauseCompositePoll())
+                if (maybeFailCompositePoll(event, updatePositionsError) || maybePauseCompositePoll(event))
                     return;
 
                 // If needed, create a fetch request if there's no data in the FetchBuffer.
                 requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
-                    if (maybeFailCompositePoll(event, fetchError) || maybePauseCompositePoll())
+                    if (maybeFailCompositePoll(event, fetchError) || maybePauseCompositePoll(event))
                         return;
 
+                    event.complete();
                     log.trace("Completed CompositePollEvent {}", event);
                 });
             });
@@ -285,14 +286,19 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         log.warn("Unknown next step for composite poll: {}", nextEventType);
+        event.complete();
     }
 
-    private boolean maybePauseCompositePoll() {
-        if (backgroundEventProcessingRequiredTest.requiresApplicationThread())
+    private boolean maybePauseCompositePoll(CompositePollEvent event) {
+        if (backgroundEventProcessingRequiredTest.requiresApplicationThread()) {
+            event.complete();
             return true;
+        }
 
-        if (offsetCommitCallbackInvocationRequiredTest.requiresApplicationThread())
+        if (offsetCommitCallbackInvocationRequiredTest.requiresApplicationThread()) {
+            event.complete();
             return true;
+        }
 
         return false;
     }
@@ -311,6 +317,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         backgroundEventHandler.add(new ErrorEvent(t));
+        event.complete();
         log.trace("Failing CompositePollEvent {}", event, t);
         return true;
     }

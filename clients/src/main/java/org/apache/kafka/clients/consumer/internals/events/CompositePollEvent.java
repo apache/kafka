@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 public class CompositePollEvent extends ApplicationEvent {
 
     private final long deadlineMs;
     private final long pollTimeMs;
     private final Type nextEventType;
+    private final AtomicBoolean complete = new AtomicBoolean();
 
     public CompositePollEvent(long deadlineMs, long pollTimeMs, Type nextEventType) {
         super(Type.COMPOSITE_POLL);
@@ -41,8 +44,16 @@ public class CompositePollEvent extends ApplicationEvent {
         return nextEventType;
     }
 
+    public boolean isComplete() {
+        return complete.get();
+    }
+
+    public void complete() {
+        complete.set(true);
+    }
+
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", deadlineMs=" + deadlineMs + ", pollTimeMs=" + pollTimeMs + ", nextEventType=" + nextEventType;
+        return super.toStringBase() + ", deadlineMs=" + deadlineMs + ", pollTimeMs=" + pollTimeMs + ", nextEventType=" + nextEventType + ", complete=" + complete;
     }
 }
