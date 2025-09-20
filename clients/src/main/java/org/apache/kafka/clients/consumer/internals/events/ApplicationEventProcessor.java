@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.OffsetCommitCallbackInvoker;
@@ -48,6 +49,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -86,30 +88,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         this.metadataVersionSnapshot = metadata.updateVersion();
 
         // If there are background events to process, exit to the application thread.
-        this.backgroundEventProcessingRequiredTest = new RequiresApplicationThreadExecution() {
-            @Override
-            public boolean requiresApplicationThread() {
-                return backgroundEventHandler.size() > 0;
-            }
-
-            @Override
-            public CompositePollEvent.State targetState() {
-                return CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED;
-            }
-        };
+        this.backgroundEventProcessingRequiredTest = () -> backgroundEventHandler.size() > 0;
 
         // If there are enqueued callbacks to invoke, exit to the application thread.
-        this.offsetCommitCallbackInvocationRequiredTest = new RequiresApplicationThreadExecution() {
-            @Override
-            public boolean requiresApplicationThread() {
-                return offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
-            }
-
-            @Override
-            public CompositePollEvent.State targetState() {
-                return CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED;
-            }
-        };
+        this.offsetCommitCallbackInvocationRequiredTest = () -> offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "JavaNCSSCheck"})
@@ -262,88 +244,89 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final CompositePollEvent event) {
-        if (maybeFailCompositePoll(event))
+        if (maybeFailCompositePoll(event) || maybePauseCompositePoll(event, ApplicationEvent.Type.POLL))
             return;
 
         ApplicationEvent.Type nextEventType = event.nextEventType();
 
         if (nextEventType == ApplicationEvent.Type.POLL) {
+            log.debug("Processing {} logic for {}", nextEventType, event);
             processPollEvent(event.pollTimeMs());
-
-            if (maybeFailCompositePoll(event))
-                return;
-            else if (maybePauseCompositePoll(event, offsetCommitCallbackInvocationRequiredTest))
-                return;
-
             nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
+
+            if (maybeFailCompositePoll(event) || maybePauseCompositePoll(event, nextEventType))
+                return;
         }
 
         if (nextEventType == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
+            log.debug("Processing {} logic for {}", nextEventType, event);
             processUpdatePatternSubscriptionEvent();
-
-            if (maybeFailCompositePoll(event))
-                return;
-            else if (maybePauseCompositePoll(event, backgroundEventProcessingRequiredTest))
-                return;
-
             nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
+
+            if (maybeFailCompositePoll(event) || maybePauseCompositePoll(event, nextEventType))
+                return;
         }
 
         if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
-            // This is a bit tricky... The CompositePollEvent should be "paused" from being reaped while the code
-            // for new CheckAndUpdatePositionsEvent is in flight.
-            applicationEventReaper.pause(event);
+            log.debug("Processing {} logic for {}", nextEventType, event);
             CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs());
             applicationEventReaper.add(new CompositePollPsuedoEvent<>(updatePositionsFuture, event.deadlineMs()));
 
             updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
-                // Make sure to resume the CompositePollEvent *before* checking for failure so that it is assured
-                // to be resumed.
-                applicationEventReaper.resume(event);
-
-                if (maybeFailCompositePoll(event, updatePositionsError))
+                if (maybeFailCompositePoll(event) || maybeFailCompositePoll(event, updatePositionsError))
                     return;
+
+                log.debug("Processing {} logic for {}", ApplicationEvent.Type.CREATE_FETCH_REQUESTS, event);
 
                 // If needed, create a fetch request if there's no data in the FetchBuffer.
                 requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
-                    if (maybeFailCompositePoll(event, fetchError))
+                    if (maybeFailCompositePoll(event) || maybeFailCompositePoll(event, fetchError))
                         return;
 
-                    log.trace("Completing CompositePollEvent {}", event);
-                    event.future().complete(CompositePollEvent.State.COMPLETE);
+                    event.complete(CompositePollEvent.State.COMPLETE, Optional.empty());
+                    log.debug("Completed CompositePollEvent {}", event);
                 });
             });
 
             return;
         }
 
-        event.future().completeExceptionally(new IllegalArgumentException("Unknown next step for composite poll: " + nextEventType));
+        log.warn("Unknown next step for composite poll: {}", nextEventType);
+        event.complete(CompositePollEvent.State.UNKNOWN, Optional.empty());
     }
 
-    private boolean maybePauseCompositePoll(CompositePollEvent event, RequiresApplicationThreadExecution test) {
-        if (!test.requiresApplicationThread())
-            return false;
+    private boolean maybePauseCompositePoll(CompositePollEvent event, ApplicationEvent.Type nextEventType) {
+        if (backgroundEventProcessingRequiredTest.requiresApplicationThread()) {
+            log.debug("Pausing event processing for {} with {} as next step", event, nextEventType);
+            event.complete(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED, Optional.of(nextEventType));
+            return true;
+        }
 
-        CompositePollEvent.State targetState = test.targetState();
-        log.trace("Pausing CompositePollEvent {} to process logic for target state {}", event, targetState);
-        event.future().complete(targetState);
-        return true;
+        if (offsetCommitCallbackInvocationRequiredTest.requiresApplicationThread()) {
+            log.debug("Pausing event processing for {} with {} as next step", event, nextEventType);
+            event.complete(CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED, Optional.of(nextEventType));
+            return true;
+        }
+
+        return false;
     }
 
     private boolean maybeFailCompositePoll(CompositePollEvent event, Throwable t) {
-        if (maybeFailCompositePoll(event))
-            return true;
-
         if (t == null)
             return false;
 
         if (t instanceof org.apache.kafka.common.errors.TimeoutException || t instanceof java.util.concurrent.TimeoutException) {
-            log.trace("Ignoring timeout for CompositePollEvent {}: {}", event, t.getMessage());
+            log.debug("Ignoring timeout for CompositePollEvent {}: {}", event, t.getMessage());
             return false;
         }
 
-        log.trace("Failing CompositePollEvent {}", event, t);
-        event.future().completeExceptionally(t);
+        if (t instanceof CompletionException) {
+            t = t.getCause();
+        }
+
+        KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
+        event.completeExceptionally(e);
+        log.debug("Failing event processing for {}", event, e);
         return true;
     }
 
@@ -351,9 +334,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         Optional<Exception> exception = networkClientDelegate.getAndClearMetadataError();
 
         if (exception.isPresent()) {
-            Exception e = exception.get();
-            log.trace("Failing CompositePollEvent {} with error from NetworkClient", event, e);
-            event.future().completeExceptionally(e);
+            KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(exception.get());
+            event.completeExceptionally(e);
+            log.debug("Failing event processing for {}", event, e);
             return true;
         }
 
@@ -958,8 +941,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private interface RequiresApplicationThreadExecution {
 
         boolean requiresApplicationThread();
-
-        CompositePollEvent.State targetState();
     }
 
     private static class CompositePollPsuedoEvent<T> implements CompletableEvent<T> {

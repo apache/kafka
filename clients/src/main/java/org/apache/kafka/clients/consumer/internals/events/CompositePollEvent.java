@@ -16,22 +16,76 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class CompositePollEvent extends CompletableApplicationEvent<CompositePollEvent.State> {
+import org.apache.kafka.common.KafkaException;
+
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+
+public class CompositePollEvent extends ApplicationEvent {
 
     public enum State {
 
         OFFSET_COMMIT_CALLBACKS_REQUIRED,
         BACKGROUND_EVENT_PROCESSING_REQUIRED,
-        COMPLETE
+        INCOMPLETE,
+        COMPLETE,
+        UNKNOWN
     }
 
+    public static class Result {
+
+        private static final Result INCOMPLETE = new Result(State.INCOMPLETE, Optional.empty());
+        private final State state;
+
+        private final Optional<Type> nextEventType;
+
+        public Result(State state, Optional<Type> nextEventType) {
+            this.state = state;
+            this.nextEventType = nextEventType;
+        }
+
+        public State state() {
+            return state;
+        }
+
+        public Optional<Type> nextEventType() {
+            return nextEventType;
+        }
+
+        @Override
+        public String toString() {
+            return "Result{" + "state=" + state + ", nextEventType=" + nextEventType + '}';
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            Result result = (Result) o;
+            return state == result.state && Objects.equals(nextEventType, result.nextEventType);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(state, nextEventType);
+        }
+    }
+
+    private final long deadlineMs;
     private final long pollTimeMs;
     private final Type nextEventType;
+    private final AtomicReference<Object> resultOrError;
 
     public CompositePollEvent(long deadlineMs, long pollTimeMs, Type nextEventType) {
-        super(Type.COMPOSITE_POLL, deadlineMs);
+        super(Type.COMPOSITE_POLL);
+        this.deadlineMs = deadlineMs;
         this.pollTimeMs = pollTimeMs;
         this.nextEventType = nextEventType;
+        this.resultOrError = new AtomicReference<>(Result.INCOMPLETE);
+    }
+
+    public long deadlineMs() {
+        return deadlineMs;
     }
 
     public long pollTimeMs() {
@@ -42,8 +96,30 @@ public class CompositePollEvent extends CompletableApplicationEvent<CompositePol
         return nextEventType;
     }
 
+    public Result resultOrError() {
+        Object o = resultOrError.get();
+
+        if (o instanceof KafkaException)
+            throw (KafkaException) o;
+        else
+            return (Result) o;
+    }
+
+    public void complete(State state, Optional<Type> nextEventType) {
+        Result result = new Result(
+            Objects.requireNonNull(state),
+            Objects.requireNonNull(nextEventType)
+        );
+
+        resultOrError.compareAndSet(Result.INCOMPLETE, result);
+    }
+
+    public void completeExceptionally(KafkaException e) {
+        resultOrError.compareAndSet(Result.INCOMPLETE, Objects.requireNonNull(e));
+    }
+
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", pollTimeMs=" + pollTimeMs + ", nextEventType=" + nextEventType;
+        return super.toStringBase() + ", deadlineMs=" + deadlineMs + ", pollTimeMs=" + pollTimeMs + ", nextEventType=" + nextEventType + ", resultOrError=" + resultOrError;
     }
 }
