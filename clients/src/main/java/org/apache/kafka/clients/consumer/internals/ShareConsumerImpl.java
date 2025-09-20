@@ -304,8 +304,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     subscriptions,
                     requestManagersSupplier,
                     networkClientDelegateSupplier,
-                    backgroundEventHandler,
-                    Optional.empty(),
+                    Optional::empty,
                     applicationEventReaper
             );
 
@@ -415,8 +414,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 subscriptions,
                 requestManagersSupplier,
                 networkClientDelegateSupplier,
-                backgroundEventHandler,
-                Optional.empty(),
+                Optional::empty,
                 applicationEventReaper
         );
 

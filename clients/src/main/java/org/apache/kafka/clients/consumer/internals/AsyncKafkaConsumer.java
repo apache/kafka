@@ -174,6 +174,31 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private static final long NO_CURRENT_THREAD = -1L;
 
+    private static class AsyncConsumerApplicationThreadRequirement implements ApplicationEventProcessor.CompositePollApplicationThreadRequirement {
+
+        private final BackgroundEventHandler backgroundEventHandler;
+        private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
+
+        public AsyncConsumerApplicationThreadRequirement(BackgroundEventHandler backgroundEventHandler,
+                                                         OffsetCommitCallbackInvoker offsetCommitCallbackInvoker) {
+            this.backgroundEventHandler = backgroundEventHandler;
+            this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
+        }
+
+        @Override
+        public Optional<CompositePollEvent.State> requirement() {
+            // If there are background events to process, exit to the application thread.
+            if (backgroundEventHandler.size() > 0)
+                return Optional.of(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED);
+
+            // If there are enqueued callbacks to invoke, exit to the application thread.
+            if (offsetCommitCallbackInvoker.size() > 0)
+                return Optional.of(CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED);
+
+            return Optional.empty();
+        }
+    }
+
     private class CompositePollEventInvoker {
 
         private CompositePollEvent latest;
@@ -373,6 +398,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
 
+    private final AsyncConsumerApplicationThreadRequirement asyncApplicationThreadRequirement;
+
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
@@ -508,13 +535,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     streamsRebalanceData
             );
             final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
+            this.asyncApplicationThreadRequirement = new AsyncConsumerApplicationThreadRequirement(
+                backgroundEventHandler,
+                offsetCommitCallbackInvoker
+            );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     subscriptions,
                     requestManagersSupplier,
                     networkClientDelegateSupplier,
-                    backgroundEventHandler,
-                    Optional.of(offsetCommitCallbackInvoker),
+                    asyncApplicationThreadRequirement,
                     applicationEventReaper
             );
             this.applicationEventHandler = applicationEventHandlerFactory.build(
@@ -616,6 +646,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             time,
             asyncConsumerMetrics
         );
+        this.asyncApplicationThreadRequirement = new AsyncConsumerApplicationThreadRequirement(
+            backgroundEventHandler,
+            offsetCommitCallbackInvoker
+        );
     }
 
     AsyncKafkaConsumer(LogContext logContext,
@@ -705,14 +739,17 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Optional.empty()
         );
         final CompletableEventReaper applicationEventReaper = new CompletableEventReaper(logContext);
+        this.asyncApplicationThreadRequirement = new AsyncConsumerApplicationThreadRequirement(
+            backgroundEventHandler,
+            offsetCommitCallbackInvoker
+        );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
                 subscriptions,
                 requestManagersSupplier,
                 networkClientDelegateSupplier,
-                backgroundEventHandler,
-                Optional.of(offsetCommitCallbackInvoker),
+                asyncApplicationThreadRequirement,
                 applicationEventReaper
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,

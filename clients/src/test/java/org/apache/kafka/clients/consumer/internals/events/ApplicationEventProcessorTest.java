@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
-import org.apache.kafka.clients.consumer.internals.OffsetCommitCallbackInvoker;
 import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManager;
@@ -93,8 +92,6 @@ public class ApplicationEventProcessorTest {
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = mock(StreamsGroupHeartbeatRequestManager.class);
     private final StreamsMembershipManager streamsMembershipManager = mock(StreamsMembershipManager.class);
-    private final BackgroundEventHandler backgroundEventHandler = mock(BackgroundEventHandler.class);
-    private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
     private final NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
     private final CompletableEventReaper applicationEventReaper = mock(CompletableEventReaper.class);
     private ApplicationEventProcessor processor;
@@ -115,11 +112,10 @@ public class ApplicationEventProcessorTest {
         processor = new ApplicationEventProcessor(
                 new LogContext(),
                 requestManagers,
-                networkClientDelegate,
                 metadata,
                 subscriptionState,
-                backgroundEventHandler,
-                Optional.of(offsetCommitCallbackInvoker),
+                networkClientDelegate,
+                Optional::empty,
                 applicationEventReaper
         );
     }
@@ -140,11 +136,10 @@ public class ApplicationEventProcessorTest {
         processor = new ApplicationEventProcessor(
             new LogContext(),
             requestManagers,
-            networkClientDelegate,
             metadata,
             subscriptionState,
-            backgroundEventHandler,
-            Optional.of(offsetCommitCallbackInvoker),
+            networkClientDelegate,
+            Optional::empty,
             applicationEventReaper
         );
     }

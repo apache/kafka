@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
-import org.apache.kafka.clients.consumer.internals.OffsetCommitCallbackInvoker;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
@@ -66,32 +65,25 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final SubscriptionState subscriptions;
     private final RequestManagers requestManagers;
     private final NetworkClientDelegate networkClientDelegate;
-    private final RequiresApplicationThreadExecution backgroundEventProcessingRequiredTest;
-    private final RequiresApplicationThreadExecution offsetCommitCallbackInvocationRequiredTest;
+    private final CompositePollApplicationThreadRequirement compositePollApplicationThreadRequirement;
     private final CompletableEventReaper applicationEventReaper;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
-                                     final NetworkClientDelegate networkClientDelegate,
                                      final ConsumerMetadata metadata,
                                      final SubscriptionState subscriptions,
-                                     final BackgroundEventHandler backgroundEventHandler,
-                                     final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker,
+                                     final NetworkClientDelegate networkClientDelegate,
+                                     final CompositePollApplicationThreadRequirement compositePollApplicationThreadRequirement,
                                      final CompletableEventReaper applicationEventReaper) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
-        this.networkClientDelegate = networkClientDelegate;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
+        this.networkClientDelegate = networkClientDelegate;
+        this.compositePollApplicationThreadRequirement = compositePollApplicationThreadRequirement;
         this.applicationEventReaper = applicationEventReaper;
         this.metadataVersionSnapshot = metadata.updateVersion();
-
-        // If there are background events to process, exit to the application thread.
-        this.backgroundEventProcessingRequiredTest = () -> backgroundEventHandler.size() > 0;
-
-        // If there are enqueued callbacks to invoke, exit to the application thread.
-        this.offsetCommitCallbackInvocationRequiredTest = () -> offsetCommitCallbackInvoker.isPresent() && offsetCommitCallbackInvoker.get().size() > 0;
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "JavaNCSSCheck"})
@@ -296,15 +288,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private boolean maybePauseCompositePoll(CompositePollEvent event, ApplicationEvent.Type nextEventType) {
-        if (backgroundEventProcessingRequiredTest.requiresApplicationThread()) {
-            log.debug("Pausing event processing for {} with {} as next step", event, nextEventType);
-            event.complete(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED, Optional.of(nextEventType));
-            return true;
-        }
+        Optional<CompositePollEvent.State> stateOpt = compositePollApplicationThreadRequirement.requirement();
 
-        if (offsetCommitCallbackInvocationRequiredTest.requiresApplicationThread()) {
-            log.debug("Pausing event processing for {} with {} as next step", event, nextEventType);
-            event.complete(CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED, Optional.of(nextEventType));
+        if (stateOpt.isPresent()) {
+            CompositePollEvent.State state = stateOpt.get();
+            log.debug("Pausing event processing for {} with {} as next step", state, nextEventType);
+            event.complete(state, Optional.of(nextEventType));
             return true;
         }
 
@@ -838,8 +827,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                                                                final SubscriptionState subscriptions,
                                                                final Supplier<RequestManagers> requestManagersSupplier,
                                                                final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                                               final BackgroundEventHandler backgroundEventHandler,
-                                                               final Optional<OffsetCommitCallbackInvoker> offsetCommitCallbackInvoker,
+                                                               final CompositePollApplicationThreadRequirement applicationThreadRequirement,
                                                                final CompletableEventReaper applicationEventReaper) {
         return new CachedSupplier<>() {
             @Override
@@ -850,11 +838,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 return new ApplicationEventProcessor(
                         logContext,
                         requestManagers,
-                        networkClientDelegate,
                         metadata,
                         subscriptions,
-                        backgroundEventHandler,
-                        offsetCommitCallbackInvoker,
+                        networkClientDelegate,
+                        applicationThreadRequirement,
                         applicationEventReaper
                 );
             }
@@ -934,13 +921,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * This interface exists mostly to make the code more intuitive. When {@link #requiresApplicationThread()}
+     * This interface exists mostly to make the code more intuitive. When {@link #requirement()}
      * returns true, the {@link CompositePollEvent} processing needs to be <em>interrupted</em> so that processing
      * can return to the application thread.
      */
-    private interface RequiresApplicationThreadExecution {
+    public interface CompositePollApplicationThreadRequirement {
 
-        boolean requiresApplicationThread();
+        Optional<CompositePollEvent.State> requirement();
     }
 
     private static class CompositePollPsuedoEvent<T> implements CompletableEvent<T> {
