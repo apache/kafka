@@ -3477,10 +3477,13 @@ org.apache.kafka.common.header.internals.RecordHeadersTest:
 - shouldThrowNpeWhenAddingCollectionWithNullHeader
 - shouldThrowNpeWhenAddingNullHeader
 - testAdd
+- testAddHeadersPreserveOrder
 - testAddRemoveInterleaved
 - testHeaders
+- testHeadersIteratorRemove
 - testLastHeader
 - testNew
+- testPreserveOrderAfterRemove
 - testReadOnly
 - testRemove
 org.apache.kafka.common.internals.IdempotentCloserTest:
