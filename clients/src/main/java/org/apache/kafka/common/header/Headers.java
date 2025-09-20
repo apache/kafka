@@ -63,7 +63,7 @@ public interface Headers extends Iterable<Header> {
 
     /**
      * Returns all headers for the given key, in the order they were added in, if present.
-     * The returned iterators {@link org.apache.kafka.common.utils.AbstractIterator#remove()} always throws {@link UnsupportedOperationException}.
+     * The iterator does not support {@link java.util.Iterator#remove()}.
      *
      * @param key to return the headers for; must not be null.
      * @return all headers for the given key, in the order they were added in, if NO headers are present an empty iterable is returned.
