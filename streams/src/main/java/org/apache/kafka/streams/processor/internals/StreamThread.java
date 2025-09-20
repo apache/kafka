@@ -1532,6 +1532,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         try {
             records = mainConsumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
+            log.info("Found no valid offset for {} partitions, resetting.", e.partitions().size());
             resetOffsets(e.partitions(), e);
         }
 
