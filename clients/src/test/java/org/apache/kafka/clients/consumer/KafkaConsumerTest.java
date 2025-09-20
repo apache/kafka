@@ -1046,7 +1046,7 @@ public class KafkaConsumerTest {
             }, fetchResponse(tp0, 50L, 5));
 
         @SuppressWarnings("unchecked")
-        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
+        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1000));
         assertEquals(5, records.count());
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(1, records.nextOffsets().size());
@@ -1826,7 +1826,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
         @SuppressWarnings("unchecked")
-        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1));
+        ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1000));
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
         assertEquals(1, records.nextOffsets().size());

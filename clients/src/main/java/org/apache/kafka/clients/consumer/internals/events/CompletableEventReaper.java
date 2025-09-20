@@ -156,6 +156,19 @@ public class CompletableEventReaper {
         return tracked.size();
     }
 
+    public List<CompletableEvent<?>> uncompletedEvents() {
+        // The following code does not use the Java Collections Streams API to reduce overhead in the critical
+        // path of the ConsumerNetworkThread loop.
+        List<CompletableEvent<?>> events = new ArrayList<>();
+
+        for (CompletableEvent<?> event : tracked) {
+            if (!event.future().isDone())
+                events.add(event);
+        }
+
+        return events;
+    }
+
     /**
      * For all the {@link CompletableEvent}s in the collection, if they're not already complete, invoke
      * {@link CompletableFuture#completeExceptionally(Throwable)}.

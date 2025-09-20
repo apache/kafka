@@ -20,6 +20,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
@@ -34,6 +35,7 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -171,7 +173,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         cachedMaximumTimeToWait = maxTimeToWaitMs;
 
         reapExpiredApplicationEvents(currentTimeMs);
-    }
+        List<CompletableEvent<?>> uncompletedEvents = applicationEventReaper.uncompletedEvents();
+        maybeFailOnMetadataError(uncompletedEvents);    }
 
     /**
      * Process the events—if any—that were produced by the application thread.
@@ -355,5 +358,23 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             closeQuietly(networkClientDelegate, "network client delegate");
             log.debug("Closed the consumer network thread");
         }
+    }
+
+    /**
+     * If there is a metadata error, complete all uncompleted events that require subscription metadata.
+     */
+    private void maybeFailOnMetadataError(List<CompletableEvent<?>> events) {
+        List<CompletableApplicationEvent<?>> subscriptionMetadataEvent = new ArrayList<>();
+
+        for (CompletableEvent<?> ce : events) {
+            if (ce instanceof CompletableApplicationEvent && ((CompletableApplicationEvent<?>) ce).requireSubscriptionMetadata())
+                subscriptionMetadataEvent.add((CompletableApplicationEvent<?>) ce);
+        }
+
+        if (subscriptionMetadataEvent.isEmpty())
+            return;
+        networkClientDelegate.getAndClearMetadataError().ifPresent(metadataError ->
+            subscriptionMetadataEvent.forEach(event -> event.future().completeExceptionally(metadataError))
+        );
     }
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.clients.consumer.internals.OffsetCommitCallbackInvoker;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
@@ -66,7 +67,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final RequiresApplicationThreadExecution backgroundEventProcessingRequiredTest;
     private final RequiresApplicationThreadExecution offsetCommitCallbackInvocationRequiredTest;
     private final CompletableEventReaper applicationEventReaper;
-    private final BackgroundEventHandler backgroundEventHandler;
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
@@ -81,7 +81,6 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.applicationEventReaper = applicationEventReaper;
-        this.backgroundEventHandler = backgroundEventHandler;
         this.metadataVersionSnapshot = metadata.updateVersion();
 
         // If there are background events to process, exit to the application thread.
@@ -241,44 +240,47 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final CompositePollEvent event) {
-        if (maybePauseCompositePoll(event))
+        if (maybePauseCompositePoll(event, ApplicationEvent.Type.POLL))
             return;
 
         ApplicationEvent.Type nextEventType = event.nextEventType();
 
         if (nextEventType == ApplicationEvent.Type.POLL) {
+            log.debug("Processing {} logic for {}", nextEventType, event);
             processPollEvent(event.pollTimeMs());
-
-            if (maybePauseCompositePoll(event))
-                return;
-
             nextEventType = ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA;
+
+            if (maybePauseCompositePoll(event, nextEventType))
+                return;
         }
 
         if (nextEventType == ApplicationEvent.Type.UPDATE_SUBSCRIPTION_METADATA) {
+            log.debug("Processing {} logic for {}", nextEventType, event);
             processUpdatePatternSubscriptionEvent();
-
-            if (maybePauseCompositePoll(event))
-                return;
-
             nextEventType = ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS;
+
+            if (maybePauseCompositePoll(event, nextEventType))
+                return;
         }
 
         if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
+            log.debug("Processing {} logic for {}", nextEventType, event);
             CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs());
             applicationEventReaper.add(new CompositePollPsuedoEvent<>(updatePositionsFuture, event.deadlineMs()));
 
             updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
-                if (maybeFailCompositePoll(event, updatePositionsError) || maybePauseCompositePoll(event))
+                if (maybeFailCompositePoll(event, updatePositionsError))
                     return;
+
+                log.debug("Processing {} logic for {}", ApplicationEvent.Type.POLL, event);
 
                 // If needed, create a fetch request if there's no data in the FetchBuffer.
                 requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
-                    if (maybeFailCompositePoll(event, fetchError) || maybePauseCompositePoll(event))
+                    if (maybeFailCompositePoll(event, fetchError))
                         return;
 
-                    event.complete();
-                    log.trace("Completed CompositePollEvent {}", event);
+                    event.complete(CompositePollEvent.State.COMPLETE, Optional.empty());
+                    log.debug("Completed CompositePollEvent {}", event);
                 });
             });
 
@@ -286,17 +288,19 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         log.warn("Unknown next step for composite poll: {}", nextEventType);
-        event.complete();
+        event.complete(CompositePollEvent.State.UNKNOWN, Optional.empty());
     }
 
-    private boolean maybePauseCompositePoll(CompositePollEvent event) {
+    private boolean maybePauseCompositePoll(CompositePollEvent event, ApplicationEvent.Type nextEventType) {
         if (backgroundEventProcessingRequiredTest.requiresApplicationThread()) {
-            event.complete();
+            log.debug("Pausing event processing for {} with {} as next step", event, nextEventType);
+            event.complete(CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED, Optional.of(nextEventType));
             return true;
         }
 
         if (offsetCommitCallbackInvocationRequiredTest.requiresApplicationThread()) {
-            event.complete();
+            log.debug("Pausing event processing for {} with {} as next step", event, nextEventType);
+            event.complete(CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED, Optional.of(nextEventType));
             return true;
         }
 
@@ -308,7 +312,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return false;
 
         if (t instanceof org.apache.kafka.common.errors.TimeoutException || t instanceof java.util.concurrent.TimeoutException) {
-            log.trace("Ignoring timeout for CompositePollEvent {}: {}", event, t.getMessage());
+            log.debug("Ignoring timeout for CompositePollEvent {}: {}", event, t.getMessage());
             return false;
         }
 
@@ -316,9 +320,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             t = t.getCause();
         }
 
-        backgroundEventHandler.add(new ErrorEvent(t));
-        event.complete();
-        log.trace("Failing CompositePollEvent {}", event, t);
+        KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
+        event.completeExceptionally(e);
+        log.debug("Failing event processing for {}", event, e);
         return true;
     }
 

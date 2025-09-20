@@ -70,6 +70,8 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
+    private Optional<Exception> metadataError;
+    private final boolean notifyMetadataErrorsViaErrorQueue;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
     public NetworkClientDelegate(
@@ -79,6 +81,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             final KafkaClient client,
             final Metadata metadata,
             final BackgroundEventHandler backgroundEventHandler,
+            final boolean notifyMetadataErrorsViaErrorQueue,
             final AsyncConsumerMetrics asyncConsumerMetrics) {
         this.time = time;
         this.client = client;
@@ -88,6 +91,8 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.metadataError = Optional.empty();
+        this.notifyMetadataErrorsViaErrorQueue = notifyMetadataErrorsViaErrorQueue;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
 
@@ -155,7 +160,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         try {
             metadata.maybeThrowAnyException();
         } catch (Exception e) {
-            backgroundEventHandler.add(new ErrorEvent(e));
+            if (notifyMetadataErrorsViaErrorQueue) {
+                backgroundEventHandler.add(new ErrorEvent(e));
+            } else {
+                metadataError = Optional.of(e);
+            }
         }
     }
 
@@ -238,7 +247,13 @@ public class NetworkClientDelegate implements AutoCloseable {
             unsent.handler
         );
     }
-    
+
+    public Optional<Exception> getAndClearMetadataError() {
+        Optional<Exception> metadataError = this.metadataError;
+        this.metadataError = Optional.empty();
+        return metadataError;
+    }
+
     public Node leastLoadedNode() {
         return this.client.leastLoadedNode(time.milliseconds()).node();
     }
@@ -437,6 +452,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final Sensor throttleTimeSensor,
                                                            final ClientTelemetrySender clientTelemetrySender,
                                                            final BackgroundEventHandler backgroundEventHandler,
+                                                           final boolean notifyMetadataErrorsViaErrorQueue,
                                                            final AsyncConsumerMetrics asyncConsumerMetrics) {
         return new CachedSupplier<>() {
             @Override
@@ -451,7 +467,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                         metadata,
                         throttleTimeSensor,
                         clientTelemetrySender);
-                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, asyncConsumerMetrics);
+                return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
             }
         };
     }
@@ -466,6 +482,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                                                            final KafkaClient client,
                                                            final Metadata metadata,
                                                            final BackgroundEventHandler backgroundEventHandler,
+                                                           final boolean notifyMetadataErrorsViaErrorQueue,
                                                            final AsyncConsumerMetrics asyncConsumerMetrics) {
         return new CachedSupplier<>() {
             @Override
@@ -477,6 +494,7 @@ public class NetworkClientDelegate implements AutoCloseable {
                     client,
                     metadata,
                     backgroundEventHandler,
+                    notifyMetadataErrorsViaErrorQueue,
                     asyncConsumerMetrics
                 );
             }

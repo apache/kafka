@@ -109,6 +109,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
@@ -176,22 +177,26 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private class CompositePollEventInvoker {
 
-        private final Timer timer;
-        private final long pollTimeMs;
         private CompositePollEvent latest;
         private int backoff = -1;
 
-        public CompositePollEventInvoker(Timer timer, long pollTimeMs) {
-            this.timer = timer;
-            this.pollTimeMs = pollTimeMs;
-        }
+        private void poll(Timer timer) {
+            if (latest == null) {
+                submitEvent(ApplicationEvent.Type.POLL, timer);
+            }
 
-        private void poll() {
-            if (latest == null || latest.isComplete()) {
-                long deadlineMs = calculateDeadlineMs(timer);
-                latest = new CompositePollEvent(deadlineMs, pollTimeMs, ApplicationEvent.Type.POLL);
-                applicationEventHandler.add(latest);
-            } else {
+            log.debug("Attempting to retrieve result from previously submitted {} with {} remaining on timer", latest, timer.remainingMs());
+
+            CompositePollEvent.Result result = latest.resultOrError();
+            CompositePollEvent.State state = result.state();
+
+            if (state == CompositePollEvent.State.COMPLETE) {
+                if (fetchBuffer.isEmpty())
+                    submitEvent(ApplicationEvent.Type.POLL, timer);
+            } else if (state == CompositePollEvent.State.UNKNOWN) {
+                latest = null;
+                throw new KafkaException("Unexpected poll result received");
+            } else if (state == CompositePollEvent.State.INCOMPLETE) {
                 if (backoff == -1)
                     backoff = 1;
                 else
@@ -199,9 +204,24 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 long sleep = Math.min(Math.min(backoff, retryBackoffMs), timer.remainingMs());
                 timer.sleep(sleep);
+            } else if (state == CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED) {
+                processBackgroundEvents();
+                result.nextEventType().ifPresent(t -> submitEvent(t, timer));
+            } else if (state == CompositePollEvent.State.OFFSET_COMMIT_CALLBACKS_REQUIRED) {
+                offsetCommitCallbackInvoker.executeCallbacks();
+                result.nextEventType().ifPresent(t -> submitEvent(t, timer));
             }
         }
+
+        private void submitEvent(ApplicationEvent.Type type, Timer timer) {
+            long deadlineMs = calculateDeadlineMs(timer);
+            latest = new CompositePollEvent(deadlineMs, time.milliseconds(), type);
+            applicationEventHandler.add(latest);
+            log.debug("Submitted new {} submitted with {} remaining on timer", latest, timer.remainingMs());
+        }
     }
+
+    private final CompositePollEventInvoker pollInvoker = new CompositePollEventInvoker();
 
     /**
      * An {@link org.apache.kafka.clients.consumer.internals.events.EventProcessor} that is created and executes in the
@@ -466,6 +486,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     fetchMetricsManager.throttleTimeSensor(),
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
                     backgroundEventHandler,
+                    false,
                     asyncConsumerMetrics
             );
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
@@ -661,6 +682,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             client,
             metadata,
             backgroundEventHandler,
+            false,
             asyncConsumerMetrics
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
@@ -866,8 +888,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            CompositePollEventInvoker pollEventInvoker = new CompositePollEventInvoker(timer, time.milliseconds());
-
             do {
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling
@@ -876,7 +896,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 wakeupTrigger.maybeTriggerWakeup();
                 processBackgroundEvents();
                 offsetCommitCallbackInvoker.executeCallbacks();
-                pollEventInvoker.poll();
+                pollInvoker.poll(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
@@ -1143,8 +1163,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             try {
                 Map<String, List<PartitionInfo>> topicMetadata =
                         applicationEventHandler.addAndGet(topicMetadataEvent);
-
-                processBackgroundEvents();
                 return topicMetadata.getOrDefault(topic, Collections.emptyList());
             } finally {
                 wakeupTrigger.clearTask();
@@ -1170,9 +1188,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final AllTopicsMetadataEvent topicMetadataEvent = new AllTopicsMetadataEvent(calculateDeadlineMs(time, timeout));
             wakeupTrigger.setActiveTask(topicMetadataEvent.future());
             try {
-                Map<String, List<PartitionInfo>> map = applicationEventHandler.addAndGet(topicMetadataEvent);
-                processBackgroundEvents();
-                return map;
+                return applicationEventHandler.addAndGet(topicMetadataEvent);
             } finally {
                 wakeupTrigger.clearTask();
             }
@@ -1254,7 +1270,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             try {
                 Map<TopicPartition, OffsetAndTimestampInternal> offsets = applicationEventHandler.addAndGet(listOffsetsEvent);
-                processBackgroundEvents();
                 Map<TopicPartition, OffsetAndTimestamp> results = new HashMap<>(offsets.size());
                 offsets.forEach((k, v) -> results.put(k, v != null ? v.buildOffsetAndTimestamp() : null));
                 return results;
@@ -1320,7 +1335,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
             try {
                 offsetAndTimestampMap = applicationEventHandler.addAndGet(listOffsetsEvent);
-                processBackgroundEvents();
                 return offsetAndTimestampMap.entrySet()
                     .stream()
                     .collect(Collectors.toMap(
