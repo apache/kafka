@@ -284,7 +284,6 @@ public class RequestManagers implements Closeable {
 
                 final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
                     metadata,
-                    backgroundEventHandler,
                     fetchConfig.isolationLevel,
                     time,
                     retryBackoffMs,

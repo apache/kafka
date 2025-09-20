@@ -26,7 +26,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetData;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.ListOffsetResult;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
@@ -112,7 +111,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
     public OffsetsRequestManager(final SubscriptionState subscriptionState,
                                  final ConsumerMetadata metadata,
-                                 final BackgroundEventHandler backgroundEventHandler,
                                  final IsolationLevel isolationLevel,
                                  final Time time,
                                  final long retryBackoffMs,
@@ -124,7 +122,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
-        requireNonNull(backgroundEventHandler);
         requireNonNull(isolationLevel);
         requireNonNull(time);
         requireNonNull(apiVersions);

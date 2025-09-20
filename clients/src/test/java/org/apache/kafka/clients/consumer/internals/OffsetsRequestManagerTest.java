@@ -21,7 +21,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.IsolationLevel;
@@ -89,7 +88,6 @@ public class OffsetsRequestManagerTest {
     private OffsetsRequestManager requestManager;
     private ConsumerMetadata metadata;
     private SubscriptionState subscriptionState;
-    private BackgroundEventHandler backgroundEventHandler;
     private final Time time = mock(Time.class);
     private ApiVersions apiVersions;
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
@@ -108,12 +106,10 @@ public class OffsetsRequestManagerTest {
         LogContext logContext = new LogContext();
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
-        backgroundEventHandler = mock(BackgroundEventHandler.class);
         apiVersions = mock(ApiVersions.class);
         requestManager = new OffsetsRequestManager(
                 subscriptionState,
                 metadata,
-                backgroundEventHandler,
                 DEFAULT_ISOLATION_LEVEL,
                 time,
                 RETRY_BACKOFF_MS,
@@ -803,7 +799,6 @@ public class OffsetsRequestManagerTest {
         requestManager = new OffsetsRequestManager(
                 subscriptionState,
                 metadata,
-                backgroundEventHandler,
                 DEFAULT_ISOLATION_LEVEL,
                 time,
                 RETRY_BACKOFF_MS,
