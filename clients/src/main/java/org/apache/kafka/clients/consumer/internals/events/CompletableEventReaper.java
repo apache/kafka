@@ -156,6 +156,10 @@ public class CompletableEventReaper {
         return tracked.size();
     }
 
+    public boolean contains(CompletableEvent<?> event) {
+        return event != null && tracked.contains(event);
+    }
+
     public List<CompletableEvent<?>> uncompletedEvents() {
         // The following code does not use the Java Collections Streams API to reduce overhead in the critical
         // path of the ConsumerNetworkThread loop.
