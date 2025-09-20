@@ -73,16 +73,13 @@ public class NetworkClientDelegateTest {
     private MockTime time;
     private MockClient client;
     private Metadata metadata;
-    private AsyncConsumerMetrics asyncConsumerMetrics;
     private BackgroundEventHandler backgroundEventHandler;
 
     @BeforeEach
     public void setup() {
         this.time = new MockTime(0);
         this.metadata = mock(Metadata.class);
-        this.asyncConsumerMetrics = mock(AsyncConsumerMetrics.class);
-        BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, asyncConsumerMetrics);
+        this.backgroundEventHandler = mock(BackgroundEventHandler.class);
         this.client = new MockClient(time, Collections.singletonList(mockNode()));
     }
 
@@ -286,7 +283,7 @@ public class NetworkClientDelegateTest {
     }
 
     public NetworkClientDelegate newNetworkClientDelegate(boolean notifyMetadataErrorsViaErrorQueue) {
-        return newNetworkClientDelegate(notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
+        return newNetworkClientDelegate(notifyMetadataErrorsViaErrorQueue, mock(AsyncConsumerMetrics.class));
     }
 
     public NetworkClientDelegate newNetworkClientDelegate(boolean notifyMetadataErrorsViaErrorQueue, AsyncConsumerMetrics asyncConsumerMetrics) {

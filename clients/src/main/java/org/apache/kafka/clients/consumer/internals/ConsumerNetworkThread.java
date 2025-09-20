@@ -174,7 +174,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         reapExpiredApplicationEvents(currentTimeMs);
         List<CompletableEvent<?>> uncompletedEvents = applicationEventReaper.uncompletedEvents();
-        maybeFailOnMetadataError(uncompletedEvents);    }
+        maybeFailOnMetadataError(uncompletedEvents);
+    }
 
     /**
      * Process the events—if any—that were produced by the application thread.
@@ -192,6 +193,10 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             try {
                 if (event instanceof CompletableEvent) {
                     applicationEventReaper.add((CompletableEvent<?>) event);
+                    // Check if there are any metadata errors and fail the CompletableEvent if an error is present.
+                    // This call is meant to handle "immediately completed events" which may not enter the awaiting state,
+                    // so metadata errors need to be checked and handled right away.
+                    maybeFailOnMetadataError(List.of((CompletableEvent<?>) event));
                 }
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {
@@ -374,7 +379,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         if (subscriptionMetadataEvent.isEmpty())
             return;
         networkClientDelegate.getAndClearMetadataError().ifPresent(metadataError ->
-            subscriptionMetadataEvent.forEach(event -> event.future().completeExceptionally(metadataError))
+                subscriptionMetadataEvent.forEach(event -> event.future().completeExceptionally(metadataError))
         );
     }
 }
