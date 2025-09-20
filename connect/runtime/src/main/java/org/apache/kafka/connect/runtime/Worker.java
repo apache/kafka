@@ -2394,6 +2394,10 @@ public final class Worker {
         }
 
         protected synchronized void recordTaskRemoved(ConnectorTaskId connectorTaskId) {
+            if (!connectorStatusMetrics.containsKey(connectorTaskId.connector())) {
+                return;
+            }
+
             // Unregister connector task count metric if we remove the last task of the connector
             if (tasks.keySet().stream().noneMatch(id -> id.connector().equals(connectorTaskId.connector()))) {
                 connectorStatusMetrics.get(connectorTaskId.connector()).close();
