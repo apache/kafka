@@ -360,7 +360,9 @@ public class IQv2StoreIntegrationTest {
             for (final boolean logEnabled : Arrays.asList(true, false)) {
                 for (final StoresToTest toTest : StoresToTest.values()) {
                     for (final String kind : Arrays.asList("DSL", "PAPI")) {
-                        values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind));
+                        for (final String groupProtocol : Arrays.asList("classic", "streams")) {
+                            values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind, groupProtocol));
+                        }
                     }
                 }
             }
@@ -426,13 +428,14 @@ public class IQv2StoreIntegrationTest {
         ));
     }
 
-    public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
+    public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
         final StoreSupplier<?> supplier = storeToTest.supplier();
         final Properties streamsConfig = streamsConfiguration(
             cache,
             log,
             storeToTest.name(),
-            kind
+            kind,
+            groupProtocol
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -765,8 +768,8 @@ public class IQv2StoreIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
-        setup(cache, log, storeToTest, kind);
+    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
+        setup(cache, log, storeToTest, kind, groupProtocol);
         try {
             if (storeToTest.global()) {
                 // See KAFKA-13523
@@ -2030,10 +2033,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,
-                                                   final String supplier, final String kind) {
+                                                   final String supplier, final String kind, final String groupProtocol) {
         final String safeTestName =
             IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
-                + "-" + kind + "-" + RANDOM.nextInt();
+                + "-" + kind + "-" + groupProtocol + "-" + RANDOM.nextInt();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -2048,6 +2051,7 @@ public class IQv2StoreIntegrationTest {
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         return config;
     }
 }
