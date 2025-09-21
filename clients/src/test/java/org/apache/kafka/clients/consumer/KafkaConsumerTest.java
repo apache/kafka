@@ -155,6 +155,8 @@ import javax.management.ObjectName;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer.DEFAULT_REASON;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -269,6 +271,35 @@ public class KafkaConsumerTest {
             final String expectedMessage = String.format("Skipping registration for metric %s. Existing consumer metrics cannot be overwritten.", existingMetricToAdd.metricName());
             assertTrue(appender.getMessages().stream().anyMatch(m -> m.contains(expectedMessage)));
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testAssignedPartitionsMetrics(GroupProtocol groupProtocol) throws InterruptedException {
+        consumer = newConsumer(groupProtocol, time, mock(KafkaClient.class), subscription,
+                mock(ConsumerMetadata.class), assignor, false, groupInstanceId);
+        Metrics metrics = consumer.metricsRegistry();
+
+        // This metric is added in the background thread for the AsyncConsumer, so waiting on it to avoid flakiness.
+        TestUtils.waitForCondition(() -> getMetric(metrics, "assigned-partitions") != null,
+                "Consumer should register the assigned-partitions metric");
+        assertNotNull(getMetric(metrics, "assigned-partitions"));
+        assertEquals(0.0d, getMetric(metrics, "assigned-partitions").metricValue());
+
+        subscription.assignFromUser(Set.of(tp0));
+        assertEquals(1.0d, getMetric(metrics, "assigned-partitions").metricValue());
+
+        subscription.assignFromUser(Set.of(tp0, tp1));
+        assertEquals(2.0d, getMetric(metrics, "assigned-partitions").metricValue());
+
+        subscription.unsubscribe();
+        subscription.subscribe(Set.of(topic), Optional.empty());
+        subscription.assignFromSubscribed(Set.of(tp0));
+        assertEquals(1.0d, getMetric(metrics, "assigned-partitions").metricValue());
+    }
+
+    private KafkaMetric getMetric(Metrics metrics, String name) {
+        return metrics.metrics().get(metrics.metricName(name, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX));
     }
 
     @ParameterizedTest
