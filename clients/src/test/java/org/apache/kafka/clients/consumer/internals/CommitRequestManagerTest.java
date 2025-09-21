@@ -1508,11 +1508,31 @@ public class CommitRequestManagerTest {
         when(coordinatorRequestManager.fatalError())
                 .thenReturn(Optional.of(new GroupAuthorizationException("Fatal error")));
 
-        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(200));
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(time.milliseconds()));
 
         assertTrue(commitFuture.isCompletedExceptionally());
 
         TestUtils.assertFutureThrows(GroupAuthorizationException.class, commitFuture, "Fatal error");
+    }
+
+    @Test
+    public void testPollWithClosingAndPendingRequests() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(new TopicPartition("topic", 1),
+                new OffsetAndMetadata(0));
+
+        var commitFuture = commitRequestManager.commitAsync(offsets);
+
+        commitRequestManager.signalClose();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(time.milliseconds()));
+
+        assertTrue(commitFuture.isCompletedExceptionally());
+
+        TestUtils.assertFutureThrows(CommitFailedException.class, commitFuture,
+                "Failed to commit offsets: Coordinator unknown and consumer is closing");
     }
 
     // Supplies (error, isRetriable)
