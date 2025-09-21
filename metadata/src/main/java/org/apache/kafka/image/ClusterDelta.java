@@ -165,9 +165,7 @@ public final class ClusterDelta {
             int nodeId = entry.getKey();
             Optional<BrokerRegistration> brokerRegistration = entry.getValue();
             if (!newBrokers.containsKey(nodeId)) {
-                if (brokerRegistration.isPresent()) {
-                    newBrokers.put(nodeId, brokerRegistration.get());
-                }
+                brokerRegistration.ifPresent(registration -> newBrokers.put(nodeId, registration));
             }
         }
         Map<Integer, ControllerRegistration> newControllers = new HashMap<>(image.controllers().size());
@@ -184,9 +182,7 @@ public final class ClusterDelta {
             int nodeId = entry.getKey();
             Optional<ControllerRegistration> controllerRegistration = entry.getValue();
             if (!newControllers.containsKey(nodeId)) {
-                if (controllerRegistration.isPresent()) {
-                    newControllers.put(nodeId, controllerRegistration.get());
-                }
+                controllerRegistration.ifPresent(registration -> newControllers.put(nodeId, registration));
             }
         }
         return new ClusterImage(newBrokers, newControllers);

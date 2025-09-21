@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -106,7 +105,7 @@ public class DelegationTokenCommand {
         CreateDelegationTokenResult createResult = adminClient.createDelegationToken(createDelegationTokenOptions);
         DelegationToken token = createResult.delegationToken().get();
         System.out.println("Created delegation token with tokenId : " + token.tokenInfo().tokenId());
-        printToken(Collections.singletonList(token));
+        printToken(List.of(token));
 
         return token;
     }
@@ -301,7 +300,7 @@ public class DelegationTokenCommand {
             CommandLineUtils.checkInvalidArgs(parser, options, createOpt, Set.of(hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, renewOpt, Set.of(renewPrincipalsOpt, maxLifeTimeOpt, expiryTimePeriodOpt, ownerPrincipalsOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, expiryOpt, Set.of(renewOpt, maxLifeTimeOpt, renewTimePeriodOpt, ownerPrincipalsOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set.of(renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, renewTimePeriodOpt, expiryTimePeriodOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set.of(renewTimePeriodOpt, maxLifeTimeOpt, hmacOpt, expiryTimePeriodOpt));
         }
     }
 }

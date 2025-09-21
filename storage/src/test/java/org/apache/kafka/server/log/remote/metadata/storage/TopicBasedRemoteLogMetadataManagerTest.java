@@ -27,6 +27,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -43,6 +44,8 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -56,6 +59,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("resource")
 @ClusterTestDefaults(brokers = 3)
 public class TopicBasedRemoteLogMetadataManagerTest {
     private static final int SEG_SIZE = 1048576;
@@ -72,7 +76,6 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         if (remoteLogMetadataManager == null)
             remoteLogMetadataManager = RemoteLogMetadataManagerTestUtils.builder()
                 .bootstrapServers(clusterInstance.bootstrapServers())
-                .startConsumerThread(true)
                 .remotePartitionMetadataStore(() -> spyRemotePartitionMetadataEventHandler)
                 .build();
         return remoteLogMetadataManager;
@@ -88,7 +91,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         try (Admin admin = clusterInstance.admin()) {
             String topic = "test-topic-exist";
             admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
-            clusterInstance.waitForTopic(topic, 1);
+            clusterInstance.waitTopicCreation(topic, 1);
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             assertTrue(doesTopicExist);
         }
@@ -103,6 +106,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @ClusterTest
     public void testDoesTopicExistWithAdminClientExecutionError() throws ExecutionException, InterruptedException {
         // Create a mock Admin client that throws an ExecutionException (not UnknownTopicOrPartitionException)
@@ -137,9 +141,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         try (Admin admin = clusterInstance.admin()) {
             // Set broker id 0 as the first entry which is taken as the leader.
             admin.createTopics(List.of(new NewTopic(leaderTopic, Map.of(0, List.of(0, 1, 2))))).all().get();
-            clusterInstance.waitForTopic(leaderTopic, 1);
+            clusterInstance.waitTopicCreation(leaderTopic, 1);
             admin.createTopics(List.of(new NewTopic(followerTopic, Map.of(0, List.of(1, 2, 0))))).all().get();
-            clusterInstance.waitForTopic(followerTopic, 1);
+            clusterInstance.waitTopicCreation(followerTopic, 1);
         }
 
         final TopicIdPartition newLeaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
@@ -336,6 +340,16 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
     @ClusterTest
     public void testInitializationFailure() throws IOException, InterruptedException {
+        // Set up a custom exit procedure for testing
+        final AtomicBoolean exitCalled = new AtomicBoolean(false);
+        final AtomicInteger exitCode = new AtomicInteger(-1);
+        
+        // Set custom exit procedure that won't actually exit the process
+        Exit.setExitProcedure((statusCode, message) -> {
+            exitCalled.set(true);
+            exitCode.set(statusCode);
+        });
+
         try (TopicBasedRemoteLogMetadataManager rlmm = new TopicBasedRemoteLogMetadataManager()) {
             // configure rlmm without bootstrap servers, so it will fail to initialize admin client.
             Map<String, Object> configs = Map.of(
@@ -343,7 +357,16 @@ public class TopicBasedRemoteLogMetadataManagerTest {
                 TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID, 0
             );
             rlmm.configure(configs);
-            TestUtils.waitForCondition(rlmm::isInitializationFailed, "Initialization should fail");
+            
+            // Wait for initialization failure and exit procedure to be called
+            TestUtils.waitForCondition(() -> exitCalled.get(), 
+                "Exit procedure should be called due to initialization failure");
+            
+            // Verify exit code
+            assertEquals(1, exitCode.get(), "Exit code should be 1");
+        } finally {
+            // Restore default exit procedure
+            Exit.resetExitProcedure();
         }
     }
 }

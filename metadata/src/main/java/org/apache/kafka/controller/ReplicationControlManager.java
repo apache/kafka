@@ -1109,7 +1109,6 @@ public class ReplicationControlManager {
                     topic,
                     partitionId,
                     partition,
-                    context.requestHeader().requestApiVersion(),
                     partitionData);
 
                 if (validationError != Errors.NONE) {
@@ -1239,7 +1238,6 @@ public class ReplicationControlManager {
         TopicControlInfo topic,
         int partitionId,
         PartitionRegistration partition,
-        short requestApiVersion,
         AlterPartitionRequestData.PartitionData partitionData
     ) {
         if (partition == null) {
@@ -2443,14 +2441,7 @@ public class ReplicationControlManager {
         }
     }
 
-    private static final class IneligibleReplica {
-        private final int replicaId;
-        private final String reason;
-
-        private IneligibleReplica(int replicaId, String reason) {
-            this.replicaId = replicaId;
-            this.reason = reason;
-        }
+    private record IneligibleReplica(int replicaId, String reason) {
 
         @Override
         public String toString() {

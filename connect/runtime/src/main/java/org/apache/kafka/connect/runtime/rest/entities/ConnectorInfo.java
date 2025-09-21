@@ -18,66 +18,15 @@ package org.apache.kafka.connect.runtime.rest.entities;
 
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
-public class ConnectorInfo {
-
-    private final String name;
-    private final Map<String, String> config;
-    private final List<ConnectorTaskId> tasks;
-    private final ConnectorType type;
-
-    @JsonCreator
-    public ConnectorInfo(@JsonProperty("name") String name,
-                         @JsonProperty("config") Map<String, String> config,
-                         @JsonProperty("tasks") List<ConnectorTaskId> tasks,
-                         @JsonProperty("type") ConnectorType type) {
-        this.name = name;
-        this.config = config;
-        this.tasks = tasks;
-        this.type = type;
-    }
-
-
-    @JsonProperty
-    public String name() {
-        return name;
-    }
-
-    @JsonProperty
-    public ConnectorType type() {
-        return type;
-    }
-
-    @JsonProperty
-    public Map<String, String> config() {
-        return config;
-    }
-
-    @JsonProperty
-    public List<ConnectorTaskId> tasks() {
-        return tasks;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ConnectorInfo that = (ConnectorInfo) o;
-        return Objects.equals(name, that.name) &&
-                Objects.equals(config, that.config) &&
-                Objects.equals(tasks, that.tasks) &&
-                Objects.equals(type, that.type);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, config, tasks, type);
-    }
-
+public record ConnectorInfo(
+    @JsonProperty("name") String name,
+    @JsonProperty("config") Map<String, String> config,
+    @JsonProperty("tasks") List<ConnectorTaskId> tasks,
+    @JsonProperty("type") ConnectorType type
+) {
 }

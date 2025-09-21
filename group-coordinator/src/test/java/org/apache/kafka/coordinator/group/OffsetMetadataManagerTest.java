@@ -49,6 +49,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
@@ -140,7 +141,7 @@ public class OffsetMetadataManagerTest {
                         .withExecutor(executor)
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
-                        .withMetadataImage(metadataImage)
+                        .withMetadataImage(new KRaftCoordinatorMetadataImage(metadataImage))
                         .withGroupCoordinatorMetricsShard(metrics)
                         .withGroupConfigManager(configManager)
                         .withConfig(GroupCoordinatorConfig.fromProps(Map.of()))
@@ -198,20 +199,11 @@ public class OffsetMetadataManagerTest {
             Group.GroupType groupType,
             String groupId
         ) {
-            switch (groupType) {
-                case CLASSIC:
-                    return groupMetadataManager.getOrMaybeCreateClassicGroup(
-                        groupId,
-                        true
-                    );
-                case CONSUMER:
-                    return groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
-                        groupId,
-                        true
-                    );
-                default:
-                    throw new IllegalArgumentException("Invalid group type: " + groupType);
-            }
+            return switch (groupType) {
+                case CLASSIC -> groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, true);
+                case CONSUMER -> groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(groupId, true);
+                default -> throw new IllegalArgumentException("Invalid group type: " + groupType);
+            };
         }
 
         public void commit() {
@@ -390,8 +382,8 @@ public class OffsetMetadataManagerTest {
             time.sleep(ms);
             List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = timer.poll();
             timeouts.forEach(timeout -> {
-                if (timeout.result.replayRecords()) {
-                    timeout.result.records().forEach(this::replay);
+                if (timeout.result().replayRecords()) {
+                    timeout.result().records().forEach(this::replay);
                 }
             });
             return timeouts;

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.util;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -54,8 +53,8 @@ public class Table<R, C, V> {
     public Map<C, V> row(R row) {
         Map<C, V> columns = table.get(row);
         if (columns == null)
-            return Collections.emptyMap();
-        return Collections.unmodifiableMap(columns);
+            return Map.of();
+        return Map.copyOf(columns);
     }
 
     public boolean isEmpty() {

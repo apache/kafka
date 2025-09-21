@@ -80,6 +80,8 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
@@ -160,11 +162,6 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsDelta;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
@@ -294,7 +291,7 @@ public class GroupMetadataManager {
         private CoordinatorExecutor<CoordinatorRecord> executor = null;
         private GroupCoordinatorConfig config = null;
         private GroupConfigManager groupConfigManager = null;
-        private MetadataImage metadataImage = null;
+        private CoordinatorMetadataImage metadataImage = null;
         private ShareGroupPartitionAssignor shareGroupAssignor = null;
         private GroupCoordinatorMetricsShard metrics;
         private Optional<Plugin<Authorizer>> authorizerPlugin = null;
@@ -340,7 +337,7 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withMetadataImage(MetadataImage metadataImage) {
+        Builder withMetadataImage(CoordinatorMetadataImage metadataImage) {
             this.metadataImage = metadataImage;
             return this;
         }
@@ -363,7 +360,7 @@ public class GroupMetadataManager {
         GroupMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
+            if (metadataImage == null) metadataImage = CoordinatorMetadataImage.EMPTY;
             if (time == null) time = Time.SYSTEM;
             if (authorizerPlugin == null) authorizerPlugin = Optional.empty();
 
@@ -485,17 +482,17 @@ public class GroupMetadataManager {
     /**
      * The metadata image.
      */
-    private MetadataImage metadataImage;
+    private CoordinatorMetadataImage metadataImage;
 
     /**
      * The cache for topic hash value by topic name.
      * A topic hash is calculated when there is a group subscribes to it.
-     * A topic hash is removed when it's updated in MetadataImage or there is no group subscribes to it.
+     * A topic hash is removed when it's updated in CoordinatorMetadataImage or there is no group subscribes to it.
      */
     private final Map<String, Long> topicHashCache;
 
     /**
-     * This tracks the version (or the offset) of the last metadata image
+     * This tracks the version of the last metadata image
      * with newly created topics.
      */
     private long lastMetadataImageWithNewTopics = -1L;
@@ -526,7 +523,7 @@ public class GroupMetadataManager {
         CoordinatorTimer<Void, CoordinatorRecord> timer,
         CoordinatorExecutor<CoordinatorRecord> executor,
         GroupCoordinatorMetricsShard metrics,
-        MetadataImage metadataImage,
+        CoordinatorMetadataImage metadataImage,
         GroupCoordinatorConfig config,
         GroupConfigManager groupConfigManager,
         ShareGroupPartitionAssignor shareGroupAssignor,
@@ -560,7 +557,7 @@ public class GroupMetadataManager {
     /**
      * @return The current metadata image used by the group metadata manager.
      */
-    public MetadataImage image() {
+    public CoordinatorMetadataImage image() {
         return metadataImage;
     }
 
@@ -649,7 +646,7 @@ public class GroupMetadataManager {
                 describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(
                     committedOffset,
                     defaultConsumerGroupAssignor.name(),
-                    metadataImage.topics()
+                    metadataImage
                 ));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
@@ -681,7 +678,7 @@ public class GroupMetadataManager {
                 describedGroups.add(shareGroup(groupId, committedOffset).asDescribedGroup(
                     committedOffset,
                     shareGroupAssignor.name(),
-                    metadataImage.topics()
+                    metadataImage
                 ));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new ShareGroupDescribeResponseData.DescribedGroup()
@@ -816,10 +813,10 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            return new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            return new ConsumerGroup(snapshotRegistry, groupId);
         } else if (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a consumer group.", groupId);
-            return new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            return new ConsumerGroup(snapshotRegistry, groupId);
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
@@ -836,19 +833,28 @@ public class GroupMetadataManager {
      * Gets or creates a streams group without updating the groups map.
      * The group will be materialized during the replay.
      *
+     * If there is an empty classic consumer group of the same name, it will be deleted and a new streams
+     * group will be created.
+     *
      * @param groupId           The group ID.
+     * @param records           The record list to which the group tombstones are written
+     *                          if the group is empty and is a classic group.
      *
      * @return A StreamsGroup.
      *
      * Package private for testing.
      */
     StreamsGroup getOrCreateStreamsGroup(
-        String groupId
+        String groupId,
+        List<CoordinatorRecord> records
     ) {
         Group group = groups.get(groupId);
 
         if (group == null) {
-            return new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+            return new StreamsGroup(logContext, snapshotRegistry, groupId);
+        } else if (maybeDeleteEmptyClassicGroup(group, records)) {
+            log.info("[GroupId {}] Converted the empty classic group to a streams group.", groupId);
+            return new StreamsGroup(logContext, snapshotRegistry, groupId);
         } else {
             return castToStreamsGroup(group);
         }
@@ -974,7 +980,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else if (group.type() == CONSUMER) {
@@ -984,7 +990,7 @@ public class GroupMetadataManager {
             // offsets if no group existed. Simple classic groups are not backed by any records
             // in the __consumer_offsets topic hence we can safely replace it here. Without this,
             // replaying consumer group records after offset commit records would not work.
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else {
@@ -1017,7 +1023,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, streamsGroup);
             return streamsGroup;
         } else if (group.type() == STREAMS) {
@@ -1358,7 +1364,6 @@ public class GroupMetadataManager {
         try {
             consumerGroup = ConsumerGroup.fromClassicGroup(
                 snapshotRegistry,
-                metrics,
                 classicGroup,
                 topicHashCache,
                 metadataImage
@@ -1874,7 +1879,7 @@ public class GroupMetadataManager {
         boolean isJoining = memberEpoch == 0;
         StreamsGroup group;
         if (isJoining) {
-            group = getOrCreateStreamsGroup(groupId);
+            group = getOrCreateStreamsGroup(groupId, records);
             throwIfStreamsGroupIsFull(group);
         } else {
             group = getStreamsGroupOrThrow(groupId);
@@ -1940,7 +1945,7 @@ public class GroupMetadataManager {
 
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology);
-                updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, metadataHash, updatedTopology, metadataImage.topics());
+                updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, metadataHash, updatedTopology, metadataImage);
                 group.setConfiguredTopology(updatedConfiguredTopology);
             } else {
                 updatedConfiguredTopology = group.configuredTopology().get();
@@ -2471,7 +2476,7 @@ public class GroupMetadataManager {
             group::currentPartitionEpoch,
             targetAssignmentEpoch,
             targetAssignment,
-            toTopicPartitions(subscription.ownedPartitions(), metadataImage.topics()),
+            toTopicPartitions(subscription.ownedPartitions(), metadataImage),
             records
         );
 
@@ -2748,18 +2753,19 @@ public class GroupMetadataManager {
         // Here will add any topics which are subscribed but not initialized and initializing
         // topics whose timestamp indicates that they are older than delta elapsed.
         subscriptionTopicNames.forEach(topicName -> {
-            TopicImage topicImage = metadataImage.topics().getTopic(topicName);
-            if (topicImage != null) {
-                Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicImage.id()) ? alreadyInitialized.get(topicImage.id()).partitions() : Set.of();
-                if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicImage.partitions().size()) {
-                    Set<Integer> partitionSet = new HashSet<>(topicImage.partitions().keySet());
-                    partitionSet.removeAll(alreadyInitializedPartSet);
+            metadataImage.topicMetadata(topicName).ifPresent(topicMetadata -> {
+                Set<Integer> alreadyInitializedPartSet = alreadyInitialized.containsKey(topicMetadata.id()) ? alreadyInitialized.get(topicMetadata.id()).partitions() : Set.of();
+                if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.partitionCount()) {
                     // alreadyInitialized contains all initialized topics and initializing topics which are less than delta old
                     // which means we are putting subscribed topics which are unseen or initializing for more than delta. But, we
                     // are also updating the timestamp here which means, old initializing will not be included repeatedly.
-                    topicPartitionChangeMap.computeIfAbsent(topicImage.id(), k -> new InitMapValue(topicImage.name(), partitionSet, curTimestamp));
+                    topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> {
+                        Set<Integer> partitionSet = IntStream.range(0, topicMetadata.partitionCount()).boxed().collect(Collectors.toCollection(HashSet::new));
+                        partitionSet.removeAll(alreadyInitializedPartSet);
+                        return new InitMapValue(topicMetadata.name(), partitionSet, curTimestamp);
+                    });
                 }
-            }
+            });
         });
         return topicPartitionChangeMap;
     }
@@ -2839,7 +2845,8 @@ public class GroupMetadataManager {
         if (!currentDeleting.isEmpty()) {
             finalInitializingMap.keySet().forEach(key -> {
                 if (currentDeleting.remove(key)) {
-                    log.warn("Initializing topic {} for share group {} found in deleting state as well, removing from deleting.", metadataImage.topics().getTopic(key).name(), groupId);
+                    String topicName = metadataImage.topicMetadata(key).map(CoordinatorMetadataImage.TopicMetadata::name).orElse(null);
+                    log.warn("Initializing topic {} for share group {} found in deleting state as well, removing from deleting.", topicName, groupId);
                 }
             });
         }
@@ -3213,7 +3220,7 @@ public class GroupMetadataManager {
         String groupId,
         Logger log,
         Time time,
-        MetadataImage image,
+        CoordinatorMetadataImage image,
         Optional<Plugin<Authorizer>> authorizerPlugin,
         Set<String> regexes
     ) {
@@ -3235,7 +3242,7 @@ public class GroupMetadataManager {
             }
         }
 
-        for (String topicName : image.topics().topicsByName().keySet()) {
+        for (String topicName : image.topicNames()) {
             for (Pattern regex : compiledRegexes) {
                 if (regex.matcher(topicName).matches()) {
                     resolvedRegexes.get(regex.pattern()).add(topicName);
@@ -3249,7 +3256,7 @@ public class GroupMetadataManager {
             resolvedRegexes
         );
 
-        long version = image.provenance().lastContainedOffset();
+        long version = image.version();
         Map<String, ResolvedRegularExpression> result = new HashMap<>(resolvedRegexes.size());
         for (Map.Entry<String, Set<String>> resolvedRegex : resolvedRegexes.entrySet()) {
             result.put(
@@ -3259,7 +3266,7 @@ public class GroupMetadataManager {
         }
 
         log.info("[GroupId {}] Scanned {} topics to refresh regular expressions {} in {}ms.",
-            groupId, image.topics().topicsByName().size(), resolvedRegexes.keySet(),
+            groupId, image.topicNames().size(), resolvedRegexes.keySet(),
             time.milliseconds() - startTimeMs);
 
         return result;
@@ -3348,14 +3355,14 @@ public class GroupMetadataManager {
                     .resolvedRegularExpression(regex)
                     .orElse(ResolvedRegularExpression.EMPTY);
 
-                if (!oldResolvedRegularExpression.topics.equals(newResolvedRegularExpression.topics)) {
+                if (!oldResolvedRegularExpression.topics().equals(newResolvedRegularExpression.topics())) {
                     bumpGroupEpoch = true;
 
-                    oldResolvedRegularExpression.topics.forEach(topicName ->
+                    oldResolvedRegularExpression.topics().forEach(topicName ->
                         subscribedTopicNames.compute(topicName, SubscriptionCount::decRegexCount)
                     );
 
-                    newResolvedRegularExpression.topics.forEach(topicName ->
+                    newResolvedRegularExpression.topics().forEach(topicName ->
                         subscribedTopicNames.compute(topicName, SubscriptionCount::incRegexCount)
                     );
                 }
@@ -3867,7 +3874,7 @@ public class GroupMetadataManager {
         int groupEpoch,
         StreamsGroupMember updatedMember,
         ConfiguredTopology configuredTopology,
-        MetadataImage metadataImage,
+        CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records
     ) {
         TaskAssignor assignor = streamsGroupAssignor(group.groupId());
@@ -4925,24 +4932,20 @@ public class GroupMetadataManager {
     }
 
     private Map<Uuid, String> attachTopicName(Set<Uuid> topicIds) {
-        TopicsImage topicsImage = metadataImage.topics();
         Map<Uuid, String> finalMap = new HashMap<>();
         for (Uuid topicId : topicIds) {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            String topicName = (topicImage != null) ? topicImage.name() : "<UNKNOWN>";
+            String topicName = metadataImage.topicMetadata(topicId).map(CoordinatorMetadataImage.TopicMetadata::name).orElse("<UNKNOWN>");
             finalMap.put(topicId, topicName);
         }
         return Collections.unmodifiableMap(finalMap);
     }
 
     private Map<Uuid, InitMapValue> attachInitValue(Map<Uuid, Set<Integer>> initMap) {
-        TopicsImage topicsImage = metadataImage.topics();
         Map<Uuid, InitMapValue> finalMap = new HashMap<>();
         long timestamp = time.milliseconds();
         for (Map.Entry<Uuid, Set<Integer>> entry : initMap.entrySet()) {
             Uuid topicId = entry.getKey();
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            String topicName = (topicImage != null) ? topicImage.name() : "<UNKNOWN>";
+            String topicName = metadataImage.topicMetadata(topicId).map(CoordinatorMetadataImage.TopicMetadata::name).orElse("<UNKNOWN>");
             finalMap.put(topicId, new InitMapValue(topicName, entry.getValue(), timestamp));
         }
         return Collections.unmodifiableMap(finalMap);
@@ -5774,41 +5777,37 @@ public class GroupMetadataManager {
      * @param newImage  The new metadata image.
      * @param delta     The delta image.
      */
-    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+    public void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
         metadataImage = newImage;
 
-        // Initialize the last offset if it was not yet.
+        // Initialize the last version if it was not yet.
         if (lastMetadataImageWithNewTopics == -1L) {
-            lastMetadataImageWithNewTopics = metadataImage.provenance().lastContainedOffset();
+            lastMetadataImageWithNewTopics = metadataImage.version();
         }
 
-        TopicsDelta topicsDelta = delta.topicsDelta();
-        if (topicsDelta == null) return;
-
-        // Updated the last offset of the image with newly created topics. This is used to
+        // Updated the last version of the image with newly created topics. This is used to
         // trigger a refresh of all the regular expressions when topics are created. Note
         // that we don't trigger a refresh when topics are deleted. Those are removed from
         // the subscription metadata (and the assignment) via the above mechanism. The
         // resolved regular expressions are cleaned up on the next refresh.
-        if (!topicsDelta.createdTopicIds().isEmpty()) {
-            lastMetadataImageWithNewTopics = metadataImage.provenance().lastContainedOffset();
+        if (!delta.createdTopicIds().isEmpty()) {
+            lastMetadataImageWithNewTopics = metadataImage.version();
         }
 
         // Notify all the groups subscribed to the created, updated or
         // deleted topics.
         Set<String> allGroupIds = new HashSet<>();
-        topicsDelta.changedTopics().forEach((topicId, topicDelta) -> {
-            String topicName = topicDelta.name();
-            // Remove topic hash from the cache to recalculate it.
-            topicHashCache.remove(topicName);
-            allGroupIds.addAll(groupsSubscribedToTopic(topicName));
-        });
-        topicsDelta.deletedTopicIds().forEach(topicId -> {
-            TopicImage topicImage = delta.image().topics().getTopic(topicId);
-            String topicName = topicImage.name();
-            topicHashCache.remove(topicName);
-            allGroupIds.addAll(groupsSubscribedToTopic(topicName));
-        });
+        delta.changedTopicIds().forEach(topicId ->
+            metadataImage.topicMetadata(topicId).ifPresent(topicMetadata -> {
+                // Remove topic hash from the cache to recalculate it.
+                topicHashCache.remove(topicMetadata.name());
+                allGroupIds.addAll(groupsSubscribedToTopic(topicMetadata.name()));
+            }));
+        delta.deletedTopicIds().forEach(topicId ->
+            delta.image().topicMetadata(topicId).ifPresent(topicMetadata -> {
+                topicHashCache.remove(topicMetadata.name());
+                allGroupIds.addAll(groupsSubscribedToTopic(topicMetadata.name()));
+            }));
         allGroupIds.forEach(groupId -> {
             Group group = groups.get(groupId);
             if (group != null) {
@@ -6075,7 +6074,11 @@ public class GroupMetadataManager {
                 // classicGroupJoinToConsumerGroup takes the join requests to non-empty consumer groups.
                 // The empty consumer groups should be converted to classic groups in classicGroupJoinToClassicGroup.
                 return classicGroupJoinToConsumerGroup((ConsumerGroup) group, context, request, responseFuture);
-            } else if (group.type() == CONSUMER || group.type() == CLASSIC) {
+            } else if (group.type() == CONSUMER || group.type() == CLASSIC || group.type() == STREAMS && group.isEmpty()) {
+                // classicGroupJoinToClassicGroup accepts:
+                // - classic groups
+                // - empty streams groups
+                // - empty consumer groups
                 return classicGroupJoinToClassicGroup(context, request, responseFuture);
             } else {
                 // Group exists but it's not a consumer group
@@ -6116,6 +6119,8 @@ public class GroupMetadataManager {
         ClassicGroup group;
         if (maybeDeleteEmptyConsumerGroup(groupId, records)) {
             log.info("[GroupId {}] Converted the empty consumer group to a classic group.", groupId);
+        } else if (maybeDeleteEmptyStreamsGroup(groupId, records)) {
+            log.info("[GroupId {}] Converted the empty streams group to a classic group.", groupId);
         }
         boolean isNewGroup = !groups.containsKey(groupId);
         try {
@@ -7480,7 +7485,7 @@ public class GroupMetadataManager {
             return ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(
                     member.assignedPartitions(),
-                    metadataImage.topics()
+                    metadataImage
                 ),
                 ConsumerProtocol.deserializeVersion(
                     ByteBuffer.wrap(member.classicMemberMetadata().get().supportedProtocols().iterator().next().metadata())
@@ -8041,20 +8046,23 @@ public class GroupMetadataManager {
         // a retry for the same is possible. Since this is part of an admin operation
         // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
-
         Set<Uuid> currentDeleting = shareGroupStatePartitionMetadata.get(shareGroupId).deletingTopics();
         Map<Uuid, InitMapValue> deleteRetryCandidates = new HashMap<>();
         Set<Uuid> deletingToIgnore = new HashSet<>();
         if (!currentDeleting.isEmpty()) {
-            if (metadataImage == null || metadataImage.equals(MetadataImage.EMPTY)) {
+            if (metadataImage == null || metadataImage.equals(CoordinatorMetadataImage.EMPTY)) {
                 deletingToIgnore.addAll(currentDeleting);
             } else {
                 for (Uuid deletingTopicId : currentDeleting) {
-                    TopicImage topicImage = metadataImage.topics().getTopic(deletingTopicId);
-                    if (topicImage == null) {
+                    Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(deletingTopicId);
+                    if (topicMetadataOp.isEmpty()) {
                         deletingToIgnore.add(deletingTopicId);
                     } else {
-                        deleteRetryCandidates.put(deletingTopicId, new InitMapValue(topicImage.name(), topicImage.partitions().keySet(), -1));
+                        deleteRetryCandidates.put(deletingTopicId,
+                            new InitMapValue(
+                                topicMetadataOp.get().name(),
+                                IntStream.range(0, topicMetadataOp.get().partitionCount()).boxed().collect(Collectors.toSet()),
+                                -1));
                     }
                 }
             }
@@ -8135,9 +8143,10 @@ public class GroupMetadataManager {
         Set<Uuid> deletingTopics = new HashSet<>(currentMap.deletingTopics());
 
         requestData.topics().forEach(topic -> {
-            TopicImage topicImage = metadataImage.topics().getTopic(topic.topicName());
-            if (topicImage != null) {
-                Uuid topicId = topicImage.id();
+            Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOpt = metadataImage.topicMetadata(topic.topicName());
+            if (topicMetadataOpt.isPresent()) {
+                var topicMetadata = topicMetadataOpt.get();
+                Uuid topicId = topicMetadata.id();
                 // A deleteState request to persister should only be sent with those topic partitions for which corresponding
                 // share partitions are initialized for the group.
                 if (initializedTopics.containsKey(topicId)) {
@@ -8157,7 +8166,7 @@ public class GroupMetadataManager {
                     // If the topic for which delete share group offsets request is sent is already present in the deletingTopics set,
                     // we will include that topic in the delete share group state request.
                     List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                    topicImage.partitions().keySet().forEach(partition ->
+                    IntStream.range(0, topicMetadata.partitionCount()).forEach(partition ->
                         partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
                     deleteShareGroupStateRequestTopicsData.add(
                         new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -8205,13 +8214,13 @@ public class GroupMetadataManager {
         Map<Uuid, Map<Integer, Long>> offsetByTopicPartitions = new HashMap<>();
 
         alterShareGroupOffsetsRequest.topics().forEach(topic -> {
-            TopicImage topicImage = metadataImage.topics().getTopic(topic.topicName());
-            if (topicImage != null) {
-                Uuid topicId = topicImage.id();
-                Set<Integer> existingPartitions = new HashSet<>(topicImage.partitions().keySet());
+            Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOpt = metadataImage.topicMetadata(topic.topicName());
+            if (topicMetadataOpt.isPresent()) {
+                var topicMetadata = topicMetadataOpt.get();
+                Uuid topicId = topicMetadata.id();
                 List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition> partitions = new ArrayList<>();
                 topic.partitions().forEach(partition -> {
-                    if (existingPartitions.contains(partition.partitionIndex())) {
+                    if (partition.partitionIndex() < topicMetadata.partitionCount()) {
                         partitions.add(
                             new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                                 .setPartitionIndex(partition.partitionIndex())
@@ -8230,7 +8239,7 @@ public class GroupMetadataManager {
                     topic.topicName(),
                     topic.partitions().stream()
                         .map(AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition::partitionIndex)
-                        .filter(existingPartitions::contains)
+                        .filter(part -> part < topicMetadata.partitionCount())
                         .collect(Collectors.toSet()),
                     currentTimeMs
                 ));
@@ -8404,6 +8413,13 @@ public class GroupMetadataManager {
     }
 
     /**
+     * @return true if the group is an empty streams group.
+     */
+    private static boolean isEmptyStreamsGroup(Group group) {
+        return group != null && group.type() == STREAMS && group.isEmpty();
+    }
+
+    /**
      * Write tombstones for the group if it's empty and is a classic group.
      *
      * @param group     The group to be deleted.
@@ -8433,6 +8449,26 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId, Long.MAX_VALUE);
         if (isEmptyConsumerGroup(group)) {
             // Add tombstones for the previous consumer group. The tombstones won't actually be
+            // replayed because its coordinator result has a non-null appendFuture.
+            createGroupTombstoneRecords(group, records);
+            removeGroup(groupId);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Delete and write tombstones for the group if it's empty and is a streams group.
+     *
+     * @param groupId The group id to be deleted.
+     * @param records The list of records to delete the group.
+     *
+     * @return true if the group is an empty streams group.
+     */
+    private boolean maybeDeleteEmptyStreamsGroup(String groupId, List<CoordinatorRecord> records) {
+        Group group = groups.get(groupId, Long.MAX_VALUE);
+        if (isEmptyStreamsGroup(group)) {
+            // Add tombstones for the previous streams group. The tombstones won't actually be
             // replayed because its coordinator result has a non-null appendFuture.
             createGroupTombstoneRecords(group, records);
             removeGroup(groupId);

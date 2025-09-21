@@ -27,7 +27,7 @@ from runtime import cmd
 
 SVN_DEV_URL="https://dist.apache.org/repos/dist/dev/kafka"
 
-def delete_old_rc_directory_if_needed(rc_tag, src, work_dir):
+def delete_old_rc_directory_if_needed(rc_tag, work_dir):
     svn_dev = os.path.join(work_dir, "svn_dev")
     cmd_desc = f"Check if {rc_tag} exists in the subversion repository."
     cmd_str = f"svn info --show-item revision {SVN_DEV_URL}/{rc_tag}"
@@ -39,7 +39,7 @@ def delete_old_rc_directory_if_needed(rc_tag, src, work_dir):
     cmd(cmd_desc, cmd_str, cwd = svn_dev)
 
 def commit_artifacts(rc_tag, src, work_dir):
-    delete_old_rc_directory_if_needed(rc_tag, src, work_dir)
+    delete_old_rc_directory_if_needed(rc_tag, work_dir)
     svn_dev = os.path.join(work_dir, "svn_dev")
     dst = os.path.join(svn_dev, rc_tag)
     print(f"Copying {src} to {dst}")
