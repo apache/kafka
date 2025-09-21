@@ -27,7 +27,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
@@ -167,6 +169,80 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
+    public void testOnPartitionsAssignedCalledWithNewPartitionsOnlyForClassicCooperative() throws InterruptedException {
+        try (var consumer = createClassicConsumerCooperativeProtocol()) {
+            testOnPartitionsAssignedCalledWithExpectedPartitions(consumer, true);
+        }
+    }
+
+    @ClusterTest
+    public void testOnPartitionsAssignedCalledWithNewPartitionsOnlyForAsyncConsumer() throws InterruptedException {
+        try (var consumer = createConsumer(CONSUMER)) {
+            testOnPartitionsAssignedCalledWithExpectedPartitions(consumer, true);
+        }
+    }
+
+    @ClusterTest
+    public void testOnPartitionsAssignedCalledWithNewPartitionsOnlyForClassicEager() throws InterruptedException {
+        try (var consumer = createConsumer(CLASSIC)) {
+            testOnPartitionsAssignedCalledWithExpectedPartitions(consumer, false);
+        }
+    }
+
+    private void testOnPartitionsAssignedCalledWithExpectedPartitions(
+            Consumer<byte[], byte[]> consumer,
+            boolean expectNewPartitionsOnlyInCallback) throws InterruptedException {
+        subscribeAndExpectOnPartitionsAssigned(consumer, List.of(topic), List.of(tp));
+        assertEquals(Set.of(tp), consumer.assignment());
+
+        // Add a new partition assignment while keeping the previous one
+        String newTopic = "newTopic";
+        TopicPartition addedPartition = new TopicPartition(newTopic, 0);
+        List<TopicPartition> expectedPartitionsInCallback;
+        if (expectNewPartitionsOnlyInCallback) {
+            expectedPartitionsInCallback = List.of(addedPartition);
+        } else {
+            expectedPartitionsInCallback = List.of(tp, addedPartition);
+        }
+
+        // Change subscription to keep the previous one and add a new topic. Assignment should be updated
+        // to contain partitions from both topics, but the onPartitionsAssigned parameters may containing
+        // the full new assignment or just the newly added partitions depending on the case.
+        subscribeAndExpectOnPartitionsAssigned(
+                consumer,
+                List.of(topic, newTopic),
+                expectedPartitionsInCallback);
+        assertEquals(Set.of(tp, addedPartition), consumer.assignment());
+    }
+
+    private void subscribeAndExpectOnPartitionsAssigned(Consumer<byte[], byte[]> consumer, List<String> topics, Collection<TopicPartition> expectedPartitionsInCallback) throws InterruptedException {
+        var partitionsAssigned = new AtomicBoolean(false);
+        AtomicReference<Collection<TopicPartition>> partitionsFromCallback = new AtomicReference<>();
+        consumer.subscribe(topics, new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                if (partitions.containsAll(expectedPartitionsInCallback)) {
+                    partitionsFromCallback.set(partitions);
+                    partitionsAssigned.set(true);
+                }
+            }
+
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                // noop
+            }
+        });
+        ClientsTestUtils.pollUntilTrue(
+                consumer,
+                partitionsAssigned::get,
+                "Timed out before expected rebalance completed"
+        );
+        // These are different types, so comparing values instead
+        assertTrue(expectedPartitionsInCallback.containsAll(partitionsFromCallback.get()) && partitionsFromCallback.get().containsAll(expectedPartitionsInCallback),
+                "Expected partitions " + expectedPartitionsInCallback + " as parameter for onPartitionsAssigned, but got " + partitionsFromCallback.get());
+    }
+
+    @ClusterTest
     public void testAsyncConsumerGetPositionOfNewlyAssignedPartitionOnPartitionsAssignedCallback() throws InterruptedException {
         testGetPositionOfNewlyAssignedPartitionOnPartitionsAssignedCallback(CONSUMER);
     }
@@ -282,6 +358,14 @@ public class PlaintextConsumerCallbackTest {
         return cluster.consumer(Map.of(
             GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
             ENABLE_AUTO_COMMIT_CONFIG, "false"
+        ));
+    }
+
+    private Consumer<byte[], byte[]> createClassicConsumerCooperativeProtocol() {
+        return cluster.consumer(Map.of(
+                GROUP_PROTOCOL_CONFIG, CLASSIC.name.toLowerCase(Locale.ROOT),
+                ENABLE_AUTO_COMMIT_CONFIG, "false",
+                ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
         ));
     }
 }

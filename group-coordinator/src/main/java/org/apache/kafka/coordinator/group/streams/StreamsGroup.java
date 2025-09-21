@@ -31,7 +31,6 @@ import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Utils;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -180,11 +179,6 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentWarmupTaskToProcessIds;
 
     /**
-     * The coordinator metrics.
-     */
-    private final GroupCoordinatorMetricsShard metrics;
-
-    /**
      * The Streams topology.
      */
     private final TimelineObject<Optional<StreamsTopology>> topology;
@@ -220,8 +214,7 @@ public class StreamsGroup implements Group {
     public StreamsGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
-        String groupId,
-        GroupCoordinatorMetricsShard metrics
+        String groupId
     ) {
         this.log = logContext.logger(StreamsGroup.class);
         this.logContext = logContext;
@@ -238,7 +231,6 @@ public class StreamsGroup implements Group {
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.metrics = Objects.requireNonNull(metrics);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
     }
