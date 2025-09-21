@@ -172,7 +172,7 @@ public class TestUtils {
      */
     public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) throws InterruptedException {
         waitForCondition(() -> Thread.getAllStackTraces().keySet().stream()
-                .noneMatch(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName)), String.format("Thread leak detected: ", threadName));
+                .noneMatch(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName)), String.format("Thread leak detected: %s", threadName));
     }
 
     /**
