@@ -160,7 +160,9 @@ public class TestUtils {
      * Asserts that there are no leaked threads with a specified name prefix and daemon status.
      * This method checks all threads in the JVM, filters them by the provided thread name prefix
      * and daemon status, and verifies that no matching threads are alive.
-     * If any matching threads are found, the test will fail.
+     * Use the {@link #waitForCondition(TestCondition, String) waitForCondition} to retry the check at a regular interval
+     * until either no matching threads are found or the timeout is exceeded.
+     * If any matching, alive threads are found after the timeout has elapsed, the assertion will fail.
      *
      * @param threadName The prefix of the thread names to check. Only threads whose names
      *                   start with this prefix will be considered.
@@ -168,7 +170,7 @@ public class TestUtils {
      *                   daemon status (either true for daemon threads or false for non-daemon threads)
      *                   will be considered.
      *
-     * @throws AssertionError If any thread with the specified name prefix and daemon status is found and is alive.
+     * @throws AssertionError If any thread with the specified name prefix and daemon status are found after the timeout. 
      */
     public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) throws InterruptedException {
         waitForCondition(() -> Thread.getAllStackTraces().keySet().stream()
