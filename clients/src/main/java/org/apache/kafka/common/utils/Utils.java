@@ -857,7 +857,7 @@ public final class Utils {
     public static void delete(final File rootFile) throws IOException {
         if (rootFile == null)
             return;
-        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
+        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
                 if (exc instanceof NoSuchFileException) {
@@ -1403,7 +1403,7 @@ public final class Utils {
      * @return new Collector<Map.Entry<K, V>, M, M>
      */
     public static <K, V, M extends Map<K, V>> Collector<Map.Entry<K, V>, M, M> entriesToMap(final Supplier<M> mapSupplier) {
-        return new Collector<Map.Entry<K, V>, M, M>() {
+        return new Collector<>() {
             @Override
             public Supplier<M> supplier() {
                 return mapSupplier;

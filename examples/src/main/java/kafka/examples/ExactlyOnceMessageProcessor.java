@@ -216,11 +216,7 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
         }
         return consumer.assignment().stream().mapToLong(partition -> {
             long currentPosition = consumer.position(partition);
-            if (fullEndOffsets.containsKey(partition)) {
-                return fullEndOffsets.get(partition) - currentPosition;
-            } else {
-                return 0;
-            }
+            return fullEndOffsets.getOrDefault(partition, currentPosition) - currentPosition;
         }).sum();
     }
 

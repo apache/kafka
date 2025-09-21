@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
+import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -36,6 +38,7 @@ public class ProcessState {
     private final Map<String, Set<TaskId>> assignedActiveTasks;
     private final Map<String, Set<TaskId>> assignedStandbyTasks;
     private final Set<TaskId> assignedTasks;
+    private PriorityQueue<Map.Entry<String, Integer>> membersByLoad;
 
     ProcessState(final String processId) {
         this.processId = processId;
@@ -45,8 +48,8 @@ public class ProcessState {
         this.assignedActiveTasks = new HashMap<>();
         this.assignedStandbyTasks = new HashMap<>();
         this.memberToTaskCounts = new HashMap<>();
+        this.membersByLoad = null;
     }
-
 
     public String processId() {
         return processId;
@@ -84,7 +87,26 @@ public class ProcessState {
         return assignedStandbyTasks;
     }
 
-    public void addTask(final String memberId, final TaskId taskId, final boolean isActive) {
+    /**
+     * Assigns a task to a member of this process.
+     *
+     * @param memberId The member to assign to.
+     * @param taskId   The task to assign.
+     * @param isActive Whether the task is an active task (true) or a standby task (false).
+     * @return the number of tasks that `memberId` has assigned after adding the new task.
+     */
+    public int addTask(final String memberId, final TaskId taskId, final boolean isActive) {
+        int newTaskCount = addTaskInternal(memberId, taskId, isActive);
+        // We cannot efficiently add a task to a specific member and keep the memberByLoad ordered correctly.
+        // So we just drop the heap here.
+        //
+        // The order in which addTask and addTaskToLeastLoadedMember is called ensures that the heaps are built at most
+        // twice (once for active, once for standby)
+        membersByLoad = null;
+        return newTaskCount;
+    }
+
+    private int addTaskInternal(final String memberId, final TaskId taskId, final boolean isActive) {
         taskCount += 1;
         assignedTasks.add(taskId);
         if (isActive) {
@@ -94,8 +116,46 @@ public class ProcessState {
             assignedStandbyTasks.putIfAbsent(memberId, new HashSet<>());
             assignedStandbyTasks.get(memberId).add(taskId);
         }
-        memberToTaskCounts.put(memberId, memberToTaskCounts.get(memberId) + 1);
+        int newTaskCount = memberToTaskCounts.get(memberId) + 1;
+        memberToTaskCounts.put(memberId, newTaskCount);
         computeLoad();
+        return newTaskCount;
+    }
+
+    /**
+     * Assigns a task to the least loaded member of this process
+     *
+     * @param taskId   The task to assign.
+     * @param isActive Whether the task is an active task (true) or a standby task (false).
+     * @return the number of tasks that `memberId` has assigned after adding the new task, or -1 if the
+     *         task was not assigned to any member.
+     */
+    public int addTaskToLeastLoadedMember(final TaskId taskId, final boolean isActive) {
+        if (memberToTaskCounts.isEmpty()) {
+            return -1;
+        }
+        if (memberToTaskCounts.size() == 1) {
+            return addTaskInternal(memberToTaskCounts.keySet().iterator().next(), taskId, isActive);
+        }
+        if (membersByLoad == null) {
+            membersByLoad = new PriorityQueue<>(
+                memberToTaskCounts.size(),
+                Map.Entry.comparingByValue()
+            );
+            for (Map.Entry<String, Integer> entry : memberToTaskCounts.entrySet()) {
+                // Copy here, since map entry objects are allowed to be reused by the underlying map implementation.
+                membersByLoad.add(new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue()));
+            }
+        }
+        Map.Entry<String, Integer> member = membersByLoad.poll();
+        if (member != null) {
+            int newTaskCount = addTaskInternal(member.getKey(), taskId, isActive);
+            member.setValue(newTaskCount);
+            membersByLoad.add(member); // Reinsert the updated member back into the priority queue
+            return newTaskCount;
+        } else {
+            throw new TaskAssignorException("No members available to assign task " + taskId);
+        }
     }
 
     private void incrementCapacity() {
