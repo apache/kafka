@@ -23,7 +23,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetFetchRequest.NoBatchedOffsetFetchRequestException;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
@@ -286,7 +285,7 @@ public class AdminApiDriver<K, V> {
                         spec.keys);
                 completeExceptionally(unrecoverableFailures);
                 if (handler instanceof ListOffsetsHandler) {
-                    // We don't need to do other operations because completeExceptionally
+                    // We dont need to do other operations because completeExceptionally
                     // help us to remove lookup and fulfillmentMap, and the downgraded
                     // offsetStamp still in fulfillmentMap so it will generate next request.
                     ListOffsetsHandler listOffsetsHandler = (ListOffsetsHandler) handler;
@@ -362,14 +361,13 @@ public class AdminApiDriver<K, V> {
             // and we don't want to issue more than one fulfillment request per broker at a time
             AdminApiHandler.RequestAndKeys<K> newRequest = newRequests.iterator().next();
             RequestSpec<K> spec = new RequestSpec<>(
-                    handler.apiName() + "(api=" + newRequest.request.apiKey() + ")",
-                    scope,
-                    newRequest.keys,
-                    newRequest.request,
-                    requestState.nextAllowedRetryMs,
-                    deadlineMs,
-                    requestState.tries,
-                    handler.apiName().equals("listOffsets") ? ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size() : 0
+                handler.apiName() + "(api=" + newRequest.request.apiKey() + ")",
+                scope,
+                newRequest.keys,
+                newRequest.request,
+                requestState.nextAllowedRetryMs,
+                deadlineMs,
+                requestState.tries
             );
 
             requestState.setInflight(spec);
@@ -406,7 +404,6 @@ public class AdminApiDriver<K, V> {
         public final long nextAllowedTryMs;
         public final long deadlineMs;
         public final int tries;
-        public final int downgradeTries;
 
         public RequestSpec(
             String name,
@@ -415,8 +412,7 @@ public class AdminApiDriver<K, V> {
             AbstractRequest.Builder<?> request,
             long nextAllowedTryMs,
             long deadlineMs,
-            int tries,
-            int downgradeTries
+            int tries
         ) {
             this.name = name;
             this.scope = scope;
@@ -425,7 +421,6 @@ public class AdminApiDriver<K, V> {
             this.nextAllowedTryMs = nextAllowedTryMs;
             this.deadlineMs = deadlineMs;
             this.tries = tries;
-            this.downgradeTries = downgradeTries;
         }
 
         @Override
@@ -438,7 +433,6 @@ public class AdminApiDriver<K, V> {
                 ", nextAllowedTryMs=" + nextAllowedTryMs +
                 ", deadlineMs=" + deadlineMs +
                 ", tries=" + tries +
-                ", downgradeTries=" + downgradeTries +
                 ')';
         }
     }

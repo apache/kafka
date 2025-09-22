@@ -5097,7 +5097,7 @@ public class KafkaAdminClient extends AdminClient {
         NodeProvider nodeProvider = spec.scope.destinationBrokerId().isPresent() ?
             new ConstantNodeIdProvider(spec.scope.destinationBrokerId().getAsInt()) :
             new LeastLoadedNodeProvider();
-        return new Call(spec.name, spec.nextAllowedTryMs, spec.tries - spec.downgradeTries, spec.deadlineMs, nodeProvider) {
+        return new Call(spec.name, spec.nextAllowedTryMs, spec.tries, spec.deadlineMs, nodeProvider) {
             @Override
             AbstractRequest.Builder<?> createRequest(int timeoutMs) {
                 return spec.request;
