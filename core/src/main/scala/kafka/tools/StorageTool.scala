@@ -166,7 +166,8 @@ object StorageTool extends Logging {
     }
     if (!namespace.getBoolean("no_initial_controllers") &&
       config.processRoles.contains(ProcessRole.ControllerRole) &&
-      staticVotersEmpty && formatter.initialVoters().isEmpty) {
+      staticVotersEmpty &&
+      formatter.initialVoters().isEmpty) {
           throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
             " is not set on this controller, you must specify one of the following: " +
             "--standalone, --initial-controllers, or --no-initial-controllers.");
@@ -344,12 +345,12 @@ object StorageTool extends Logging {
       .action(storeTrue())
 
     reconfigurableQuorumOptions.addArgument("--no-initial-controllers", "-N")
-      .help("Used to initialize a server without a dynamic quorum topology. When setting this flag, " +
+      .help("Used to initialize a controller without specifying a dynamic quorum. When setting this flag, " +
         "the controller.quorum.voters config should not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(storeTrue())
 
     reconfigurableQuorumOptions.addArgument("--initial-controllers", "-I")
-      .help("Used to initialize a server with a specific dynamic quorum topology. The argument " +
+      .help("Used to initialize a controller with the specified dynamic quorum. The argument " +
         "is a comma-separated list of id@hostname:port:directory. The same values must be used to " +
         "format all nodes. For example:\n0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:" +
         "MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n. When setting this flag, " +
