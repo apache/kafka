@@ -87,8 +87,7 @@ object StorageTool extends Logging {
         0
 
       case "version-mapping" =>
-        val unstableFeatureVersionsEnable = if (config.isDefined) config.get.unstableFeatureVersionsEnabled.booleanValue else false
-        runVersionMappingCommand(namespace, printStream, Feature.PRODUCTION_FEATURES, unstableFeatureVersionsEnable)
+        runVersionMappingCommand(namespace, printStream, Feature.PRODUCTION_FEATURES)
         0
 
       case "feature-dependencies" =>
@@ -183,17 +182,15 @@ object StorageTool extends Logging {
    * @param namespace                     Arguments containing the release version.
    * @param printStream                   The print stream to output the version mapping.
    * @param validFeatures                 List of features to be considered in the output.
-   * @param unstableFeatureVersionsEnable Whether unreleased MetadataVersions should be enabled or not.
    */
   def runVersionMappingCommand(
     namespace: Namespace,
     printStream: PrintStream,
-    validFeatures: java.util.List[Feature],
-    unstableFeatureVersionsEnable: Boolean
+    validFeatures: java.util.List[Feature]
   ): Unit = {
     val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.LATEST_PRODUCTION.toString)
     try {
-      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion, unstableFeatureVersionsEnable)
+      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion, true)
 
       val metadataVersionLevel = metadataVersion.featureLevel()
       printStream.print(f"metadata.version=$metadataVersionLevel%d ($releaseVersion%s)%n")
@@ -360,9 +357,6 @@ object StorageTool extends Logging {
         "Using the command with no --release-version  argument will return the mapping for " +
         "the latest stable metadata version"
       )
-    versionMappingParser.addArgument("--config", "-c")
-      .action(store())
-      .help("The Kafka configuration file to use.")
 
     versionMappingParser.addArgument("--release-version", "-r")
       .action(store())
