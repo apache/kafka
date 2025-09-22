@@ -387,7 +387,7 @@ class BrokerServer(
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, clientToControllerChannelManager, groupCoordinator,
-        transactionCoordinator, shareCoordinator)
+        transactionCoordinator, shareCoordinator, time)
 
       dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
@@ -616,7 +616,8 @@ class BrokerServer(
       tp => replicaManager.getLog(tp).toJava,
       tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
-      config.groupCoordinatorConfig.offsetsLoadBufferSize
+      config.groupCoordinatorConfig.offsetsLoadBufferSize,
+      CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
     )
     val writer = new CoordinatorPartitionWriter(
       replicaManager
@@ -647,7 +648,8 @@ class BrokerServer(
       tp => replicaManager.getLog(tp).toJava,
       tp => replicaManager.getLogEndOffset(tp).map(Long.box).toJava,
       serde,
-      config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
+      config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize(),
+      CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
     )
     val writer = new CoordinatorPartitionWriter(
       replicaManager
@@ -782,6 +784,9 @@ class BrokerServer(
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
       if (shareCoordinator != null)
         CoreUtils.swallow(shareCoordinator.shutdown(), this)
+
+      if (autoTopicCreationManager != null)
+        CoreUtils.swallow(autoTopicCreationManager.close(), this)
 
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)
