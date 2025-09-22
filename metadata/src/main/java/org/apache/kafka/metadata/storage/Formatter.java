@@ -363,7 +363,7 @@ public class Formatter {
                     throw new FormatterException(
                         "Cannot set kraft.version to " + configuredKRaftVersionLevel.get() +
                         " unless controller.quorum.voters is empty and one of the flags --standalone, " +
-                        "--initial-controllers, or -no-initial-controllers is used. " +
+                        "--initial-controllers, or --no-initial-controllers  is used. " +
                         "For dynamic controllers support, try using one of --standalone, --initial-controllers, " +
                         "or --no-initial-controllers and removing controller.quorum.voters."
                     );
