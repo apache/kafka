@@ -353,9 +353,9 @@ public class Formatter {
                 if (hasDynamicQuorum()) {
                     throw new FormatterException(
                         "Cannot set kraft.version to " + configuredKRaftVersionLevel.get() +
-                        " if controller.quorum.voters is empty and one of the flags --standalone or " +
-                        "--initial-controllers is used. For dynamic controllers support, try removing the " +
-                        "--feature flag for kraft.version."
+                        " if controller.quorum.voters is empty and one of the flags --standalone, " +
+                        "--initial-controllers, or --no-initial-controllers is used. For dynamic controllers support, " +
+                        "try removing the --feature flag for kraft.version."
                     );
                 }
             } else {

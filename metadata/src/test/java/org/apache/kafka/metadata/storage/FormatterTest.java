@@ -467,7 +467,7 @@ public class FormatterTest {
             assertTrue(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
                 "Cannot set kraft.version to 0 if controller.quorum.voters is empty " +
-                "and one of the flags --standalone or --initial-controllers is used. " +
+                "and one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
                 "For dynamic controllers support, try removing the --feature flag for kraft.version.",
                 assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
             );
