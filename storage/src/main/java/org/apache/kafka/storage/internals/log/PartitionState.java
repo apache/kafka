@@ -30,7 +30,7 @@ public interface PartitionState {
     Set<Integer> isr();
 
     /**
-     * This set may include un-committed ISR members following an expansion. This "effective" ISR is used for advancing
+     * This set may include uncommitted ISR members following an expansion. This "effective" ISR is used for advancing
      * the high watermark as well as determining which replicas are required for acks=all produce requests.*
      */
     Set<Integer> maximalIsr();
