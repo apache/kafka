@@ -151,13 +151,34 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldParseValidSimpleConsumerValidConfigWithStringOffset() throws Exception {
+    public void shouldParseValidSimpleConsumerValidConfigWithStringOffsetDeprecated() throws Exception {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--partition", "0",
             "--offset", "LatEst",
             "--property", "print.value=false"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+
+        assertEquals("localhost:9092", config.bootstrapServer());
+        assertEquals("test", config.topicArg().orElse(""));
+        assertTrue(config.partitionArg().isPresent());
+        assertEquals(0, config.partitionArg().getAsInt());
+        assertEquals(-1, config.offsetArg());
+        assertFalse(config.fromBeginning());
+        assertFalse(((DefaultMessageFormatter) config.formatter()).printValue());
+    }
+
+    @Test
+    public void shouldParseValidSimpleConsumerValidConfigWithStringOffset() throws Exception {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--offset", "LatEst",
+            "--formatter-property", "print.value=false"
         };
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
