@@ -52,13 +52,11 @@ import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DescribeClusterResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeTopicPartitionsResponse;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.errors.ConnectException;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -598,7 +596,6 @@ public class TopicAdminTest {
         }
     }
 
-    @Disabled
     @Test
     public void endOffsetsShouldFailWithTimeoutExceptionWhenTimeoutErrorOccurs() {
         String topicName = "myTopic";
@@ -611,9 +608,7 @@ public class TopicAdminTest {
         )) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
-            for (int i = 0; i < ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size(); ++i) {
-                env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
-            }
+            env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             assertThrows(TimeoutException.class, () -> admin.endOffsets(tps));
         }
