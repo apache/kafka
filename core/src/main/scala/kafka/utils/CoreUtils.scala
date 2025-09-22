@@ -23,16 +23,8 @@ import java.lang.management.ManagementFactory
 import com.typesafe.scalalogging.Logger
 
 import javax.management.ObjectName
-import scala.collection.Seq
-import org.apache.commons.validator.routines.InetAddressValidator
-import org.apache.kafka.common.Endpoint
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.network.SocketServerConfigs
 import org.slf4j.event.Level
-
-import scala.jdk.CollectionConverters._
 
 /**
  * General helper functions!
@@ -47,8 +39,6 @@ import scala.jdk.CollectionConverters._
  */
 object CoreUtils {
   private val logger = Logger(getClass)
-
-  private val inetAddressValidator = InetAddressValidator.getInstance()
 
   /**
     * Do the given action and log any exceptions thrown without rethrowing them.
@@ -121,76 +111,4 @@ object CoreUtils {
 
   def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.writeLock)(fun)
 
-  def listenerListToEndPoints(listeners: java.util.List[String], securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol]): Seq[Endpoint] = {
-    listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
-  }
-
-  private def checkDuplicateListenerPorts(endpoints: Seq[Endpoint], listeners: java.util.List[String]): Unit = {
-    val distinctPorts = endpoints.map(_.port).distinct
-    require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
-  }
-
-  def listenerListToEndPoints(listeners: java.util.List[String], securityProtocolMap: java.util.Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[Endpoint] = {
-    def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean =
-      (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
-        (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
-
-    def validate(endPoints: Seq[Endpoint]): Unit = {
-      val distinctListenerNames = endPoints.map(_.listener).distinct
-      require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
-
-      val (duplicatePorts, _) = endPoints.filter {
-        // filter port 0 for unit tests
-        ep => ep.port != 0
-      }.groupBy(_.port).partition {
-        case (_, endpoints) => endpoints.size > 1
-      }
-
-      // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
-      val duplicatePortsPartitionedByValidIps = duplicatePorts.map {
-        case (port, eps) =>
-          (port, eps.partition(ep =>
-            ep.host != null && inetAddressValidator.isValid(ep.host)
-          ))
-      }
-
-      // Iterate through every grouping of duplicates by port to see if they are valid
-      duplicatePortsPartitionedByValidIps.foreach {
-        case (port, (duplicatesWithIpHosts, duplicatesWithoutIpHosts)) =>
-          if (requireDistinctPorts)
-            checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners)
-
-          duplicatesWithIpHosts match {
-            case eps if eps.isEmpty =>
-            case Seq(ep1, ep2) =>
-              if (requireDistinctPorts) {
-                val errorMessage = "If you have two listeners on " +
-                  s"the same port then one needs to be IPv4 and the other IPv6, listeners: $listeners, port: $port"
-                require(validateOneIsIpv4AndOtherIpv6(ep1.host, ep2.host), errorMessage)
-
-                // If we reach this point it means that even though duplicatesWithIpHosts in isolation can be valid, if
-                // there happens to be ANOTHER listener on this port without an IP host (such as a null host) then its
-                // not valid.
-                if (duplicatesWithoutIpHosts.nonEmpty)
-                  throw new IllegalArgumentException(errorMessage)
-              }
-            case _ =>
-              // Having more than 2 duplicate endpoints doesn't make sense since we only have 2 IP stacks (one is IPv4
-              // and the other is IPv6)
-              if (requireDistinctPorts)
-                throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has " +
-                  s"an IPv4 address and the other IPv6 address, listeners: $listeners, port: $port")
-          }
-      }
-    }
-
-    val endPoints = try {
-      SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap).asScala
-    } catch {
-      case e: Exception =>
-        throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)
-    }
-    validate(endPoints)
-    endPoints
-  }
 }
