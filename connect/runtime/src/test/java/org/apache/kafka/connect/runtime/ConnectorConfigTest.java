@@ -30,7 +30,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +52,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     public static final Plugins MOCK_PLUGINS = new Plugins(new HashMap<>()) {
         @Override
         public Set<PluginDesc<Transformation<?>>> transformations() {
-            return Collections.emptySet();
+            return Set.of();
         }
     };
 
@@ -472,7 +471,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         Plugins mockPlugins = mock(Plugins.class);
         when(mockPlugins.newPlugin(HasDuplicateConfigTransformation.class.getName(),
                 null, (ClassLoader) null)).thenReturn(new HasDuplicateConfigTransformation());
-        when(mockPlugins.transformations()).thenReturn(Collections.emptySet());
+        when(mockPlugins.transformations()).thenReturn(Set.of());
         ConfigDef def = ConnectorConfig.enrich(mockPlugins, new ConfigDef(), props, false);
         assertEnrichedConfigDef(def, prefix, HasDuplicateConfigTransformation.MUST_EXIST_KEY, ConfigDef.Type.BOOLEAN);
         assertEnrichedConfigDef(def, prefix, TransformationStage.PREDICATE_CONFIG, ConfigDef.Type.STRING);

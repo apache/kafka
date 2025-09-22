@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -83,11 +84,9 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
@@ -1248,7 +1247,7 @@ public class GroupCoordinatorShardTest {
 
     @Test
     public void testOnLoaded() {
-        MetadataImage image = MetadataImage.EMPTY;
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
@@ -1344,7 +1343,7 @@ public class GroupCoordinatorShardTest {
             mock(CoordinatorMetrics.class),
             mock(CoordinatorMetricsShard.class)
         );
-        MetadataImage image = MetadataImage.EMPTY;
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
 
         // Confirm the cleanup is scheduled when the coordinator is initially loaded.
         coordinator.onLoaded(image);
@@ -1384,10 +1383,9 @@ public class GroupCoordinatorShardTest {
         ArgumentCaptor<List<CoordinatorRecord>> recordsCapture = ArgumentCaptor.forClass(List.class);
 
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
 
-        ConsumerGroup group1 = new ConsumerGroup(snapshotRegistry, "group-id", metricsShard);
-        ConsumerGroup group2 = new ConsumerGroup(snapshotRegistry, "other-group-id", metricsShard);
+        ConsumerGroup group1 = new ConsumerGroup(snapshotRegistry, "group-id");
+        ConsumerGroup group2 = new ConsumerGroup(snapshotRegistry, "other-group-id");
 
         when(groupMetadataManager.groupIds()).thenReturn(Set.of("group-id", "other-group-id"));
         when(groupMetadataManager.group("group-id")).thenReturn(group1);
@@ -1479,12 +1477,12 @@ public class GroupCoordinatorShardTest {
             coordinatorMetrics,
             metricsShard
         );
-        coordinator.onLoaded(MetadataImage.EMPTY);
+        coordinator.onLoaded(CoordinatorMetadataImage.EMPTY);
 
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
 
         // Advance the timer to trigger the update.
@@ -1495,7 +1493,7 @@ public class GroupCoordinatorShardTest {
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
     }
 

@@ -49,7 +49,6 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
@@ -163,7 +162,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                                   RestServer restServer, RestClient restClient) {
 
         OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore(plugins.newInternalConverter(
-                true, JsonConverter.class.getName(), Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
+                true, JsonConverter.class.getName(), Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(config);
 
         Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore,
