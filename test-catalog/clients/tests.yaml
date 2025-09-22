@@ -5137,6 +5137,7 @@ org.apache.kafka.common.utils.AbstractIteratorTest:
 - testEmptyIterator
 - testIterator
 org.apache.kafka.common.utils.AppInfoParserTest:
+- testClientIdWontAddRepeatedly
 - testRegisterAppInfoRegistersMetrics
 - testUnregisterAppInfoUnregistersMetrics
 org.apache.kafka.common.utils.ByteBufferInputStreamTest:
