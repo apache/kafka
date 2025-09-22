@@ -219,7 +219,7 @@ public class KafkaProducerTest {
     }
 
     @AfterEach
-    public void detectLeaks() {
+    public void detectLeaks() throws InterruptedException {
         // Assert no thread leakage of Kafka producer.
         TestUtils.assertNoLeakedThreadsWithNameAndDaemonStatus(NETWORK_THREAD_PREFIX, Boolean.TRUE);
     }

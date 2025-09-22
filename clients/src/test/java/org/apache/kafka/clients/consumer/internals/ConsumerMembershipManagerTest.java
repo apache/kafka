@@ -71,6 +71,8 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.TOPIC_PARTITION_COMPARATOR;
 import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.invokeRebalanceCallbacks;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -125,7 +127,7 @@ public class ConsumerMembershipManagerTest {
         time = new MockTime(0);
         backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
         metrics = new Metrics(time);
-        rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics);
+        rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
         when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
     }
@@ -179,6 +181,15 @@ public class ConsumerMembershipManagerTest {
 
         membershipManager = createMembershipManagerJoiningGroup(null, null, "rack1");
         assertEquals(Optional.of("rack1"), membershipManager.rackId());
+    }
+
+    @Test
+    public void testAssignedPartitionCountMetricRegistered() {
+        MetricName metricName = metrics.metricName(
+                "assigned-partitions",
+                CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX
+        );
+        assertNotNull(metrics.metric(metricName), "Metric assigned-partitions should have been registered");
     }
 
     @Test
