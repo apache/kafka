@@ -41,7 +41,6 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings({"unchecked", "ThrowableNotThrown"})
 public class MetadataVersionConfigValidatorTest {
 
-
     private static final LogDeltaManifest TEST_MANIFEST = LogDeltaManifest.newBuilder()
         .provenance(MetadataProvenance.EMPTY)
         .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
@@ -52,7 +51,7 @@ public class MetadataVersionConfigValidatorTest {
     public static final MetadataProvenance TEST_PROVENANCE =
         new MetadataProvenance(50, 3, 8000, true);
 
-    void testWith(
+    void executeMetadataUpdate(
         MetadataVersion metadataVersion,
         Supplier<Boolean> multiLogDirSupplier,
         FaultHandler faultHandler
@@ -79,7 +78,7 @@ public class MetadataVersionConfigValidatorTest {
         Supplier<Boolean> multiLogDirSupplier = mock(Supplier.class);
         when(multiLogDirSupplier.get()).thenReturn(false);
 
-        testWith(metadataVersion, multiLogDirSupplier, faultHandler);
+        executeMetadataUpdate(metadataVersion, multiLogDirSupplier, faultHandler);
 
         verify(multiLogDirSupplier, times(1)).get();
         verifyNoMoreInteractions(faultHandler);
@@ -93,7 +92,7 @@ public class MetadataVersionConfigValidatorTest {
 
         when(multiLogDirSupplier.get()).thenReturn(true);
 
-        testWith(metadataVersion, multiLogDirSupplier, faultHandler);
+        executeMetadataUpdate(metadataVersion, multiLogDirSupplier, faultHandler);
 
         verify(multiLogDirSupplier, times(1)).get();
         verify(faultHandler, times(1)).handleFault(
@@ -134,9 +133,8 @@ public class MetadataVersionConfigValidatorTest {
 
     private void validate(MetadataVersion metadataVersion, boolean jbodConfig, FaultHandler faultHandler)
         throws Exception {
-        Supplier<Boolean> multiLogDirSupplier = mock(Supplier.class);
-        when(multiLogDirSupplier.get()).thenReturn(jbodConfig);
+        Supplier<Boolean> multiLogDirSupplier = () -> jbodConfig;
 
-        testWith(metadataVersion, multiLogDirSupplier, faultHandler);
+        executeMetadataUpdate(metadataVersion, multiLogDirSupplier, faultHandler);
     }
 }
