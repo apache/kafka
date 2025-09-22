@@ -50,26 +50,20 @@ public class DelegationTokenPublisher implements MetadataPublisher {
             if (firstPublish) {
                 // Initialize the tokenCache with the Image
                 DelegationTokenImage delegationTokenImage = newImage.delegationTokens();
-                delegationTokenImage.tokens().forEach((tokenId, delegationTokenData) -> {
-                    try {
-                        tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.tokenInformation()));
-                    } catch (Exception e) {
-                        faultHandler.handleFault("Error updating delegation token during initialization", e);
-                    }
-                });
+                for (var token : delegationTokenImage.tokens().entrySet()) {
+                    tokenManager.updateToken(tokenManager.getDelegationToken(token.getValue().tokenInformation()));
+                }
                 firstPublish = false;
             }
             // Apply changes to DelegationTokens.
-            delta.getOrCreateDelegationTokenDelta().changes().forEach((tokenId, delegationTokenData) -> {
-                try {
-                    if (delegationTokenData.isPresent())
-                        tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.get().tokenInformation()));
-                    else
-                        tokenManager.removeToken(tokenId);
-                } catch (Exception e) {
-                    faultHandler.handleFault("Error updating delegation token for tokenId: " + tokenId, e);
-                }
-            });
+            for (var token : delta.getOrCreateDelegationTokenDelta().changes().entrySet()) {
+                var tokenId = token.getKey();
+                var delegationTokenData = token.getValue();
+                if (delegationTokenData.isPresent())
+                    tokenManager.updateToken(tokenManager.getDelegationToken(delegationTokenData.get().tokenInformation()));
+                else
+                    tokenManager.removeToken(tokenId);
+            }
         } catch (Throwable t) {
             var msg = String.format("Uncaught exception while publishing DelegationToken changes from %s MetadataDelta up to %s",
                 first ? "initial" : "update", newImage.highestOffsetAndEpoch().offset());
