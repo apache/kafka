@@ -147,6 +147,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -2666,8 +2667,7 @@ public class KafkaConsumerTest {
         consumer.assign(Set.of(tp0));
 
         // poll once to update with the current metadata
-        consumer.poll(Duration.ofMillis(0));
-        TestUtils.waitForCondition(() -> requestGenerated(client, ApiKeys.FIND_COORDINATOR),
+        waitForConsumerPoll(() -> requestGenerated(client, ApiKeys.FIND_COORDINATOR),
                 "No metadata requests sent");
         client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
 
@@ -2681,9 +2681,8 @@ public class KafkaConsumerTest {
         }
         // poll once again, which should send the list-offset request
         consumer.seek(tp0, 50L);
-        consumer.poll(Duration.ofMillis(0));
         // requests: list-offset, fetch
-        TestUtils.waitForCondition(() -> {
+        waitForConsumerPoll(() -> {
             boolean hasListOffsetRequest = requestGenerated(client, ApiKeys.LIST_OFFSETS);
             boolean hasFetchRequest = requestGenerated(client, ApiKeys.FETCH);
             return hasListOffsetRequest && hasFetchRequest;
@@ -3815,6 +3814,20 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         expectedTags.put("class", clazz.getSimpleName());
         expectedTags.putAll(TAGS);
         return new MetricName(NAME, "plugins", DESCRIPTION, expectedTags);
+    }
+
+    private void waitForConsumerPoll(Supplier<Boolean> testCondition, String conditionDetails) {
+        try {
+            TestUtils.waitForCondition(
+                () -> {
+                    consumer.poll(Duration.ZERO);
+                    return testCondition.get();
+                },
+                conditionDetails
+            );
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        }
     }
 
     private static final String NAME = "name";
