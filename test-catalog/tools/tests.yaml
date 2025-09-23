@@ -177,16 +177,23 @@ org.apache.kafka.tools.ConsoleProducerTest:
 - testProducerConfigFromFileUsingCommandConfig
 - testValidConfigsBootstrapServer
 org.apache.kafka.tools.ConsumerPerformanceTest:
+- testBootstrapServerNotPresent
 - testClientIdOverride
+- testCommandConfigWithConsumerConfigPresent
+- testCommandProperty
 - testConfigBootStrapServer
 - testConfigWithInclude
 - testConfigWithTopicAndInclude
 - testConfigWithUnrecognizedOption
 - testConfigWithoutTopicAndInclude
+- testConsumerConfigDeprecated
 - testDefaultClientId
 - testDetailedHeaderMatchBody
+- testMessagesDeprecated
 - testMetricsRetrievedBeforeConsumerClosed
 - testNonDetailedHeaderMatchBody
+- testNumOfRecordsNotPresent
+- testNumOfRecordsWithMessagesPresent
 org.apache.kafka.tools.DelegationTokenCommandTest:
 - testCheckArgsInvalidArgs
 - testCheckArgsMissingRequiredArgs
@@ -476,12 +483,19 @@ org.apache.kafka.tools.ResetIntegrationWithSslTest:
 - testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic
 - testResetWhenInternalTopicsAreSpecified
 org.apache.kafka.tools.ShareConsumerPerformanceTest:
+- testBootstrapServerNotPresent
 - testClientIdOverride
+- testCommandConfigWithConsumerConfigPresent
+- testCommandProperty
 - testConfigBootStrapServer
 - testConfigWithUnrecognizedOption
+- testConsumerConfigDeprecated
 - testDefaultClientId
 - testHeaderMatchBody
+- testMessagesDeprecated
 - testMetricsRetrievedBeforeConsumerClosed
+- testNumOfRecordsNotPresent
+- testNumOfRecordsWithMessagesPresent
 org.apache.kafka.tools.StreamsResetterTest:
 - shouldDeleteTopic
 - shouldDetermineInternalTopicBasedOnTopicName1
