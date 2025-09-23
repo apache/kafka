@@ -212,7 +212,7 @@ public final class DistributedConfig extends WorkerConfig {
 
     public static final String INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG = "inter.worker.signature.algorithm";
     public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT = "HmacSHA256";
-    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DOC = "The algorithm used to sign internal requests"
+    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DOC = "The algorithm used to sign internal requests. "
             + "The algorithm '" + INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT + "' will be used as a default on JVMs that support it; "
             + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
 
