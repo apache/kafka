@@ -784,12 +784,6 @@ class AutoTopicCreationManagerTest {
       Set("test-topic-1", "test-topic-2"), mockTime.milliseconds())
     
     // Debug output to understand the failure
-    if (cachedErrors.size != 1) {
-      println(s"Expected 1 cached error but found ${cachedErrors.size}")
-      cachedErrors.foreach { case (topic, error) =>
-        println(s"  Cached error for $topic: $error")
-      }
-    }
     
     assertEquals(1, cachedErrors.size, s"Expected only 1 error but found: $cachedErrors")
     assertTrue(cachedErrors.contains("test-topic-2"))
