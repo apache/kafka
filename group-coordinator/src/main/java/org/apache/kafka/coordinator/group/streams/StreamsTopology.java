@@ -102,9 +102,10 @@ public record StreamsTopology(int topologyEpoch,
         return new StreamsGroupDescribeResponseData.Topology()
             .setEpoch(topologyEpoch)
             .setSubtopologies(
-                subtopologies.entrySet().stream().map(
-                    entry -> asStreamsGroupDescribeSubtopology(entry.getKey(), entry.getValue())
-                ).toList()
+                subtopologies.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(entry -> asStreamsGroupDescribeSubtopology(entry.getKey(), entry.getValue()))
+                    .toList()
             );
     }
 
