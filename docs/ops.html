@@ -4099,14 +4099,8 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
   <p>
     The static versus dynamic nature of the quorum is determined at the time of formatting.
     Specifically, the quorum will be formatted as dynamic if <code>controller.quorum.voters</code> is
-    <b>not</b> present, and if the software version is Apache Kafka 3.9 or newer. If you have
-    followed the instructions earlier in this document, you will get a dynamic quorum.<p>
-
-    If you would like the formatting process to fail if a dynamic quorum cannot be achieved, format your
-    controllers using the <code>--feature kraft.version=1</code>. (Note that you should not supply
-    this flag when formatting brokers -- only when formatting controllers.)<p>
-
-  <pre><code class="language-bash">$ bin/kafka-storage.sh format -t KAFKA_CLUSTER_ID --feature kraft.version=1 -c controller.properties</code></pre>
+    <b>not</b> present, and one of --standalone, --initial-controllers, or --no-initial-controllers is set.
+    If you have followed the instructions earlier in this document, you will get a dynamic quorum.
   <p>
   Note: To migrate from static voter set to dynamic voter set, please refer to the <a href="#kraft_upgrade">Upgrade</a> section.
 
