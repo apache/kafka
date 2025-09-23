@@ -74,7 +74,7 @@ public class ConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "10",
+            "--num-records", "10",
             "--print-metrics"
         };
 
@@ -82,7 +82,56 @@ public class ConsumerPerformanceTest {
 
         assertEquals("localhost:9092", config.brokerHostsAndPorts());
         assertTrue(config.topic().get().contains("test"));
-        assertEquals(10, config.numMessages());
+        assertEquals(10, config.numRecords());
+    }
+
+    @Test
+    public void testBootstrapServerNotPresent() {
+        String[] args = new String[]{
+            "--topic", "test"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() ->
+                new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(err.contains("Missing required argument \"[bootstrap-server]\""));
+    }
+
+    @Test
+    public void testNumOfRecordsNotPresent() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() ->
+                new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(err.contains("Exactly one of the following arguments is required:"));
+    }
+
+    @Test
+    public void testMessagesDeprecated() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--messages", "10"
+        };
+
+        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
+        assertEquals(10, config.numRecords());
+    }
+
+    @Test
+    public void testNumOfRecordsWithMessagesPresent() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--messages", "10",
+            "--num-records", "20"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() ->
+                new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(err.contains("Exactly one of the following arguments is required"));
     }
 
     @Test
@@ -90,7 +139,7 @@ public class ConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "10",
+            "--num-records", "10",
             "--new-consumer"
         };
 
@@ -104,14 +153,14 @@ public class ConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--include", "test.*",
-            "--messages", "10"
+            "--num-records", "10"
         };
 
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
 
         assertEquals("localhost:9092", config.brokerHostsAndPorts());
         assertTrue(config.include().get().toString().contains("test.*"));
-        assertEquals(10, config.numMessages());
+        assertEquals(10, config.numRecords());
     }
 
     @Test
@@ -120,7 +169,7 @@ public class ConsumerPerformanceTest {
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--include", "test.*",
-            "--messages", "10"
+            "--num-records", "10"
         };
 
         String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
@@ -132,7 +181,7 @@ public class ConsumerPerformanceTest {
     public void testConfigWithoutTopicAndInclude() {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
-            "--messages", "10"
+            "--num-records", "10"
         };
 
         String err = ToolsTestUtils.captureStandardErr(() -> new ConsumerPerformance.ConsumerPerfOptions(args));
@@ -141,8 +190,10 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
-    public void testClientIdOverride() throws IOException {
-        File tempFile = Files.createFile(tempDir.resolve("test_consumer_config.conf")).toFile();
+    public void testCommandProperty() throws IOException {
+        Path configPath = tempDir.resolve("test_command_property_consumer_perf.conf");
+        Files.deleteIfExists(configPath);
+        File tempFile = Files.createFile(configPath).toFile();
         try (PrintWriter output = new PrintWriter(Files.newOutputStream(tempFile.toPath()))) {
             output.println("client.id=consumer-1");
             output.flush();
@@ -151,7 +202,54 @@ public class ConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "10",
+            "--num-records", "10",
+            "--command-property", "client.id=consumer-2",
+            "--command-config", tempFile.getAbsolutePath(),
+            "--command-property", "prop=val"
+        };
+
+        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
+
+        assertEquals("consumer-2", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+        assertEquals("val", config.props().getProperty("prop"));
+    }
+
+    @Test
+    public void testClientIdOverride() throws IOException {
+        Path configPath = tempDir.resolve("test_client_id_override_consumer_perf.conf");
+        Files.deleteIfExists(configPath);
+        File tempFile = Files.createFile(configPath).toFile();
+        try (PrintWriter output = new PrintWriter(Files.newOutputStream(tempFile.toPath()))) {
+            output.println("client.id=consumer-1");
+            output.flush();
+        }
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--num-records", "10",
+            "--command-config", tempFile.getAbsolutePath()
+        };
+
+        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
+
+        assertEquals("consumer-1", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
+    }
+
+    @Test
+    public void testConsumerConfigDeprecated() throws IOException {
+        Path configPath = tempDir.resolve("test_consumer_config_deprecated_consumer_perf.conf");
+        Files.deleteIfExists(configPath);
+        File tempFile = Files.createFile(configPath).toFile();
+        try (PrintWriter output = new PrintWriter(Files.newOutputStream(tempFile.toPath()))) {
+            output.println("client.id=consumer-1");
+            output.flush();
+        }
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--num-records", "10",
             "--consumer.config", tempFile.getAbsolutePath()
         };
 
@@ -161,11 +259,27 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
+    public void testCommandConfigWithConsumerConfigPresent() {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--num-records", "10",
+            "--consumer.config", "some-path",
+            "--command-config", "some-path"
+        };
+
+        String err = ToolsTestUtils.captureStandardErr(() ->
+                new ConsumerPerformance.ConsumerPerfOptions(args));
+        assertTrue(err.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
+                "[consumer.config]", "[command-config]")));
+    }
+
+    @Test
     public void testDefaultClientId() throws IOException {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "10"
+            "--num-records", "10"
         };
 
         ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
@@ -178,7 +292,7 @@ public class ConsumerPerformanceTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--messages", "0",
+            "--num-records", "0",
             "--print-metrics"
         };
 
