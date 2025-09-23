@@ -343,6 +343,8 @@ public class TaskManager {
                 final TaskId taskId = entry.getKey();
                 final Task task = stateDirectory.removeStartupTask(taskId);
                 if (task != null) {
+                    task.initializeIfNeeded();
+
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
                     task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), changelogReader, inputPartitions);

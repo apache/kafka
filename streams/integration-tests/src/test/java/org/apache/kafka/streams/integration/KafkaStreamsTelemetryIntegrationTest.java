@@ -281,6 +281,15 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsApplicationProperties = props(groupProtocol);
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
 
+        shouldPassMetrics(topology);
+
+        INTERCEPTING_CONSUMERS.clear();
+        INTERCEPTING_ADMIN_CLIENTS.clear();
+
+        shouldPassMetrics(topology);
+    }
+
+    private void shouldPassMetrics(Topology topology) throws Exception {
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 

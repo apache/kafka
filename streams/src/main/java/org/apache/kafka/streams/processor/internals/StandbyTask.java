@@ -45,8 +45,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class StandbyTask extends AbstractTask implements Task {
     private final boolean eosEnabled;
-    private final Sensor closeTaskSensor;
-    private final Sensor updateSensor;
+    private Sensor closeTaskSensor;
+    private Sensor updateSensor;
     private final StreamsMetricsImpl streamsMetrics;
 
     protected final InternalProcessorContext<?, ?> processorContext;
@@ -83,8 +83,6 @@ public class StandbyTask extends AbstractTask implements Task {
         this.streamsMetrics = streamsMetrics;
         processorContext.transitionToStandby(cache);
 
-        closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
-        updateSensor = TaskMetrics.updateSensor(Thread.currentThread().getName(), id.toString(), streamsMetrics);
         this.eosEnabled = config.eosEnabled;
     }
 
@@ -109,6 +107,9 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
+            closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
+            updateSensor = TaskMetrics.updateSensor(Thread.currentThread().getName(), id.toString(), streamsMetrics);
+
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
             // with and without EOS we would check for checkpointing at each commit during running,
