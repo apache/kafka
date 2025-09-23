@@ -457,9 +457,9 @@ class DefaultAutoTopicCreationManager(
                 }
               case createTopicsResponse: CreateTopicsResponse =>
                 cacheTopicCreationErrorsFromResponse(createTopicsResponse, timeoutMs)
-              case other =>
-                warn(s"Auto topic creation request received unexpected response type: ${other.getClass.getSimpleName}")
-                cacheTopicCreationErrors(creatableTopics.keys.toSet, s"Unexpected response type: ${other.getClass.getSimpleName}", timeoutMs)
+              case unexpectedResponse =>
+                warn(s"Auto topic creation request received unexpected response type: ${unexpectedResponse.getClass.getSimpleName}")
+                cacheTopicCreationErrors(creatableTopics.keys.toSet, s"Unexpected response type: ${unexpectedResponse.getClass.getSimpleName}", timeoutMs)
             }
           }
           debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
