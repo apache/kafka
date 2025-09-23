@@ -166,13 +166,17 @@ public class QuorumControllerMetrics implements AutoCloseable {
         registry.ifPresent(r -> r.newGauge(AVERAGE_IDLE_RATIO, new Gauge<Double>() {
             @Override
             public Double value() {
-                return avgIdleTimeRatio.measure();
+                synchronized (avgIdleTimeRatio) {
+                    return avgIdleTimeRatio.measure();
+                }
             }
         }));
     }
 
     public void updateIdleTime(long idleDurationMs) {
-        avgIdleTimeRatio.record((double) idleDurationMs, time.milliseconds());
+        synchronized (avgIdleTimeRatio) {
+            avgIdleTimeRatio.record((double) idleDurationMs, time.milliseconds());
+        }
     }
 
     public void addTimeSinceLastHeartbeatMetric(int brokerId) {
