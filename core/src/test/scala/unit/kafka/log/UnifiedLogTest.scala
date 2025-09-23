@@ -4668,7 +4668,6 @@ class UnifiedLogTest {
   }
 }
 
-
   @Test
   def testStaleProducerEpochReturnsRecoverableErrorForTV1Clients(): Unit = {
     // Producer epoch gets incremented (coordinator fail over, completed transaction, etc.)
@@ -4758,6 +4757,7 @@ class UnifiedLogTest {
     assertTrue(exception.getMessage.contains(s"$originalEpoch"))
     assertTrue(exception.getMessage.contains(s"$bumpedEpoch"))
   }
+
 object UnifiedLogTest {
   def allRecords(log: UnifiedLog): List[Record] = {
     val recordsFound = ListBuffer[Record]()
