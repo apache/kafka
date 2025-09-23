@@ -2824,18 +2824,18 @@ class KafkaApis(val requestChannel: RequestChannel,
               val timeoutMs = heartbeatIntervalMs * 2
 
               autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, timeoutMs)
-              
+
               // Check for cached topic creation errors only if there's already a MISSING_INTERNAL_TOPICS status
               val hasMissingInternalTopicsStatus = responseData.status() != null && 
                 responseData.status().stream().anyMatch(s => s.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-              
+
               if (hasMissingInternalTopicsStatus) {
                 val currentTimeMs = time.milliseconds()
-                val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicsToCreate.keys.toSet, currentTimeMs)
-                if (cachedErrors.nonEmpty) {
+                val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicsToCreate.keySet(), currentTimeMs)
+                if (!cachedErrors.isEmpty) {
                   val missingInternalTopicStatus =
                     responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
-                  val creationErrorDetails = cachedErrors.map { case (topic, error) => s"$topic ($error)" }.mkString(", ")
+                  val creationErrorDetails = cachedErrors.entrySet().stream().map(e => s"${e.getKey} (${e.getValue})" ).collect(Collectors.joining(", "))
                   if (missingInternalTopicStatus.isPresent) {
                     val existingDetail = Option(missingInternalTopicStatus.get().statusDetail()).getOrElse("")
                     missingInternalTopicStatus.get().setStatusDetail(

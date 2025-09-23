@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
+import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.EnvelopeRequest;
 import org.apache.kafka.common.requests.EnvelopeResponse;
 import org.apache.kafka.common.requests.RequestContext;
@@ -51,6 +53,7 @@ import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.util.MockTime;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +64,7 @@ import org.mockito.Mockito;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,11 +72,13 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME;
 import static org.apache.kafka.common.internals.Topic.SHARE_GROUP_STATE_TOPIC_NAME;
 import static org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -86,10 +92,12 @@ public class DefaultAutoTopicCreationManagerTest {
             (Class<AbstractRequest.Builder<? extends AbstractRequest>>) (Class<?>) AbstractRequest.Builder.class;
 
     private final int requestTimeout = 100;
+    private final int testCacheCapacity = 3;
     private AbstractKafkaConfig config;
     private final MetadataCache metadataCache = Mockito.mock(MetadataCache.class);
     private final NodeToControllerChannelManager brokerToController = Mockito.mock(NodeToControllerChannelManager.class);
     private AutoTopicCreationManager autoTopicCreationManager;
+    private final MockTime mockTime = new MockTime(0L, 0L);
 
     private final int internalTopicPartitions = 2;
     private final short internalTopicReplicationFactor = 2;
@@ -109,6 +117,8 @@ public class DefaultAutoTopicCreationManagerTest {
         props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, String.valueOf(internalTopicReplicationFactor));
         props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, String.valueOf(internalTopicReplicationFactor));
         props.setProperty(ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, String.valueOf(internalTopicReplicationFactor));
+        // Set a short group max session timeout for testing TTL (1 second)
+        props.setProperty(GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "1000");
 
         config = new AbstractKafkaConfig(AbstractKafkaConfig.CONFIG_DEF, props, Map.of(), false) { };
         var aliveBrokers = List.of(new Node(0, "host0", 0), new Node(1, "host1", 1));
@@ -146,7 +156,9 @@ public class DefaultAutoTopicCreationManagerTest {
                 brokerToController,
                 Properties::new,
                 Properties::new,
-                Properties::new);
+                Properties::new,
+                mockTime,
+                testCacheCapacity);
 
         var topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection();
         topicsCollection.add(getNewTopic(topicName, numPartitions, replicationFactor));
@@ -269,9 +281,12 @@ public class DefaultAutoTopicCreationManagerTest {
                 brokerToController,
                 Properties::new,
                 Properties::new,
-                Properties::new);
+                Properties::new,
+                mockTime,
+                testCacheCapacity);
 
-        autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
+        autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext,
+                new GroupCoordinatorConfig(config).streamsGroupHeartbeatIntervalMs() * 2L);
 
         var argumentCaptor = ArgumentCaptor.forClass(ABSTRACT_REQUEST_BUILDER_CLASS);
         verify(brokerToController).sendRequest(
@@ -305,9 +320,12 @@ public class DefaultAutoTopicCreationManagerTest {
                 brokerToController,
                 Properties::new,
                 Properties::new,
-                Properties::new);
+                Properties::new,
+                mockTime,
+                testCacheCapacity);
 
-        autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
+        autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext,
+                new GroupCoordinatorConfig(config).streamsGroupHeartbeatIntervalMs() * 2L);
 
         verify(brokerToController, never()).sendRequest(
                 any(ABSTRACT_REQUEST_BUILDER_CLASS),
@@ -329,9 +347,12 @@ public class DefaultAutoTopicCreationManagerTest {
                 brokerToController,
                 Properties::new,
                 Properties::new,
-                Properties::new);
+                Properties::new,
+                mockTime,
+                testCacheCapacity);
 
-        autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
+        autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext,
+                new GroupCoordinatorConfig(config).streamsGroupHeartbeatIntervalMs() * 2L);
 
         var argumentCaptor = ArgumentCaptor.forClass(ABSTRACT_REQUEST_BUILDER_CLASS);
 
@@ -369,7 +390,9 @@ public class DefaultAutoTopicCreationManagerTest {
                 brokerToController,
                 Properties::new,
                 Properties::new,
-                Properties::new);
+                Properties::new,
+                mockTime,
+                testCacheCapacity);
 
         var createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
                 .setApiKey(ApiKeys.CREATE_TOPICS.id)
@@ -409,5 +432,229 @@ public class DefaultAutoTopicCreationManagerTest {
                 .setName(topicName)
                 .setNumPartitions(numPartitions)
                 .setReplicationFactor(replicationFactor);
+    }
+
+    @Test
+    public void testTopicCreationErrorCaching() throws UnknownHostException {
+        autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+                config,
+                brokerToController,
+                Properties::new,
+                Properties::new,
+                Properties::new,
+                mockTime,
+                testCacheCapacity);
+
+        Map<String, CreatableTopic> topics = new HashMap<>();
+        topics.put("test-topic-1", new CreatableTopic()
+                .setName("test-topic-1")
+                .setNumPartitions(1)
+                .setReplicationFactor((short) 1));
+
+        var requestContext = initializeRequestContextWithUserPrincipal();
+
+        autoTopicCreationManager.createStreamsInternalTopics(
+                topics,
+                requestContext,
+                new GroupCoordinatorConfig(config).streamsGroupHeartbeatIntervalMs() * 2L);
+
+        var argumentCaptor = ArgumentCaptor.forClass(ControllerRequestCompletionHandler.class);
+        verify(brokerToController).sendRequest(
+                any(ABSTRACT_REQUEST_BUILDER_CLASS),
+                argumentCaptor.capture());
+
+        // Simulate a CreateTopicsResponse with errors
+        var createTopicsResponseData = new CreateTopicsResponseData();
+        var topicResult = new CreateTopicsResponseData.CreatableTopicResult()
+                .setName("test-topic-1")
+                .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code())
+                .setErrorMessage("Topic 'test-topic-1' already exists.");
+        createTopicsResponseData.topics().add(topicResult);
+
+        var createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData);
+        var header = new RequestHeader(ApiKeys.CREATE_TOPICS, (short) 0, "client", 1);
+        var clientResponse = new ClientResponse(header, null, null,
+                0, 0, false, null, null, createTopicsResponse);
+
+        // Trigger the completion handler
+        argumentCaptor.getValue().onComplete(clientResponse);
+
+        // Verify that the error was cached
+        var cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(
+                Set.of("test-topic-1"), mockTime.milliseconds());
+        assertEquals(1, cachedErrors.size());
+        assertTrue(cachedErrors.containsKey("test-topic-1"));
+        assertEquals("Topic 'test-topic-1' already exists.", cachedErrors.get("test-topic-1"));
+    }
+
+    @Test
+    public void testGetTopicCreationErrorsWithMultipleTopics() throws UnknownHostException {
+        autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+                config,
+                brokerToController,
+                Properties::new,
+                Properties::new,
+                Properties::new,
+                mockTime,
+                testCacheCapacity);
+
+        var topics = Map.of(
+                "success-topic",
+                new CreatableTopic().setName("success-topic").setNumPartitions(1).setReplicationFactor((short) 1),
+                "failed-topic",
+                new CreatableTopic().setName("failed-topic").setNumPartitions(1).setReplicationFactor((short) 1));
+
+        var requestContext = initializeRequestContextWithUserPrincipal();
+        autoTopicCreationManager.createStreamsInternalTopics(
+                topics, requestContext, new GroupCoordinatorConfig(config).streamsGroupHeartbeatIntervalMs() * 2L);
+
+        var argumentCaptor = ArgumentCaptor.forClass(ControllerRequestCompletionHandler.class);
+
+        verify(brokerToController).sendRequest(
+                any(ABSTRACT_REQUEST_BUILDER_CLASS),
+                argumentCaptor.capture());
+
+        // Simulate mixed response - one success, one failure
+        var createTopicsResponseData = new CreateTopicsResponseData();
+        createTopicsResponseData.topics().add(
+                new CreateTopicsResponseData.CreatableTopicResult()
+                        .setName("success-topic")
+                        .setErrorCode(Errors.NONE.code())
+        );
+        createTopicsResponseData.topics().add(
+                new CreateTopicsResponseData.CreatableTopicResult()
+                        .setName("failed-topic")
+                        .setErrorCode(Errors.POLICY_VIOLATION.code())
+                        .setErrorMessage("Policy violation")
+        );
+
+        var createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData);
+        var header = new RequestHeader(ApiKeys.CREATE_TOPICS, (short) 0, "client", 1);
+        var clientResponse = new ClientResponse(header, null, null,
+                0, 0, false, null, null, createTopicsResponse);
+
+        argumentCaptor.getValue().onComplete(clientResponse);
+
+        // Only the failed topic should be cached
+        var cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(
+                Set.of("success-topic", "failed-topic", "nonexistent-topic"), mockTime.milliseconds());
+        assertEquals(1, cachedErrors.size());
+        assertTrue(cachedErrors.containsKey("failed-topic"));
+        assertEquals("Policy violation", cachedErrors.get("failed-topic"));
+    }
+
+    @Test
+    public void testErrorCacheTTL() throws UnknownHostException {
+        autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+                config,
+                brokerToController,
+                Properties::new,
+                Properties::new,
+                Properties::new,
+                mockTime,
+                testCacheCapacity);
+
+        // First cache an error by simulating topic creation failure
+        var topics = Map.of("test-topic",
+                new CreatableTopic().setName("test-topic").setNumPartitions(1).setReplicationFactor((short) 1));
+        var requestContext = initializeRequestContextWithUserPrincipal();
+        long shortTtlMs = 1000L; // Use 1 second TTL for faster testing
+        autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext, shortTtlMs);
+
+        var argumentCaptor = ArgumentCaptor.forClass(ControllerRequestCompletionHandler.class);
+        verify(brokerToController).sendRequest(
+                any(ABSTRACT_REQUEST_BUILDER_CLASS),
+                argumentCaptor.capture());
+
+        // Simulate a CreateTopicsResponse with error
+        var createTopicsResponseData = new CreateTopicsResponseData();
+        var topicResult = new CreateTopicsResponseData.CreatableTopicResult()
+                .setName("test-topic")
+                .setErrorCode(Errors.INVALID_REPLICATION_FACTOR.code())
+                .setErrorMessage("Invalid replication factor");
+        createTopicsResponseData.topics().add(topicResult);
+
+        var createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData);
+        var header = new RequestHeader(ApiKeys.CREATE_TOPICS, (short) 0, "client", 1);
+        var clientResponse = new ClientResponse(header, null, null,
+                0, 0, false, null, null, createTopicsResponse);
+
+        // Cache the error at T0
+        argumentCaptor.getValue().onComplete(clientResponse);
+
+        // Verify error is cached and accessible within TTL
+        var cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(
+                Set.of("test-topic"), mockTime.milliseconds());
+        assertEquals(1, cachedErrors.size());
+        assertEquals("Invalid replication factor", cachedErrors.get("test-topic"));
+
+        // Advance time beyond TTL
+        mockTime.sleep(shortTtlMs + 100); // T0 + 1.1 seconds
+
+        // Verify error is now expired and proactively cleaned up
+        var expiredErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(
+                Set.of("test-topic"), mockTime.milliseconds());
+        assertTrue(expiredErrors.isEmpty(), "Expired errors should be proactively cleaned up");
+    }
+
+    @Test
+    public void testErrorCacheExpirationBasedEviction() throws UnknownHostException {
+        // Create manager with small cache size for testing
+        autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+                config,
+                brokerToController,
+                Properties::new,
+                Properties::new,
+                Properties::new,
+                mockTime,
+                3);
+
+        var requestContext = initializeRequestContextWithUserPrincipal();
+
+        // Create 5 topics to exceed the cache size of 3
+        List<String> topicNames = IntStream.rangeClosed(1, 5).mapToObj(i -> "test-topic-" + i).toList();
+
+        for (String topicName : topicNames) {
+            var topics = Map.of(topicName,
+                    new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor((short) 1));
+
+            autoTopicCreationManager.createStreamsInternalTopics(
+                    topics, requestContext, new GroupCoordinatorConfig(config).streamsGroupHeartbeatIntervalMs() * 2L);
+
+            var argumentCaptor = ArgumentCaptor.forClass(ControllerRequestCompletionHandler.class);
+            verify(brokerToController, Mockito.atLeastOnce()).sendRequest(
+                    any(ABSTRACT_REQUEST_BUILDER_CLASS),
+                    argumentCaptor.capture());
+
+            // Simulate error response for this topic
+            var createTopicsResponseData = new CreateTopicsResponseData();
+            var topicResult = new CreateTopicsResponseData.CreatableTopicResult()
+                    .setName(topicName)
+                    .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code())
+                    .setErrorMessage("Topic '" + topicName + "' already exists.");
+            createTopicsResponseData.topics().add(topicResult);
+
+            var createTopicsResponse = new CreateTopicsResponse(createTopicsResponseData);
+            var header = new RequestHeader(ApiKeys.CREATE_TOPICS, (short) 0, "client", 1);
+            var clientResponse = new ClientResponse(header, null, null,
+                    0, 0, false, null, null, createTopicsResponse);
+
+            argumentCaptor.getValue().onComplete(clientResponse);
+
+            // Advance time slightly between additions to ensure different timestamps
+            mockTime.sleep(10);
+        }
+
+        // With cache size of 3, topics 1 and 2 should have been evicted
+        var cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(
+                Set.copyOf(topicNames), mockTime.milliseconds());
+
+        // Only the last 3 topics should be in the cache (topics 3, 4, 5)
+        assertEquals(3, cachedErrors.size(), "Cache should contain only the most recent 3 entries");
+        assertTrue(cachedErrors.containsKey("test-topic-3"), "test-topic-3 should be in cache");
+        assertTrue(cachedErrors.containsKey("test-topic-4"), "test-topic-4 should be in cache");
+        assertTrue(cachedErrors.containsKey("test-topic-5"), "test-topic-5 should be in cache");
+        assertFalse(cachedErrors.containsKey("test-topic-1"), "test-topic-1 should have been evicted");
+        assertFalse(cachedErrors.containsKey("test-topic-2"), "test-topic-2 should have been evicted");
     }
 }

@@ -58,6 +58,31 @@ public interface AutoTopicCreationManager {
      * @param metadataRequestContext defined when creating topics on behalf of the client. The goal here is to preserve
      *                               original client principal for auditing, thus needing to wrap a plain CreateTopicsRequest
      *                               inside Envelope to send to the controller when forwarding is enabled.
+     * @param timeoutMs the time in milliseconds for which topic creation errors should be cached. This serves as the
+     *                  TTL (Time To Live) for error cache entries. If topic creation fails, the error will be cached
+     *                  for this duration to avoid repeated failed attempts and provide consistent error responses
+     *                  during streams group heartbeat requests.
      */
-    void createStreamsInternalTopics(Map<String, CreatableTopic> topics, RequestContext metadataRequestContext);
+    void createStreamsInternalTopics(
+            Map<String, CreatableTopic> topics,
+            RequestContext metadataRequestContext,
+            long timeoutMs
+    );
+
+    /**
+     * Retrieve cached topic creation errors for the specified streams internal topics.
+     * This method returns error messages for topics that failed to be created and are still
+     * within their cache TTL period. Only non-expired error entries are returned.
+     *
+     * @param topicNames the set of topic names to check for cached errors
+     * @param currentTimeMs the current time in milliseconds, used to filter out expired cache entries
+     * @return a map of topic names to their corresponding error messages for topics that have
+     *         cached errors and are not yet expired. Empty map if no cached errors exist for the topics.
+     */
+    Map<String, String> getStreamsInternalTopicCreationErrors(Set<String> topicNames, long currentTimeMs);
+
+    /**
+     * Close the AutoTopicCreationManager and clean up any resources.
+     */
+    void close();
 }

@@ -389,7 +389,9 @@ class BrokerServer(
         config, clientToControllerChannelManager,
         () => groupCoordinator.groupMetadataTopicConfigs(),
         () => transactionCoordinator.transactionTopicConfigs,
-        () => shareCoordinator.shareGroupStateTopicConfigs()
+        () => shareCoordinator.shareGroupStateTopicConfigs(),
+        time,
+        DefaultAutoTopicCreationManager.DEFAULT_TOPIC_ERROR_CACHE_CAPACITY
       )
 
       dynamicConfigHandlers = Map[ConfigType, ConfigHandler](

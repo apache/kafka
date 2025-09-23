@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
@@ -55,6 +56,7 @@ import java.util.stream.Stream;
 
 public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager {
 
+    public static final int DEFAULT_TOPIC_ERROR_CACHE_CAPACITY = 1000;
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultAutoTopicCreationManager.class);
 
     private final AbstractKafkaConfig config;
@@ -63,19 +65,23 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     private final Supplier<Properties> shareCoordinator;
     private final Supplier<Properties> transactionTopicConfigsSupplier;
     private final Set<String> inflightTopics = ConcurrentHashMap.newKeySet();
+    private final ExpiringErrorCache topicCreationErrorCache;
 
     public DefaultAutoTopicCreationManager(
             AbstractKafkaConfig config,
             NodeToControllerChannelManager channelManager,
             Supplier<Properties> groupCoordinatorConfigsSupplier,
             Supplier<Properties> transactionTopicConfigsSupplier,
-            Supplier<Properties> shareCoordinatorConfigsSupplier
+            Supplier<Properties> shareCoordinatorConfigsSupplier,
+            Time time,
+            int topicErrorCacheCapacity
     ) {
         this.config = config;
         this.channelManager = channelManager;
         this.groupCoordinator = groupCoordinatorConfigsSupplier;
         this.shareCoordinator = shareCoordinatorConfigsSupplier;
         this.transactionTopicConfigsSupplier = transactionTopicConfigsSupplier;
+        this.topicCreationErrorCache = new ExpiringErrorCache(topicErrorCacheCapacity, time);
     }
 
     @Override
@@ -108,12 +114,17 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     @Override
     public void createStreamsInternalTopics(
             Map<String, CreatableTopic> topics,
-            RequestContext requestContext
+            RequestContext requestContext,
+            long timeoutMs
     ) {
-        if (topics.isEmpty()) {
-            return;
+        if (!topics.isEmpty()) {
+            sendCreateTopicRequestWithErrorCaching(topics, Optional.of(requestContext), timeoutMs);
         }
-        sendCreateTopicRequest(topics, Optional.of(requestContext));
+    }
+
+    @Override
+    public Map<String, String> getStreamsInternalTopicCreationErrors(Set<String> topicNames, long currentTimeMs) {
+        return topicCreationErrorCache.getErrorsForTopics(topicNames, currentTimeMs);
     }
 
     private List<MetadataResponseTopic> sendCreateTopicRequest(
@@ -248,5 +259,100 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
         } catch (InvalidTopicException e) {
             return false;
         }
+    }
+
+    private List<MetadataResponseTopic> sendCreateTopicRequestWithErrorCaching(
+            Map<String, CreateTopicsRequestData.CreatableTopic> creatableTopics,
+            Optional<RequestContext> requestContext,
+            long timeoutMs
+    ) {
+        var topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size());
+        topicsToCreate.addAll(creatableTopics.values());
+
+        var createTopicsRequest = new CreateTopicsRequest.Builder(
+                new CreateTopicsRequestData()
+                        .setTimeoutMs(config.requestTimeoutMs())
+                        .setTopics(topicsToCreate)
+        );
+
+        var requestCompletionHandler = new ControllerRequestCompletionHandler() {
+            @Override
+            public void onTimeout() {
+                clearInflightRequests(creatableTopics);
+                LOGGER.debug("Auto topic creation timed out for {}.", creatableTopics.keySet());
+                cacheTopicCreationErrors(creatableTopics.keySet(), "Auto topic creation timed out.", timeoutMs);
+            }
+
+            @Override
+            public void onComplete(ClientResponse response) {
+                clearInflightRequests(creatableTopics);
+                if (response.authenticationException() != null) {
+                    var authException = response.authenticationException();
+                    LOGGER.warn("Auto topic creation failed for {} with authentication exception: {}", creatableTopics.keySet(), authException.getMessage());
+                    cacheTopicCreationErrors(creatableTopics.keySet(), authException.getMessage(), timeoutMs);
+                } else if (response.versionMismatch() != null) {
+                    var versionException = response.versionMismatch();
+                    LOGGER.warn("Auto topic creation failed for {} with version mismatch exception: {}", creatableTopics.keySet(), versionException.getMessage());
+                    cacheTopicCreationErrors(creatableTopics.keySet(), versionException.getMessage(), timeoutMs);
+                } else {
+                    var body = response.responseBody();
+                    if (body instanceof CreateTopicsResponse) {
+                        cacheTopicCreationErrorsFromResponse((CreateTopicsResponse) body, timeoutMs);
+                    } else {
+                        LOGGER.debug("Auto topic creation completed for {} with response {}.", creatableTopics.keySet(), response.responseBody());
+                    }
+                }
+            }
+        };
+
+        var request = requestContext.<AbstractRequest.Builder<? extends AbstractRequest>>map(context -> {
+            short requestVersion = channelManager.controllerApiVersions()
+                    .map(nodeApiVersions -> nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS))
+                    // We will rely on the Metadata request to be retried in the case
+                    // that the latest version is not usable by the controller.
+                    .orElseGet(ApiKeys.CREATE_TOPICS::latestVersion);
+
+            // Borrow client information such as client id and correlation id from the original request,
+            // in order to correlate the create request with the original metadata request.
+            var requestHeader = new RequestHeader(
+                    ApiKeys.CREATE_TOPICS,
+                    requestVersion,
+                    context.clientId(),
+                    context.correlationId());
+            return ForwardingManagerUtils.buildEnvelopeRequest(context,
+                    createTopicsRequest.build(requestVersion).serializeWithHeader(requestHeader));
+        }).orElse(createTopicsRequest);
+
+        channelManager.sendRequest(request, requestCompletionHandler);
+
+        return creatableTopics.keySet().stream()
+                .map(topic -> new MetadataResponseTopic()
+                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                        .setName(topic)
+                        .setIsInternal(Topic.isInternal(topic)))
+                .toList();
+    }
+
+    private void cacheTopicCreationErrors(Set<String> topicNames, String errorMessage, long ttlMs) {
+        for (String topicName : topicNames) {
+            topicCreationErrorCache.put(topicName, errorMessage, ttlMs);
+        }
+    }
+
+    private void cacheTopicCreationErrorsFromResponse(CreateTopicsResponse response, long ttlMs) {
+        response.data().topics().forEach(topicResult -> {
+            if (topicResult.errorCode() != Errors.NONE.code()) {
+                var errorMessage = Optional.ofNullable(topicResult.errorMessage())
+                        .filter(s -> !s.isEmpty())
+                        .orElse(Errors.forCode(topicResult.errorCode()).message());
+                topicCreationErrorCache.put(topicResult.name(), errorMessage, ttlMs);
+                LOGGER.debug("Cached topic creation error for {}: {}", topicResult.name(), errorMessage);
+            }
+        });
+    }
+
+    @Override
+    public void close() {
+        topicCreationErrorCache.clear();
     }
 }
