@@ -87,7 +87,7 @@ public class MaterializedTest {
         final IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
             () -> Materialized.as("valid-name").withRetention(Duration.of(-1, ChronoUnit.DAYS)));
 
-        assertEquals( "Retention must not be negative.", e.getMessage());
+        assertEquals("Retention must not be negative.", e.getMessage());
     }
 
     @Test
