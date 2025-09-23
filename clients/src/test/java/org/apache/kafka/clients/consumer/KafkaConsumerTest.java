@@ -2118,7 +2118,7 @@ public class KafkaConsumerTest {
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
-        final ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
+        final ConsumerRecords<String, String> records = pollForRecords();
         assertFalse(records.isEmpty());
         assertFalse(records.nextOffsets().isEmpty());
     }
@@ -3666,7 +3666,7 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         service.execute(() -> consumer.poll(Duration.ofSeconds(5)));
         try {
             TimeUnit.SECONDS.sleep(1);
-            assertThrows(ConcurrentModificationException.class, () -> consumer.poll(Duration.ZERO));
+            assertThrows(ConcurrentModificationException.class, () -> consumer.poll(Duration.ofSeconds(5)));
             client.wakeup();
             consumer.wakeup();
         } finally {

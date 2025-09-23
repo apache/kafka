@@ -265,14 +265,14 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             applicationEventReaper.add(new CompositePollPsuedoEvent<>(updatePositionsFuture, event.deadlineMs()));
 
             updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
-                if (maybeFailCompositePoll(event) || maybeFailCompositePoll(event, updatePositionsError))
+                if (maybeFailCompositePoll(event, updatePositionsError))
                     return;
 
                 log.debug("Processing {} logic for {}", ApplicationEvent.Type.CREATE_FETCH_REQUESTS, event);
 
                 // If needed, create a fetch request if there's no data in the FetchBuffer.
                 requestManagers.fetchRequestManager.createFetchRequests().whenComplete((___, fetchError) -> {
-                    if (maybeFailCompositePoll(event) || maybeFailCompositePoll(event, fetchError))
+                    if (maybeFailCompositePoll(event, fetchError))
                         return;
 
                     event.complete(CompositePollEvent.State.COMPLETE, Optional.empty());
@@ -301,6 +301,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private boolean maybeFailCompositePoll(CompositePollEvent event, Throwable t) {
+        if (maybeFailCompositePoll(event))
+            return true;
+
         if (t == null)
             return false;
 

@@ -51,6 +51,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
@@ -70,7 +71,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
-    private Optional<Exception> metadataError;
+    private final AtomicReference<Exception> metadataError;
     private final boolean notifyMetadataErrorsViaErrorQueue;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
@@ -91,7 +92,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.metadataError = Optional.empty();
+        this.metadataError = new AtomicReference<>();
         this.notifyMetadataErrorsViaErrorQueue = notifyMetadataErrorsViaErrorQueue;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
     }
@@ -163,7 +164,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             if (notifyMetadataErrorsViaErrorQueue) {
                 backgroundEventHandler.add(new ErrorEvent(e));
             } else {
-                metadataError = Optional.of(e);
+                metadataError.compareAndSet(null, e);
             }
         }
     }
@@ -249,9 +250,8 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
     
     public Optional<Exception> getAndClearMetadataError() {
-        Optional<Exception> metadataError = this.metadataError;
-        this.metadataError = Optional.empty();
-        return metadataError;
+        Exception exception = metadataError.getAndSet(null);
+        return Optional.ofNullable(exception);
     }
 
     public Node leastLoadedNode() {
