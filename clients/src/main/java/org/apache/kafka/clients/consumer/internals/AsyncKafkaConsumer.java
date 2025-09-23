@@ -211,10 +211,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             log.debug("Attempting to retrieve result from previously submitted {} with {} remaining on timer", latest, timer.remainingMs());
 
-            CompositePollEvent.Result result = latest.resultOrError();
+            CompositePollEvent.Result result;
+
+            try {
+                result = latest.resultOrError();
+            } catch (Throwable t) {
+                // If the background thread hit an exception, bubble it up to the user but make sure to clear
+                // out the latest request to signify this one is complete.
+                latest = null;
+                throw ConsumerUtils.maybeWrapAsKafkaException(t);
+            }
+
             CompositePollEvent.State state = result.state();
 
             if (state == CompositePollEvent.State.COMPLETE) {
+                // Make sure to clear out the latest request since it's complete.
+                latest = null;
+
                 if (fetchBuffer.isEmpty())
                     submitEvent(ApplicationEvent.Type.POLL, timer);
             } else if (state == CompositePollEvent.State.UNKNOWN) {
