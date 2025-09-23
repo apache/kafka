@@ -101,6 +101,7 @@ Headers => [Header]</code></pre>
 headerKey: String
 headerValueLength: varint
 Value: byte[]</code></pre>
+    <p>The key of a record header is guaranteed to be non-null, while the value of a record header may be null. The order of headers in a record is preserved when producing and consuming.</p>
     <p>We use the same varint encoding as Protobuf. More information on the latter can be found <a href="https://developers.google.com/protocol-buffers/docs/encoding#varints">here</a>. The count of headers in a record
     is also encoded as a varint.</p>
 

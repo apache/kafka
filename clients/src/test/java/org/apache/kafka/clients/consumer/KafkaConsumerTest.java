@@ -155,6 +155,8 @@ import javax.management.ObjectName;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer.DEFAULT_REASON;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -269,6 +271,35 @@ public class KafkaConsumerTest {
             final String expectedMessage = String.format("Skipping registration for metric %s. Existing consumer metrics cannot be overwritten.", existingMetricToAdd.metricName());
             assertTrue(appender.getMessages().stream().anyMatch(m -> m.contains(expectedMessage)));
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testAssignedPartitionsMetrics(GroupProtocol groupProtocol) throws InterruptedException {
+        consumer = newConsumer(groupProtocol, time, mock(KafkaClient.class), subscription,
+                mock(ConsumerMetadata.class), assignor, false, groupInstanceId);
+        Metrics metrics = consumer.metricsRegistry();
+
+        // This metric is added in the background thread for the AsyncConsumer, so waiting on it to avoid flakiness.
+        TestUtils.waitForCondition(() -> getMetric(metrics, "assigned-partitions") != null,
+                "Consumer should register the assigned-partitions metric");
+        assertNotNull(getMetric(metrics, "assigned-partitions"));
+        assertEquals(0.0d, getMetric(metrics, "assigned-partitions").metricValue());
+
+        subscription.assignFromUser(Set.of(tp0));
+        assertEquals(1.0d, getMetric(metrics, "assigned-partitions").metricValue());
+
+        subscription.assignFromUser(Set.of(tp0, tp1));
+        assertEquals(2.0d, getMetric(metrics, "assigned-partitions").metricValue());
+
+        subscription.unsubscribe();
+        subscription.subscribe(Set.of(topic), Optional.empty());
+        subscription.assignFromSubscribed(Set.of(tp0));
+        assertEquals(1.0d, getMetric(metrics, "assigned-partitions").metricValue());
+    }
+
+    private KafkaMetric getMetric(Metrics metrics, String name) {
+        return metrics.metrics().get(metrics.metricName(name, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX));
     }
 
     @ParameterizedTest
@@ -716,26 +747,27 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances(GroupProtocol groupProtocol) {
-        final int targetInterceptor = 3;
+        final int targetInterceptor = 1;
 
         try {
             Properties props = new Properties();
             props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,  MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName());
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, 
+                    CloseInterceptor.class.getName() + "," + MockConsumerInterceptor.class.getName());
 
             MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
             assertThrows(KafkaException.class, () -> newConsumer(
                     props, new StringDeserializer(), new StringDeserializer()));
 
-            assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
-            assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CONFIG_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
 
+            assertEquals(1, CloseInterceptor.CLOSE_COUNT.get());
         } finally {
             MockConsumerInterceptor.resetCounters();
+            CloseInterceptor.resetCounters();
         }
     }
 
@@ -3115,6 +3147,7 @@ public class KafkaConsumerTest {
         configs.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, retryBackoffMs);
         configs.put(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, throwOnStableOffsetNotSupported);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         groupInstanceId.ifPresent(gi -> configs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, gi));
 
         return new ConsumerConfig(configs);
@@ -3796,6 +3829,35 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         public void withPluginMetrics(PluginMetrics metrics) {
             MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
             metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
+    }
+
+    public static class CloseInterceptor implements ConsumerInterceptor<String, String> {
+
+        public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+
+        @Override
+        public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
+            return null;
+        }
+
+        @Override
+        public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            // no-op
+        }
+
+        @Override
+        public void close() {
+            CLOSE_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // no-op
+        }
+
+        public static void resetCounters() {
+            CLOSE_COUNT.set(0);
         }
     }
 }
