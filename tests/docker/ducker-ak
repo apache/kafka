@@ -163,9 +163,8 @@ detect_container_runtime() {
         return
     fi
 
-    if which docker &> /dev/null; then
-        container_runtime="docker"
-    elif which podman &> /dev/null; then
+    container_runtime="docker"
+    if command -v podman &> /dev/null; then
         container_runtime="podman"
     else
         die "No supported container runtime found. Please install docker or podman, or set CONTAINER_RUNTIME environment variable."

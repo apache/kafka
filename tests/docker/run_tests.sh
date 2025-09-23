@@ -22,9 +22,8 @@ REBUILD=${REBUILD:f}
 
 # Auto-detect container runtime if not set
 if [[ -z "${CONTAINER_RUNTIME}" ]]; then
-    if command -v docker &> /dev/null; then
-        export CONTAINER_RUNTIME="docker"
-    elif command -v podman &> /dev/null; then
+    export CONTAINER_RUNTIME="docker"
+    if command -v podman &> /dev/null; then
         export CONTAINER_RUNTIME="podman"
     fi
 fi
