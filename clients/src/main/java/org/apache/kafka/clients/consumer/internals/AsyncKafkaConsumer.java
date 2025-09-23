@@ -240,6 +240,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         private void submitEvent(ApplicationEvent.Type type, Timer timer) {
             long deadlineMs = calculateDeadlineMs(timer);
             latest = new CompositePollEvent(deadlineMs, time.milliseconds(), type);
+            backoff = -1;
             applicationEventHandler.add(latest);
             log.debug("Submitted new {} submitted with {} remaining on timer", latest, timer.remainingMs());
         }
