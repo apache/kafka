@@ -113,7 +113,6 @@ public class StreamsGroup implements Group {
         }
     }
 
-    private final LogContext logContext;
     private final Logger log;
 
     /**
@@ -217,7 +216,6 @@ public class StreamsGroup implements Group {
         String groupId
     ) {
         this.log = logContext.logger(StreamsGroup.class);
-        this.logContext = logContext;
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
         this.groupId = Objects.requireNonNull(groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
