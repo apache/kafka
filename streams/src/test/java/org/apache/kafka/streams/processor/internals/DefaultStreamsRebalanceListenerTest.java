@@ -110,7 +110,7 @@ public class DefaultStreamsRebalanceListenerTest {
 
         final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksRevoked(Set.of()));
 
-        assertEquals(actualException,  exception);
+        assertEquals(actualException, exception);
         verify(taskManager).handleRevocation(any());
         verify(streamThread, never()).setState(any());
     }
@@ -211,7 +211,7 @@ public class DefaultStreamsRebalanceListenerTest {
 
         final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onAllTasksLost());
 
-        assertEquals(exception,  actualException);
+        assertEquals(exception, actualException);
         verify(taskManager).handleLostAll();
         verify(streamsRebalanceData, never()).setReconciledAssignment(any());
     }
