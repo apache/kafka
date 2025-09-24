@@ -9952,9 +9952,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(
                     NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
 
-            UnregisterBrokerOptions options = new UnregisterBrokerOptions();
-            options.timeoutMs = 10;
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId, options);
+            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId, new UnregisterBrokerOptions().timeoutMs(10));
 
             // Validate response
             assertNotNull(result.all());
