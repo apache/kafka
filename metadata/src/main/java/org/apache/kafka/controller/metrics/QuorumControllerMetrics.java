@@ -50,7 +50,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private static final MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
     private static final MetricName AVERAGE_IDLE_RATIO = getMetricName(
-            "ControllerEventManager", "AvgIdleRatio");
+        "ControllerEventManager", "AvgIdleRatio");
     private static final MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
     private static final MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(

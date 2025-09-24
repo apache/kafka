@@ -411,7 +411,7 @@ public final class QuorumController implements Controller {
                     logContext,
                     threadNamePrefix,
                     EventQueue.VoidEvent.INSTANCE,
-                    Optional.of(controllerMetrics::updateIdleTime)
+                    controllerMetrics::updateIdleTime
                 );
 
                 return new QuorumController(

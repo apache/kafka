@@ -452,7 +452,7 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix
     ) {
-        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, Optional.empty());
+        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, __ -> { });
     }
 
     public KafkaEventQueue(
@@ -461,7 +461,7 @@ public final class KafkaEventQueue implements EventQueue {
         String threadNamePrefix,
         Event cleanupEvent
     ) {
-        this(time, logContext, threadNamePrefix, cleanupEvent, Optional.empty());
+        this(time, logContext, threadNamePrefix, cleanupEvent, __ -> { });
     }
 
     public KafkaEventQueue(
@@ -469,7 +469,7 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix,
         Event cleanupEvent,
-        Optional<Consumer<Long>> idleTimeCallback
+        Consumer<Long> idleTimeCallback
     ) {
         this.time = time;
         this.cleanupEvent = Objects.requireNonNull(cleanupEvent);
@@ -480,7 +480,7 @@ public final class KafkaEventQueue implements EventQueue {
             this.eventHandler, false);
         this.shuttingDown = false;
         this.interrupted = false;
-        this.idleTimeCallback = idleTimeCallback.orElse(__ -> { });
+        this.idleTimeCallback = Objects.requireNonNull(idleTimeCallback);
         this.eventHandlerThread.start();
     }
 

@@ -30,7 +30,6 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -436,7 +435,7 @@ public class KafkaEventQueueTest {
                 logContext,
                 "testIdleTimeCallback",
                 EventQueue.VoidEvent.INSTANCE,
-                Optional.of(lastIdleTimeMs::set))) {
+                lastIdleTimeMs::set)) {
             time.sleep(2);
             assertEquals(0, lastIdleTimeMs.get(), "Last idle time should be 0ms");
 
