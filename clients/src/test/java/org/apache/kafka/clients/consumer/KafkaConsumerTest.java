@@ -2720,22 +2720,6 @@ public class KafkaConsumerTest {
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
     }
 
-    @SuppressWarnings("unchecked")
-    private ConsumerRecords<String, String> pollForRecords() {
-        Timer timer = time.timer(15000);
-
-        while (timer.notExpired()) {
-            ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1000));
-
-            if (!records.isEmpty())
-                return records;
-        }
-
-        throw new org.apache.kafka.common.errors.TimeoutException("no records to return");
-    }
-
-
-
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testListOffsetShouldUpdateSubscriptions(GroupProtocol groupProtocol) {
@@ -3814,6 +3798,20 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         expectedTags.put("class", clazz.getSimpleName());
         expectedTags.putAll(TAGS);
         return new MetricName(NAME, "plugins", DESCRIPTION, expectedTags);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ConsumerRecords<String, String> pollForRecords() {
+        Timer timer = time.timer(15000);
+
+        while (timer.notExpired()) {
+            ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ofMillis(1000));
+
+            if (!records.isEmpty())
+                return records;
+        }
+
+        throw new org.apache.kafka.common.errors.TimeoutException("no records to return");
     }
 
     private void waitForConsumerPoll(Supplier<Boolean> testCondition, String conditionDetails) {
