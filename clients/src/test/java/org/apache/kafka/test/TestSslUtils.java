@@ -444,14 +444,19 @@ public class TestSslUtils {
                 SubjectPublicKeyInfo subPubKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
                 BcContentSignerBuilder signerBuilder;
                 String keyAlgorithm = keyPair.getPublic().getAlgorithm();
-                if (keyAlgorithm.equals("RSA"))
-                    signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
-                else if (keyAlgorithm.equals("DSA"))
-                    signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
-                else if (keyAlgorithm.equals("EC"))
-                    signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
-                else
-                    throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                switch (keyAlgorithm) {
+                    case "RSA":
+                        signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    case "DSA":
+                        signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    case "EC":
+                        signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                }
                 ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
                 // Negative numbers for "days" can be used to generate expired certificates
                 Date now = new Date();
@@ -520,14 +525,19 @@ public class TestSslUtils {
                         SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
                 BcContentSignerBuilder signerBuilder;
                 String keyAlgorithm = keyPair.getPublic().getAlgorithm();
-                if (keyAlgorithm.equals("RSA"))
-                    signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
-                else if (keyAlgorithm.equals("DSA"))
-                    signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
-                else if (keyAlgorithm.equals("EC"))
-                    signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
-                else
-                    throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                switch (keyAlgorithm) {
+                    case "RSA":
+                        signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    case "DSA":
+                        signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    case "EC":
+                        signerBuilder = new BcECContentSignerBuilder(sigAlgId, digAlgId);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unsupported algorithm " + keyAlgorithm);
+                }
                 ContentSigner sigGen = signerBuilder.build(privateKeyAsymKeyParam);
                 // Negative numbers for "days" can be used to generate expired certificates
                 Date now = new Date();

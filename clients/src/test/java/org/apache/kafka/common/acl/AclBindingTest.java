@@ -66,7 +66,7 @@ public class AclBindingTest {
             new ResourcePattern(ResourceType.TOPIC, "mytopic", PatternType.LITERAL),
             new AccessControlEntry("User:ANONYMOUS", "", AclOperation.ALL, AclPermissionType.ALLOW));
         assertEquals(ACL1, acl1Copy);
-        assertEquals(acl1Copy, ACL1);
+        assertEquals(ACL1, acl1Copy);
         assertEquals(ACL2, ACL2);
         assertNotEquals(ACL1, ACL2);
         assertNotEquals(ACL2, ACL1);

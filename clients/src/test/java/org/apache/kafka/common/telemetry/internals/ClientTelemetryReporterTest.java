@@ -533,7 +533,7 @@ public class ClientTelemetryReporterTest {
             
             assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
 
-            assertThrows(KafkaException.class, () -> telemetrySender.createRequest());
+            assertThrows(KafkaException.class, telemetrySender::createRequest);
             assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state());
             
             // === Test 3: After termination, no more requests ===

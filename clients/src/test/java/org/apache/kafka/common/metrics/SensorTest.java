@@ -70,12 +70,12 @@ public class SensorTest {
         assertTrue(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel.id));
         assertTrue(Sensor.RecordingLevel.TRACE.shouldRecord(configLevel.id));
 
-        assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.DEBUG.toString()),
-            Sensor.RecordingLevel.DEBUG);
-        assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.INFO.toString()),
-            Sensor.RecordingLevel.INFO);
-        assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.TRACE.toString()),
-            Sensor.RecordingLevel.TRACE);
+        assertEquals(Sensor.RecordingLevel.DEBUG,
+            Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.DEBUG.toString()));
+        assertEquals(Sensor.RecordingLevel.INFO,
+            Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.INFO.toString()));
+        assertEquals(Sensor.RecordingLevel.TRACE,
+            Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.TRACE.toString()));
     }
 
     @Test
