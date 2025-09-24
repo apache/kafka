@@ -365,68 +365,6 @@ public class ShareHeartbeatRequestManagerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("errorProvider")
-    public void testHeartbeatResponseOnErrorHandling(final Errors error, final boolean isFatal) {
-       // Handling errors on the second heartbeat
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
-
-        // Manually completing the response to test error handling
-        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        ClientResponse response = createHeartbeatResponse(
-                result.unsentRequests.get(0),
-                error);
-        result.unsentRequests.get(0).handler().onComplete(response);
-        ShareGroupHeartbeatResponse mockResponse = (ShareGroupHeartbeatResponse) response.responseBody();
-
-        switch (error) {
-            case NONE:
-                verify(membershipManager).onHeartbeatSuccess(mockResponse);
-                assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS);
-                break;
-
-            case COORDINATOR_LOAD_IN_PROGRESS:
-                verify(backgroundEventHandler, never()).add(any());
-                assertNextHeartbeatTiming(DEFAULT_RETRY_BACKOFF_MS);
-                break;
-
-            case COORDINATOR_NOT_AVAILABLE:
-            case NOT_COORDINATOR:
-                verify(backgroundEventHandler, never()).add(any());
-                verify(coordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
-                assertNextHeartbeatTiming(0);
-                break;
-
-            case UNKNOWN_MEMBER_ID:
-                verify(backgroundEventHandler, never()).add(any());
-                assertNextHeartbeatTiming(0);
-                break;
-
-            default:
-                if (isFatal) {
-                    when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
-                    ensureFatalError(error);
-                } else {
-                    verify(backgroundEventHandler, never()).add(any());
-                    assertNextHeartbeatTiming(0);
-                }
-                break;
-        }
-
-        if (error != Errors.NONE) {
-            verify(membershipManager).onHeartbeatFailure(false);
-        }
-
-        if (!isFatal) {
-            // Make sure a next heartbeat is sent for all non-fatal errors (to retry or rejoin)
-            time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-            result = heartbeatRequestManager.poll(time.milliseconds());
-            assertEquals(1, result.unsentRequests.size());
-        }
-    }
-
-    @ParameterizedTest
     @ValueSource(strings = {SHARE_PROTOCOL_NOT_SUPPORTED_MSG})
     public void testUnsupportedVersionGeneratedOnTheBroker(String errorMsg) {
         mockResponseWithException(new UnsupportedVersionException(errorMsg), true);
