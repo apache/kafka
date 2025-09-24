@@ -58,11 +58,11 @@ object TransactionMarkerChannelManager {
             txnStateManager: TransactionStateManager,
             time: Time,
             logContext: LogContext): TransactionMarkerChannelManager = {
-
+    val metricGrpPrefix = "txn-marker-channel"
     val metricTags = new util.LinkedHashMap[String, String]()
-    metricTags.put("component", "txn-marker")
+    metricTags.put("component", metricGrpPrefix)
     metricTags.put("node-id", config.nodeId.toString)
-    
+
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       config.interBrokerSecurityProtocol,
       JaasContext.Type.SERVER,
@@ -83,7 +83,7 @@ object TransactionMarkerChannelManager {
       config.connectionsMaxIdleMs,
       metrics,
       time,
-      "txn-marker-channel",
+      metricGrpPrefix,
       Map.empty[String, String].asJava,
       false,
       channelBuilder,

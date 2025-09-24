@@ -41,8 +41,9 @@ public class NetworkUtils {
                                                    Metrics metrics,
                                                    Time time,
                                                    LogContext logContext) {
+        String metricGroupPrefix = prefix + "-channel";
         LinkedHashMap<String, String> extraTags = new LinkedHashMap<>();
-        extraTags.put("component", prefix + "-client");
+        extraTags.put("component", metricGroupPrefix);
         extraTags.put("node-id", String.valueOf(config.nodeId()));
 
         ChannelBuilder channelBuilder = ChannelBuilders.clientChannelBuilder(
@@ -60,8 +61,6 @@ public class NetworkUtils {
         if (channelBuilder instanceof Reconfigurable) {
             config.addReconfigurable((Reconfigurable) channelBuilder);
         }
-
-        String metricGroupPrefix = prefix + "-channel";
 
         Selector selector = new Selector(
             NetworkReceive.UNLIMITED,

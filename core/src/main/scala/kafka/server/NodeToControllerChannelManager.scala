@@ -109,7 +109,7 @@ class NodeToControllerChannelManagerImpl(
   private val requestThread = newRequestThread
   private[kafka] val metricTags: util.LinkedHashMap[String, String] = {
     val map = new util.LinkedHashMap[String, String]()
-    map.put("component", threadName)
+    map.put("component", channelName)
     map.put("node-id", config.nodeId.toString)
     map
   }

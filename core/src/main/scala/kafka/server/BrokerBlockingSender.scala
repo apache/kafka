@@ -52,9 +52,10 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
+  val metricGroupPrefix = "replica-fetcher"
   private[kafka] val metricTags: util.LinkedHashMap[String, String] = {
     val map = new util.LinkedHashMap[String, String]()
-    map.put("component", s"fetcher-$fetcherId")
+    map.put("component", metricGroupPrefix)
     map.put("client-id", s"BrokerBlockingSender-${sourceBroker.id}")
     map
   }
@@ -82,7 +83,7 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       brokerConfig.connectionsMaxIdleMs,
       metrics,
       time,
-      "replica-fetcher",
+      metricGroupPrefix,
       Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
       channelBuilder,

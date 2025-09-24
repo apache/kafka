@@ -96,29 +96,29 @@ public class LoginTest {
             int found = 0;
             for (Metric metric : admin.metrics().values()) {
                 found += assertMetricName(
-                    metric.metricName(), 
+                    metric.metricName(),
                     expectedTags(Map.of("client-id", CLIENT_ID))
                 );
             }
             assertEquals(1, found, "Expected to find 1 metric");
-            
+
             Map<MetricName, KafkaMetric> allMetrics = Stream.of(
                 cluster.controllers().get(0).metrics().metrics(),
                 cluster.brokers().get(0).metrics().metrics()
             ).collect(HashMap::new, Map::putAll, Map::putAll);
             assertMetrics(
-                allMetrics, 
+                allMetrics,
                 expectedTags(Map.of(
-                    "mechanism", MECHANISMS, 
-                    "listener", "EXTERNAL", 
+                    "mechanism", MECHANISMS,
+                    "listener", "EXTERNAL",
                     "networkProcessor", "0"
                 ))
             );
             assertMetrics(
-                allMetrics, 
+                allMetrics,
                 expectedTags(Map.of(
-                    "node-id", "0", 
-                    "component", "raft-client"
+                    "node-id", "0",
+                    "component", "raft-channel"
                 ))
             );
         }
@@ -213,9 +213,9 @@ public class LoginTest {
 
         }
     }
-    
+
     public static class CustomerAuthorizer implements Authorizer {
-        
+
         @Override
         public Map<Endpoint, ? extends CompletionStage<Void>> start(AuthorizerServerInfo serverInfo) {
             return Map.of();
@@ -223,7 +223,7 @@ public class LoginTest {
 
         @Override
         public List<AuthorizationResult> authorize(
-            AuthorizableRequestContext requestContext, 
+            AuthorizableRequestContext requestContext,
             List<Action> actions
         ) {
             return IntStream.range(0, actions.size())
@@ -233,7 +233,7 @@ public class LoginTest {
 
         @Override
         public List<? extends CompletionStage<AclCreateResult>> createAcls(
-            AuthorizableRequestContext requestContext, 
+            AuthorizableRequestContext requestContext,
             List<AclBinding> aclBindings
         ) {
             return IntStream.range(0, aclBindings.size())
@@ -243,7 +243,7 @@ public class LoginTest {
 
         @Override
         public List<? extends CompletionStage<AclDeleteResult>> deleteAcls(
-            AuthorizableRequestContext requestContext, 
+            AuthorizableRequestContext requestContext,
             List<AclBindingFilter> aclBindingFilters
         ) {
             return IntStream.range(0, aclBindingFilters.size())

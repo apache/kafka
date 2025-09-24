@@ -105,9 +105,10 @@ class KafkaRaftManager[T](
   private val logContext = new LogContext(s"[RaftManager id=${config.nodeId}] ")
   this.logIdent = logContext.logPrefix()
   val clientId = s"raft-client-${config.nodeId}"
+  val metricGroupPrefix = "raft-channel"
   private[kafka] val metricTags: util.LinkedHashMap[String, String] = {
     val map = new util.LinkedHashMap[String, String]()
-    map.put("component", "raft-client")
+    map.put("component", metricGroupPrefix)
     map.put("node-id", config.nodeId.toString)
     map
   }
@@ -226,7 +227,6 @@ class KafkaRaftManager[T](
       metricTags
     )
 
-    val metricGroupPrefix = "raft-channel"
     val collectPerConnectionMetrics = false
 
     val selector = new Selector(
