@@ -783,7 +783,6 @@ class AutoTopicCreationManagerTest {
     val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(
       Set("test-topic-1", "test-topic-2"), mockTime.milliseconds())
     
-    // Debug output to understand the failure
     
     assertEquals(1, cachedErrors.size, s"Expected only 1 error but found: $cachedErrors")
     assertTrue(cachedErrors.contains("test-topic-2"))
