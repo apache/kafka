@@ -58,15 +58,15 @@ public class Protocol {
                         b.append(taggedField.name);
                         b.append("]");
                         if (!subTypes.containsKey(taggedField.name))
-                            subTypes.put(taggedField.name + "<" + tag.toString() + ">", taggedField.type.arrayElementType().get());
+                            subTypes.put(taggedField.name + "&lt;tag: " + tag.toString() + "&gt;", taggedField.type.arrayElementType().get());
                     } else {
                         b.append(taggedField.name);
                         if (!subTypes.containsKey(taggedField.name))
-                            subTypes.put(taggedField.name + "<" + tag.toString() + ">", taggedField.type);
+                            subTypes.put(taggedField.name + "&lt;tag: " + tag.toString() + "&gt;", taggedField.type);
                     }
-                    b.append("<");
+                    b.append("&lt;tag: ");
                     b.append(tag);
-                    b.append("> ");
+                    b.append("&gt; ");
                 });
             } else {
                 b.append(field.def.name);
