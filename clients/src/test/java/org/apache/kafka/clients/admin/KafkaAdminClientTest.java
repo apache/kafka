@@ -8443,7 +8443,7 @@ public class KafkaAdminClientTest {
             node);
         final TopicPartition tp0 = new TopicPartition("foo", 0);
 
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster, AdminClientConfig.RETRIES_CONFIG, "2")) {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster, AdminClientConfig.RETRIES_CONFIG, "4")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
                     ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
@@ -8478,7 +8478,7 @@ public class KafkaAdminClientTest {
         final TopicPartition tp1 = new TopicPartition("foo", 1);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
-            AdminClientConfig.RETRIES_CONFIG, "2")) {
+            AdminClientConfig.RETRIES_CONFIG, "4")) {
 
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
                     ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 6));
@@ -8618,7 +8618,7 @@ public class KafkaAdminClientTest {
         final TopicPartition tp0 = new TopicPartition("foo", 0);
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster,
-            AdminClientConfig.RETRIES_CONFIG, "2")) {
+            AdminClientConfig.RETRIES_CONFIG, "3")) {
 
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(
                     ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 0));
