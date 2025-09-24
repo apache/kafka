@@ -23,6 +23,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
 import org.slf4j.Logger;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
@@ -59,7 +60,6 @@ public class CompositePollEventInvoker {
 
             CompositePollEvent.Result result = latest.resultOrError();
             CompositePollEvent.State state = result.state();
-            log.debug("Retrieved result: {}, with state: {}", result, state);
 
             if (state == CompositePollEvent.State.COMPLETE) {
                 // Make sure to clear out the latest request since it's complete.
