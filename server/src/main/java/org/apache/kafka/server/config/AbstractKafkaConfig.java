@@ -190,6 +190,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             throw new IllegalArgumentException("Each listener must have a different name, listeners: " + listeners);
         }
 
+        if (!requireDistinctPorts) return;
+
         Map<Integer, List<Endpoint>> duplicatePorts = endPoints.stream()
                 .filter(ep -> ep.port() != 0) // filter port 0 for unit tests
                 .collect(Collectors.groupingBy(Endpoint::port))
