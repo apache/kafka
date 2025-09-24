@@ -3724,7 +3724,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return new RecordsSnapshotWriter.Builder()
                 .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                 .setTime(time)
-                .setMaxBatchSize(MAX_BATCH_SIZE_BYTES)
+                .setMaxBatchSizeBytes(MAX_BATCH_SIZE_BYTES)
                 .setMemoryPool(memoryPool)
                 .setRawSnapshotWriter(wrappedWriter)
                 .setKraftVersion(partitionState.kraftVersionAtOffset(lastContainedLogOffset))
@@ -3796,6 +3796,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    @Override
     public Optional<Node> voterNode(int id, ListenerName listenerName) {
         return partitionState.lastVoterSet().voterNode(id, listenerName);
     }

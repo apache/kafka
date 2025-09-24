@@ -807,7 +807,7 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(4).
-        setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString)).
+        setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString, true)).
         setNumControllerNodes(3).build()).
       build()
     try {

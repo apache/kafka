@@ -272,13 +272,9 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     )
     consumer.subscribe(util.Set.of(inputTopic),
       new StreamsRebalanceListener {
-        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Optional[Exception] =
-          Optional.empty()
-        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Optional[Exception] = {
-          Optional.empty()
-        }
-        override def onAllTasksLost(): Optional[Exception] =
-          Optional.empty()
+        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Unit = ()
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Unit = ()
+        override def onAllTasksLost(): Unit = ()
       })
     consumer
   }
