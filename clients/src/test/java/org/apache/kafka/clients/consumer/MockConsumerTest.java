@@ -209,9 +209,7 @@ public class MockConsumerTest {
         consumer.assign(Collections.singleton(partition));
         consumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
 
-        IntStream.range(0, 10).forEach(offset -> {
-            consumer.addRecord(new ConsumerRecord<>("test", 0, offset, null, null));
-        });
+        IntStream.range(0, 10).forEach(offset -> consumer.addRecord(new ConsumerRecord<>("test", 0, offset, null, null)));
 
         consumer.setMaxPollRecords(2L);
 

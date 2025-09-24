@@ -862,7 +862,7 @@ public abstract class AbstractStickyAssignorTest {
             assertEquals(assign.values().stream().mapToInt(List::size).sum(),
                     assign.values().stream().flatMap(List::stream).collect(Collectors.toSet()).size());
             for (List<TopicPartition> list: assign.values()) {
-                assertTrue(list.size() >= 1 && list.size() <= 2);
+                assertTrue(!list.isEmpty() && list.size() <= 2);
             }
         }
     }
@@ -1025,7 +1025,7 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
-        assertEquals(assignment.values().stream().mapToInt(List::size).sum(), 1 + 100);
+        assertEquals(1 + 100, assignment.values().stream().mapToInt(List::size).sum());
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(isFullyBalanced(assignment));
     }
@@ -1043,7 +1043,7 @@ public abstract class AbstractStickyAssignorTest {
 
         assignment = assignor.assign(Collections.emptyMap(), subscriptions);
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
-        assertEquals(assignment.size(), 1);
+        assertEquals(1, assignment.size());
         assertTrue(assignment.get(consumerId).isEmpty());
     }
 

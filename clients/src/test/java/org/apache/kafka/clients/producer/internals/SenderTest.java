@@ -524,7 +524,7 @@ public class SenderTest {
             // Verify node is throttled a little bit. In real-life Apache Kafka, we observe that this can happen
             // as done above by throttling or with a disconnect / backoff.
             long currentPollDelay = client.pollDelayMs(nodeToThrottle, startTime);
-            assertEquals(currentPollDelay, throttleTimeMs);
+            assertEquals(throttleTimeMs, currentPollDelay);
 
             txnManager.beginTransaction();
             txnManager.maybeAddPartition(tp0);
@@ -3268,7 +3268,7 @@ public class SenderTest {
             fail("Expected abortable error to be thrown for commit");
         } catch (KafkaException e) {
             assertTrue(transactionManager.hasAbortableError());
-            assertEquals(commitResult.error().getClass(), TransactionAbortableException.class);
+            assertEquals(TransactionAbortableException.class, commitResult.error().getClass());
         }
 
         // Abort API with TRANSACTION_ABORTABLE error should convert to Fatal error i.e. KafkaException
@@ -3287,7 +3287,7 @@ public class SenderTest {
             // Verify TM is in FATAL_ERROR state
             assertTrue(transactionManager.hasFatalError());
             assertFalse(e instanceof TransactionAbortableException);
-            assertEquals(abortResult.error().getClass(), KafkaException.class);
+            assertEquals(KafkaException.class, abortResult.error().getClass());
         }
     }
 

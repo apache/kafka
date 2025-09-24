@@ -892,7 +892,7 @@ public class RecordAccumulatorTest {
         readyNodes = accum.ready(metadataCache, time.milliseconds()).readyNodes;
         assertEquals(Collections.singleton(node1), readyNodes, "Our partition's leader should be ready");
         Map<Integer, List<ProducerBatch>> drained = accum.drain(metadataCache, readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertEquals(drained.get(node1.id()).size(), 1, "There should be only one batch.");
+        assertEquals(1, drained.get(node1.id()).size(), "There should be only one batch.");
         time.sleep(1000L);
         accum.reenqueue(drained.get(node1.id()).get(0), time.milliseconds());
 
@@ -1788,6 +1788,6 @@ public class RecordAccumulatorTest {
         }
 
         // Verify all original records are accounted for (no data loss)
-        assertEquals(keyFoundMap.size(), 100, "All original 100 records should be present after splitting");
+        assertEquals(100, keyFoundMap.size(), "All original 100 records should be present after splitting");
     }
 }

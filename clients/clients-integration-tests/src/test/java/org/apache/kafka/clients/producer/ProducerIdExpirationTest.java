@@ -204,10 +204,10 @@ public class ProducerIdExpirationTest {
             // Update the producer ID expiration ms to a very high value.
             admin.incrementalAlterConfigs(producerIdExpirationConfig("100000"));
 
-            cluster.brokers().values().forEach(broker -> {
+            cluster.brokers().values().forEach(broker ->
                 TestUtils.waitUntilTrue(() -> broker.logManager().producerStateManagerConfig().producerIdExpirationMs() == 100000,
-                    () -> "Configuration was not updated.", DEFAULT_MAX_WAIT_MS, 100);
-            });
+                    () -> "Configuration was not updated.", DEFAULT_MAX_WAIT_MS, 100)
+            );
             // Send more records to send producer ID back to brokers.
             producer.send(new ProducerRecord<>(topic1, 0, null, "key".getBytes(), "value".getBytes()));
             producer.flush();
@@ -226,10 +226,10 @@ public class ProducerIdExpirationTest {
             kafkaBroker.awaitShutdown();
             kafkaBroker.startup();
             cluster.waitForReadyBrokers();
-            cluster.brokers().values().forEach(broker -> {
+            cluster.brokers().values().forEach(broker ->
                 TestUtils.waitUntilTrue(() -> broker.logManager().producerStateManagerConfig().producerIdExpirationMs() == 100,
-                    () -> "Configuration was not updated.", DEFAULT_MAX_WAIT_MS, 100);
-            });
+                    () -> "Configuration was not updated.", DEFAULT_MAX_WAIT_MS, 100)
+            );
 
             // Ensure producer ID expires quickly again.
             waitProducerIdExpire(admin);

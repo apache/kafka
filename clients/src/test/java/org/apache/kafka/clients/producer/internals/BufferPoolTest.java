@@ -219,7 +219,7 @@ public class BufferPoolTest {
         t1.join();
         t2.join();
         // both the allocate() called by threads t1 and t2 should have been interrupted and the waiters queue should be empty
-        assertEquals(pool.queued(), 0);
+        assertEquals(0, pool.queued());
     }
 
     @Test
@@ -332,7 +332,7 @@ public class BufferPoolTest {
 
         }
 
-        assertEquals(bufferPool.availableMemory(), 1024);
+        assertEquals(1024, bufferPool.availableMemory());
     }
 
     public static class StressTestThread extends Thread {

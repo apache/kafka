@@ -439,14 +439,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.heartbeatIntervalMs()).thenReturn(heartbeatIntervalMs);
-                });
+                (mock, context) -> when(mock.heartbeatIntervalMs()).thenReturn(heartbeatIntervalMs));
             final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(
                 Timer.class,
-                (mock, context) -> {
-                    when(mock.isExpired()).thenReturn(true);
-                });
+                (mock, context) -> when(mock.isExpired()).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -473,14 +469,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.timeToNextHeartbeatMs(time.milliseconds())).thenReturn(timeToNextHeartbeatMs);
-                });
+                (mock, context) -> when(mock.timeToNextHeartbeatMs(time.milliseconds())).thenReturn(timeToNextHeartbeatMs));
             final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(
                 Timer.class,
-                (mock, context) -> {
-                    when(mock.isExpired()).thenReturn(true);
-                });
+                (mock, context) -> when(mock.isExpired()).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -508,14 +500,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(
                 Timer.class,
-                (mock, context) -> {
-                    when(mock.isExpired()).thenReturn(true);
-                })
+                (mock, context) -> when(mock.isExpired()).thenReturn(true))
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
@@ -551,9 +539,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                })
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final HeartbeatRequestState heartbeatRequestState = heartbeatRequestStateMockedConstruction.constructed().get(0);
@@ -1001,9 +987,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -1032,9 +1016,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -1073,9 +1055,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -1111,9 +1091,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -1145,9 +1123,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -1173,9 +1149,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
             final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
@@ -1212,9 +1186,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
             final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
@@ -1261,9 +1233,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
             final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
@@ -1312,9 +1282,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
         ) {
@@ -1343,9 +1311,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
-                });
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
                 StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
             final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
@@ -1424,14 +1390,11 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @Test
     public void testMaximumTimeToWaitPollTimerExpired() {
         try (
-            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class, (mock, context) -> {
-                when(mock.isExpired()).thenReturn(true);
-            });
+            final MockedConstruction<Timer> timerMockedConstruction =
+                mockConstruction(Timer.class, (mock, context) -> when(mock.isExpired()).thenReturn(true));
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.requestInFlight()).thenReturn(false);
-                })
+                (mock, context) -> when(mock.requestInFlight()).thenReturn(false))
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = timerMockedConstruction.constructed().get(0);
@@ -1450,9 +1413,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class);
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.requestInFlight()).thenReturn(false);
-                })
+                (mock, context) -> when(mock.requestInFlight()).thenReturn(false))
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = timerMockedConstruction.constructed().get(0);
@@ -1473,9 +1434,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
         final long remainingMs = 12L;
         final long timeToNextHeartbeatMs = 6L;
         try (
-            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class, (mock, context) -> {
-                when(mock.remainingMs()).thenReturn(remainingMs);
-            });
+            final MockedConstruction<Timer> timerMockedConstruction =
+                mockConstruction(Timer.class, (mock, context) -> when(mock.remainingMs()).thenReturn(remainingMs));
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
                 (mock, context) -> {
@@ -1500,14 +1460,11 @@ class StreamsGroupHeartbeatRequestManagerTest {
     public void testMaximumTimeToWaitSelectingMinimumWaitTime(final long remainingMs,
                                                               final long timeToNextHeartbeatMs) {
         try (
-            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class, (mock, context) -> {
-                when(mock.remainingMs()).thenReturn(remainingMs);
-            });
+            final MockedConstruction<Timer> timerMockedConstruction =
+                mockConstruction(Timer.class, (mock, context) -> when(mock.remainingMs()).thenReturn(remainingMs));
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
-                (mock, context) -> {
-                    when(mock.timeToNextHeartbeatMs(anyLong())).thenReturn(timeToNextHeartbeatMs);
-                })
+                (mock, context) -> when(mock.timeToNextHeartbeatMs(anyLong())).thenReturn(timeToNextHeartbeatMs))
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = timerMockedConstruction.constructed().get(0);

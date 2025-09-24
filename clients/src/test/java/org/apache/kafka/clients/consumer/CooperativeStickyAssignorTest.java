@@ -81,7 +81,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
         Optional<Integer> encodedGeneration = ((CooperativeStickyAssignor) assignor).memberData(subscription).generation;
         assertTrue(encodedGeneration.isPresent());
-        assertEquals(encodedGeneration.get(), DEFAULT_GENERATION);
+        assertEquals(DEFAULT_GENERATION, encodedGeneration.get());
 
         int generation = 10;
         assignor.onAssignment(null, new ConsumerGroupMetadata("dummy-group-id", generation, "dummy-member-id", Optional.empty()));
@@ -90,7 +90,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         encodedGeneration = ((CooperativeStickyAssignor) assignor).memberData(subscription).generation;
 
         assertTrue(encodedGeneration.isPresent());
-        assertEquals(encodedGeneration.get(), generation);
+        assertEquals(generation, encodedGeneration.get());
     }
 
     @Test
