@@ -243,7 +243,6 @@ org.apache.kafka.tools.FeatureCommandTest:
 - testIncompatibleUpgradeFlags
 - testInvalidReleaseVersion
 - testLevelToString
-- testMetadataVersionsToString
 - testParseNameAndLevel
 - testUpgradeMetadataVersionWithKraft
 - testUpgradeWithReleaseVersion
@@ -632,10 +631,13 @@ org.apache.kafka.tools.consumer.ConsoleConsumerOptionsTest:
 - shouldParseValidConsumerValidConfig
 - shouldParseValidSimpleConsumerValidConfigWithNumericOffset
 - shouldParseValidSimpleConsumerValidConfigWithStringOffset
+- shouldParseValidSimpleConsumerValidConfigWithStringOffsetDeprecated
 - testClientIdOverrideDeprecated
 - testClientIdOverrideUsingCommandProperty
 - testCustomConfigShouldBePassedToConfigureMethod
+- testCustomConfigShouldBePassedToConfigureMethodDeprecated
 - testCustomPropertyShouldBePassedToConfigureMethod
+- testCustomPropertyShouldBePassedToConfigureMethodDeprecated
 - testDefaultClientId
 - testParseFormatter
 - testParseOffset
@@ -665,7 +667,9 @@ org.apache.kafka.tools.consumer.ConsoleShareConsumerOptionsTest:
 - testClientIdOverride
 - testClientIdOverrideDeprecated
 - testCustomConfigShouldBePassedToConfigureMethod
+- testCustomConfigShouldBePassedToConfigureMethodDeprecated
 - testCustomPropertyShouldBePassedToConfigureMethod
+- testCustomPropertyShouldBePassedToConfigureMethodDeprecated
 - testDefaultClientId
 - testRejectAndReleaseOption
 - testRejectOption

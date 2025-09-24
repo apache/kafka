@@ -66,6 +66,7 @@ org.apache.kafka.server.common.MetadataVersionTest:
 - testIsElrSupported
 - testListOffsetsValueVersion
 - testMetadataChanged
+- testMetadataVersionsToString
 - testPartitionChangeRecordVersion
 - testPartitionRecordVersion
 - testPrevious
