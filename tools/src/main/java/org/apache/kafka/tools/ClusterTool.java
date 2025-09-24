@@ -26,6 +26,7 @@ import org.apache.kafka.server.util.CommandLineUtils;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
@@ -82,9 +83,13 @@ public class ClusterTool {
             connectionOptions.addArgument("--bootstrap-controller", "-C")
                     .action(store())
                     .help("A list of host/port pairs to use for establishing the connection to the KRaft controllers.");
-            subpparser.addArgument("--config", "-c")
+            subpparser.addArgument("--config")
                     .action(store())
-                    .help("A property file containing configurations for the Admin client.");
+                    .help("(DEPRECATED) A property file containing configurations for the Admin client. " +
+                            "This option will be removed in a future version. Use --command-config instead.");
+            subpparser.addArgument("--command-config", "-c")
+                    .action(store())
+                    .help("Config properties file for the Admin client.");
         }
         unregisterParser.addArgument("--id", "-i")
                 .type(Integer.class)
@@ -97,8 +102,16 @@ public class ClusterTool {
 
         Namespace namespace = parser.parseArgsOrFail(args);
         String command = namespace.getString("command");
-        String configPath = namespace.getString("config");
-        Properties properties = (configPath == null) ? new Properties() : Utils.loadProps(configPath);
+        String configFile = namespace.getString("config");
+        String commandConfigFile = namespace.getString("command_config");
+        if (configFile != null && commandConfigFile != null) {
+            throw new ArgumentParserException("--config and --command-config cannot be specified together.", parser);
+        }
+        if (configFile != null) {
+            System.out.println("Option --config has been deprecated and will be removed in a future version. Use --command-config instead.");
+            commandConfigFile = configFile;
+        }
+        Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
         CommandLineUtils.initializeBootstrapProperties(properties,
                 Optional.ofNullable(namespace.getString("bootstrap_server")),

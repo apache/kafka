@@ -35,7 +35,6 @@ import java.security.Provider;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -120,7 +119,7 @@ public final class DistributedConfig extends WorkerConfig {
      */
     public static final String WORKER_UNSYNC_BACKOFF_MS_CONFIG = "worker.unsync.backoff.ms";
     private static final String WORKER_UNSYNC_BACKOFF_MS_DOC = "When the worker is out of sync with other workers and " +
-            " fails to catch up within worker.sync.timeout.ms, leave the Connect cluster for this long before rejoining.";
+            " fails to catch up within the <code>worker.sync.timeout.ms</code>, leave the Connect cluster for this long before rejoining.";
     public static final int WORKER_UNSYNC_BACKOFF_MS_DEFAULT = 5 * 60 * 1000;
 
     public static final String CONFIG_STORAGE_PREFIX = "config.storage.";
@@ -207,20 +206,20 @@ public final class DistributedConfig extends WorkerConfig {
     public static final Long INTER_WORKER_KEY_SIZE_DEFAULT = null;
 
     public static final String INTER_WORKER_KEY_TTL_MS_CONFIG = "inter.worker.key.ttl.ms";
-    public static final String INTER_WORKER_KEY_TTL_MS_MS_DOC = "The TTL of generated session keys used for "
+    public static final String INTER_WORKER_KEY_TTL_MS_DOC = "The TTL of generated session keys used for "
         + "internal request validation (in milliseconds)";
-    public static final int INTER_WORKER_KEY_TTL_MS_MS_DEFAULT = Math.toIntExact(TimeUnit.HOURS.toMillis(1));
+    public static final int INTER_WORKER_KEY_TTL_MS_DEFAULT = Math.toIntExact(TimeUnit.HOURS.toMillis(1));
 
     public static final String INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG = "inter.worker.signature.algorithm";
     public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT = "HmacSHA256";
-    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DOC = "The algorithm used to sign internal requests"
-            + "The algorithm '" + INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG + "' will be used as a default on JVMs that support it; "
+    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DOC = "The algorithm used to sign internal requests. "
+            + "The algorithm '" + INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT + "' will be used as a default on JVMs that support it; "
             + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
 
     public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG = "inter.worker.verification.algorithms";
-    public static final List<String> INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT = Collections.singletonList(INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
+    public static final List<String> INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT = List.of(INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
     public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_DOC = "A list of permitted algorithms for verifying internal requests, "
-        + "which must include the algorithm used for the " + INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG + " property. "
+        + "which must include the algorithm used for the <code>" + INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG + "</code> property. "
         + "The algorithm(s) '" + INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT + "' will be used as a default on JVMs that provide them; "
         + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
     private final Crypto crypto;
@@ -491,10 +490,10 @@ public final class DistributedConfig extends WorkerConfig {
                     SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC)
             .define(INTER_WORKER_KEY_TTL_MS_CONFIG,
                     ConfigDef.Type.INT,
-                    INTER_WORKER_KEY_TTL_MS_MS_DEFAULT,
+                    INTER_WORKER_KEY_TTL_MS_DEFAULT,
                     between(0, Integer.MAX_VALUE),
                     ConfigDef.Importance.LOW,
-                    INTER_WORKER_KEY_TTL_MS_MS_DOC)
+                    INTER_WORKER_KEY_TTL_MS_DOC)
             .define(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
                     defaultKeyGenerationAlgorithm(crypto),

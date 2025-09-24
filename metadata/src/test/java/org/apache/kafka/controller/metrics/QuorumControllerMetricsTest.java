@@ -165,6 +165,7 @@ public class QuorumControllerMetricsTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testTimeSinceLastHeartbeatReceivedMs() {
         MetricsRegistry registry = new MetricsRegistry();
