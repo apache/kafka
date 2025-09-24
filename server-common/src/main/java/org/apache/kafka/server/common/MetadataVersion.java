@@ -19,9 +19,11 @@ package org.apache.kafka.server.common;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * This class contains the different Kafka versions.
@@ -340,11 +342,12 @@ public enum MetadataVersion {
 
     /**
      * Return an `MetadataVersion` instance for `versionString`, which can be in a variety of formats (e.g. "3.8", "3.8.x",
-     * "3.8.0", "3.8-IV0"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
+     * "3.8.0", "3.8-IV0"). The `unstableFeatureVersionsEnabled` parameter determines whether unstable versions are permitted.
+     * `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
      * Note that 'misconfigured' values such as "3.8.1" will be parsed to `IBP_3_8_IV0` as we ignore anything after the first
      * two segments.
      */
-    public static MetadataVersion fromVersionString(String versionString) {
+    public static MetadataVersion fromVersionString(String versionString, boolean unstableFeatureVersionsEnabled) {
         String[] versionSegments = versionString.split(Pattern.quote("."));
         int numSegments = 2;
         String key;
@@ -353,10 +356,22 @@ public enum MetadataVersion {
         } else {
             key = String.join(".", Arrays.copyOfRange(versionSegments, 0, numSegments));
         }
-        return Optional.ofNullable(IBP_VERSIONS.get(key)).orElseThrow(() ->
-            new IllegalArgumentException("Version " + versionString + " is not a valid version. The minimum version is " + MINIMUM_VERSION
-                + " and the maximum version is " + latestTesting())
-        );
+
+        MetadataVersion metadataVersion = IBP_VERSIONS.get(key);
+        if (metadataVersion == null || (!unstableFeatureVersionsEnabled && !metadataVersion.isProduction())) {
+            String errorMsg = "Unknown metadata.version '" + versionString + "'. Supported metadata.version are: "
+                + metadataVersionsToString(MetadataVersion.MINIMUM_VERSION,
+                unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting() : MetadataVersion.latestProduction());
+            throw new IllegalArgumentException(errorMsg);
+        }
+        return metadataVersion;
+    }
+
+    public static String metadataVersionsToString(MetadataVersion first, MetadataVersion last) {
+        List<MetadataVersion> versions = List.of(MetadataVersion.VERSIONS).subList(first.ordinal(), last.ordinal() + 1);
+        return versions.stream()
+            .map(String::valueOf)
+            .collect(Collectors.joining(", "));
     }
 
     public static MetadataVersion fromFeatureLevel(short version) {

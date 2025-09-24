@@ -151,13 +151,34 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void shouldParseValidSimpleConsumerValidConfigWithStringOffset() throws Exception {
+    public void shouldParseValidSimpleConsumerValidConfigWithStringOffsetDeprecated() throws Exception {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--partition", "0",
             "--offset", "LatEst",
             "--property", "print.value=false"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+
+        assertEquals("localhost:9092", config.bootstrapServer());
+        assertEquals("test", config.topicArg().orElse(""));
+        assertTrue(config.partitionArg().isPresent());
+        assertEquals(0, config.partitionArg().getAsInt());
+        assertEquals(-1, config.offsetArg());
+        assertFalse(config.fromBeginning());
+        assertFalse(((DefaultMessageFormatter) config.formatter()).printValue());
+    }
+
+    @Test
+    public void shouldParseValidSimpleConsumerValidConfigWithStringOffset() throws Exception {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--offset", "LatEst",
+            "--formatter-property", "print.value=false"
         };
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
@@ -355,13 +376,63 @@ public class ConsoleConsumerOptionsTest {
     }
 
     @Test
-    public void testCustomPropertyShouldBePassedToConfigureMethod() throws Exception {
+    public void testCustomPropertyShouldBePassedToConfigureMethodDeprecated() throws Exception {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--property", "print.key=true",
             "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
             "--property", "key.deserializer.my-props=abc"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+
+        assertInstanceOf(DefaultMessageFormatter.class, config.formatter());
+        assertTrue(config.formatterArgs().containsKey("key.deserializer.my-props"));
+        DefaultMessageFormatter formatter = (DefaultMessageFormatter) config.formatter();
+        assertTrue(formatter.keyDeserializer().isPresent());
+        assertInstanceOf(MockDeserializer.class, formatter.keyDeserializer().get());
+        MockDeserializer keyDeserializer = (MockDeserializer) formatter.keyDeserializer().get();
+        assertEquals(1, keyDeserializer.configs.size());
+        assertEquals("abc", keyDeserializer.configs.get("my-props"));
+        assertTrue(keyDeserializer.isKey);
+    }
+
+    @Test
+    public void testCustomPropertyShouldBePassedToConfigureMethod() throws Exception {
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--formatter-property", "print.key=true",
+            "--formatter-property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
+            "--formatter-property", "key.deserializer.my-props=abc"
+        };
+
+        ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
+
+        assertInstanceOf(DefaultMessageFormatter.class, config.formatter());
+        assertTrue(config.formatterArgs().containsKey("key.deserializer.my-props"));
+        DefaultMessageFormatter formatter = (DefaultMessageFormatter) config.formatter();
+        assertTrue(formatter.keyDeserializer().isPresent());
+        assertInstanceOf(MockDeserializer.class, formatter.keyDeserializer().get());
+        MockDeserializer keyDeserializer = (MockDeserializer) formatter.keyDeserializer().get();
+        assertEquals(1, keyDeserializer.configs.size());
+        assertEquals("abc", keyDeserializer.configs.get("my-props"));
+        assertTrue(keyDeserializer.isKey);
+    }
+
+    @Test
+    public void testCustomConfigShouldBePassedToConfigureMethodDeprecated() throws Exception {
+        Map<String, String> configs = new HashMap<>();
+        configs.put("key.deserializer.my-props", "abc");
+        configs.put("print.key", "false");
+        File propsFile = ToolsTestUtils.tempPropertiesFile(configs);
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--property", "print.key=true",
+            "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
+            "--formatter-config", propsFile.getAbsolutePath()
         };
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
@@ -386,8 +457,8 @@ public class ConsoleConsumerOptionsTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
-            "--property", "print.key=true",
-            "--property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
+            "--formatter-property", "print.key=true",
+            "--formatter-property", "key.deserializer=org.apache.kafka.test.MockDeserializer",
             "--formatter-config", propsFile.getAbsolutePath()
         };
 
