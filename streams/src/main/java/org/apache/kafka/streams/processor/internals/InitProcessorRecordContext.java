@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Time;
 
-import java.util.Objects;
 
 public class InitProcessorRecordContext extends ProcessorRecordContext {
 
     private final Time time;
+    private static final long NO_OFFSET = -1;
+    private static final int NO_PARTITION = -1;
 
     public InitProcessorRecordContext(final Time time) {
-        super(time.milliseconds(), -1, -1, null, new RecordHeaders());
+        super(ConsumerRecord.NO_TIMESTAMP, NO_OFFSET, NO_PARTITION, null, new RecordHeaders());
         this.time = time;
     }
 
@@ -36,16 +38,15 @@ public class InitProcessorRecordContext extends ProcessorRecordContext {
     }
 
     @Override
+    @Deprecated
     public boolean equals(final Object o) {
-        if (this == o) {
-            return true;
-        }
-        return o != null && getClass() == o.getClass();
+        return super.equals(o);
     }
 
     @Override
     @Deprecated
     public int hashCode() {
-        return Objects.hashCode(super.timestamp());
+        return super.hashCode();
     }
+
 }

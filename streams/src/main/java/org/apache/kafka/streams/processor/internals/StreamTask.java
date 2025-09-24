@@ -1109,7 +1109,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             try {
                 node.init(processorContext, processingExceptionHandler);
             } finally {
-                updateProcessorContext(null, RecordQueue.UNKNOWN, null);
+                updateProcessorContext(null, ConsumerRecord.NO_TIMESTAMP, null);
             }
         }
     }
