@@ -229,31 +229,6 @@ class StreamsBrokerBounceTest(Test):
 
         return self.collect_results(sleep_time_secs)
 
-    @ignore
-    @cluster(num_nodes=7)
-    @matrix(failure_mode=["clean_shutdown"],
-            broker_type=["controller"],
-            sleep_time_secs=[0],
-            metadata_quorum=[quorum.combined_kraft],
-            group_protocol=["classic", "streams"])
-    def test_broker_type_bounce_at_start(self, failure_mode, broker_type, sleep_time_secs, metadata_quorum, group_protocol):
-        """
-        Start a smoke test client, then kill one particular broker immediately before streams stats
-        Streams should throw an exception since it cannot create topics with the desired
-        replication factor of 3
-        """
-        self.setup_system(start_processor=False, group_protocol=group_protocol)
-
-        # Sleep to allow test to run for a bit
-        time.sleep(sleep_time_secs)
-
-        # Fail brokers
-        self.fail_broker_type(failure_mode, broker_type)
-
-        self.processor1.start()
-
-        return self.collect_results(sleep_time_secs)
-
     @cluster(num_nodes=10)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             num_failures=[2],
