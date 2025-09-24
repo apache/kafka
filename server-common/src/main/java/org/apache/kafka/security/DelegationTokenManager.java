@@ -104,6 +104,10 @@ public class DelegationTokenManager {
             .toList();
     }
 
+    public boolean isEnabled() {
+        return secretKey != null;
+    }
+
     public static boolean filterToken(
         KafkaPrincipal requesterPrincipal,
         Optional<List<KafkaPrincipal>> owners,
