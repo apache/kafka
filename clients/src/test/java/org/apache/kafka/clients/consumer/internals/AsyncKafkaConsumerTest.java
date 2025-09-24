@@ -1496,11 +1496,11 @@ public class AsyncKafkaConsumerTest {
             Exception expectedException = expectedExceptionOpt.get();
 
             waitForConsumerPollException(
-                e ->
-                    Objects.equals(e.getClass(), expectedException.getClass()) &&
+                e -> {
+                    return Objects.equals(e.getClass(), expectedException.getClass()) &&
                         Objects.equals(e.getMessage(), expectedException.getMessage()) &&
-                        Objects.equals(e.getCause(), expectedException.getCause())
-                ,
+                        Objects.equals(e.getCause(), expectedException.getCause());
+                },
                 "Consumer.poll() did not throw the expected exception " + expectedException
             );
         } else {
