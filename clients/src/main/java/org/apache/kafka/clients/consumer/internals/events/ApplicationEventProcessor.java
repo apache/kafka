@@ -262,7 +262,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (nextEventType == ApplicationEvent.Type.CHECK_AND_UPDATE_POSITIONS) {
             log.debug("Processing {} logic for {}", nextEventType, event);
             CompletableFuture<Boolean> updatePositionsFuture = processCheckAndUpdatePositionsEvent(event.deadlineMs());
-            applicationEventReaper.add(new CompositePollPsuedoEvent<>(updatePositionsFuture, event.deadlineMs()));
+            applicationEventReaper.add(new CompositePollPseudoEvent<>(updatePositionsFuture, event.deadlineMs()));
 
             updatePositionsFuture.whenComplete((__, updatePositionsError) -> {
                 if (maybeFailCompositePoll(event, updatePositionsError))
@@ -933,12 +933,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         Optional<CompositePollEvent.State> requirement();
     }
 
-    private static class CompositePollPsuedoEvent<T> implements CompletableEvent<T> {
+    private static class CompositePollPseudoEvent<T> implements CompletableEvent<T> {
 
         private final CompletableFuture<T> future;
         private final long deadlineMs;
 
-        public CompositePollPsuedoEvent(CompletableFuture<T> future, long deadlineMs) {
+        public CompositePollPseudoEvent(CompletableFuture<T> future, long deadlineMs) {
             this.future = future;
             this.deadlineMs = deadlineMs;
         }
