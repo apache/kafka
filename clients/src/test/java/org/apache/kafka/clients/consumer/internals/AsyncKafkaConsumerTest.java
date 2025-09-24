@@ -2218,7 +2218,6 @@ public class AsyncKafkaConsumerTest {
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
             StreamsRebalanceListener mockStreamsListener = mock(StreamsRebalanceListener.class);
-            when(mockStreamsListener.onTasksRevoked(any())).thenReturn(Optional.empty());
             consumer.subscribe(singletonList("topic"), mockStreamsListener);
             final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
             final int memberEpoch = 42;
@@ -2239,7 +2238,6 @@ public class AsyncKafkaConsumerTest {
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
             StreamsRebalanceListener mockStreamsListener = mock(StreamsRebalanceListener.class);
-            when(mockStreamsListener.onAllTasksLost()).thenReturn(Optional.empty());
             consumer.subscribe(singletonList("topic"), mockStreamsListener);
             final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
             final int memberEpoch = 0;

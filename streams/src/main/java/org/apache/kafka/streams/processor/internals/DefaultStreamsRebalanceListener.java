@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -52,59 +51,44 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
     }
 
     @Override
-    public Optional<Exception> onTasksRevoked(final Set<StreamsRebalanceData.TaskId> tasks) {
-        try {
-            final Map<TaskId, Set<TopicPartition>> activeTasksToRevokeWithPartitions =
-                pairWithTopicPartitions(tasks.stream());
-            final Set<TopicPartition> partitionsToRevoke = activeTasksToRevokeWithPartitions.values().stream()
-                .flatMap(Collection::stream)
-                .collect(Collectors.toSet());
+    public void onTasksRevoked(final Set<StreamsRebalanceData.TaskId> tasks) {
+        final Map<TaskId, Set<TopicPartition>> activeTasksToRevokeWithPartitions =
+            pairWithTopicPartitions(tasks.stream());
+        final Set<TopicPartition> partitionsToRevoke = activeTasksToRevokeWithPartitions.values().stream()
+            .flatMap(Collection::stream)
+            .collect(Collectors.toSet());
 
-            final long start = time.milliseconds();
-            try {
-                log.info("Revoking active tasks {}.", tasks);
-                taskManager.handleRevocation(partitionsToRevoke);
-            } finally {
-                log.info("partition revocation took {} ms.", time.milliseconds() - start);
-            }
-            if (streamThread.state() != StreamThread.State.PENDING_SHUTDOWN) {
-                streamThread.setState(StreamThread.State.PARTITIONS_REVOKED);
-            }
-        } catch (final Exception exception) {
-            return Optional.of(exception);
+        final long start = time.milliseconds();
+        try {
+            log.info("Revoking active tasks {}.", tasks);
+            taskManager.handleRevocation(partitionsToRevoke);
+        } finally {
+            log.info("partition revocation took {} ms.", time.milliseconds() - start);
         }
-        return Optional.empty();
+        if (streamThread.state() != StreamThread.State.PENDING_SHUTDOWN) {
+            streamThread.setState(StreamThread.State.PARTITIONS_REVOKED);
+        }
     }
 
     @Override
-    public Optional<Exception> onTasksAssigned(final StreamsRebalanceData.Assignment assignment) {
-        try {
-            final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
-                pairWithTopicPartitions(assignment.activeTasks().stream());
-            final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
-                pairWithTopicPartitions(Stream.concat(assignment.standbyTasks().stream(), assignment.warmupTasks().stream()));
+    public void onTasksAssigned(final StreamsRebalanceData.Assignment assignment) {
+        final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
+            pairWithTopicPartitions(assignment.activeTasks().stream());
+        final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
+            pairWithTopicPartitions(Stream.concat(assignment.standbyTasks().stream(), assignment.warmupTasks().stream()));
 
-            log.info("Processing new assignment {} from Streams Rebalance Protocol", assignment);
+        log.info("Processing new assignment {} from Streams Rebalance Protocol", assignment);
 
-            taskManager.handleAssignment(activeTasksWithPartitions, standbyTasksWithPartitions);
-            streamThread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
-            taskManager.handleRebalanceComplete();
-            streamsRebalanceData.setReconciledAssignment(assignment);
-        } catch (final Exception exception) {
-            return Optional.of(exception);
-        }
-        return Optional.empty();
+        taskManager.handleAssignment(activeTasksWithPartitions, standbyTasksWithPartitions);
+        streamThread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
+        taskManager.handleRebalanceComplete();
+        streamsRebalanceData.setReconciledAssignment(assignment);
     }
 
     @Override
-    public Optional<Exception> onAllTasksLost() {
-        try {
-            taskManager.handleLostAll();
-            streamsRebalanceData.setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
-        } catch (final Exception exception) {
-            return Optional.of(exception);
-        }
-        return Optional.empty();
+    public void onAllTasksLost() {
+        taskManager.handleLostAll();
+        streamsRebalanceData.setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
     }
 
     private Map<TaskId, Set<TopicPartition>> pairWithTopicPartitions(final Stream<StreamsRebalanceData.TaskId> taskIdStream) {
