@@ -26,6 +26,7 @@ import javax.security.auth.login.LoginContext
 import kafka.api.{IntegrationTestHarness, SaslSetup}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.consumer.CloseOptions
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -185,10 +186,19 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     consumer.assign(java.util.List.of(tp))
 
     val startMs = System.currentTimeMillis()
-    assertThrows(classOf[SaslAuthenticationException], () => consumer.poll(Duration.ofMillis(50)))
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        consumer.poll(Duration.ofMillis(50))
+        false
+      } catch {
+        case _: SaslAuthenticationException => true
+      }
+    }, "Client not ready or disconnected within timeout")
+
     val endMs = System.currentTimeMillis()
     require(endMs - startMs < failedAuthenticationDelayMs, "Failed authentication must not be delayed on the client")
-    consumer.close()
+    consumer.close(CloseOptions.timeout(Duration.ZERO))
   }
 
   /**

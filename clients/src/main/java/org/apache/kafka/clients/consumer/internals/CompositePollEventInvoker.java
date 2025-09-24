@@ -35,7 +35,7 @@ public class CompositePollEventInvoker {
     private final ApplicationEventHandler applicationEventHandler;
     private final Runnable backgroundEventProcessor;
     private final Runnable offsetCommitProcessor;
-    private CompositePollEvent latest;
+    private CompositePollEvent inflight;
 
     public CompositePollEventInvoker(LogContext logContext,
                                      Time time,
@@ -50,21 +50,27 @@ public class CompositePollEventInvoker {
     }
 
     public void poll(Timer timer) {
-        if (latest == null) {
-            log.debug("latest was null, so submitting new event...");
+        if (inflight == null) {
+            log.debug("No existing inflight event, submitting");
             submitEvent(ApplicationEvent.Type.POLL, timer);
         }
 
         try {
-            log.debug("Attempting to retrieve result from previously submitted {} with {} remaining on timer", latest, timer.remainingMs());
+            if (log.isTraceEnabled()) {
+                log.trace(
+                    "Attempting to retrieve result from previously submitted {} with {} remaining on timer",
+                    inflight,
+                    timer.remainingMs()
+                );
+            }
 
-            CompositePollEvent.Result result = latest.resultOrError();
+            CompositePollEvent.Result result = inflight.resultOrError();
             CompositePollEvent.State state = result.state();
 
             if (state == CompositePollEvent.State.COMPLETE) {
-                // Make sure to clear out the latest request since it's complete.
-                log.debug("We're supposedly complete with event {}, so clearing...", latest);
-                latest = null;
+                // Make sure to clear out the inflight request since it's complete.
+                log.debug("Event {} completed, clearing inflight", inflight);
+                inflight = null;
             } else if (state == CompositePollEvent.State.BACKGROUND_EVENT_PROCESSING_REQUIRED) {
                 log.debug("About to process background events");
                 backgroundEventProcessor.run();
@@ -79,18 +85,18 @@ public class CompositePollEventInvoker {
                 throw new KafkaException("Unexpected poll result received");
             }
         } catch (Throwable t) {
-            log.debug("Caught error, rethrowing...", t);
-            // If an exception is hit, bubble it up to the user but make sure to clear out the latest request
-            // to signify this one is complete.
-            latest = null;
+            // If an exception is hit, bubble it up to the user but make sure to clear out the inflight request
+            // because the error effectively renders it complete.
+            log.debug("Event {} \"completed\" via error ({}), clearing inflight", inflight, String.valueOf(t));
+            inflight = null;
             throw ConsumerUtils.maybeWrapAsKafkaException(t);
         }
     }
 
     private void submitEvent(ApplicationEvent.Type type, Timer timer) {
         long deadlineMs = calculateDeadlineMs(timer);
-        latest = new CompositePollEvent(deadlineMs, time.milliseconds(), type);
-        applicationEventHandler.add(latest);
-        log.debug("Submitted new {} submitted with {} remaining on timer", latest, timer.remainingMs());
+        inflight = new CompositePollEvent(deadlineMs, time.milliseconds(), type);
+        applicationEventHandler.add(inflight);
+        log.debug("Submitted new {} with {} remaining on timer", inflight, timer.remainingMs());
     }
 }

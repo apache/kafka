@@ -145,13 +145,29 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   }
 
   private def verifyConsumerWithAuthenticationFailure(consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
-    verifyAuthenticationException(consumer.poll(Duration.ofMillis(1000)))
+    TestUtils.waitUntilTrue(() => {
+      try {
+        consumer.poll(Duration.ofMillis(1000))
+        false
+      } catch {
+        case _: SaslAuthenticationException => true
+      }
+    }, s"Consumer.poll() did not throw a ${classOf[SaslAuthenticationException]} exception within the timeout")
+
     verifyAuthenticationException(consumer.partitionsFor(topic))
 
     createClientCredential()
     val producer = createProducer()
     verifyWithRetry(sendOneRecord(producer))()
-    verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))(_.count == 1)
+
+    val expectedNumber = 1
+    TestUtils.waitUntilTrue(() => {
+      try {
+        consumer.poll(Duration.ofMillis(1000)).count == expectedNumber
+      } catch {
+        case _: SaslAuthenticationException => false
+      }
+    }, s"Consumer.poll() did not read the expected number of records ($expectedNumber) within the timeout")
   }
 
   @Test

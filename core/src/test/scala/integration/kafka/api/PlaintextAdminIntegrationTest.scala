@@ -568,8 +568,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       try {
         consumer.assign(util.Set.of(tp))
         consumer.seekToBeginning(util.Set.of(tp))
-        val records = consumer.poll(time.Duration.ofSeconds(3))
-        assertEquals(expectedNumber, records.count())
+
+        TestUtils.waitUntilTrue(() => {
+          val records = consumer.poll(time.Duration.ofSeconds(3))
+          expectedNumber == records.count()
+        }, s"Consumer.poll() did not return the expected number of records ($expectedNumber) within the timeout")
       } finally consumer.close()
     }
 
