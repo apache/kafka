@@ -51,14 +51,14 @@ public class StreamsRebalanceListenerInvoker {
 
     public Exception invokeAllTasksRevoked() {
         if (listener.isEmpty()) {
-            throw new IllegalStateException("StreamsRebalanceListener is not defined");
+            return null;
         }
         return invokeTasksRevoked(streamsRebalanceData.reconciledAssignment().activeTasks());
     }
 
     public Exception invokeTasksAssigned(final StreamsRebalanceData.Assignment assignment) {
         if (listener.isEmpty()) {
-            throw new IllegalStateException("StreamsRebalanceListener is not defined");
+            return null;
         }
         log.info("Invoking tasks assigned callback for new assignment: {}", assignment);
         try {
@@ -78,7 +78,7 @@ public class StreamsRebalanceListenerInvoker {
 
     public Exception invokeTasksRevoked(final Set<StreamsRebalanceData.TaskId> tasks) {
         if (listener.isEmpty()) {
-            throw new IllegalStateException("StreamsRebalanceListener is not defined");
+            return null;
         }
         log.info("Invoking task revoked callback for revoked active tasks {}", tasks);
         try {
@@ -98,7 +98,7 @@ public class StreamsRebalanceListenerInvoker {
 
     public Exception invokeAllTasksLost() {
         if (listener.isEmpty()) {
-            throw new IllegalStateException("StreamsRebalanceListener is not defined");
+            return null;
         }
         log.info("Invoking tasks lost callback for all tasks");
         try {
