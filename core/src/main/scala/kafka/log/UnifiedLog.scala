@@ -1080,6 +1080,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               throw new InvalidTxnStateException("Record was not part of an ongoing transaction")
             }
           }
+        }
 
         // We cache offset metadata for the start of each transaction. This allows us to
         // compute the last stable offset without relying on additional index lookups.
