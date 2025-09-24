@@ -1254,6 +1254,8 @@ kafka.log.UnifiedLogTest:
 - testSegmentDeletionWithHighWatermarkInitialization
 - testSizeBasedLogRoll
 - testSplitOnOffsetOverflow
+- testStaleProducerEpochReturnsRecoverableErrorForTV1Clients
+- testStaleProducerEpochReturnsRecoverableErrorForTV2Clients
 - testStartOffsetsRemoteLogStorageIsEnabled
 - testTakeSnapshotOnRollAndDeleteSnapshotOnRecoveryPointCheckpoint
 - testThatGarbageCollectingSegmentsDoesntChangeOffset

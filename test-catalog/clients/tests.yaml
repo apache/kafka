@@ -1419,6 +1419,7 @@ org.apache.kafka.clients.consumer.internals.ConsumerNetworkClientTest:
 - testDisconnectWakesUpPoll
 - testDisconnectWithInFlightRequests
 - testDisconnectWithUnsentRequests
+- testFutureCompletionOutsidePoll
 - testInvalidTopicExceptionPropagatedFromMetadata
 - testMetadataFailurePropagated
 - testTimeoutUnsentRequest
