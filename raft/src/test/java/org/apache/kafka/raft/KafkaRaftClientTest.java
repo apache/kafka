@@ -2109,11 +2109,11 @@ class KafkaRaftClientTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    public void testObserverSendDiscoveryFetchAfterFetchTimeout(boolean withKip853Rpc) throws Exception {
+    public void testObserverUnattachedSendFetchToBootstrapServers(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
         int otherNodeId = localId + 2;
-        int epoch = 5;
+        int epoch = 0;
         Set<Integer> voters = Set.of(leaderId, otherNodeId);
         List<InetSocketAddress> bootstrapServers = voters
             .stream()
@@ -2125,10 +2125,12 @@ class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
+        // unattached observer will send fetches to bootstrap servers to discover leader
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         assertTrue(context.bootstrapIds.contains(fetchRequest.destination().id()));
-        context.assertFetchRequestData(fetchRequest, 0, 0L, 0, context.client.highWatermark());
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
+        context.assertUnknownLeaderAndNoVotedCandidate(epoch);
 
         context.deliverResponse(
             fetchRequest.correlationId(),
@@ -2136,15 +2138,50 @@ class KafkaRaftClientTest {
             context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
         );
 
+        // unattached observer becomes a follower after discovering leader
         context.client.poll();
         context.assertElectedLeader(epoch, leaderId);
+    }
 
-        context.time.sleep(context.fetchTimeoutMs);
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testObserverFollowerSendFetchToBestNode(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        int leaderId = localId + 1;
+        int otherNodeId = localId + 2;
+        int epoch = 0;
+        Set<Integer> voters = Set.of(leaderId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .toList();
 
-        context.pollUntilRequest();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(Optional.of(bootstrapServers))
+            .withElectedLeader(epoch, leaderId)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
+
+        context.client.poll();
+
+        // observer will send fetch to the leader
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        assertEquals(leaderId, fetchRequest.destination().id());
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
+
+        // if request times out, observer will retry to a bootstrap server
+        context.time.sleep(context.requestTimeoutMs());
+        context.client.poll();
         fetchRequest = context.assertSentFetchRequest();
         assertNotEquals(leaderId, fetchRequest.destination().id());
         assertTrue(context.bootstrapIds.contains(fetchRequest.destination().id()));
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
+
+        // observer will retry to the leader
+        context.time.sleep(context.requestTimeoutMs());
+        context.client.poll();
+        fetchRequest = context.assertSentFetchRequest();
+        assertEquals(leaderId, fetchRequest.destination().id());
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, context.client.highWatermark());
     }
 
@@ -3749,7 +3786,7 @@ class KafkaRaftClientTest {
 
     @ParameterizedTest
     @CsvSource({ "true, true", "true, false", "false, true", "false, false" })
-    public void testObserverReplication(boolean withKip853Rpc, boolean alwaysFlush) throws Exception {
+    public void testObserverReplication(boolean withKip853Rpc, boolean canBecomeVoter) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
@@ -3758,7 +3795,7 @@ class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withKip853Rpc(withKip853Rpc)
-            .withAlwaysFlush(alwaysFlush)
+            .withCanBecomeVoter(canBecomeVoter)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -3775,7 +3812,7 @@ class KafkaRaftClientTest {
 
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset());
-        long firstUnflushedOffset = alwaysFlush ? 2L : 0L;
+        long firstUnflushedOffset = canBecomeVoter ? 2L : 0L;
         assertEquals(firstUnflushedOffset, context.log.firstUnflushedOffset());
     }
 

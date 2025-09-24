@@ -124,11 +124,11 @@ public class CoordinatorRecordTypeGenerator implements TypeClassGenerator {
         for (Map.Entry<Short, CoordinatorRecord> entry : records.entrySet()) {
             MessageSpec key = entry.getValue().key;
             if (key == null) {
-                throw new RuntimeException("Coordinator record " + entry.getKey() + " has not key.");
+                throw new RuntimeException("Coordinator record " + entry.getKey() + " has no key.");
             }
             MessageSpec value = entry.getValue().value;
             if (value == null) {
-                throw new RuntimeException("Coordinator record " + entry.getKey() + " has not key.");
+                throw new RuntimeException("Coordinator record " + entry.getKey() + " has no value.");
             }
             String name = cleanName(key.name());
             numProcessed++;

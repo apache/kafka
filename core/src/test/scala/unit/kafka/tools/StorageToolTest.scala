@@ -307,6 +307,20 @@ Found problem:
   }
 
   @Test
+  def testFormatWithUnsupportedReleaseVersion(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val failure = assertThrows(classOf[TerseFailure], () =>
+      runFormatCommand(stream, properties, Seq("--release-version", "3.3-IV1"))).getMessage
+    assertTrue(failure.contains("Unknown metadata.version 3.3-IV1"))
+    assertTrue(failure.contains(MetadataVersion.MINIMUM_VERSION.version))
+    assertTrue(failure.contains(MetadataVersion.latestProduction().version))
+  }
+
+  @Test
   def testFormatWithReleaseVersionAsFeature(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
@@ -372,16 +386,149 @@ Found problem:
   }
 
   @Test
-  def testFormatWithStandaloneFlagOnBrokerFails(): Unit = {
+  def testFormatWithReleaseVersionAndFeatureOverride(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties, Seq(
+      "--release-version", "3.7-IV0",
+      "--feature", "share.version=1")))
+
+    // Verify that the feature override is applied by checking the bootstrap metadata
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+
+    // Verify that the share.version feature is set to 1 as specified
+    assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
+      "share.version should be set to 1")
+
+    // Verify the command output contains the expected release version
+    assertTrue(stream.toString().contains("3.7-IV0"),
+      "Failed to find release version in output: " + stream.toString())
+
+    // Verify that the format command completed successfully with features
+    assertTrue(stream.toString().contains("Formatting metadata directory"),
+      "Failed to find formatting message in output: " + stream.toString())
+  }
+
+  @Test
+  def testFormatWithMultipleFeatures(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    assertEquals(0, runFormatCommand(stream, properties, Seq(
+      "--release-version", "3.8-IV0",
+      "--feature", "share.version=1",
+      "--feature", "transaction.version=2",
+      "--feature", "group.version=1")))
+
+    // Verify that all features are properly bootstrapped by checking the bootstrap metadata
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+
+    // Verify that all specified features are set correctly
+    assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
+      "share.version should be set to 1")
+    assertEquals(2.toShort, bootstrapMetadata.featureLevel("transaction.version"),
+      "transaction.version should be set to 2")
+    assertEquals(1.toShort, bootstrapMetadata.featureLevel("group.version"),
+      "group.version should be set to 1")
+
+    // Verify the command output contains the expected release version
+    assertTrue(stream.toString().contains("3.8-IV0"),
+      "Failed to find release version in output: " + stream.toString())
+
+    // Verify that the format command completed successfully with multiple features
+    assertTrue(stream.toString().contains("Formatting metadata directory"),
+      "Failed to find formatting message in output: " + stream.toString())
+  }
+  
+  @Test
+  def testFormatWithInvalidFeatureThrowsError(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultStaticQuorumProperties)
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+
+    // Test with an invalid feature that doesn't exist
+    val exception = assertThrows(classOf[FormatterException], () => {
+      runFormatCommand(stream, properties, Seq(
+        "--release-version", "3.7-IV0",
+        "--feature", "stream.version=1"))
+    })
+
+    assertTrue(exception.getMessage.contains("Unsupported feature: stream.version."))
+  }
+
+  @Test
+  def testFormatWithStandaloneFlagOnBrokerFails(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.setProperty("process.roles", "broker")
+    properties.setProperty("node.id", "0")
+    properties.setProperty("controller.listener.names", "CONTROLLER")
+    properties.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
     assertEquals("You can only use --standalone on a controller.",
       assertThrows(classOf[TerseFailure],
         () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
+  }
+
+  @Test
+  def testFormatWithStandaloneFailsWithStaticVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
+    assertEquals("You cannot specify controller.quorum.voters and " +
+      "format the node with --initial-controllers or --standalone. If you " +
+      "want to use dynamic quorum, please remove controller.quorum.voters and " +
+      "specify controller.quorum.bootstrap.servers instead.",
+      assertThrows(classOf[TerseFailure],
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
+    )
+  }
+
+  @Test
+  def testFormatWithInitialControllersFailsWithStaticVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String](
+      "--release-version", "3.9-IV0",
+      "--initial-controllers",
+      "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ,"
+    )
+    assertEquals("You cannot specify controller.quorum.voters and " +
+      "format the node with --initial-controllers or --standalone. If you " +
+      "want to use dynamic quorum, please remove controller.quorum.voters and " +
+      "specify controller.quorum.bootstrap.servers instead.",
+      assertThrows(classOf[TerseFailure],
+        () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage
+    )
+  }
+
+  @Test
+  def testFormatWithNoInitialControllersPassesWithVotersConfig(): Unit = {
+    val availableDirs = Seq(TestUtils.tempDir())
+    val properties = new Properties()
+    properties.putAll(defaultDynamicQuorumProperties)
+    properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "0@localhost:8020")
+    properties.setProperty("log.dirs", availableDirs.mkString(","))
+    val stream = new ByteArrayOutputStream()
+    val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--no-initial-controllers")
+    assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
   }
 
   @ParameterizedTest

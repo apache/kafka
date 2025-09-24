@@ -127,7 +127,7 @@ public class RemoteIndexCacheTest {
     }
 
     @AfterEach
-    public void cleanup() {
+    public void cleanup() throws InterruptedException {
         reset(rsm);
         // the files created for the test will be deleted automatically on thread exit since we use temp dir
         Utils.closeQuietly(cache, "RemoteIndexCache created for unit test");
@@ -172,15 +172,15 @@ public class RemoteIndexCacheTest {
         OffsetIndex offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex();
         OffsetPosition offsetPosition1 = offsetIndex.entry(1);
         // this call should have invoked fetchOffsetIndex, fetchTimestampIndex once
-        int resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset);
-        assertEquals(offsetPosition1.position, resultPosition);
+        int resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset());
+        assertEquals(offsetPosition1.position(), resultPosition);
         verifyFetchIndexInvocation(1, List.of(IndexType.OFFSET, IndexType.TIMESTAMP));
 
         // this should not cause fetching index from RemoteStorageManager as it is already fetched earlier
         reset(rsm);
         OffsetPosition offsetPosition2 = offsetIndex.entry(2);
-        int resultPosition2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset);
-        assertEquals(offsetPosition2.position, resultPosition2);
+        int resultPosition2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset());
+        assertEquals(offsetPosition2.position(), resultPosition2);
         assertNotNull(cache.getIndexEntry(rlsMetadata));
         verifyNoInteractions(rsm);
     }
@@ -219,7 +219,7 @@ public class RemoteIndexCacheTest {
         // offsetIndex.lookup() returns OffsetPosition(baseOffset, 0) for offsets smaller than the last entry in the offset index.
         OffsetPosition nonExistentOffsetPosition = new OffsetPosition(baseOffset, 0);
         long lowerOffsetThanBaseOffset = offsetIndex.baseOffset() - 1;
-        assertEquals(nonExistentOffsetPosition.position, cache.lookupOffset(rlsMetadata, lowerOffsetThanBaseOffset));
+        assertEquals(nonExistentOffsetPosition.position(), cache.lookupOffset(rlsMetadata, lowerOffsetThanBaseOffset));
     }
 
     @Test
@@ -331,14 +331,26 @@ public class RemoteIndexCacheTest {
         verify(cacheEntry.offsetIndex()).renameTo(any(File.class));
         verify(cacheEntry.txnIndex()).renameTo(any(File.class));
 
+        // wait until the delete method is invoked
+        TestUtils.waitForCondition(() -> {
+            try {
+                verify(cacheEntry.timeIndex()).deleteIfExists();
+                verify(cacheEntry.offsetIndex()).deleteIfExists();
+                verify(cacheEntry.txnIndex()).deleteIfExists();
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }, "Failed to delete index file");
+
         // verify no index files on disk
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isEmpty(),
                 "Offset index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isEmpty(),
                 "Txn index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isEmpty(),
                 "Time index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isEmpty(),
                 "Index file marked for deletion should not be present on disk at " + tpDir.toPath());
     }
 
@@ -1076,12 +1088,12 @@ public class RemoteIndexCacheTest {
                 name -> name.contains(segmentUuid.toString()) && name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
         // Ensure that the `indexEntry` object still able to access the renamed index files after being marked for deletion
         OffsetPosition offsetPosition = indexEntry.offsetIndex().entry(2);
-        assertEquals(offsetPosition.position, indexEntry.lookupOffset(offsetPosition.offset).position);
+        assertEquals(offsetPosition.position(), indexEntry.lookupOffset(offsetPosition.offset()).position());
         assertNull(cache.internalCache().asMap().get(segmentUuid));
         verifyFetchIndexInvocation(1);
 
         // Once the entry gets removed from cache, the subsequent call to the cache should re-fetch the entry from remote.
-        assertEquals(offsetPosition.position, cache.lookupOffset(rlsMetadata, offsetPosition.offset));
+        assertEquals(offsetPosition.position(), cache.lookupOffset(rlsMetadata, offsetPosition.offset()));
         verifyFetchIndexInvocation(2);
         RemoteIndexCache.Entry indexEntry2 = cache.getIndexEntry(rlsMetadata);
         assertNotNull(indexEntry2);
@@ -1099,18 +1111,18 @@ public class RemoteIndexCacheTest {
         assertEquals(3, countFiles(cacheDir, name -> true));
         assertEquals(3, countFiles(cacheDir,
                 name -> name.contains(segmentUuid.toString()) && name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
-        assertEquals(offsetPosition.position, indexEntry.lookupOffset(offsetPosition.offset).position);
-        assertEquals(offsetPosition.position, indexEntry2.lookupOffset(offsetPosition.offset).position);
+        assertEquals(offsetPosition.position(), indexEntry.lookupOffset(offsetPosition.offset()).position());
+        assertEquals(offsetPosition.position(), indexEntry2.lookupOffset(offsetPosition.offset()).position());
 
         indexEntry.cleanup();
         assertEquals(0, countFiles(cacheDir, name -> true));
-        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset));
-        assertEquals(offsetPosition.position, indexEntry2.lookupOffset(offsetPosition.offset).position);
+        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
+        assertEquals(offsetPosition.position(), indexEntry2.lookupOffset(offsetPosition.offset()).position());
 
         indexEntry2.cleanup();
         assertEquals(0, countFiles(cacheDir, name -> true));
-        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset));
-        assertThrows(IllegalStateException.class, () -> indexEntry2.lookupOffset(offsetPosition.offset));
+        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
+        assertThrows(IllegalStateException.class, () -> indexEntry2.lookupOffset(offsetPosition.offset()));
     }
 
     private int countFiles(File cacheDir, Predicate<String> condition) {

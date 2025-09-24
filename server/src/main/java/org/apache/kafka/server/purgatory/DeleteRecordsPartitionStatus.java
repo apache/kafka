@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.purgatory;
 
-
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult;
 import org.apache.kafka.common.protocol.Errors;
 

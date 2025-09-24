@@ -97,6 +97,27 @@ class KafkaVersion(LooseVersion):
     def supports_feature_command(self):
         return self >= V_3_8_0
 
+    def supports_command_config(self):
+        # According to KIP-1147, --producer.config and --consumer.config have been deprecated and will be removed in future versions
+        # For backward compatibility, we select the configuration based on node version:
+        # - For versions 4.2.0 and above, use --command-config
+        # - For older versions, continue using --producer.config or --consumer.config
+        return self >= V_4_2_0
+
+    def supports_command_property(self):
+        # According to KIP-1147, --producer-property and --consumer-property have been deprecated and will be removed in future versions
+        # For backward compatibility, we select the configuration based on node version:
+        # - For versions 4.2.0 and above, use --command-property
+        # - For older versions, continue using --producer-property or --consumer-property
+        return self >= V_4_2_0
+
+    def supports_formatter_property(self):
+        # According to KIP-1147, --property has been deprecated and will be removed in future versions
+        # For backward compatibility, we select the configuration based on node version:
+        # - For versions 4.2.0 and above, use --formatter-property
+        # - For older versions, continue using --property
+        return self >= V_4_2_0
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
@@ -111,7 +132,7 @@ DEV_VERSION = KafkaVersion("4.2.0-SNAPSHOT")
 
 LATEST_STABLE_TRANSACTION_VERSION = 2
 # This should match the LATEST_PRODUCTION version defined in MetadataVersion.java
-LATEST_STABLE_METADATA_VERSION = "4.0-IV3"
+LATEST_STABLE_METADATA_VERSION = "4.1-IV1"
 
 # 2.1.x versions
 V_2_1_0 = KafkaVersion("2.1.0")
@@ -223,3 +244,7 @@ LATEST_4_0 = V_4_0_0
 # 4.1.x version
 V_4_1_0 = KafkaVersion("4.1.0")
 LATEST_4_1 = V_4_1_0
+
+# 4.2.x version
+V_4_2_0 = KafkaVersion("4.2.0")
+LATEST_4_2 = V_4_2_0
