@@ -619,7 +619,7 @@ class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
 
-        // begin epoch requests should be sent out every beginQuorumEpochTimeoutMs
+        // begin epoch requests sent out every beginQuorumEpochTimeoutMs if replicas have not fetched
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
         context.client.poll();
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
@@ -651,7 +651,7 @@ class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
         assertEquals(OptionalInt.of(localId.id()), context.currentLeader());
 
-        // begin epoch requests should be sent out every beginQuorumEpochTimeoutMs
+        // begin epoch requests sent out every beginQuorumEpochTimeoutMs if replicas have not fetched
         context.time.sleep(context.beginQuorumEpochTimeoutMs);
         context.client.poll();
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));

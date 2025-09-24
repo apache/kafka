@@ -188,11 +188,12 @@ public class LeaderState<T> implements EpochState {
         beginQuorumEpochTimer.reset(beginQuorumEpochTimeoutMs);
     }
 
+    // Leader don't need to send begin quorum requests to replicas which have fetched recently.
     public Set<ReplicaKey> needToSendBeginQuorumRequests(long currentTimeMs) {
         Set<ReplicaKey> replicaKeys = new HashSet<>();
         beginQuorumEpochTimer.update(currentTimeMs);
         for (ReplicaState state : voterStates.values()) {
-            if (beginQuorumEpochTimer.currentTimeMs() - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs
+            if (currentTimeMs - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs
                 || !state.hasAcknowledgedLeader) {
                 replicaKeys.add(state.replicaKey());
             }
