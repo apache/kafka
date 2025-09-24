@@ -69,7 +69,6 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -93,14 +92,14 @@ public class StreamsGroupCommand {
         int exitCode = 0;
         try {
             opts = new StreamsGroupCommandOptions(args);
-            Objects.requireNonNull(opts).checkArgs();
+            opts.checkArgs();
             // should have exactly one action
             long numberOfActions = Stream.of(
-                    opts.listOpt,
-                    opts.describeOpt,
-                    opts.resetOffsetsOpt,
-                    opts.deleteOpt,
-                    opts.deleteOffsetsOpt
+                opts.listOpt,
+                opts.describeOpt,
+                opts.resetOffsetsOpt,
+                opts.deleteOpt,
+                opts.deleteOffsetsOpt
             ).filter(opts.options::has).count();
             if (numberOfActions != 1)
                 throw new IllegalArgumentException("Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
@@ -124,7 +123,7 @@ public class StreamsGroupCommand {
         return exitCode;
     }
 
-    public static void run(StreamsGroupCommandOptions opts) throws IllegalArgumentException, ExecutionException, InterruptedException {
+    public static void run(StreamsGroupCommandOptions opts) throws ExecutionException, InterruptedException {
         try (StreamsGroupService streamsGroupService = new StreamsGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt)) {
                 streamsGroupService.listGroups();
