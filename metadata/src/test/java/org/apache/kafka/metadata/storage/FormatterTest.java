@@ -32,6 +32,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -74,7 +75,6 @@ public class FormatterTest {
     private static final int DEFAULT_NODE_ID = 1;
 
     private static final Uuid DEFAULT_CLUSTER_ID = Uuid.fromString("b3dGE68sQQKzfk80C_aLZw");
-    private static final String KRAFT_VERSION = "kraft.version";
 
     static class TestEnv implements AutoCloseable {
         final List<String> directories;
@@ -424,14 +424,14 @@ public class FormatterTest {
         try (TestEnv testEnv = new TestEnv(2)) {
             FormatterContext formatter1 = testEnv.newFormatter();
             if (specifyKRaftVersion) {
-                formatter1.formatter.setFeatureLevel(KRAFT_VERSION, (short) 1);
+                formatter1.formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME, (short) 1);
             }
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setInitialControllers(DynamicVoters.
                 parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.setHasDynamicQuorum(true);
             formatter1.formatter.run();
-            assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRAFT_VERSION));
+            assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
             assertEquals(List.of(
                 "Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata(),
                 String.format("Formatting data directory %s with %s %s.",
@@ -459,7 +459,7 @@ public class FormatterTest {
     public void testFormatWithInitialVotersFailsWithOlderKraftVersion() throws Exception {
         try (TestEnv testEnv = new TestEnv(2)) {
             FormatterContext formatter1 = testEnv.newFormatter();
-            formatter1.formatter.setFeatureLevel(KRAFT_VERSION, (short) 0);
+            formatter1.formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME, (short) 0);
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setInitialControllers(DynamicVoters.
                     parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
@@ -478,7 +478,7 @@ public class FormatterTest {
     public void testFormatWithStaticQuorumFailsWithNewerKraftVersion() throws Exception {
         try (TestEnv testEnv = new TestEnv(2)) {
             FormatterContext formatter1 = testEnv.newFormatter();
-            formatter1.formatter.setFeatureLevel(KRAFT_VERSION, (short) 1);
+            formatter1.formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME, (short) 1);
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             assertFalse(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
@@ -496,13 +496,13 @@ public class FormatterTest {
         try (TestEnv testEnv = new TestEnv(2)) {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_8_IV0);
-            formatter1.formatter.setFeatureLevel(KRAFT_VERSION, (short) 1);
+            formatter1.formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME, (short) 1);
             formatter1.formatter.setInitialControllers(DynamicVoters.
                     parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setHasDynamicQuorum(true);
             formatter1.formatter.run();
-            assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRAFT_VERSION));
+            assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
         }
     }
 
@@ -515,9 +515,9 @@ public class FormatterTest {
             formatter1.formatter.setHasDynamicQuorum(hasDynamicQuorum);
             formatter1.formatter.run();
             if (hasDynamicQuorum) {
-                assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRAFT_VERSION));
+                assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
             } else {
-                assertEquals((short) 0, formatter1.formatter.featureLevels.get(KRAFT_VERSION));
+                assertEquals((short) 0, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
             }
         }
     }
@@ -558,7 +558,7 @@ public class FormatterTest {
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             assertFalse(formatter1.formatter.hasDynamicQuorum());
             formatter1.formatter.run();
-            assertEquals((short) 0, formatter1.formatter.featureLevels.get(KRAFT_VERSION));
+            assertEquals((short) 0, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
             assertEquals(List.of(
                     "Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata(),
                     String.format("Formatting data directory %s with %s %s.",

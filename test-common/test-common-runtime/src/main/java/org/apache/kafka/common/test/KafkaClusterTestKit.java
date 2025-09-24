@@ -490,7 +490,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             StringBuilder dynamicVotersBuilder = new StringBuilder();
             String prefix = "";
             if (standalone) {
-                if (nodeId == TestKitDefaults.CONTROLLER_ID_OFFSET) {
+                if (nodeId == TestKitDefaults.BROKER_ID_OFFSET + TestKitDefaults.CONTROLLER_ID_OFFSET) {
                     final var controllerNode = nodes.controllerNodes().get(nodeId);
                     dynamicVotersBuilder.append(
                         String.format(

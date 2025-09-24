@@ -306,15 +306,15 @@ public class Formatter {
                             ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
                 }
             }
-            if (!featureName.equals(KRaftVersion.FEATURE_NAME)) {
-                newFeatureLevels.put(featureName, level);
-            }
+            newFeatureLevels.put(featureName, level);
         }
         newFeatureLevels.put(MetadataVersion.FEATURE_NAME, releaseVersion.featureLevel());
         // Add default values for features that were not specified.
         supportedFeatures.forEach(supportedFeature -> {
-            if (!newFeatureLevels.containsKey(supportedFeature.featureName()) &&
-                !supportedFeature.featureName().equals(KRaftVersion.FEATURE_NAME)) {
+            if (supportedFeature.featureName().equals(KRaftVersion.FEATURE_NAME)) {
+                newFeatureLevels.put(KRaftVersion.FEATURE_NAME, effectiveKRaftFeatureLevel(
+                    Optional.ofNullable(newFeatureLevels.get(KRaftVersion.FEATURE_NAME))));
+            } else if (!newFeatureLevels.containsKey(supportedFeature.featureName())) {
                 newFeatureLevels.put(supportedFeature.featureName(),
                     supportedFeature.defaultLevel(releaseVersion));
             }
@@ -331,10 +331,6 @@ public class Formatter {
                 Feature.validateVersion(featureVersion, newFeatureLevels);
             }
         }
-        // Only add kraft.version after validation, because it only depends
-        // on format arguments, not the release version.
-        newFeatureLevels.put(KRaftVersion.FEATURE_NAME, effectiveKRaftFeatureLevel(
-            Optional.ofNullable(featureLevels.get(KRaftVersion.FEATURE_NAME))));
         return newFeatureLevels;
     }
 
@@ -352,10 +348,9 @@ public class Formatter {
             if (configuredKRaftVersionLevel.get() == 0) {
                 if (hasDynamicQuorum()) {
                     throw new FormatterException(
-                        "Cannot set kraft.version to " + configuredKRaftVersionLevel.get() +
-                        " if controller.quorum.voters is empty and one of the flags --standalone, " +
-                        "--initial-controllers, or --no-initial-controllers is used. For dynamic controllers support, " +
-                        "try removing the --feature flag for kraft.version."
+                        "Cannot set kraft.version to 0 if controller.quorum.voters is empty and one of the flags " +
+                        "--standalone, --initial-controllers, or --no-initial-controllers is used. For dynamic " +
+                        "controllers support, try removing the --feature flag for kraft.version."
                     );
                 }
             } else {
