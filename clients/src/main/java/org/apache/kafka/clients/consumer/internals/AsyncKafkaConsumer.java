@@ -187,25 +187,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private class BackgroundEventProcessor implements EventProcessor<BackgroundEvent> {
 
-        private Optional<StreamsRebalanceListener> streamsRebalanceListener = Optional.empty();
-        private final Optional<StreamsRebalanceData> streamsRebalanceData;
-
-        public BackgroundEventProcessor() {
-            this.streamsRebalanceData = Optional.empty();
-        }
-
-        public BackgroundEventProcessor(final Optional<StreamsRebalanceData> streamsRebalanceData) {
-            this.streamsRebalanceData = streamsRebalanceData;
-        }
-
-        private void setStreamsRebalanceListener(final StreamsRebalanceListener streamsRebalanceListener) {
-            if (streamsRebalanceData.isEmpty()) {
-                throw new IllegalStateException("Background event processor was not created to be used with Streams " +
-                    "rebalance protocol events");
-            }
-            this.streamsRebalanceListener = Optional.of(streamsRebalanceListener);
-        }
-
         @Override
         public void process(final BackgroundEvent event) {
             switch (event.type()) {
@@ -278,44 +259,26 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         private StreamsOnTasksRevokedCallbackCompletedEvent invokeOnTasksRevokedCallback(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke,
                                                                                          final CompletableFuture<Void> future) {
-            final Optional<Exception> exceptionFromCallback = streamsRebalanceListener().onTasksRevoked(activeTasksToRevoke);
+            final Optional<Exception> exceptionFromCallback = Optional.ofNullable(streamsRebalanceListenerInvoker().invokeTasksRevoked(activeTasksToRevoke));
             final Optional<KafkaException> error = exceptionFromCallback.map(e -> ConsumerUtils.maybeWrapAsKafkaException(e, "Task revocation callback throws an error"));
             return new StreamsOnTasksRevokedCallbackCompletedEvent(future, error);
         }
 
         private StreamsOnTasksAssignedCallbackCompletedEvent invokeOnTasksAssignedCallback(final StreamsRebalanceData.Assignment assignment,
                                                                                            final CompletableFuture<Void> future) {
-            final Optional<KafkaException> error;
-            final Optional<Exception> exceptionFromCallback = streamsRebalanceListener().onTasksAssigned(assignment);
-            if (exceptionFromCallback.isPresent()) {
-                error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "Task assignment callback throws an error"));
-            } else {
-                error = Optional.empty();
-                streamsRebalanceData().setReconciledAssignment(assignment);
-            }
+            final Optional<Exception> exceptionFromCallback = Optional.ofNullable(streamsRebalanceListenerInvoker().invokeTasksAssigned(assignment));
+            final Optional<KafkaException> error = exceptionFromCallback.map(e -> ConsumerUtils.maybeWrapAsKafkaException(e, "Task assignment callback throws an error"));
             return new StreamsOnTasksAssignedCallbackCompletedEvent(future, error);
         }
 
         private StreamsOnAllTasksLostCallbackCompletedEvent invokeOnAllTasksLostCallback(final CompletableFuture<Void> future) {
-            final Optional<KafkaException> error;
-            final Optional<Exception> exceptionFromCallback = streamsRebalanceListener().onAllTasksLost();
-            if (exceptionFromCallback.isPresent()) {
-                error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "All tasks lost callback throws an error"));
-            } else {
-                error = Optional.empty();
-                streamsRebalanceData().setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);
-            }
+            final Optional<Exception> exceptionFromCallback = Optional.ofNullable(streamsRebalanceListenerInvoker().invokeAllTasksLost());
+            final Optional<KafkaException> error = exceptionFromCallback.map(e -> ConsumerUtils.maybeWrapAsKafkaException(e, "All tasks lost callback throws an error"));
             return new StreamsOnAllTasksLostCallbackCompletedEvent(future, error);
         }
 
-        private StreamsRebalanceData streamsRebalanceData() {
-            return streamsRebalanceData.orElseThrow(
-                () -> new IllegalStateException("Background event processor was not created to be used with Streams " +
-                    "rebalance protocol events"));
-        }
-
-        private StreamsRebalanceListener streamsRebalanceListener() {
-            return streamsRebalanceListener.orElseThrow(
+        private StreamsRebalanceListenerInvoker streamsRebalanceListenerInvoker() {
+            return streamsRebalanceListenerInvoker.orElseThrow(
                 () -> new IllegalStateException("Background event processor was not created to be used with Streams " +
                     "rebalance protocol events"));
         }
@@ -367,6 +330,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
+    private final Optional<StreamsRebalanceListenerInvoker> streamsRebalanceListenerInvoker;
     // Last triggered async commit future. Used to wait until all previous async commits are completed.
     // We only need to keep track of the last one, since they are guaranteed to complete in order.
     private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> lastPendingAsyncCommit = null;
@@ -517,7 +481,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     time,
                     new RebalanceCallbackMetricsManager(metrics)
             );
-            this.backgroundEventProcessor = new BackgroundEventProcessor(streamsRebalanceData);
+            this.streamsRebalanceListenerInvoker = streamsRebalanceData.map(s ->
+                new StreamsRebalanceListenerInvoker(logContext, s));
+            this.backgroundEventProcessor = new BackgroundEventProcessor();
             this.backgroundEventReaper = backgroundEventReaperFactory.build(logContext);
 
             // The FetchCollector is only used on the application thread.
@@ -577,6 +543,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.time = time;
         this.backgroundEventQueue = backgroundEventQueue;
         this.rebalanceListenerInvoker = rebalanceListenerInvoker;
+        this.streamsRebalanceListenerInvoker = Optional.empty();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
         this.backgroundEventReaper = backgroundEventReaper;
         this.metrics = metrics;
@@ -699,6 +666,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 networkClientDelegateSupplier,
                 requestManagersSupplier,
                 asyncConsumerMetrics);
+        this.streamsRebalanceListenerInvoker = Optional.empty();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
         this.backgroundEventReaper = new CompletableEventReaper(logContext);
     }
@@ -1477,7 +1445,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             () -> autoCommitOnClose(closeTimer), firstException);
         swallow(log, Level.ERROR, "Failed to stop finding coordinator",
             this::stopFindCoordinatorOnClose, firstException);
-        swallow(log, Level.ERROR, "Failed to release group assignment",
+        swallow(log, Level.ERROR, "Failed to run rebalance callbacks",
             this::runRebalanceCallbacksOnClose, firstException);
         swallow(log, Level.ERROR, "Failed to leave group while closing consumer",
             () -> leaveGroupOnClose(closeTimer, membershipOperation), firstException);
@@ -1527,26 +1495,39 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void runRebalanceCallbacksOnClose() {
-        if (groupMetadata.get().isEmpty() || rebalanceListenerInvoker == null)
+        if (groupMetadata.get().isEmpty())
             return;
 
         int memberEpoch = groupMetadata.get().get().generationId();
 
-        Set<TopicPartition> assignedPartitions = groupAssignmentSnapshot.get();
+        Exception error = null;
 
-        if (assignedPartitions.isEmpty())
-            // Nothing to revoke.
-            return;
+        if (streamsRebalanceListenerInvoker != null && streamsRebalanceListenerInvoker.isPresent()) {
 
-        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-        droppedPartitions.addAll(assignedPartitions);
+            if (memberEpoch > 0) {
+                error = streamsRebalanceListenerInvoker.get().invokeAllTasksRevoked();
+            } else {
+                error = streamsRebalanceListenerInvoker.get().invokeAllTasksLost();
+            }
 
-        final Exception error;
+        } else if (rebalanceListenerInvoker != null) {
 
-        if (memberEpoch > 0)
-            error = rebalanceListenerInvoker.invokePartitionsRevoked(droppedPartitions);
-        else
-            error = rebalanceListenerInvoker.invokePartitionsLost(droppedPartitions);
+            Set<TopicPartition> assignedPartitions = groupAssignmentSnapshot.get();
+
+            if (assignedPartitions.isEmpty())
+                // Nothing to revoke.
+                return;
+
+            SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+            droppedPartitions.addAll(assignedPartitions);
+
+            if (memberEpoch > 0) {
+                error = rebalanceListenerInvoker.invokePartitionsRevoked(droppedPartitions);
+            } else {
+                error = rebalanceListenerInvoker.invokePartitionsLost(droppedPartitions);
+            }
+
+        }
 
         if (error != null)
             throw ConsumerUtils.maybeWrapAsKafkaException(error);
@@ -1963,8 +1944,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     public void subscribe(Collection<String> topics, StreamsRebalanceListener streamsRebalanceListener) {
+
+        streamsRebalanceListenerInvoker
+            .orElseThrow(() -> new IllegalStateException("Consumer was not created to be used with Streams rebalance protocol events"))
+            .setRebalanceListener(streamsRebalanceListener);
+
         subscribeInternal(topics, Optional.empty());
-        backgroundEventProcessor.setStreamsRebalanceListener(streamsRebalanceListener);
     }
 
     @Override

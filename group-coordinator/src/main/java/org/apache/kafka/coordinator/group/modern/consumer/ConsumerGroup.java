@@ -38,7 +38,6 @@ import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
@@ -120,11 +119,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     private final TimelineHashMap<String, Integer> serverAssignors;
 
     /**
-     * The coordinator metrics.
-     */
-    private final GroupCoordinatorMetricsShard metrics;
-
-    /**
      * The number of members that use the classic protocol.
      */
     private final TimelineInteger numClassicProtocolMembers;
@@ -155,14 +149,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
-        String groupId,
-        GroupCoordinatorMetricsShard metrics
+        String groupId
     ) {
         super(snapshotRegistry, groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.metrics = Objects.requireNonNull(metrics);
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
         this.classicProtocolMembersSupportedProtocols = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -1130,7 +1122,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * Create a new consumer group according to the given classic group.
      *
      * @param snapshotRegistry  The SnapshotRegistry.
-     * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
      * @param topicHashCache    The cache for topic hashes.
      * @param metadataImage     The current metadata image for the Kafka cluster.
@@ -1141,13 +1132,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     public static ConsumerGroup fromClassicGroup(
         SnapshotRegistry snapshotRegistry,
-        GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
         Map<String, Long> topicHashCache,
         CoordinatorMetadataImage metadataImage
     ) {
         String groupId = classicGroup.groupId();
-        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
         consumerGroup.setGroupEpoch(classicGroup.generationId());
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 

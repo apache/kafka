@@ -1532,6 +1532,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         try {
             records = mainConsumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
+            log.info("Found no valid offset for {} partitions, resetting.", e.partitions().size());
             resetOffsets(e.partitions(), e);
         }
 
@@ -1647,14 +1648,14 @@ public class StreamThread extends Thread implements ProcessingThread {
                         addToResetList(
                             partition,
                             seekToBeginning,
-                            "Setting topic '{}' to consume from earliest offset",
+                            "Setting topic '{}' to consume from 'earliest' offset",
                             loggedTopics
                         );
                     } else if (resetPolicy == AutoOffsetResetStrategy.LATEST) {
                         addToResetList(
                             partition,
                             seekToEnd,
-                            "Setting topic '{}' to consume from latest offset",
+                            "Setting topic '{}' to consume from 'latest' offset",
                             loggedTopics
                         );
                     } else if (resetPolicy.type() == AutoOffsetResetStrategy.StrategyType.BY_DURATION) {
@@ -1662,7 +1663,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                             partition,
                             seekByDuration,
                             resetPolicy.duration().get(),
-                            "Setting topic '{}' to consume from by_duration:{}",
+                            "Setting topic '{}' to consume from 'by_duration:{}'",
                             resetPolicy.duration().get().toString(),
                             loggedTopics
                         );
@@ -1778,12 +1779,12 @@ public class StreamThread extends Thread implements ProcessingThread {
     private void addToResetList(
         final TopicPartition partition,
         final Set<TopicPartition> partitions,
-        final String resetPolicy,
+        final String logMessage,
         final Set<String> loggedTopics
     ) {
         final String topic = partition.topic();
         if (loggedTopics.add(topic)) {
-            log.info("Setting topic '{}' to consume from {} offset", topic, resetPolicy);
+            log.info(logMessage, topic);
         }
         partitions.add(partition);
     }
