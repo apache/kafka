@@ -634,16 +634,18 @@ class KafkaRaftClientTest {
         context.assertSentBeginQuorumEpochRequest(epoch, Set.of(remoteId1, remoteId2));
     }
 
-    @Test
-    public void testBeginQuorumShouldNotSendAfterFetchRequest() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testBeginQuorumShouldNotSendAfterFetchRequest(boolean withKip853Rpc) throws Exception {
         ReplicaKey localId = replicaKey(randomReplicaId(), true);
         int remoteId1 = localId.id() + 1;
         int remoteId2 = localId.id() + 2;
-        ReplicaKey replicaKey1 = replicaKey(remoteId1, true);
-        ReplicaKey replicaKey2 = replicaKey(remoteId2, true);
+        ReplicaKey replicaKey1 = replicaKey(remoteId1, withKip853Rpc);
+        ReplicaKey replicaKey2 = replicaKey(remoteId2, withKip853Rpc);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId.id(), localId.directoryId().get())
-                .withRaftProtocol(KIP_853_PROTOCOL)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+                localId.id(), localId.directoryId().get())
+                .withKip853Rpc(withKip853Rpc)
                 .withStartingVoters(VoterSetTest.voterSet(Stream.of(localId, replicaKey1, replicaKey2)), KRaftVersion.KRAFT_VERSION_1)
                 .build();
 
