@@ -767,11 +767,10 @@ public class SslTransportLayerTest {
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testNetworkThreadTimeRecorded(Args args) throws Exception {
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         channelBuilder.configure(args.sslClientConfigs);
         try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
-                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
+                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, new LogContext())) {
 
             String node = "0";
             server = createEchoServer(args, SecurityProtocol.SSL);
@@ -967,7 +966,7 @@ public class SslTransportLayerTest {
     }
 
     private SslChannelBuilder newClientChannelBuilder() {
-        return new SslChannelBuilder(ConnectionMode.CLIENT, null, false, new LogContext());
+        return new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
     }
 
     private void testClose(Args args, SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
@@ -1311,10 +1310,9 @@ public class SslTransportLayerTest {
     }
 
     private Selector createSelector(Args args) {
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         channelBuilder.configure(args.sslClientConfigs);
-        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
+        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
         return selector;
     }
 
@@ -1371,7 +1369,7 @@ public class SslTransportLayerTest {
         int flushDelayCount = 0;
 
         public TestSslChannelBuilder(ConnectionMode connectionMode) {
-            super(connectionMode, null, false, new LogContext());
+            super(connectionMode, null, false);
         }
 
         public void configureBufferSizes(Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) {

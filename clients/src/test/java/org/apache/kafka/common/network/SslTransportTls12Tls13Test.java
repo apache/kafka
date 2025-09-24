@@ -50,10 +50,9 @@ public class SslTransportTls12Tls13Test {
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
 
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
+        this.selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
     }
 
     @AfterEach
