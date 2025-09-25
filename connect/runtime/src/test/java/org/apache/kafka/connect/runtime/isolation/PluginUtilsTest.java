@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -41,13 +42,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PluginUtilsTest {
@@ -600,6 +605,91 @@ public class PluginUtilsTest {
         Map<String, String> expectedAliases = new HashMap<>();
         expectedAliases.put("CollidingConverter", CollidingConverter.class.getName());
         assertEquals(expectedAliases, actualAliases);
+    }
+
+    @Test
+    public void testPluginPathIsNull() {
+        Set<Path> actualPath = PluginUtils.pluginLocations(null, true);
+        assertTrue(actualPath.isEmpty());
+    }
+
+    @Test
+    public void testPluginPathIsDirectory() throws IOException {
+        Path connectorA = Files.createDirectories(pluginPath.resolve("connectorA"));
+        Path connectorB = Files.createDirectories(pluginPath.resolve("connectorB"));
+        Path transformC = Files.createDirectories(pluginPath.resolve("transformC"));
+
+        // not in PLUGIN_PATH_FILTER
+        Files.createFile(pluginPath.resolve("README.txt"));
+
+        Set<Path> actualPluginPath = PluginUtils.pluginLocations(pluginPath.toString(), true);
+
+        Set<Path> expectedPluginPath = new LinkedHashSet<>();
+        expectedPluginPath.add(transformC.toAbsolutePath());
+        expectedPluginPath.add(connectorB.toAbsolutePath());
+        expectedPluginPath.add(connectorA.toAbsolutePath());
+
+        assertEquals(expectedPluginPath, actualPluginPath);
+        actualPluginPath.forEach(p -> assertTrue(p.isAbsolute()));
+    }
+
+    @Test
+    public void testPluginPathIsArchive() throws IOException {
+        Path jarPluginPath = Files.createFile(pluginPath.resolve("converter.jar")).toAbsolutePath();
+        Set<Path> actualPluginPath = PluginUtils.pluginLocations(jarPluginPath.toString(), true);
+        assertEquals(Set.of(jarPluginPath), actualPluginPath);
+    }
+
+    @Test
+    public void testPluginIncludeClassFile() throws IOException {
+        Path pluginPath = this.pluginPath.resolve("plugins-with-class");
+        Files.createDirectories(pluginPath);
+        Path testClass = Files.createFile(pluginPath.resolve("Foo.class"));
+
+        Set<Path> actual = PluginUtils.pluginLocations(pluginPath.toString(), true);
+
+        assertEquals(Set.of(testClass.toAbsolutePath()), actual);
+    }
+
+    @Test
+    public void testPluginPathHaveEmptyElement() throws IOException {
+        Path connectorA = Files.createFile(pluginPath.resolve("connectorA.jar")).toAbsolutePath();
+        Path connectorB = Files.createFile(pluginPath.resolve("connectorB.jar")).toAbsolutePath();
+
+        // have empty element between the commas
+        String pluginPath = connectorA + ",," + connectorB;
+        Set<Path> actualPath = PluginUtils.pluginLocations(pluginPath, true);
+
+        Set<Path> expectedPath = new LinkedHashSet<>();
+        expectedPath.add(connectorA.toAbsolutePath());
+        expectedPath.add(connectorB.toAbsolutePath());
+
+        assertNotEquals(expectedPath, actualPath);
+
+        // need add current path
+        Path cwd = Paths.get("").toAbsolutePath();
+        try (DirectoryStream<Path> listing = Files.newDirectoryStream(cwd,
+                p -> Files.isDirectory(p) || PluginUtils.isArchive(p) || PluginUtils.isClassFile(p))) {
+            for (Path p : listing) {
+                expectedPath.add(p.toAbsolutePath());
+            }
+        }
+        assertEquals(expectedPath, actualPath);
+    }
+
+    @Test
+    public void testPluginPathNotExist() {
+        Path missing = pluginPath.resolve("this-path-should-not-exist");
+        assertFalse(Files.exists(missing));
+        Set<Path> actual = PluginUtils.pluginLocations(missing.toString(), false);
+        assertTrue(actual.isEmpty());
+    }
+
+    @Test
+    public void testPluginPathNotExistWithFailFast() {
+        Path missing = pluginPath.resolve("this-path-should-not-exist");
+        assertFalse(Files.exists(missing));
+        assertThrows(RuntimeException.class, () -> PluginUtils.pluginLocations(missing.toString(), true));
     }
 
     public static class CollidingConverter implements Converter, Versioned {

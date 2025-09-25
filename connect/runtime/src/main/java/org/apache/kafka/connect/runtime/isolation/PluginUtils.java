@@ -200,6 +200,19 @@ public class PluginUtils {
         return path.toString().toLowerCase(Locale.ROOT).endsWith(".class");
     }
 
+    /**
+     * Resolve plugin locations from a comma-separated plugin path.
+     * Each element may be a directory or a JAR/ZIP archive path.
+     * - For a directory, returns its immediate children that are directories, archives, or .class files.
+     * - For an archive, returns the archive itself.
+     * - Empty elements are interpreted as the current working directory.
+     * All returned paths are absolute. Non-existent or invalid elements are ignored unless {@code failFast} is true.
+     *
+     * @param pluginPath A comma-separated list of plugin roots; may be null
+     * @param failFast If true, throw a RuntimeException on the first invalid element; otherwise log and continue
+     * @return An ordered set of absolute paths representing plugin locations
+     * @throws RuntimeException When {@code failFast} is true and an invalid element is encountered
+     */
     public static Set<Path> pluginLocations(String pluginPath, boolean failFast) {
         if (pluginPath == null) {
             return Set.of();
@@ -209,7 +222,7 @@ public class PluginUtils {
         for (String path : pluginPathElements) {
             try {
                 Path pluginPathElement = Paths.get(path).toAbsolutePath();
-                if (pluginPath.isEmpty()) {
+                if (path.isEmpty()) {
                     log.warn("Plugin path element is empty, evaluating to {}.", pluginPathElement);
                 }
                 if (!Files.exists(pluginPathElement)) {
@@ -232,14 +245,19 @@ public class PluginUtils {
         return pluginLocations;
     }
 
+    /**
+     * Retrieves a list of paths from the given plugin path element.
+     * This method scans the directory specified by the provided path and collects
+     * all entries that match the {@code PLUGIN_PATH_FILTER} criteria, which includes directories,
+     * archives, or `.class` files.
+     *
+     * @param pluginPathElement the path to the directory to scan for plugin locations
+     * @return a list of paths that match the {@code PLUGIN_PATH_FILTER} criteria
+     * @throws IOException if an I/O error occurs while accessing the directory
+     */
     private static List<Path> pluginLocations(Path pluginPathElement) throws IOException {
         List<Path> locations = new ArrayList<>();
-        try (
-                DirectoryStream<Path> listing = Files.newDirectoryStream(
-                        pluginPathElement,
-                        PLUGIN_PATH_FILTER
-                )
-        ) {
+        try (DirectoryStream<Path> listing = Files.newDirectoryStream(pluginPathElement, PLUGIN_PATH_FILTER)) {
             for (Path dir : listing) {
                 locations.add(dir);
             }
