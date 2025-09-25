@@ -862,7 +862,7 @@ public abstract class AbstractStickyAssignorTest {
             assertEquals(assign.values().stream().mapToInt(List::size).sum(),
                     assign.values().stream().flatMap(List::stream).collect(Collectors.toSet()).size());
             for (List<TopicPartition> list: assign.values()) {
-                assertTrue(!list.isEmpty() && list.size() <= 2);
+                assertTrue(list.size() >= 1 && list.size() <= 2);
             }
         }
     }
