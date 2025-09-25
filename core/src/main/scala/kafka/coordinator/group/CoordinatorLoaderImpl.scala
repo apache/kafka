@@ -34,20 +34,38 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.jdk.CollectionConverters._
 
+object CoordinatorLoaderImpl {
+  /**
+   * The interval between updating the last committed offset during loading, in offsets. Smaller
+   * values commit more often at the expense of loading times when the workload is simple and does
+   * not create collections that need to participate in {@link CoordinatorPlayback} snapshotting.
+   * Larger values commit less often and allow more temporary data to accumulate before the next
+   * commit when the workload creates many temporary collections that need to be snapshotted.
+   *
+   * The value of 16,384 was chosen as a trade-off between the performance of these two workloads.
+   *
+   * When changing this value, please run the GroupCoordinatorShardLoadingBenchmark to evaluate
+   * the relative change in performance.
+   */
+  val DEFAULT_COMMIT_INTERVAL_OFFSETS = 16384L
+}
+
 /**
  * Coordinator loader which reads records from a partition and replays them
  * to a group coordinator.
  *
- * @param replicaManager  The replica manager.
- * @param deserializer    The deserializer to use.
- * @param loadBufferSize  The load buffer size.
+ * @param replicaManager        The replica manager.
+ * @param deserializer          The deserializer to use.
+ * @param loadBufferSize        The load buffer size.
+ * @param commitIntervalOffsets The interval between updating the last committed offset during loading, in offsets.
  * @tparam T The record type.
  */
 class CoordinatorLoaderImpl[T](
   time: Time,
   replicaManager: ReplicaManager,
   deserializer: Deserializer[T],
-  loadBufferSize: Int
+  loadBufferSize: Int,
+  commitIntervalOffsets: Long = CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
 ) extends CoordinatorLoader[T] with Logging {
   private val isRunning = new AtomicBoolean(true)
   private val scheduler = new KafkaScheduler(1)
@@ -99,7 +117,7 @@ class CoordinatorLoaderImpl[T](
           // the log end offset but the log is empty. This could happen with compacted topics.
           var readAtLeastOneRecord = true
 
-          var previousHighWatermark = -1L
+          var lastCommittedOffset = -1L
           var numRecords = 0L
           var numBytes = 0L
           while (currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get) {
@@ -208,10 +226,14 @@ class CoordinatorLoaderImpl[T](
               if (currentOffset >= currentHighWatermark) {
                 coordinator.updateLastWrittenOffset(currentOffset)
 
-                if (currentHighWatermark > previousHighWatermark) {
+                if (currentHighWatermark > lastCommittedOffset) {
                   coordinator.updateLastCommittedOffset(currentHighWatermark)
-                  previousHighWatermark = currentHighWatermark
+                  lastCommittedOffset = currentHighWatermark
                 }
+              } else if (currentOffset - lastCommittedOffset >= commitIntervalOffsets) {
+                coordinator.updateLastWrittenOffset(currentOffset)
+                coordinator.updateLastCommittedOffset(currentOffset)
+                lastCommittedOffset = currentOffset
               }
             }
             numBytes = numBytes + memoryRecords.sizeInBytes()
