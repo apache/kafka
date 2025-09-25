@@ -283,50 +283,12 @@ public class TestLinearWriteSpeed {
         }
     }
 
-    private static class Options {
-        private final OptionSpec<String> dirOpt;
-        private final OptionSpec<Long> bytesOpt;
-        private final OptionSpec<Integer> sizeOpt;
-        private final OptionSpec<Integer> messageSizeOpt;
-        private final OptionSpec<Integer> filesOpt;
-        private final OptionSpec<Long> reportingIntervalOpt;
-        private final OptionSpec<Integer> maxThroughputOpt;
-        private final OptionSpec<Long> flushIntervalOpt;
-        private final OptionSpec<String> compressionCodecOpt;
-        private final OptionSpec<Integer> compressionLevelOpt;
-        private final OptionSpec<Void> channelOpt;
-        private final OptionSpec<Void> logOpt;
-        private final OptionSpec<Void> mmapOpt;
-
-        private Options(
-            OptionSpec<String> dirOpt,
-            OptionSpec<Long> bytesOpt,
-            OptionSpec<Integer> sizeOpt,
-            OptionSpec<Integer> messageSizeOpt,
-            OptionSpec<Integer> filesOpt,
-            OptionSpec<Long> reportingIntervalOpt,
-            OptionSpec<Integer> maxThroughputOpt,
-            OptionSpec<Long> flushIntervalOpt,
-            OptionSpec<String> compressionCodecOpt,
-            OptionSpec<Integer> compressionLevelOpt,
-            OptionSpec<Void> channelOpt,
-            OptionSpec<Void> logOpt,
-            OptionSpec<Void> mmapOpt
-        ) {
-            this.dirOpt = dirOpt;
-            this.bytesOpt = bytesOpt;
-            this.sizeOpt = sizeOpt;
-            this.messageSizeOpt = messageSizeOpt;
-            this.filesOpt = filesOpt;
-            this.reportingIntervalOpt = reportingIntervalOpt;
-            this.maxThroughputOpt = maxThroughputOpt;
-            this.flushIntervalOpt = flushIntervalOpt;
-            this.compressionCodecOpt = compressionCodecOpt;
-            this.compressionLevelOpt = compressionLevelOpt;
-            this.channelOpt = channelOpt;
-            this.logOpt = logOpt;
-            this.mmapOpt = mmapOpt;
-        }
+    private record Options(OptionSpec<String> dirOpt, OptionSpec<Long> bytesOpt, OptionSpec<Integer> sizeOpt,
+                           OptionSpec<Integer> messageSizeOpt, OptionSpec<Integer> filesOpt,
+                           OptionSpec<Long> reportingIntervalOpt, OptionSpec<Integer> maxThroughputOpt,
+                           OptionSpec<Long> flushIntervalOpt, OptionSpec<String> compressionCodecOpt,
+                           OptionSpec<Integer> compressionLevelOpt, OptionSpec<Void> channelOpt,
+                           OptionSpec<Void> logOpt, OptionSpec<Void> mmapOpt) {
     }
 
     private static Options createOptions(OptionParser parser) {
