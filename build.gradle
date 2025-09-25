@@ -494,7 +494,7 @@ subprojects {
       it.canBeResolved
     }.any { config ->
       config.incoming.dependencies.any { dependency ->
-        "${dependency.group}:${dependency.name}" == "org.mockito:mockito-core"
+          "$dependency" == libs.mockitoCore
       }
     }
 
