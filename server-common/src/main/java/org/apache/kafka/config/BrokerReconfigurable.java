@@ -32,7 +32,7 @@ import java.util.Set;
  *   <li>Validating the new configuration before applying it via {@link #validateReconfiguration(AbstractConfig)}</li>
  *   <li>Applying the new configuration via {@link #reconfigure(AbstractConfig, AbstractConfig)}</li>
  * </ol>
- * <strong>Note: Since Kafka is eliminating Scala, developers should implement this interface instead of {@link kafka.server.BrokerReconfigurable}</strong>
+ * <strong>Note: Since Kafka 4.0, the Scala class {@code kafka.server.BrokerReconfigurable} has been removed as part of Scala elimination.</strong>
  */
 public interface BrokerReconfigurable {
     /**
