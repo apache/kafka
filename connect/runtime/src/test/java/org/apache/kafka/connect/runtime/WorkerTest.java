@@ -903,10 +903,6 @@ public class WorkerTest {
     @ValueSource(booleans = {true, false})
     public void testConnectorStatusMetricsGroup_tasksFailedToStart(boolean enableTopicCreation) {
         setup(enableTopicCreation);
-        ConcurrentMap<ConnectorTaskId, WorkerTask<?, ?>> tasks = new ConcurrentHashMap<>();
-        ConnectorTaskId taskId1 = new ConnectorTaskId("c1", 0);
-        ConnectorTaskId taskId2 = new ConnectorTaskId("c1", 1);
-
         mockKafkaClusterId();
         mockInternalConverters();
         mockFileConfigProvider();
@@ -919,10 +915,13 @@ public class WorkerTest {
                 noneConnectorClientConfigOverridePolicy);
         worker.herder = herder;
 
+        // Pass an empty tasks map to simulate all tasks failing to start
         Worker.ConnectorStatusMetricsGroup metricsGroup = new Worker.ConnectorStatusMetricsGroup(
-                worker.metrics(), tasks, herder
+                worker.metrics(), new ConcurrentHashMap<>(), herder
         );
 
+        ConnectorTaskId taskId1 = new ConnectorTaskId("c1", 0);
+        ConnectorTaskId taskId2 = new ConnectorTaskId("c1", 1);
         metricsGroup.recordTaskAdded(taskId1);
         metricsGroup.recordTaskAdded(taskId2);
         metricsGroup.recordTaskRemoved(taskId1);
