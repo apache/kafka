@@ -245,11 +245,7 @@ public final class ListOffsetsHandlerTest {
     }
 
     @Test
-    public void testListOffsetExceedMaxUnsupportVersionRetry() {
-        Map<TopicPartition, OffsetSpec> specificTimestampPartitions = new HashMap<>();
-        specificTimestampPartitions.put(timestampPartitionsByOffset.get(
-                ListOffsetsHandler.getOffsetFromSpec(OffsetSpec.earliestPendingUpload())), OffsetSpec.earliestPendingUpload());
-
+    public void testListOffsetExceedMaxUnsupportedVersionRetry() {
         ListOffsetsHandler handler =
                 new ListOffsetsHandler(offsetTimestampsByPartition, new ListOffsetsOptions(), logContext, defaultApiTimeoutMs);
 
@@ -267,6 +263,34 @@ public final class ListOffsetsHandlerTest {
         testHandleResponseUnsupportedVersion(OffsetSpec.latestTiered());
         testHandleResponseUnsupportedVersion(OffsetSpec.earliestPendingUpload());
     }
+
+    @Test
+    public void testUnsupportedVersionButNoPartitionMatch() {
+        int brokerId = 1;
+        OffsetSpec leastOffsetSpec = OffsetSpec.earliestPendingUpload();
+        UnsupportedVersionException uve = new UnsupportedVersionException("");
+        Map<TopicPartition, OffsetSpec> specificTimestampPartitions = new HashMap<>();
+        specificTimestampPartitions.put(timestampPartitionsByOffset.get(
+                ListOffsetsHandler.getOffsetFromSpec(OffsetSpec.earliestPendingUpload())), leastOffsetSpec);
+
+        final Map<TopicPartition, Long> nonSpecificTimestampPartitions = new HashMap<>(offsetTimestampsByPartition);
+        specificTimestampPartitions.forEach((k, v) -> nonSpecificTimestampPartitions.remove(k));
+
+        ListOffsetsHandler handler =
+                new ListOffsetsHandler(nonSpecificTimestampPartitions, new ListOffsetsOptions(), logContext, defaultApiTimeoutMs);
+        handler.setCurrentUnsupportedVersion(ListOffsetsHandler.getOffsetFromSpec(leastOffsetSpec));
+
+        for (int i = 0; i < ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size() - 1; ++i) {
+            assertEquals(
+                    mapToError(Set.of(), uve),
+                    handler.handleUnsupportedVersionException(brokerId, uve, specificTimestampPartitions.keySet()));
+            handler.downgradeOffsetTimestampVersion();
+        }
+        assertEquals(
+                mapToError(specificTimestampPartitions.keySet(), uve),
+                handler.handleUnsupportedVersionException(brokerId, uve, specificTimestampPartitions.keySet()));
+    }
+
 
     private void testHandleResponseUnsupportedVersion(OffsetSpec leastOffsetSpec) {
         int brokerId = 1;

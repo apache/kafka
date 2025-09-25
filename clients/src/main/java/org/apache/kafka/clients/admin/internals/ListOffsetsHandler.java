@@ -212,7 +212,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
         for (TopicPartition topicPartition : keys) {
             Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
-            if (offsetTimestamp == currentUnsupportedVersion && !accUnsupportedTimestampPartition.containsKey(topicPartition)) {
+            if (offsetTimestamp != null && offsetTimestamp == currentUnsupportedVersion && !accUnsupportedTimestampPartition.containsKey(topicPartition)) {
                 supportedTimestampPartitions.put(topicPartition, exception);
                 accUnsupportedTimestampPartition.put(topicPartition, exception);
             }
