@@ -48,7 +48,6 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -73,10 +72,10 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,7 +90,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -171,6 +169,15 @@ public class EosIntegrationTest {
 
     private String stateTmpDir;
 
+    private static java.util.stream.Stream<Arguments> groupProtocolAndProcessingThreadsParameters() {
+        return java.util.stream.Stream.of(
+            Arguments.of("classic", true),
+            Arguments.of("classic", false),
+            Arguments.of("streams", true),
+            Arguments.of("streams", false)
+        );
+    }
+
     @BeforeEach
     public void createTopics() throws Exception {
         applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
@@ -186,14 +193,16 @@ public class EosIntegrationTest {
         CLUSTER.setGroupStandbyReplicas(applicationId, 1);
     }
 
-    @Test
-    public void shouldBeAbleToRunWithEosEnabled() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldBeAbleToRunWithEosEnabled(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldCommitCorrectOffsetIfInputTopicIsTransactional() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true);
+    @ParameterizedTest
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldCommitCorrectOffsetIfInputTopicIsTransactional(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true, groupProtocol);
 
         try (final Admin adminClient = Admin.create(mkMap(mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())));
              final Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(mkMap(
@@ -218,36 +227,42 @@ public class EosIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldBeAbleToRestartAfterClose() throws Exception {
-        runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldBeAbleToRestartAfterClose(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+        runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldBeAbleToCommitToMultiplePartitions() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldBeAbleToCommitToMultiplePartitions(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldBeAbleToCommitMultiplePartitionOffsets() throws Exception {
-        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldBeAbleToCommitMultiplePartitionOffsets(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldBeAbleToRunWithTwoSubtopologies() throws Exception {
-        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldBeAbleToRunWithTwoSubtopologies(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+        runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
-    @Test
-    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws Exception {
-        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false);
+    @ParameterizedTest
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+        runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
     private void runSimpleCopyTest(final int numberOfRestarts,
                                    final String inputTopic,
                                    final String throughTopic,
                                    final String outputTopic,
-                                   final boolean inputTopicTransactional) throws Exception {
+                                   final boolean inputTopicTransactional,
+                                   final String groupProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
@@ -266,6 +281,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), MAX_POLL_INTERVAL_MS - 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
+        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
 
         for (int i = 0; i < numberOfRestarts; ++i) {
             final Properties config = StreamsTestUtils.getStreamsConfig(
@@ -329,8 +345,9 @@ public class EosIntegrationTest {
         return recordsPerKey;
     }
 
-    @Test
-    public void shouldBeAbleToPerformMultipleTransactions() throws Exception {
+    @ParameterizedTest
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldBeAbleToPerformMultipleTransactions(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
@@ -340,6 +357,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
@@ -377,8 +395,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldNotViolateEosIfOneTaskFails(final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldNotViolateEosIfOneTaskFails(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
 
         // this test writes 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to copy all 40 records into the output topic
@@ -389,7 +407,7 @@ public class EosIntegrationTest {
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
-        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, groupProtocol, processingThreadsEnabled)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -479,8 +497,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldNotViolateEosIfOneTaskFailsWithState(final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldNotViolateEosIfOneTaskFailsWithState(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
 
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
@@ -496,7 +514,7 @@ public class EosIntegrationTest {
 
         // We need more processing time under "with state" situation, so increasing the max.poll.interval.ms
         // to avoid unexpected rebalance during test, which will cause unexpected fail over triggered
-        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, groupProtocol, processingThreadsEnabled)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -597,8 +615,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances(final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
         // the app is supposed to copy all 60 records into the output topic
         //
@@ -611,8 +629,8 @@ public class EosIntegrationTest {
         // after the stalling instance is removed, we write the remaining 20 records and verify to read 60 result records
 
         try (
-            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, processingThreadsEnabled);
-            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, processingThreadsEnabled)
+            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, groupProtocol, processingThreadsEnabled);
+            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, groupProtocol, processingThreadsEnabled)
         ) {
             startApplicationAndWaitUntilRunning(streams1);
             startApplicationAndWaitUntilRunning(streams2);
@@ -751,12 +769,12 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final boolean processingThreadsEnabled) throws Exception {
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
         final List<KeyValue<Long, Long>> writtenData = prepareData(0L, 10, 0L, 1L);
         final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
 
-        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, processingThreadsEnabled)) {
+        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, groupProtocol, processingThreadsEnabled)) {
             writeInputData(writtenData);
 
             startApplicationAndWaitUntilRunning(streams);
@@ -783,9 +801,9 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
     public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(
-            final boolean processingThreadsEnabled) throws Exception {
+            final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
 
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -797,6 +815,7 @@ public class EosIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
         streamsConfiguration.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
+        streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         streamsConfiguration.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 100);
         final String stateStoreName = "stateStore";
 
@@ -930,8 +949,13 @@ public class EosIntegrationTest {
     static final AtomicReference<TaskId> TASK_WITH_DATA = new AtomicReference<>();
     static final AtomicBoolean DID_REVOKE_IDLE_TASK = new AtomicBoolean(false);
 
-    @Test
-    public void shouldNotCommitActiveTasksWithPendingInputIfRevokedTaskDidNotMakeProgress() throws Exception {
+    @ParameterizedTest
+    @MethodSource("groupProtocolAndProcessingThreadsParameters")
+    public void shouldNotCommitActiveTasksWithPendingInputIfRevokedTaskDidNotMakeProgress(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+        // Reset static variables to ensure test isolation
+        TASK_WITH_DATA.set(null);
+        DID_REVOKE_IDLE_TASK.set(false);
+
         final AtomicBoolean requestCommit = new AtomicBoolean(false);
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -966,6 +990,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
         properties.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), Integer.MAX_VALUE);
         properties.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, TestTaskAssignor.class.getName());
+        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
@@ -1100,6 +1125,7 @@ public class EosIntegrationTest {
                                          final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads,
+                                         final String groupProtocol,
                                          final boolean processingThreadsEnabled) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
@@ -1208,7 +1234,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
         properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
-        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
