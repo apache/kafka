@@ -821,6 +821,10 @@ public class VersionedKeyValueStoreIntegrationTest {
             }
 
             @Override
+            public void initMetricsIfNeeded() {
+            }
+
+            @Override
             public void flush() {
                 // do nothing
             }

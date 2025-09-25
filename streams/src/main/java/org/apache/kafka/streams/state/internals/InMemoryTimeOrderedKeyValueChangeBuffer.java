@@ -202,6 +202,18 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         taskId = context.taskId().toString();
         streamsMetrics = context.metrics();
 
+        this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
+        updateBufferMetrics();
+        open = true;
+        partition = context.taskId().partition();
+    }
+
+    @Override
+    public void initMetricsIfNeeded() {
+        registerMetrics();
+    }
+
+    private void registerMetrics() {
         bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
             taskId,
             METRIC_SCOPE,
@@ -214,11 +226,6 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
             storeName,
             streamsMetrics
         );
-
-        this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
-        updateBufferMetrics();
-        open = true;
-        partition = context.taskId().partition();
     }
 
     @Override

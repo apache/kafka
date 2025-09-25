@@ -381,6 +381,10 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
 
     @Override
+    public void initMetricsIfNeeded() {
+    }
+
+    @Override
     public void flush() {
     }
 

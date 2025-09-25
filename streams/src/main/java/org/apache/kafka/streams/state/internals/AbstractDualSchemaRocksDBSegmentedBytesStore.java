@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -62,6 +63,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     protected Position position;
     protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
+    private TaskId taskId;
+    private StreamsMetricsImpl streamsMetrics;
 
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
                                                  final KeySchema baseKeySchema,
@@ -243,15 +246,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.internalProcessorContext = asInternalProcessorContext(stateStoreContext);
 
-        final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
-        final String threadId = Thread.currentThread().getName();
-        final String taskName = stateStoreContext.taskId().toString();
-
-        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-            threadId,
-            taskName,
-            metrics
-        );
+        streamsMetrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
+        taskId = stateStoreContext.taskId();
 
         final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
@@ -273,6 +269,19 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             stateStoreContext.appConfigs(),
             IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
             false
+        );
+    }
+
+    @Override
+    public void initMetricsIfNeeded() {
+        registerMetrics();
+    }
+
+    private void registerMetrics() {
+        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
+                Thread.currentThread().getName(),
+                taskId.toString(),
+                streamsMetrics
         );
     }
 

@@ -65,6 +65,7 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
     @Override
     public void openExisting(final StateStoreContext context, final long streamTime) {
         metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
+        metricsRecorder.initMetricsIfNeeded();
         super.openExisting(context, streamTime);
     }
 }

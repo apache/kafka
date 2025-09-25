@@ -42,6 +42,7 @@ import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Record;
@@ -275,6 +276,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             transitionTo(State.RESTORING);
 
             log.info("Initialized");
+        }
+    }
+
+    @Override
+    public void initializeMetricsIfNeeded() {
+        for (final StateStore stateStore : topology.stateStores()) {
+            stateStore.initMetricsIfNeeded();
         }
     }
 

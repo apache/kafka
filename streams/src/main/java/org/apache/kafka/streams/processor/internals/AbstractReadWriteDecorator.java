@@ -49,6 +49,11 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
     }
 
     @Override
+    public void initMetricsIfNeeded() {
+        throw new UnsupportedOperationException(ERROR_MESSAGE);
+    }
+
+    @Override
     public void close() {
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }

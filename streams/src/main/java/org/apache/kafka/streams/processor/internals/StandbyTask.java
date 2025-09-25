@@ -27,6 +27,7 @@ import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -107,9 +108,6 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
-            closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
-            updateSensor = TaskMetrics.updateSensor(Thread.currentThread().getName(), id.toString(), streamsMetrics);
-
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
             // with and without EOS we would check for checkpointing at each commit during running,
@@ -127,6 +125,15 @@ public class StandbyTask extends AbstractTask implements Task {
             log.info("Initialized");
         } else if (state() == State.RESTORING) {
             throw new IllegalStateException("Illegal state " + state() + " while initializing standby task " + id);
+        }
+    }
+
+    @Override
+    public void initializeMetricsIfNeeded() {
+        closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
+        updateSensor = TaskMetrics.updateSensor(Thread.currentThread().getName(), id.toString(), streamsMetrics);
+        for (final StateStore stateStore : topology.stateStores()) {
+            stateStore.initMetricsIfNeeded();
         }
     }
 

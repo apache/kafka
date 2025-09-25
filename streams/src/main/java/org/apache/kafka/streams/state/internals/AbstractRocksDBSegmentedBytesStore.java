@@ -25,6 +25,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
@@ -63,6 +64,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private Position position;
     protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
+    private TaskId taskId;
+    private StreamsMetricsImpl streamsMetrics;
 
     AbstractRocksDBSegmentedBytesStore(final String name,
                                        final long retentionPeriod,
@@ -294,15 +297,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.internalProcessorContext = asInternalProcessorContext(stateStoreContext);
 
-        final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
-        final String threadId = Thread.currentThread().getName();
-        final String taskName = stateStoreContext.taskId().toString();
-
-        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-                threadId,
-                taskName,
-                metrics
-        );
+        streamsMetrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
+        taskId = stateStoreContext.taskId();
 
         final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
@@ -323,6 +319,19 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 stateStoreContext.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
+    }
+
+    @Override
+    public void initMetricsIfNeeded() {
+        registerMetrics();
+    }
+
+    private void registerMetrics() {
+        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
+                Thread.currentThread().getName(),
+                taskId.toString(),
+                streamsMetrics
+        );
     }
 
     @Override

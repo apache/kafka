@@ -179,6 +179,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             false);
     }
 
+    @Override
+    public void initMetricsIfNeeded() {
+        metricsRecorder.initMetricsIfNeeded();
+    }
+
     @SuppressWarnings("unchecked")
     void openDB(final Map<String, Object> configs, final File stateDir) {
         // initialize the default rocksdb options

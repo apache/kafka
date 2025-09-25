@@ -93,6 +93,11 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
+    public void initMetricsIfNeeded() {
+        inner.initMetricsIfNeeded();
+    }
+
+    @Override
     public void flush() {
         inner.flush();
     }

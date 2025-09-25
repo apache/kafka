@@ -1214,6 +1214,11 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
+        public void initMetricsIfNeeded() {
+            inner.initMetricsIfNeeded();
+        }
+
+        @Override
         public void put(final K key, final V value) {
             inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP));
         }
@@ -1275,6 +1280,11 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public void init(final StateStoreContext stateStoreContext, final StateStore root) {
             inner.init(stateStoreContext, root);
+        }
+
+        @Override
+        public void initMetricsIfNeeded() {
+            inner.initMetricsIfNeeded();
         }
 
         @Override

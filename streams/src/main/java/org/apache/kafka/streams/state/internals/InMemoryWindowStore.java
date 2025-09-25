@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
@@ -80,6 +81,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private volatile boolean open = false;
 
     private final Position position;
+    private TaskId taskId;
+    private StreamsMetricsImpl streamsMetrics;
 
     public InMemoryWindowStore(final String name,
                                final long retentionPeriod,
@@ -104,14 +107,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                      final StateStore root) {
         this.internalProcessorContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
 
-        final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
-        final String threadId = Thread.currentThread().getName();
-        final String taskName = stateStoreContext.taskId().toString();
-        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-            threadId,
-            taskName,
-            metrics
-        );
+        streamsMetrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
+        taskId = stateStoreContext.taskId();
 
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
@@ -140,6 +137,19 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             );
         }
         open = true;
+    }
+
+    @Override
+    public void initMetricsIfNeeded() {
+        registerMetrics();
+    }
+
+    private void registerMetrics() {
+        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
+                Thread.currentThread().getName(),
+                taskId.toString(),
+                streamsMetrics
+        );
     }
 
     @Override

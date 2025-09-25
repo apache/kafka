@@ -71,6 +71,8 @@ public interface StateStore {
      */
     void init(final StateStoreContext stateStoreContext, final StateStore root);
 
+    void initMetricsIfNeeded();
+
     /**
      * Flush any cached data
      */

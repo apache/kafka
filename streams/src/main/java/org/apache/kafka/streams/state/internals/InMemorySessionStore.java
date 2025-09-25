@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -78,6 +79,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private StateStoreContext stateStoreContext;
     private final Position position;
+    private TaskId taskId;
 
     InMemorySessionStore(final String name,
                          final long retentionPeriod,
@@ -97,22 +99,14 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         this.stateStoreContext = stateStoreContext;
-        final String threadId = Thread.currentThread().getName();
-        final String taskName = stateStoreContext.taskId().toString();
+        taskId = stateStoreContext.taskId();
 
         // The provided context is not required to implement InternalProcessorContext,
         // If it doesn't, we can't record this metric.
         if (stateStoreContext instanceof InternalProcessorContext) {
             this.context = (InternalProcessorContext<?, ?>) stateStoreContext;
-            final StreamsMetricsImpl metrics = this.context.metrics();
-            expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-                threadId,
-                taskName,
-                metrics
-            );
         } else {
             this.context = null;
-            expiredRecordSensor = null;
         }
 
         if (root != null) {
@@ -138,6 +132,23 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             );
         }
         open = true;
+    }
+
+    @Override
+    public void initMetricsIfNeeded() {
+        if (context != null) {
+            registerMetrics();
+        } else {
+            expiredRecordSensor = null;
+        }
+    }
+
+    private void registerMetrics() {
+        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
+            Thread.currentThread().getName(),
+            taskId.toString(),
+            this.context.metrics()
+        );
     }
 
     @Override

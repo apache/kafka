@@ -79,6 +79,11 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public void initializeMetricsIfNeeded() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
     public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
         throw new UnsupportedOperationException("This task is read-only");
     }

@@ -365,6 +365,10 @@ public class IQv2IntegrationTest {
                         }
 
                         @Override
+                        public void initMetricsIfNeeded() {
+                        }
+
+                        @Override
                         public void flush() {
 
                         }

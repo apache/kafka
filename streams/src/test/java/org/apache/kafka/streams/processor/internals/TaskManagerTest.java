@@ -4922,6 +4922,10 @@ public class TaskManagerTest {
         }
 
         @Override
+        public void initializeMetricsIfNeeded() {
+        }
+
+        @Override
         public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
             this.partitionsForOffsetReset = partitionsForOffsetReset;
         }

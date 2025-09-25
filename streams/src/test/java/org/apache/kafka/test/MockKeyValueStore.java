@@ -65,6 +65,10 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     }
 
     @Override
+    public void initMetricsIfNeeded() {
+    }
+
+    @Override
     public void flush() {
         instanceLastFlushCount.set(GLOBAL_FLUSH_COUNTER.getAndIncrement());
         flushed = true;

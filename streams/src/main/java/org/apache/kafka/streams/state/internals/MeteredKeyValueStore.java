@@ -127,12 +127,17 @@ public class MeteredKeyValueStore<K, V>
         initStoreSerde(stateStoreContext);
         streamsMetrics = (StreamsMetricsImpl) stateStoreContext.metrics();
 
-        registerMetrics();
         final Sensor restoreSensor =
             StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(stateStoreContext, root), time, restoreSensor);
+    }
+
+    @Override
+    public void initMetricsIfNeeded() {
+        registerMetrics();
+        super.initMetricsIfNeeded();
     }
 
     private void registerMetrics() {

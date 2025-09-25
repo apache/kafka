@@ -63,6 +63,11 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         wrapped.init(stateStoreContext, root);
     }
 
+    @Override
+    public void initMetricsIfNeeded() {
+        wrapped.initMetricsIfNeeded();
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public boolean setFlushListener(final CacheFlushListener<K, V> listener,

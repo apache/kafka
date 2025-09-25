@@ -127,6 +127,11 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     }
 
     @Override
+    public void initMetricsIfNeeded() {
+        store.initMetricsIfNeeded();
+    }
+
+    @Override
     public void flush() {
         store.flush();
     }

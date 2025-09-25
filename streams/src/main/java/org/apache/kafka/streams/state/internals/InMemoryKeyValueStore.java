@@ -99,6 +99,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
+    public void initMetricsIfNeeded() {
+    }
+
+    @Override
     public boolean persistent() {
         return false;
     }

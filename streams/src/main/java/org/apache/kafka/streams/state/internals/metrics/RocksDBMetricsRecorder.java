@@ -146,11 +146,14 @@ public class RocksDBMetricsRecorder {
                 + "This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
+        this.taskId = taskId;
+        this.streamsMetrics = streamsMetrics;
+    }
+
+    public void initMetricsIfNeeded() {
         final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
         initSensors(streamsMetrics, metricContext);
         initGauges(streamsMetrics, metricContext);
-        this.taskId = taskId;
-        this.streamsMetrics = streamsMetrics;
     }
 
     public void addValueProviders(final String segmentName,

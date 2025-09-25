@@ -110,6 +110,8 @@ public interface Task {
      */
     void initializeIfNeeded();
 
+    void initializeMetricsIfNeeded();
+
     default void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
         throw new UnsupportedOperationException();
     }

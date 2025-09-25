@@ -142,6 +142,11 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
+    public void initMetricsIfNeeded() {
+        throw new UnsupportedOperationException("nothing to reassign");
+    }
+
+    @Override
     public void flush() {
         throw new UnsupportedOperationException("nothing to flush for logical segment");
     }

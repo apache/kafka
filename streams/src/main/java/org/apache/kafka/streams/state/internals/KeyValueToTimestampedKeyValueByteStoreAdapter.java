@@ -100,6 +100,11 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     }
 
     @Override
+    public void initMetricsIfNeeded() {
+        store.initMetricsIfNeeded();
+    }
+
+    @Override
     public void flush() {
         store.flush();
     }

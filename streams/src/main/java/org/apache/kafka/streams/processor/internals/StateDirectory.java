@@ -251,6 +251,8 @@ public class StateDirectory implements AutoCloseable {
                     );
 
                     try {
+                        task.initializeIfNeeded();
+
                         tasksForLocalState.put(id, task);
                     } catch (final TaskCorruptedException e) {
                         // Task is corrupt - wipe it out (under EOS) and don't initialize a Standby for it
