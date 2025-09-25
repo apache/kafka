@@ -129,9 +129,9 @@ public record StreamsTopology(int topologyEpoch,
             .setReplicationFactor(topicInfo.replicationFactor())
             .setTopicConfigs(
                 topicInfo.topicConfigs().stream().map(
-                    y -> new StreamsGroupDescribeResponseData.KeyValue()
-                        .setKey(y.key())
-                        .setValue(y.value())
+                    topicConfig -> new StreamsGroupDescribeResponseData.KeyValue()
+                        .setKey(topicConfig.key())
+                        .setValue(topicConfig.value())
                 ).toList()
             );
     }

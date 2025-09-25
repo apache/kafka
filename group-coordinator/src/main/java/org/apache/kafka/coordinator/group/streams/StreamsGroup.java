@@ -1046,7 +1046,7 @@ public class StreamsGroup implements Group {
                     .orElse(
                         topology.get(committedOffset)
                             .map(StreamsTopology::asStreamsGroupDescribeTopology)
-                            .orElse(null)
+                            .orElseThrow(() -> new IllegalStateException("There should always be a topology for a streams group."))
                     )
             );
         members.entrySet(committedOffset).forEach(
