@@ -346,6 +346,7 @@ class RequestChannel(val queueSize: Int,
                      val metrics: RequestChannelMetrics) {
   import RequestChannel._
 
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
   private val metricsPackage = "kafka.network"
   private val metricsClassName = "RequestChannel"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)

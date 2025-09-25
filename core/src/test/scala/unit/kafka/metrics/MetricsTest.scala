@@ -154,6 +154,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val tags = util.Map.of("dir", path)
     val expectedMBeanName = Set(tags.keySet().iterator().next(), ObjectName.quote(path)).mkString("=")
 
+    // Changing the package or class name may cause incompatibility with existing code and metrics configuration
     val metricsPackage = "kafka.metrics"
     val metricsClassName = "MetricsTest"
     val metric = new KafkaMetricsGroup(metricsPackage, metricsClassName).metricName("test-metric", tags)

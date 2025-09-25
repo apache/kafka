@@ -81,7 +81,7 @@ class LogManager(logDirs: Seq[File],
                  cleanerFactory: (CleanerConfig, util.List[File], ConcurrentMap[TopicPartition, UnifiedLog], LogDirFailureChannel, Time) => LogCleaner =
                   (cleanerConfig, files, map, logDirFailureChannel, time) => new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time)
                 ) extends Logging {
-
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
   private val metricsPackage = "kafka.log"
   private val metricsClassName = "LogManager"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)

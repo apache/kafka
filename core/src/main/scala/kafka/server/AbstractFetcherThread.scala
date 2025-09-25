@@ -888,6 +888,7 @@ object FetcherMetrics {
 }
 
 class FetcherLagMetrics(metricId: ClientIdTopicPartition) {
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
   private val metricsPackage = "kafka.server"
   private val metricsClassName = "FetcherLagMetrics"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
@@ -929,6 +930,7 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
 }
 
 class FetcherStats(metricId: ClientIdAndBroker) {
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
   private val metricsPackage = "kafka.server"
   private val metricsClassName = "FetcherStats"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)

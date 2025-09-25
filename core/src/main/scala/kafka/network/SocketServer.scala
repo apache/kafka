@@ -78,7 +78,7 @@ class SocketServer(
   val socketFactory: ServerSocketFactory = ServerSocketFactory.INSTANCE,
   val connectionDisconnectListeners: Seq[ConnectionDisconnectListener] = Seq.empty
 ) extends Logging with BrokerReconfigurable {
-
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
   private val metricsPackage = "kafka.network"
   private val metricsClassName = "SocketServer"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)

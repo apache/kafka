@@ -231,6 +231,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
                      val defaultActionQueue: ActionQueue = new DelayedActionQueue
                      ) extends Logging {
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
   private val metricsPackage = "kafka.server"
   private val metricsClassName = "ReplicaManager"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)

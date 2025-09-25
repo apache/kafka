@@ -135,6 +135,7 @@ class DelayedProduce(delayMs: Long,
 }
 
 object DelayedProduceMetrics {
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
   private val metricsPackage = "kafka.server"
   private val metricsClassName = "DelayedProduceMetrics"
   private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
