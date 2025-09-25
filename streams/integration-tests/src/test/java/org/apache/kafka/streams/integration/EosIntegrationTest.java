@@ -48,6 +48,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -90,6 +91,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -181,6 +183,7 @@ public class EosIntegrationTest {
         CLUSTER.createTopic(MULTI_PARTITION_INPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
         CLUSTER.createTopic(MULTI_PARTITION_THROUGH_TOPIC, NUM_TOPIC_PARTITIONS, 1);
         CLUSTER.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
+        CLUSTER.setGroupStandbyReplicas(applicationId, 1);
     }
 
     @Test
@@ -605,8 +608,7 @@ public class EosIntegrationTest {
         // -> the stall only affects one thread and should trigger a rebalance
         // after rebalancing, we should read 40 committed records (even if 50 record got written)
         //
-        // afterward, the "stalling" thread resumes, and another rebalance should get triggered
-        // we write the remaining 20 records and verify to read 60 result records
+        // after the stalling instance is removed, we write the remaining 20 records and verify to read 60 result records
 
         try (
             final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, processingThreadsEnabled);
@@ -667,24 +669,19 @@ public class EosIntegrationTest {
                 "Expected a host to start stalling"
             );
             final String observedStallingHost = stallingHost.get();
-            final KafkaStreams stallingInstance;
             final KafkaStreams remainingInstance;
             if ("streams1".equals(observedStallingHost)) {
-                stallingInstance = streams1;
                 remainingInstance = streams2;
             } else if ("streams2".equals(observedStallingHost)) {
-                stallingInstance = streams2;
                 remainingInstance = streams1;
             } else {
                 throw new IllegalArgumentException("unexpected host name: " + observedStallingHost);
             }
 
-            // the stalling instance won't have an updated view, and it doesn't matter what it thinks
-            // the assignment is. We only really care that the remaining instance only sees one host
-            // that owns both partitions.
+            // After removing the stalling instance, we only care that the remaining instance
+            // sees one host that owns both partitions.
             waitForCondition(
-                () -> stallingInstance.metadataForAllStreamsClients().size() == 2
-                    && remainingInstance.metadataForAllStreamsClients().size() == 1
+                () -> remainingInstance.metadataForAllStreamsClients().size() == 1
                     && remainingInstance.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 2,
                 MAX_WAIT_TIME_MS,
                 () -> "Should have rebalanced.\n" +
@@ -711,9 +708,8 @@ public class EosIntegrationTest {
                 expectedCommittedRecordsAfterRebalance,
                 "The all committed records after rebalance do not match what expected");
 
-            LOG.info("Releasing Stall");
             doStall = false;
-            // Once the stalling host rejoins the group, we expect both instances to see both instances.
+            // After removing the stalling instance, we expect both remaining instances to see both instances.
             // It doesn't really matter what the assignment is, but we might as well also assert that they
             // both see both partitions assigned exactly once
             waitForCondition(
@@ -1212,6 +1208,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
         properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
+        properties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
