@@ -49,6 +49,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class ListOffsetsHandlerTest {
@@ -226,6 +227,39 @@ public final class ListOffsetsHandlerTest {
     }
 
     @Test
+    public void testListOffsetDowngradeAndReset() {
+        Map<TopicPartition, OffsetSpec> specificTimestampPartitions = new HashMap<>();
+        specificTimestampPartitions.put(timestampPartitionsByOffset.get(
+                ListOffsetsHandler.getOffsetFromSpec(OffsetSpec.earliestPendingUpload())), OffsetSpec.earliestPendingUpload());
+
+        ListOffsetsHandler handler =
+                new ListOffsetsHandler(offsetTimestampsByPartition, new ListOffsetsOptions(), logContext, defaultApiTimeoutMs);
+        handler.setCurrentUnsupportedVersion(ListOffsetsHandler.getOffsetFromSpec(OffsetSpec.earliestPendingUpload()));
+        handler.downgradeOffsetTimestampVersion();
+        assertEquals(1, handler.unsupportedVersionRetry());
+        assertEquals(ListOffsetsHandler.getOffsetFromSpec(OffsetSpec.latestTiered()), handler.currentUnsupportedVersion());
+
+        handler.reset();
+        assertEquals(0, handler.unsupportedVersionRetry());
+        assertEquals(ListOffsetsHandler.getOffsetFromSpec(OffsetSpec.earliestPendingUpload()), handler.currentUnsupportedVersion());
+    }
+
+    @Test
+    public void testListOffsetExceedMaxUnsupportVersionRetry() {
+        Map<TopicPartition, OffsetSpec> specificTimestampPartitions = new HashMap<>();
+        specificTimestampPartitions.put(timestampPartitionsByOffset.get(
+                ListOffsetsHandler.getOffsetFromSpec(OffsetSpec.earliestPendingUpload())), OffsetSpec.earliestPendingUpload());
+
+        ListOffsetsHandler handler =
+                new ListOffsetsHandler(offsetTimestampsByPartition, new ListOffsetsOptions(), logContext, defaultApiTimeoutMs);
+
+        for (int i = 0; i < ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size() - 1; i++) {
+            handler.downgradeOffsetTimestampVersion();
+        }
+        assertThrows(IllegalStateException.class, handler::downgradeOffsetTimestampVersion);
+    }
+
+    @Test
     public void testHandleResponseUnsupportedVersion() {
         testHandleResponseUnsupportedVersion(OffsetSpec.latest());
         testHandleResponseUnsupportedVersion(OffsetSpec.maxTimestamp());
@@ -248,18 +282,9 @@ public final class ListOffsetsHandlerTest {
         final Map<TopicPartition, Long> nonSpecificTimestampPartitions = new HashMap<>(offsetTimestampsByPartition);
         specificTimestampPartitions.forEach((k, v) -> nonSpecificTimestampPartitions.remove(k));
 
-        // Unsupported version exceptions currently cannot be handled if there's no partition with a
-        // MAX_TIMESTAMP spec...
-        // TODO: fix the logic
-        Set<TopicPartition> keysToTest = nonSpecificTimestampPartitions.keySet();
-        Set<TopicPartition> expectedFailures = keysToTest;
-//        assertEquals(
-//            mapToError(expectedFailures, uve),
-//            handler.handleUnsupportedVersionException(brokerId, uve, keysToTest));
-
         // ...or if there are only partitions with specific specs.
-        keysToTest = specificTimestampPartitions.keySet();
-        expectedFailures = keysToTest;
+        Set<TopicPartition> keysToTest = specificTimestampPartitions.keySet();
+        Set<TopicPartition> expectedFailures = keysToTest;
         assertEquals(
             mapToError(expectedFailures, uve),
             handler.handleUnsupportedVersionException(brokerId, uve, keysToTest));

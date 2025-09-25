@@ -230,7 +230,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     }
 
     public void downgradeOffsetTimestampVersion() {
-        if (unsupportedVersionRetry > maxUnsupportedVersionRetry) {
+        if (unsupportedVersionRetry >= maxUnsupportedVersionRetry) {
             throw new IllegalStateException("Index should not larger than " + maxUnsupportedVersionRetry);
         }
 
@@ -247,6 +247,16 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     public boolean isOldestTimstamp() {
         return currentUnsupportedVersion == ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.get(
                 ListOffsetsRequest.LEAST_TO_OLDEST_TIMESTAMPS.size() - 1);
+    }
+
+    // Visible for test
+    public long currentUnsupportedVersion() {
+        return currentUnsupportedVersion;
+    }
+
+    // Visible for test
+    public int unsupportedVersionRetry() {
+        return unsupportedVersionRetry;
     }
 
     // Visible for test
