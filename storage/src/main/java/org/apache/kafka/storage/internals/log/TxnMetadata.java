@@ -43,9 +43,9 @@ public final class TxnMetadata {
     @Override
     public String toString() {
         return "TxnMetadata(" +
-            "producerId=" + producerId +
-            ", firstOffset=" + firstOffset +
-            ", lastOffset=" + lastOffset +
-            ')';
+                "producerId=" + producerId +
+                ", firstOffset=" + firstOffset +
+                ", lastOffset=" + lastOffset +
+                ')';
     }
 }

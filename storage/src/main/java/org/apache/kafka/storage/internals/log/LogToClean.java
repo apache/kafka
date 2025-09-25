@@ -43,8 +43,8 @@ public final class LogToClean implements Comparable<LogToClean> {
         this.needCompactionNow = needCompactionNow;
 
         this.cleanBytes = log.logSegments(-1, firstDirtyOffset).stream()
-            .mapToLong(LogSegment::size)
-            .sum();
+                .mapToLong(LogSegment::size)
+                .sum();
 
         Map.Entry<Long, Long> cleanableBytesResult = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset);
         this.firstUncleanableOffset = cleanableBytesResult.getKey();
@@ -101,36 +101,36 @@ public final class LogToClean implements Comparable<LogToClean> {
         if (o == null || getClass() != o.getClass()) return false;
         LogToClean that = (LogToClean) o;
         return firstDirtyOffset == that.firstDirtyOffset &&
-            needCompactionNow == that.needCompactionNow &&
-            cleanBytes == that.cleanBytes &&
-            firstUncleanableOffset == that.firstUncleanableOffset &&
-            cleanableBytes == that.cleanableBytes &&
-            totalBytes == that.totalBytes &&
-            Double.compare(that.cleanableRatio, cleanableRatio) == 0 &&
-            topicPartition.equals(that.topicPartition) &&
-            log.equals(that.log);
+                needCompactionNow == that.needCompactionNow &&
+                cleanBytes == that.cleanBytes &&
+                firstUncleanableOffset == that.firstUncleanableOffset &&
+                cleanableBytes == that.cleanableBytes &&
+                totalBytes == that.totalBytes &&
+                Double.compare(that.cleanableRatio, cleanableRatio) == 0 &&
+                topicPartition.equals(that.topicPartition) &&
+                log.equals(that.log);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(
-            topicPartition, log, firstDirtyOffset, needCompactionNow, cleanBytes,
-            firstUncleanableOffset, cleanableBytes, totalBytes, cleanableRatio
+                topicPartition, log, firstDirtyOffset, needCompactionNow, cleanBytes,
+                firstUncleanableOffset, cleanableBytes, totalBytes, cleanableRatio
         );
     }
 
     @Override
     public String toString() {
         return "LogToClean{" +
-            "topicPartition=" + topicPartition +
-            ", log=" + log +
-            ", firstDirtyOffset=" + firstDirtyOffset +
-            ", needCompactionNow=" + needCompactionNow +
-            ", cleanBytes=" + cleanBytes +
-            ", firstUncleanableOffset=" + firstUncleanableOffset +
-            ", cleanableBytes=" + cleanableBytes +
-            ", totalBytes=" + totalBytes +
-            ", cleanableRatio=" + cleanableRatio +
-            '}';
+                "topicPartition=" + topicPartition +
+                ", log=" + log +
+                ", firstDirtyOffset=" + firstDirtyOffset +
+                ", needCompactionNow=" + needCompactionNow +
+                ", cleanBytes=" + cleanBytes +
+                ", firstUncleanableOffset=" + firstUncleanableOffset +
+                ", cleanableBytes=" + cleanableBytes +
+                ", totalBytes=" + totalBytes +
+                ", cleanableRatio=" + cleanableRatio +
+                '}';
     }
 }
