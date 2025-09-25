@@ -44,11 +44,6 @@ public class ScramPublisher implements MetadataPublisher {
 
     @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
-        onMetadataUpdate(delta, newImage);
-    }
-
-    public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
-        String deltaName = "MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
         try {
             // Apply changes to SCRAM credentials.
             ScramDelta scramDelta = delta.scramDelta();
@@ -63,7 +58,8 @@ public class ScramPublisher implements MetadataPublisher {
                 });
             }
         } catch (Throwable t) {
-            faultHandler.handleFault("Uncaught exception while publishing SCRAM changes from " + deltaName, t);
+            faultHandler.handleFault("Uncaught exception while publishing SCRAM changes from MetadataDelta up to "
+                + newImage.highestOffsetAndEpoch().offset(), t);
         }
     }
 }

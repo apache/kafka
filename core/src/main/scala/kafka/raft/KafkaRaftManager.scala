@@ -20,16 +20,13 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.OptionalInt
+import java.util.{OptionalInt, Collection => JCollection, Map => JMap}
 import java.util.concurrent.CompletableFuture
-import java.util.{Map => JMap}
-import java.util.{Collection => JCollection}
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
@@ -40,7 +37,7 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, MetadataLogConfig, QuorumConfig, RaftClient, ReplicatedLog, TimingWheelExpirationService}
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, QuorumConfig, RaftManager, ReplicatedLog, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -50,7 +47,6 @@ import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
 
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
 
 object KafkaRaftManager {
   private def createLogDirectory(logDir: File, logDirName: String): File = {
@@ -83,29 +79,6 @@ object KafkaRaftManager {
       .map(Paths.get(_).toAbsolutePath)
       .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
   }
-}
-
-trait RaftManager[T] {
-  def handleRequest(
-    context: RequestContext,
-    header: RequestHeader,
-    request: ApiMessage,
-    createdTimeMs: Long
-  ): CompletableFuture[ApiMessage]
-
-  def register(
-    listener: RaftClient.Listener[T]
-  ): Unit
-
-  def leaderAndEpoch: LeaderAndEpoch
-
-  def client: RaftClient[T]
-
-  def replicatedLog: ReplicatedLog
-
-  def voterNode(id: Int, listener: ListenerName): Option[Node]
-
-  def recordSerde: RecordSerde[T]
 }
 
 class KafkaRaftManager[T](
@@ -176,12 +149,6 @@ class KafkaRaftManager[T](
     Utils.closeQuietly(netChannel, "net channel")
     Utils.closeQuietly(replicatedLog, "replicated log")
     CoreUtils.swallow(dataDirLock.foreach(_.destroy()), this)
-  }
-
-  override def register(
-    listener: RaftClient.Listener[T]
-  ): Unit = {
-    client.register(listener)
   }
 
   override def handleRequest(
@@ -290,14 +257,6 @@ class KafkaRaftManager[T](
     )
 
     (controllerListenerName, networkClient)
-  }
-
-  override def leaderAndEpoch: LeaderAndEpoch = {
-    client.leaderAndEpoch
-  }
-
-  override def voterNode(id: Int, listener: ListenerName): Option[Node] = {
-    client.voterNode(id, listener).toScala
   }
 
   override def recordSerde: RecordSerde[T] = serde

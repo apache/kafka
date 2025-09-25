@@ -48,6 +48,21 @@ public class RecordHeadersTest {
     }
 
     @Test
+    public void testAddHeadersPreserveOrder() {
+        Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("key", "value".getBytes()));
+        headers.add(new RecordHeader("key2", "value2".getBytes()));
+        headers.add(new RecordHeader("key3", "value3".getBytes()));
+
+        Header[] headersArr = headers.toArray();
+        assertHeader("key", "value", headersArr[0]);
+        assertHeader("key2", "value2", headersArr[1]);
+        assertHeader("key3", "value3", headersArr[2]);
+
+        assertEquals(3, getCount(headers));
+    }
+
+    @Test
     public void testRemove() {
         Headers headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
@@ -57,6 +72,27 @@ public class RecordHeadersTest {
         headers.remove("key");
 
         assertFalse(headers.iterator().hasNext());
+    }
+
+    @Test
+    public void testPreserveOrderAfterRemove() {
+        Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("key", "value".getBytes()));
+        headers.add(new RecordHeader("key2", "value2".getBytes()));
+        headers.add(new RecordHeader("key3", "value3".getBytes()));
+
+        headers.remove("key");
+        Header[] headersArr = headers.toArray();
+        assertHeader("key2", "value2", headersArr[0]);
+        assertHeader("key3", "value3", headersArr[1]);
+        assertEquals(2, getCount(headers));
+
+        headers.add(new RecordHeader("key4", "value4".getBytes()));
+        headers.remove("key3");
+        headersArr = headers.toArray();
+        assertHeader("key2", "value2", headersArr[0]);
+        assertHeader("key4", "value4", headersArr[1]);
+        assertEquals(2, getCount(headers));
     }
 
     @Test
@@ -125,6 +161,17 @@ public class RecordHeadersTest {
         assertHeader("key", "value3", headers.lastHeader("key"));
         assertEquals(3, getCount(headers));
 
+    }
+
+    @Test
+    public void testHeadersIteratorRemove() {
+        Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("key", "value".getBytes()));
+
+        Iterator<Header> headersIterator = headers.headers("key").iterator();
+        headersIterator.next();
+        assertThrows(UnsupportedOperationException.class,
+            headersIterator::remove);
     }
 
     @Test

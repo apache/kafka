@@ -3793,6 +3793,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    @Override
     public Optional<Node> voterNode(int id, ListenerName listenerName) {
         return partitionState.lastVoterSet().voterNode(id, listenerName);
     }
