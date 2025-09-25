@@ -39,4 +39,13 @@ public final class TxnMetadata {
     public TxnMetadata(long producerId, LogOffsetMetadata firstOffset) {
         this(producerId, firstOffset, OptionalLong.empty());
     }
+
+    @Override
+    public String toString() {
+        return "TxnMetadata(" +
+            "producerId=" + producerId +
+            ", firstOffset=" + firstOffset +
+            ", lastOffset=" + lastOffset +
+            ')';
+    }
 }

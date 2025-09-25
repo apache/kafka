@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Helper class for a log, its topic/partition, the first cleanable position, the first uncleanable dirty position,
@@ -42,8 +43,8 @@ public final class LogToClean implements Comparable<LogToClean> {
         this.needCompactionNow = needCompactionNow;
 
         this.cleanBytes = log.logSegments(-1, firstDirtyOffset).stream()
-                .mapToLong(LogSegment::size)
-                .sum();
+            .mapToLong(LogSegment::size)
+            .sum();
 
         Map.Entry<Long, Long> cleanableBytesResult = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset);
         this.firstUncleanableOffset = cleanableBytesResult.getKey();
@@ -92,5 +93,44 @@ public final class LogToClean implements Comparable<LogToClean> {
     @Override
     public int compareTo(LogToClean that) {
         return Double.compare(this.cleanableRatio, that.cleanableRatio);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        LogToClean that = (LogToClean) o;
+        return firstDirtyOffset == that.firstDirtyOffset &&
+            needCompactionNow == that.needCompactionNow &&
+            cleanBytes == that.cleanBytes &&
+            firstUncleanableOffset == that.firstUncleanableOffset &&
+            cleanableBytes == that.cleanableBytes &&
+            totalBytes == that.totalBytes &&
+            Double.compare(that.cleanableRatio, cleanableRatio) == 0 &&
+            topicPartition.equals(that.topicPartition) &&
+            log.equals(that.log);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+            topicPartition, log, firstDirtyOffset, needCompactionNow, cleanBytes,
+            firstUncleanableOffset, cleanableBytes, totalBytes, cleanableRatio
+        );
+    }
+
+    @Override
+    public String toString() {
+        return "LogToClean{" +
+            "topicPartition=" + topicPartition +
+            ", log=" + log +
+            ", firstDirtyOffset=" + firstDirtyOffset +
+            ", needCompactionNow=" + needCompactionNow +
+            ", cleanBytes=" + cleanBytes +
+            ", firstUncleanableOffset=" + firstUncleanableOffset +
+            ", cleanableBytes=" + cleanableBytes +
+            ", totalBytes=" + totalBytes +
+            ", cleanableRatio=" + cleanableRatio +
+            '}';
     }
 }
