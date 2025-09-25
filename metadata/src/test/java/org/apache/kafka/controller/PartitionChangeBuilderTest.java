@@ -310,7 +310,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.6-IV0", "3.7-IV2", "4.0-IV0"})
     public void testNoLeaderEpochBumpOnIsrShrink(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         testTriggerLeaderEpochBumpIfNeeded(
             createFooBuilder(metadataVersion).setTargetIsrWithBrokerStates(
                 AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 1))),
@@ -325,7 +325,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.4-IV0", "3.5-IV2"})
     public void testLeaderEpochBumpOnIsrShrink(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         testTriggerLeaderEpochBumpIfNeeded(
             createFooBuilder(metadataVersion).setTargetIsrWithBrokerStates(
                 AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 1))),
@@ -339,7 +339,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2", "4.0-IV0"})
     public void testNoLeaderEpochBumpOnIsrExpansion(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         testTriggerLeaderEpochBumpIfNeeded(
             createFooBuilder(metadataVersion).setTargetIsrWithBrokerStates(
                 AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2, 1, 3, 4))),
@@ -354,7 +354,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2", "4.0-IV0"})
     public void testLeaderEpochBumpOnNewReplicaSetDisjoint(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         testTriggerLeaderEpochBumpIfNeeded(
             createFooBuilder(metadataVersion).setTargetReplicas(List.of(2, 1, 4)),
             new PartitionChangeRecord(),
@@ -368,7 +368,7 @@ public class PartitionChangeBuilderTest {
     @ParameterizedTest
     @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV2"})
     public void testNoLeaderEpochBumpOnEmptyTargetIsr(String metadataVersionString) {
-        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString, true);
         PartitionRegistration partition = new PartitionRegistration.Builder().
             setReplicas(new int[] {2}).
             setDirectories(new Uuid[]{

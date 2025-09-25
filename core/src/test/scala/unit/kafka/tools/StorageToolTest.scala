@@ -315,7 +315,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val failure = assertThrows(classOf[TerseFailure], () =>
       runFormatCommand(stream, properties, Seq("--release-version", "3.3-IV1"))).getMessage
-    assertTrue(failure.contains("Unknown metadata.version 3.3-IV1"))
+    assertTrue(failure.contains("Unknown metadata.version '3.3-IV1'"))
     assertTrue(failure.contains(MetadataVersion.MINIMUM_VERSION.version))
     assertTrue(failure.contains(MetadataVersion.latestProduction().version))
   }
@@ -735,18 +735,18 @@ Found problem:
       runVersionMappingCommand(stream, "2.9-IV2")
     })
 
-    assertEquals("Unknown release version '2.9-IV2'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.latestTesting().version, exception.getMessage
+    assertEquals("Unknown metadata.version '2.9-IV2'. Supported metadata.version are: " +
+      MetadataVersion.metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()),
+      exception.getMessage
     )
 
     val exception2 = assertThrows(classOf[TerseFailure], () => {
       runVersionMappingCommand(stream, "invalid")
     })
 
-    assertEquals("Unknown release version 'invalid'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.latestTesting().version, exception2.getMessage
+    assertEquals("Unknown metadata.version 'invalid'. Supported metadata.version are: " +
+      MetadataVersion.metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()),
+      exception2.getMessage
     )
   }
 
