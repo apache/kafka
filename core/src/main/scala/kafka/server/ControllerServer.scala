@@ -22,7 +22,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicClientQuotaPublisher, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -38,14 +38,15 @@ import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, Metad
 import org.apache.kafka.metadata.{KafkaConfigSchema, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.metadata.publisher.{AclPublisher, FeaturesPublisher}
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, FeaturesPublisher, ScramPublisher}
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.{DelegationTokenManager, ProcessRole, SimpleApiVersionManager}
+import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
+import org.apache.kafka.server.{ProcessRole, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, NodeToControllerChannelManager}
-import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
+import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -145,7 +146,7 @@ class ControllerServer(
 
       metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
 
-      featuresPublisher = new FeaturesPublisher(logContext)
+      featuresPublisher = new FeaturesPublisher(logContext, sharedServer.metadataPublishingFaultHandler)
 
       registrationsPublisher = new ControllerRegistrationsPublisher()
 
@@ -350,7 +351,7 @@ class ControllerServer(
 
       // Set up the SCRAM publisher.
       metadataPublishers.add(new ScramPublisher(
-        config,
+        config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
         credentialProvider
@@ -360,7 +361,7 @@ class ControllerServer(
       // We need a tokenManager for the Publisher
       // The tokenCache in the tokenManager is the same used in DelegationTokenControlManager
       metadataPublishers.add(new DelegationTokenPublisher(
-          config,
+          config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "controller",
           new DelegationTokenManager(delegationTokenManagerConfigs, tokenCache)

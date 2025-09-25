@@ -296,7 +296,7 @@ public class StreamsMembershipManager implements RequestManager {
         this.backgroundEventHandler = backgroundEventHandler;
         this.streamsRebalanceData = streamsRebalanceData;
         this.subscriptionState = subscriptionState;
-        metricsManager = new ConsumerRebalanceMetricsManager(metrics);
+        metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
         this.time = time;
     }
 
@@ -1010,8 +1010,8 @@ public class StreamsMembershipManager implements RequestManager {
             return;
         }
         if (reconciliationInProgress) {
-            log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment " +
-                targetAssignment + " will be handled in the next reconciliation loop.");
+            log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment {}" +
+                " will be handled in the next reconciliation loop.", targetAssignment);
             return;
         }
 
@@ -1131,12 +1131,12 @@ public class StreamsMembershipManager implements RequestManager {
         );
 
         final SortedSet<TopicPartition> partitionsToAssign = topicPartitionsForActiveTasks(activeTasksToAssign);
-        final SortedSet<TopicPartition> partitionsToAssigneNotPreviouslyOwned =
+        final SortedSet<TopicPartition> partitionsToAssignNotPreviouslyOwned =
             partitionsToAssignNotPreviouslyOwned(partitionsToAssign, topicPartitionsForActiveTasks(ownedActiveTasks));
 
         subscriptionState.assignFromSubscribedAwaitingCallback(
             partitionsToAssign,
-            partitionsToAssigneNotPreviouslyOwned
+            partitionsToAssignNotPreviouslyOwned
         );
         notifyAssignmentChange(partitionsToAssign);
 
@@ -1152,10 +1152,10 @@ public class StreamsMembershipManager implements RequestManager {
             if (callbackError == null) {
                 subscriptionState.enablePartitionsAwaitingCallback(partitionsToAssign);
             } else {
-                if (!partitionsToAssigneNotPreviouslyOwned.isEmpty()) {
+                if (!partitionsToAssignNotPreviouslyOwned.isEmpty()) {
                     log.warn("Leaving newly assigned partitions {} marked as non-fetchable and not " +
                             "requiring initializing positions after onTasksAssigned callback failed.",
-                        partitionsToAssigneNotPreviouslyOwned, callbackError);
+                        partitionsToAssignNotPreviouslyOwned, callbackError);
                 }
             }
         });
@@ -1205,9 +1205,9 @@ public class StreamsMembershipManager implements RequestManager {
             Stream.concat(
                 streamsRebalanceData.subtopologies().get(task.subtopologyId()).sourceTopics().stream(),
                 streamsRebalanceData.subtopologies().get(task.subtopologyId()).repartitionSourceTopics().keySet().stream()
-            ).forEach(topic -> {
-                topicPartitions.add(new TopicPartition(topic, task.partitionId()));
-            })
+            ).forEach(topic ->
+                topicPartitions.add(new TopicPartition(topic, task.partitionId()))
+            )
         );
         return topicPartitions;
     }
@@ -1223,7 +1223,7 @@ public class StreamsMembershipManager implements RequestManager {
             String reason = rejoinedWhileReconciliationInProgress ?
                 "the member has re-joined the group" :
                 "the member already transitioned out of the reconciling state into " + state;
-            log.info("Interrupting reconciliation that is not relevant anymore because " + reason);
+            log.info("Interrupting reconciliation that is not relevant anymore because {}", reason);
             markReconciliationCompleted();
         }
         return shouldAbort;
