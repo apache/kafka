@@ -46,7 +46,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static net.sourceforge.argparse4j.impl.Arguments.append;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -238,13 +237,6 @@ public class FeatureCommand {
         });
     }
 
-    static String metadataVersionsToString(MetadataVersion first, MetadataVersion last) {
-        List<MetadataVersion> versions = List.of(MetadataVersion.VERSIONS).subList(first.ordinal(), last.ordinal() + 1);
-        return versions.stream()
-                .map(String::valueOf)
-                .collect(Collectors.joining(", "));
-    }
-
     static void handleUpgrade(Namespace namespace, Admin adminClient) throws TerseException {
         handleUpgradeOrDowngrade("upgrade", namespace, adminClient, FeatureUpdate.UpgradeType.UPGRADE);
     }
@@ -292,12 +284,10 @@ public class FeatureCommand {
 
         if (releaseVersion != null) {
             try {
-                metadataVersion = MetadataVersion.fromVersionString(releaseVersion);
+                metadataVersion = MetadataVersion.fromVersionString(releaseVersion, true);
                 updates.put(metadataVersion.featureName(), new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             } catch (Throwable e) {
-                throw new TerseException("Unknown metadata.version " + releaseVersion +
-                        ". Supported metadata.version are " + metadataVersionsToString(
-                        MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()));
+                throw new TerseException(e.getMessage());
             }
             try {
                 for (Feature feature : Feature.PRODUCTION_FEATURES) {
@@ -315,11 +305,9 @@ public class FeatureCommand {
             if (metadata != null) {
                 System.out.println(" `metadata` flag is deprecated and may be removed in a future release.");
                 try {
-                    metadataVersion = MetadataVersion.fromVersionString(metadata);
+                    metadataVersion = MetadataVersion.fromVersionString(metadata, true);
                 } catch (Throwable e) {
-                    throw new TerseException("Unknown metadata.version " + metadata +
-                            ". Supported metadata.version are " + metadataVersionsToString(
-                            MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()));
+                    throw new TerseException(e.getMessage());
                 }
                 updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             }
@@ -361,7 +349,7 @@ public class FeatureCommand {
             .orElseGet(() -> MetadataVersion.latestProduction().version());
 
         try {
-            MetadataVersion version = MetadataVersion.fromVersionString(releaseVersion);
+            MetadataVersion version = MetadataVersion.fromVersionString(releaseVersion, true);
 
             short metadataVersionLevel = version.featureLevel();
             System.out.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion);
@@ -371,9 +359,7 @@ public class FeatureCommand {
                 System.out.printf("%s=%d%n", feature.featureName(), featureLevel);
             }
         } catch (IllegalArgumentException e) {
-            throw new TerseException("Unknown release version '" + releaseVersion + "'." +
-                " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-                " to " + MetadataVersion.latestTesting().version());
+            throw new TerseException(e.getMessage());
         }
     }
 

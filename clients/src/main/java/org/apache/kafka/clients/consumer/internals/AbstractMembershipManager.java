@@ -988,7 +988,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             String reason = rejoinedWhileReconciliationInProgress ?
                 "the member has re-joined the group" :
                 "the member already transitioned out of the reconciling state into " + state;
-            log.info("Interrupting reconciliation that is not relevant anymore because " + reason);
+            log.info("Interrupting reconciliation that is not relevant anymore because {}", reason);
             markReconciliationCompleted();
         }
         return shouldAbort;

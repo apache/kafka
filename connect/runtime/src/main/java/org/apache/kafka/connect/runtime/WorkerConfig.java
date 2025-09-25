@@ -58,13 +58,12 @@ public class WorkerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
-    public static final String BOOTSTRAP_SERVERS_DOC = 
+    public static final String BOOTSTRAP_SERVERS_DOC =
                 "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
                         + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
                         + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
                         + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
                         + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
-    public static final String BOOTSTRAP_SERVERS_DEFAULT = "localhost:9092";
 
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
     public static final String CLIENT_DNS_LOOKUP_DOC = CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC;
@@ -136,7 +135,7 @@ public class WorkerConfig extends AbstractConfig {
             + "plugins and their dependencies\n"
             + "Note: symlinks will be followed to discover dependencies or plugins.\n"
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
-            + "/opt/connectors\n" 
+            + "/opt/connectors\n"
             + "Do not use config provider variables in this property, since the raw path is used "
             + "by the worker's scanner before config providers are initialized and used to "
             + "replace variables.";
@@ -198,7 +197,8 @@ public class WorkerConfig extends AbstractConfig {
      */
     protected static ConfigDef baseConfigDef() {
         ConfigDef result = new ConfigDef()
-                .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
+                .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, ConfigDef.NO_DEFAULT_VALUE,
+                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                         Type.STRING,
@@ -225,6 +225,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(PLUGIN_PATH_CONFIG,
                         Type.LIST,
                         null,
+                        ConfigDef.ValidList.anyNonDuplicateValues(false, true),
                         Importance.LOW,
                         PLUGIN_PATH_DOC)
                 .define(PLUGIN_DISCOVERY_CONFIG,
@@ -245,15 +246,19 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW,
                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
-                        JmxReporter.class.getName(), Importance.LOW,
+                        JmxReporter.class.getName(),
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        Importance.LOW,
                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
                         Importance.LOW, HEADER_CONVERTER_CLASS_DOC)
                 .define(HEADER_CONVERTER_VERSION, Type.STRING,
                         HEADER_CONVERTER_VERSION_DEFAULT, Importance.LOW, HEADER_CONVERTER_VERSION_DOC)
-                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST,
+                .define(CONFIG_PROVIDERS_CONFIG,
+                        Type.LIST,
                         List.of(),
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
                         Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC)
@@ -337,8 +342,8 @@ public class WorkerConfig extends AbstractConfig {
         if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
             log.warn(
                 "Variables cannot be used in the 'plugin.path' property, since the property is "
-                + "used by plugin scanning before the config providers that replace the " 
-                + "variables are initialized. The raw value '{}' was used for plugin scanning, as " 
+                + "used by plugin scanning before the config providers that replace the "
+                + "variables are initialized. The raw value '{}' was used for plugin scanning, as "
                 + "opposed to the transformed value '{}', and this may cause unexpected results.",
                 rawPluginPath,
                 transformedPluginPath
