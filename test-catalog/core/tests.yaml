@@ -1603,9 +1603,15 @@ kafka.server.AutoTopicCreationManagerTest:
 - testCreateStreamsInternalTopicsPassesPrincipal
 - testCreateStreamsInternalTopicsWithEmptyTopics
 - testCreateTxnTopic
+- testEnvelopeResponseCorrelationIdMismatch
+- testEnvelopeResponseParsingException
+- testEnvelopeResponseSuccessfulParsing
+- testEnvelopeResponseWithEnvelopeError
+- testEnvelopeResponseWithTopicErrors
 - testErrorCacheExpirationBasedEviction
 - testErrorCacheTTL
 - testGetTopicCreationErrorsWithMultipleTopics
+- testSendCreateTopicRequestEnvelopeHandling
 - testTopicCreationErrorCaching
 - testTopicCreationWithMetadataContextNoRetryUponUnsupportedVersion
 - testTopicCreationWithMetadataContextPassPrincipal
