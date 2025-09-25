@@ -29,6 +29,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -83,9 +84,8 @@ public class ReconfigurableQuorumIntegrationTest {
             new TestKitNodes.Builder().
                 setNumBrokerNodes(1).
                 setNumControllerNodes(1).
-                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
                 build()
-        ).build()) {
+        ).setStandalone(true).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
@@ -107,13 +107,23 @@ public class ReconfigurableQuorumIntegrationTest {
 
     @Test
     public void testRemoveController() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder().
-                setNumBrokerNodes(1).
-                setNumControllerNodes(3).
-                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
-                build()
-        ).build()) {
+        final var nodes = new TestKitNodes.Builder().
+            setNumBrokerNodes(1).
+            setNumControllerNodes(3).
+            build();
+
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                controllerNode.id(),
+                controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
+            setInitialVoterSet(initialVoters).
+            build()
+        ) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
@@ -132,12 +142,22 @@ public class ReconfigurableQuorumIntegrationTest {
 
     @Test
     public void testRemoveAndAddSameController() throws Exception {
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder().
-                setNumBrokerNodes(1).
-                setNumControllerNodes(4).
-                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
-                build()).build()
+        final var nodes = new TestKitNodes.Builder().
+            setNumBrokerNodes(1).
+            setNumControllerNodes(4).
+            build();
+
+        final Map<Integer, Uuid> initialVoters = new HashMap<>();
+        for (final var controllerNode : nodes.controllerNodes().values()) {
+            initialVoters.put(
+                controllerNode.id(),
+                controllerNode.metadataDirectoryId()
+            );
+        }
+
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
+            setInitialVoterSet(initialVoters).
+            build()
         ) {
             cluster.format();
             cluster.startup();
