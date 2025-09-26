@@ -326,6 +326,7 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testDescribeProducers
 - testDescribeReplicaLogDirs
 - testDescribeStreamsGroups
+- testDescribeStreamsGroupsNotReady
 - testDescribeTopicsWithIds
 - testDescribeTopicsWithNames
 - testDescribeTopicsWithOptionPartitionSizeLimitPerResponse

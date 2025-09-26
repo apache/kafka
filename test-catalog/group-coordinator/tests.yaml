@@ -1063,6 +1063,9 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupMemberTest:
 org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testAddTaskProcessIds
 - testAsDescribedGroup
+- testAsDescribedGroupFallbackToStreamsTopologyWhenConfiguredTopologyEmpty
+- testAsDescribedGroupPrefersConfiguredTopologyOverStreamsTopology
+- testAsDescribedGroupWithStreamsTopologyHavingSubtopologies
 - testAsListedGroup
 - testComputeMetadataHash
 - testCreateGroupTombstoneRecords
@@ -1090,6 +1093,9 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testValidateOffsetFetch
 - testValidateTransactionalOffsetCommit
 org.apache.kafka.coordinator.group.streams.StreamsTopologyTest:
+- asStreamsGroupDescribeTopicInfoShouldConvertCorrectly
+- asStreamsGroupDescribeTopologyShouldReturnCorrectStructure
+- asStreamsGroupDescribeTopologyWithEmptySubtopologies
 - fromHeartbeatRequestShouldCreateCorrectTopology
 - fromRecordShouldCreateCorrectTopology
 - requiredTopicsShouldBeCorrect
