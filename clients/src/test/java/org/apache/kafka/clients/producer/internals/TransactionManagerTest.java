@@ -623,9 +623,9 @@ public class TransactionManagerTest {
     @ValueSource(booleans = {true, false})
     public void testDefaultSequenceNumber(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
-        assertEquals(transactionManager.sequenceNumber(tp0), 0);
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp0, 3);
-        assertEquals(transactionManager.sequenceNumber(tp0), 3);
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
     }
 
     @ParameterizedTest
@@ -849,13 +849,13 @@ public class TransactionManagerTest {
     @ValueSource(booleans = {true, false})
     public void testSequenceNumberOverflow(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
-        assertEquals(transactionManager.sequenceNumber(tp0), 0);
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
-        assertEquals(transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
+        assertEquals(Integer.MAX_VALUE, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp0, 100);
-        assertEquals(transactionManager.sequenceNumber(tp0), 99);
+        assertEquals(99, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
-        assertEquals(transactionManager.sequenceNumber(tp0), 98);
+        assertEquals(98, transactionManager.sequenceNumber(tp0));
     }
 
     @ParameterizedTest
@@ -863,17 +863,17 @@ public class TransactionManagerTest {
     public void testProducerIdReset(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         initializeIdempotentProducerId(15L, Short.MAX_VALUE);
-        assertEquals(transactionManager.sequenceNumber(tp0), 0);
-        assertEquals(transactionManager.sequenceNumber(tp1), 0);
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        assertEquals(0, transactionManager.sequenceNumber(tp1));
         transactionManager.incrementSequenceNumber(tp0, 3);
-        assertEquals(transactionManager.sequenceNumber(tp0), 3);
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp1, 3);
-        assertEquals(transactionManager.sequenceNumber(tp1), 3);
+        assertEquals(3, transactionManager.sequenceNumber(tp1));
 
         transactionManager.requestIdempotentEpochBumpForPartition(tp0);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
-        assertEquals(transactionManager.sequenceNumber(tp0), 0);
-        assertEquals(transactionManager.sequenceNumber(tp1), 3);
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        assertEquals(3, transactionManager.sequenceNumber(tp1));
     }
 
     @Test
@@ -1101,7 +1101,7 @@ public class TransactionManagerTest {
         transactionManager.initializeTransactions(false);
         client.prepareUnsupportedVersionResponse(body -> {
             FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-            assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), CoordinatorType.TRANSACTION);
+            assertEquals(CoordinatorType.TRANSACTION, CoordinatorType.forId(findCoordinatorRequest.data().keyType()));
             assertTrue(findCoordinatorRequest.data().key().isEmpty());
             assertEquals(1, findCoordinatorRequest.data().coordinatorKeys().size());
             assertTrue(findCoordinatorRequest.data().coordinatorKeys().contains(transactionalId));
