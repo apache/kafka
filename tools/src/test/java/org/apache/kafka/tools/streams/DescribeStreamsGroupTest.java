@@ -74,6 +74,7 @@ public class DescribeStreamsGroupTest {
     private static final String OUTPUT_TOPIC_2 = "customOutputTopic2";
     private static final String INPUT_TOPIC_3 = "customInputTopic3";
     private static final String OUTPUT_TOPIC_3 = "customOutputTopic3";
+
     private static String bootstrapServers;
     @BeforeAll
     public static void setup() throws Exception {
@@ -261,7 +262,7 @@ public class DescribeStreamsGroupTest {
         cluster.createTopic(INPUT_TOPIC_2, 1, 1);
         try (KafkaStreams streams2 = new KafkaStreams(topology(INPUT_TOPIC_2, OUTPUT_TOPIC_2), streamsProp(APP_ID_2))) {
             startApplicationAndWaitUntilRunning(streams2);
-            List<String> args = List.of("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--timeout", "1");
+            List<String> args = List.of("--bootstrap-server", bootstrapServers, "--describe", "--members", "--verbose", "--group", APP_ID, "--timeout", "0");
             Throwable e = assertThrows(ExecutionException.class, () -> getStreamsGroupService(args.toArray(new String[0])).describeGroups());
             assertEquals(TimeoutException.class, e.getCause().getClass());
 
