@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metalog;
+package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metalog.LocalLogManager.LeaderChangeBatch;
-import org.apache.kafka.metalog.LocalLogManager.LocalRecordBatch;
-import org.apache.kafka.metalog.LocalLogManager.SharedLogData;
+import org.apache.kafka.controller.MockRaftClient.LeaderChangeBatch;
+import org.apache.kafka.controller.MockRaftClient.LocalRecordBatch;
+import org.apache.kafka.controller.MockRaftClient.SharedLogData;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -41,9 +41,9 @@ import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-public class LocalLogManagerTestEnv implements AutoCloseable {
+public class MockRaftClientTestEnv implements AutoCloseable {
     private static final Logger log =
-        LoggerFactory.getLogger(LocalLogManagerTestEnv.class);
+        LoggerFactory.getLogger(MockRaftClientTestEnv.class);
 
     private final String clusterId;
 
@@ -59,23 +59,23 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
     private final File dir;
 
     /**
-     * The shared data for our LocalLogManager instances.
+     * The shared data for our MockRaftClient instances.
      */
     private final SharedLogData shared;
 
     /**
-     * A list of log managers.
+     * A list of raft clients.
      */
-    private final List<LocalLogManager> logManagers;
+    private final List<MockRaftClient> raftClients;
 
     public static class Builder {
-        private final int numManagers;
+        private final int numNodes;
         private Optional<RawSnapshotReader> snapshotReader = Optional.empty();
         private Consumer<SharedLogData> sharedLogDataInitializer = __ -> { };
         private KRaftVersion lastKRaftVersion = KRaftVersion.KRAFT_VERSION_0;
 
-        public Builder(int numManagers) {
-            this.numManagers = numManagers;
+        public Builder(int numNodes) {
+            this.numNodes = numNodes;
         }
 
         public Builder setSnapshotReader(RawSnapshotReader snapshotReader) {
@@ -96,19 +96,19 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
             return this;
         }
 
-        public LocalLogManagerTestEnv build() {
-            return new LocalLogManagerTestEnv(
-                numManagers,
+        public MockRaftClientTestEnv build() {
+            return new MockRaftClientTestEnv(
+                numNodes,
                 snapshotReader,
                 sharedLogDataInitializer,
                 lastKRaftVersion);
         }
 
-        public LocalLogManagerTestEnv buildWithMockListeners() {
-            LocalLogManagerTestEnv env = build();
+        public MockRaftClientTestEnv buildWithMockListeners() {
+            MockRaftClientTestEnv env = build();
             try {
-                for (LocalLogManager logManager : env.logManagers) {
-                    logManager.register(new MockMetaLogManagerListener(logManager.nodeId().getAsInt()));
+                for (MockRaftClient raftClient : env.raftClients) {
+                    raftClient.register(new MockRaftClientListener(raftClient.nodeId().getAsInt()));
                 }
             } catch (Exception e) {
                 try {
@@ -122,8 +122,8 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         }
     }
 
-    private LocalLogManagerTestEnv(
-        int numManagers,
+    private MockRaftClientTestEnv(
+        int numNodes,
         Optional<RawSnapshotReader> snapshotReader,
         Consumer<SharedLogData> sharedLogDataInitializer,
         KRaftVersion lastKRaftVersion
@@ -132,23 +132,23 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         dir = TestUtils.tempDirectory();
         shared = new SharedLogData(snapshotReader);
         sharedLogDataInitializer.accept(shared);
-        List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
+        List<MockRaftClient> newRaftClients = new ArrayList<>(numNodes);
         try {
-            for (int nodeId = 0; nodeId < numManagers; nodeId++) {
-                newLogManagers.add(new LocalLogManager(
-                    new LogContext(String.format("[LocalLogManager %d] ", nodeId)),
+            for (int nodeId = 0; nodeId < numNodes; nodeId++) {
+                newRaftClients.add(new MockRaftClient(
+                    new LogContext(String.format("[MockRaftClient %d] ", nodeId)),
                     nodeId,
                     shared,
-                    String.format("LocalLogManager-%d_", nodeId),
+                    String.format("MockRaftClient-%d_", nodeId),
                     lastKRaftVersion));
             }
         } catch (Throwable t) {
-            for (LocalLogManager logManager : newLogManagers) {
-                logManager.close();
+            for (MockRaftClient raftClient : newRaftClients) {
+                raftClient.close();
             }
             throw t;
         }
-        this.logManagers = newLogManagers;
+        this.raftClients = newRaftClients;
     }
 
     /**
@@ -179,9 +179,9 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         AtomicReference<LeaderAndEpoch> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
             LeaderAndEpoch result = null;
-            for (LocalLogManager logManager : logManagers) {
-                LeaderAndEpoch leader = logManager.leaderAndEpoch();
-                int nodeId = logManager.nodeId().getAsInt();
+            for (MockRaftClient raftClient : raftClients) {
+                LeaderAndEpoch leader = raftClient.leaderAndEpoch();
+                int nodeId = raftClient.nodeId().getAsInt();
                 if (leader.isLeader(nodeId)) {
                     if (result != null) {
                         throw new RuntimeException("node " + nodeId +
@@ -198,14 +198,14 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return value.get();
     }
 
-    public List<LocalLogManager> logManagers() {
-        return logManagers;
+    public List<MockRaftClient> raftClients() {
+        return raftClients;
     }
 
-    public Optional<LocalLogManager> activeLogManager() {
+    public Optional<MockRaftClient> activeRaftClient() {
         OptionalInt leader = shared.leaderAndEpoch().leaderId();
         if (leader.isPresent()) {
-            return Optional.of(logManagers.get(leader.getAsInt()));
+            return Optional.of(raftClients.get(leader.getAsInt()));
         } else {
             return Optional.empty();
         }
@@ -218,11 +218,11 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
     @Override
     public void close() throws InterruptedException {
         try {
-            for (LocalLogManager logManager : logManagers) {
-                logManager.beginShutdown();
+            for (MockRaftClient raftClient : raftClients) {
+                raftClient.beginShutdown();
             }
-            for (LocalLogManager logManager : logManagers) {
-                logManager.close();
+            for (MockRaftClient raftClient : raftClients) {
+                raftClient.close();
             }
             Utils.delete(dir);
         } catch (IOException e) {

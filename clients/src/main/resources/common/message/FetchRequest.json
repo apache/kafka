@@ -27,7 +27,7 @@
   // the request is now relevant.  Partitions will be processed in the order
   // they appear in the request.
   //
-  // Version 4 adds IsolationLevel.  Starting in version 4, the reqestor must be
+  // Version 4 adds IsolationLevel.  Starting in version 4, the requestor must be
   // able to handle Kafka log message format version 2.
   //
   // Version 5 adds LogStartOffset to indicate the earliest available offset of

@@ -31,7 +31,6 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -109,8 +108,8 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
     @Override
     protected Set<WorkerHandle> workers() {
         return connectWorker != null
-                ? Collections.singleton(connectWorker)
-                : Collections.emptySet();
+                ? Set.of(connectWorker)
+                : Set.of();
     }
 
     public Response healthCheck() {

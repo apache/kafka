@@ -142,7 +142,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.brokers().forEach((_, broker) => {
-        assertEquals("external://localhost:0", broker.config.get(SocketServerConfigs.LISTENERS_CONFIG))
+        assertEquals(util.List.of("external://localhost:0"), broker.config.get(SocketServerConfigs.LISTENERS_CONFIG))
         assertEquals("external", broker.config.get(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG))
         assertEquals("external:PLAINTEXT,CONTROLLER:PLAINTEXT", broker.config.get(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG))
       })
@@ -807,7 +807,7 @@ class KRaftClusterTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(4).
-        setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString)).
+        setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString, true)).
         setNumControllerNodes(3).build()).
       build()
     try {

@@ -110,7 +110,8 @@ public class SslTransportLayerTest {
             this.useInlinePem = useInlinePem;
             sslConfigOverrides = new HashMap<>();
             sslConfigOverrides.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
-            sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
+            sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of(tlsProtocol));
+            sslConfigOverrides.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
             init();
         }
 
@@ -607,7 +608,7 @@ public class SslTransportLayerTest {
     public void testTlsDefaults(Args args) throws Exception {
         args.sslServerConfigs = args.serverCertStores.getTrustingConfig(args.clientCertStores);
         args.sslClientConfigs = args.clientCertStores.getTrustingConfig(args.serverCertStores);
-
+        args.sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslServerConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslClientConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
 

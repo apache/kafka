@@ -332,16 +332,16 @@ public final class AddVoterHandler {
     }
 
     public void highWatermarkUpdated(LeaderState<?> leaderState) {
-        leaderState.addVoterHandlerState().ifPresent(current -> {
-            leaderState.highWatermark().ifPresent(highWatermark -> {
+        leaderState.addVoterHandlerState().ifPresent(current ->
+            leaderState.highWatermark().ifPresent(highWatermark ->
                 current.lastOffset().ifPresent(lastOffset -> {
                     if (highWatermark.offset() > lastOffset) {
                         // VotersRecord with the added voter was committed; complete the RPC
                         leaderState.resetAddVoterHandlerState(Errors.NONE, null, Optional.empty());
                     }
-                });
-            });
-        });
+                })
+            )
+        );
     }
 
     private ApiVersionsRequestData buildApiVersionsRequest() {

@@ -762,7 +762,7 @@ public List&lt;SourceRecord&gt; poll() throws InterruptedException {
     <p>The <code>flush()</code> method is used during the offset commit process, which allows tasks to recover from failures and resume from a safe point such that no events will be missed. The method should push any outstanding data to the destination system and then block until the write has been acknowledged. The <code>offsets</code> parameter can often be ignored, but is useful in some cases where implementations want to store offset information in the destination store to provide exactly-once
     delivery. For example, an HDFS connector could do this and use atomic move operations to make sure the <code>flush()</code> operation atomically commits the data and offsets to a final location in HDFS.</p>
 
-    <h5><a id="connect_errantrecordreporter" href="connect_errantrecordreporter">Errant Record Reporter</a></h5>
+    <h5><a id="connect_errantrecordreporter" href="#connect_errantrecordreporter">Errant Record Reporter</a></h5>
 
     <p>When <a href="#connect_errorreporting">error reporting</a> is enabled for a connector, the connector can use an <code>ErrantRecordReporter</code> to report problems with individual records sent to a sink connector. The following example shows how a connector's <code>SinkTask</code> subclass might obtain and use the <code>ErrantRecordReporter</code>, safely handling a null reporter when the DLQ is not enabled or when the connector is installed in an older Connect runtime that doesn't have this reporter feature:</p>
 

@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.LogReadResult;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperation;
@@ -368,6 +369,14 @@ public class DelayedShareFetch extends DelayedOperation {
                         "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     sharePartitions.keySet());
             }
+            // At this point, there could be delayed requests sitting in the purgatory which are waiting on
+            // DelayedShareFetchPartitionKeys corresponding to partitions, whose leader has been changed to a different broker.
+            // In that case, such partitions would not be able to get acquired, and the tryComplete will keep on returning false.
+            // Eventually the operation will get timed out and completed, but it might not get removed from the purgatory.
+            // This has been eventually left it like this because the purging mechanism will trigger whenever the number of completed
+            // but still being watched operations is larger than the purge interval. This purge interval is defined by the config
+            // share.fetch.purgatory.purge.interval.requests and is 1000 by default, thereby ensuring that such stale operations do not
+            // grow indefinitely.
             return false;
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
@@ -757,7 +766,8 @@ public class DelayedShareFetch extends DelayedOperation {
      * Case a: The partition is in an offline log directory on this broker
      * Case b: This broker does not know the partition it tries to fetch
      * Case c: This broker is no longer the leader of the partition it tries to fetch
-     * Case d: All remote storage read requests completed
+     * Case d: This broker is no longer the leader or follower of the partition it tries to fetch
+     * Case e: All remote storage read requests completed
      * @return boolean representing whether the remote fetch is completed or not.
      */
     private boolean maybeCompletePendingRemoteFetch() {
@@ -765,14 +775,20 @@ public class DelayedShareFetch extends DelayedOperation {
 
         for (TopicIdPartition topicIdPartition : pendingRemoteFetchesOpt.get().fetchOffsetMetadataMap().keySet()) {
             try {
-                replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
+                Partition partition = replicaManager.getPartitionOrException(topicIdPartition.topicPartition());
+                if (!partition.isLeader()) {
+                    throw new NotLeaderException("Broker is no longer the leader of topicPartition: " + topicIdPartition);
+                }
             } catch (KafkaStorageException e) { // Case a
                 log.debug("TopicPartition {} is in an offline log directory, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
             } catch (UnknownTopicOrPartitionException e) { // Case b
                 log.debug("Broker no longer knows of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
-            } catch (NotLeaderOrFollowerException e) { // Case c
+            } catch (NotLeaderException e) { // Case c
+                log.debug("Broker is no longer the leader of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
+                canComplete = true;
+            } catch (NotLeaderOrFollowerException e) { // Case d
                 log.debug("Broker is no longer the leader or follower of topicPartition {}, satisfy {} immediately", topicIdPartition, shareFetch.fetchParams());
                 canComplete = true;
             }
@@ -780,7 +796,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 break;
         }
 
-        if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case d
+        if (canComplete || pendingRemoteFetchesOpt.get().isDone()) { // Case e
             return forceComplete();
         } else
             return false;

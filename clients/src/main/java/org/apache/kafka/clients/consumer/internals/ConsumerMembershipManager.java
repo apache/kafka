@@ -163,7 +163,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             logContext,
             backgroundEventHandler,
             time,
-            new ConsumerRebalanceMetricsManager(metrics),
+            new ConsumerRebalanceMetricsManager(metrics, subscriptions),
             autoCommitEnabled);
     }
 

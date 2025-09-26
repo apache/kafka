@@ -415,6 +415,7 @@ public class Formatter {
         if (ensemble.emptyLogDirs().isEmpty()) {
             printStream.println("All of the log directories are already formatted.");
         } else {
+            printStream.println("Bootstrap metadata: " + bootstrapMetadata);
             Map<String, DirectoryType> directoryTypes = new HashMap<>();
             for (String emptyLogDir : ensemble.emptyLogDirs()) {
                 DirectoryType directoryType = DirectoryType.calculate(emptyLogDir,
@@ -505,7 +506,7 @@ public class Formatter {
         VoterSet voterSet = initialControllers.toVoterSet(controllerListenerName);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
             setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
-            setMaxBatchSize(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
+            setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
             setRawSnapshotWriter(FileRawSnapshotWriter.create(
                 clusterMetadataDirectory.toPath(),
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).

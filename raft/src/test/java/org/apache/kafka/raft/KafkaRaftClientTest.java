@@ -3786,7 +3786,7 @@ class KafkaRaftClientTest {
 
     @ParameterizedTest
     @CsvSource({ "true, true", "true, false", "false, true", "false, false" })
-    public void testObserverReplication(boolean withKip853Rpc, boolean alwaysFlush) throws Exception {
+    public void testObserverReplication(boolean withKip853Rpc, boolean canBecomeVoter) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
@@ -3795,7 +3795,7 @@ class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withKip853Rpc(withKip853Rpc)
-            .withAlwaysFlush(alwaysFlush)
+            .withCanBecomeVoter(canBecomeVoter)
             .build();
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -3812,7 +3812,7 @@ class KafkaRaftClientTest {
 
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset());
-        long firstUnflushedOffset = alwaysFlush ? 2L : 0L;
+        long firstUnflushedOffset = canBecomeVoter ? 2L : 0L;
         assertEquals(firstUnflushedOffset, context.log.firstUnflushedOffset());
     }
 

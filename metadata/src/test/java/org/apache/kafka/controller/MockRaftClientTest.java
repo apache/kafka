@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metalog;
+package org.apache.kafka.controller;
 
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
@@ -28,23 +28,23 @@ import org.junit.jupiter.api.Timeout;
 import java.util.List;
 import java.util.OptionalInt;
 
-import static org.apache.kafka.metalog.MockMetaLogManagerListener.COMMIT;
-import static org.apache.kafka.metalog.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
-import static org.apache.kafka.metalog.MockMetaLogManagerListener.SHUTDOWN;
+import static org.apache.kafka.controller.MockRaftClientListener.COMMIT;
+import static org.apache.kafka.controller.MockRaftClientListener.LAST_COMMITTED_OFFSET;
+import static org.apache.kafka.controller.MockRaftClientListener.SHUTDOWN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 @Timeout(value = 40)
-public class LocalLogManagerTest {
+public class MockRaftClientTest {
 
     /**
-     * Test creating a LocalLogManager and closing it.
+     * Test creating a MockRaftClient and closing it.
      */
     @Test
     public void testCreateAndClose() throws Exception {
         try (
-            LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv env = new MockRaftClientTestEnv.Builder(1).
                 buildWithMockListeners()
         ) {
             env.close();
@@ -53,12 +53,12 @@ public class LocalLogManagerTest {
     }
 
     /**
-     * Test that the local log manager will claim leadership.
+     * Test that the raft client will claim leadership.
      */
     @Test
     public void testClaimsLeadership() throws Exception {
         try (
-            LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(1).
+            MockRaftClientTestEnv env = new MockRaftClientTestEnv.Builder(1).
                     buildWithMockListeners()
         ) {
             assertEquals(new LeaderAndEpoch(OptionalInt.of(0), 1), env.waitForLeader());
@@ -68,12 +68,12 @@ public class LocalLogManagerTest {
     }
 
     /**
-     * Test that we can pass leadership back and forth between log managers.
+     * Test that we can pass leadership back and forth between raft clients.
      */
     @Test
     public void testPassLeadership() throws Exception {
         try (
-            LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv env = new MockRaftClientTestEnv.Builder(3).
                     buildWithMockListeners()
         ) {
             LeaderAndEpoch first = env.waitForLeader();
@@ -82,7 +82,7 @@ public class LocalLogManagerTest {
                 int currentLeaderId = cur.leaderId().orElseThrow(() ->
                     new AssertionError("Current leader is undefined")
                 );
-                env.logManagers().get(currentLeaderId).resign(cur.epoch());
+                env.raftClients().get(currentLeaderId).resign(cur.epoch());
 
                 LeaderAndEpoch next = env.waitForLeader();
                 while (next.epoch() == cur.epoch()) {
@@ -100,10 +100,9 @@ public class LocalLogManagerTest {
     }
 
     private static void waitForLastCommittedOffset(long targetOffset,
-                LocalLogManager logManager) throws InterruptedException {
+                MockRaftClient raftClient) throws InterruptedException {
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
-            MockMetaLogManagerListener listener =
-                (MockMetaLogManagerListener) logManager.listeners().get(0);
+            MockRaftClientListener listener = (MockRaftClientListener) raftClient.listeners().get(0);
             long highestOffset = -1;
             for (String event : listener.serializedEvents()) {
                 if (event.startsWith(LAST_COMMITTED_OFFSET)) {
@@ -117,19 +116,19 @@ public class LocalLogManagerTest {
                 }
             }
             if (highestOffset < targetOffset) {
-                throw new RuntimeException("Offset for log manager " +
-                    logManager.nodeId() + " only reached " + highestOffset);
+                throw new RuntimeException("Offset for raft client " +
+                    raftClient.nodeId() + " only reached " + highestOffset);
             }
         });
     }
 
     /**
-     * Test that all the log managers see all the commits.
+     * Test that all the raft clients see all the commits.
      */
     @Test
     public void testCommits() throws Exception {
         try (
-            LocalLogManagerTestEnv env = new LocalLogManagerTestEnv.Builder(3).
+            MockRaftClientTestEnv env = new MockRaftClientTestEnv.Builder(3).
                     buildWithMockListeners()
         ) {
             LeaderAndEpoch leaderInfo = env.waitForLeader();
@@ -137,22 +136,24 @@ public class LocalLogManagerTest {
                 new AssertionError("Current leader is undefined")
             );
 
-            LocalLogManager activeLogManager = env.logManagers().get(leaderId);
-            int epoch = activeLogManager.leaderAndEpoch().epoch();
+            MockRaftClient activeRaftClient = env.raftClients().get(leaderId);
+            int epoch = activeRaftClient.leaderAndEpoch().epoch();
             List<ApiMessageAndVersion> messages = List.of(
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(0), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(1), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(2), (short) 0));
-            assertEquals(3, activeLogManager.prepareAppend(epoch, messages));
-            activeLogManager.schedulePreparedAppend();
-            for (LocalLogManager logManager : env.logManagers()) {
-                waitForLastCommittedOffset(3, logManager);
+            assertEquals(3, activeRaftClient.prepareAppend(epoch, messages));
+
+            activeRaftClient.schedulePreparedAppend();
+            for (MockRaftClient raftClient : env.raftClients()) {
+                waitForLastCommittedOffset(3, raftClient);
             }
-            List<MockMetaLogManagerListener> listeners = env.logManagers().stream().
-                map(m -> (MockMetaLogManagerListener) m.listeners().get(0)).
+
+            List<MockRaftClientListener> listeners = env.raftClients().stream().
+                map(m -> (MockRaftClientListener) m.listeners().get(0)).
                 toList();
             env.close();
-            for (MockMetaLogManagerListener listener : listeners) {
+            for (MockRaftClientListener listener : listeners) {
                 List<String> events = listener.serializedEvents();
                 assertEquals(SHUTDOWN, events.get(events.size() - 1));
                 int foundIndex = 0;

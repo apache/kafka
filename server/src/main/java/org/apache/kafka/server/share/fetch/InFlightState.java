@@ -48,7 +48,7 @@ public class InFlightState {
     private String memberId;
     // The state of the records before the transition. In case we need to revert an in-flight state, we revert the above
     // attributes of InFlightState to this state, namely - state, deliveryCount and memberId.
-    private InFlightState rollbackState;
+    private RollbackState rollbackState;
     // The timer task for the acquisition lock timeout.
     private AcquisitionLockTimerTask acquisitionLockTimeoutTask;
     // The boolean determines if the record has achieved a terminal state of ARCHIVED from which it cannot transition
@@ -205,7 +205,7 @@ public class InFlightState {
         InFlightState currentState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
         InFlightState updatedState = tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
         if (updatedState != null) {
-            rollbackState = currentState;
+            rollbackState = new RollbackState(currentState, maxDeliveryCount);
         }
         return updatedState;
     }
@@ -224,16 +224,23 @@ public class InFlightState {
             rollbackState = null;
             return;
         }
+        InFlightState previousState = rollbackState.state();
         // Check is acquisition lock timeout task is expired then mark the message as Available.
         if (acquisitionLockTimeoutTask != null && acquisitionLockTimeoutTask.hasExpired()) {
-            state = RecordState.AVAILABLE;
+            // If the acquisition lock timeout task has expired, we should mark the record as available.
+            // However, if the delivery count has reached the maximum delivery count, we should archive the record.
+            state = previousState.deliveryCount() >= rollbackState.maxDeliveryCount ?
+                RecordState.ARCHIVED : RecordState.AVAILABLE;
             memberId = EMPTY_MEMBER_ID;
             cancelAndClearAcquisitionLockTimeoutTask();
         } else {
-            state = rollbackState.state;
-            memberId = rollbackState.memberId;
+            state = previousState.state();
+            memberId = previousState.memberId();
         }
-        deliveryCount = rollbackState.deliveryCount();
+        // Do not revert the delivery count as the delivery count should not be reverted for the failed
+        // state transition. However, in the current implementation, the delivery count is only incremented
+        // when the state is updated to Acquired, hence reverting the delivery count is not needed when
+        // the state transition fails.
         rollbackState = null;
     }
 
@@ -270,5 +277,13 @@ public class InFlightState {
             ", deliveryCount=" + deliveryCount +
             ", memberId=" + memberId +
             ")";
+    }
+
+  /**
+   * This record is used to store the state before the transition. It is used to revert the state if the transition fails.
+   * @param state The state of the records before the transition.
+   * @param maxDeliveryCount The maximum delivery count for the record.
+   */
+    private record RollbackState(InFlightState state, int maxDeliveryCount) {
     }
 }

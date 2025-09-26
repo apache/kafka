@@ -38,11 +38,10 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-
-import static java.util.Collections.singleton;
 
 /**
  * Write the original consumed record into a dead letter queue. The dead letter queue is a Kafka topic located
@@ -85,7 +84,7 @@ public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byt
             if (!admin.listTopics().names().get().contains(topic)) {
                 log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
                 NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, sinkConfig.dlqTopicReplicationFactor());
-                admin.createTopics(singleton(schemaTopicRequest)).all().get();
+                admin.createTopics(Set.of(schemaTopicRequest)).all().get();
             }
         } catch (InterruptedException e) {
             throw new ConnectException("Could not initialize dead letter queue with topic=" + topic, e);

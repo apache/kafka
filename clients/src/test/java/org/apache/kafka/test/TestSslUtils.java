@@ -84,7 +84,6 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -211,6 +210,7 @@ public class TestSslUtils {
 
         sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, keyManagerAlgorithm);
         sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, trustManagerAlgorithm);
+        sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
         List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add(tlsProtocol);
@@ -686,6 +686,7 @@ public class TestSslUtils {
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
             sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
             sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+            sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
             List<String> enabledProtocols  = new ArrayList<>();
             enabledProtocols.add(tlsProtocol);
@@ -701,7 +702,8 @@ public class TestSslUtils {
 
             Map<String, Object> sslConfigs = new HashMap<>();
             sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
-            sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
+            sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of(tlsProtocol));
+            sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
             if (connectionMode != ConnectionMode.CLIENT || useClientCert) {
                 KeyPair keyPair = generateKeyPair(algorithm);
@@ -838,6 +840,7 @@ public class TestSslUtils {
         List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add(tlsProtocol);
         sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+        sslConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
 
         return sslConfigs;
     }

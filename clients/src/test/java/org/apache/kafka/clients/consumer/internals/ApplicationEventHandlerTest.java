@@ -27,7 +27,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -44,10 +45,11 @@ public class ApplicationEventHandlerTest {
     private final RequestManagers requestManagers = mock(RequestManagers.class);
     private final CompletableEventReaper applicationEventReaper = mock(CompletableEventReaper.class);
 
-    @Test
-    public void testRecordApplicationEventQueueSize() {
+    @ParameterizedTest
+    @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")
+    public void testRecordApplicationEventQueueSize(String groupName) {
         try (Metrics metrics = new Metrics();
-             AsyncConsumerMetrics asyncConsumerMetrics = spy(new AsyncConsumerMetrics(metrics));
+             AsyncConsumerMetrics asyncConsumerMetrics = spy(new AsyncConsumerMetrics(metrics, groupName));
              ApplicationEventHandler applicationEventHandler = new ApplicationEventHandler(
                      new LogContext(),
                      time,
