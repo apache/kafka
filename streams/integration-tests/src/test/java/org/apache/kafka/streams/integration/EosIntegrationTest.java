@@ -16,6 +16,70 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -38,83 +102,22 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Utils;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
-import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
-import org.apache.kafka.streams.errors.TaskCorruptedException;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinRecordsReceived;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.processor.StateRestoreListener;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
-import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.RangeQuery;
-import org.apache.kafka.streams.query.StateQueryRequest;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
-import org.apache.kafka.streams.query.StateQueryResult;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import static org.apache.kafka.streams.utils.TestUtils.waitForApplicationState;
-import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.TestUtils;
 import static org.apache.kafka.test.TestUtils.consumerConfig;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import org.junit.jupiter.api.AfterAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Tag("integration")
 @Timeout(600)
@@ -192,14 +195,14 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldBeAbleToRunWithEosEnabled(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToRunWithEosEnabled(final String groupProtocol) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldCommitCorrectOffsetIfInputTopicIsTransactional(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldCommitCorrectOffsetIfInputTopicIsTransactional(final String groupProtocol) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true, groupProtocol);
 
         try (final Admin adminClient = Admin.create(mkMap(mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())));
@@ -226,32 +229,32 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldBeAbleToRestartAfterClose(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToRestartAfterClose(final String groupProtocol) throws Exception {
         runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldBeAbleToCommitToMultiplePartitions(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToCommitToMultiplePartitions(final String groupProtocol) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldBeAbleToCommitMultiplePartitionOffsets(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToCommitMultiplePartitionOffsets(final String groupProtocol) throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldBeAbleToRunWithTwoSubtopologies(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToRunWithTwoSubtopologies(final String groupProtocol) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions(final String groupProtocol) throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false, groupProtocol);
     }
 
@@ -344,8 +347,8 @@ public class EosIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldBeAbleToPerformMultipleTransactions(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldBeAbleToPerformMultipleTransactions(final String groupProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
@@ -950,8 +953,8 @@ public class EosIntegrationTest {
     static final AtomicBoolean DID_REVOKE_IDLE_TASK = new AtomicBoolean(false);
 
     @ParameterizedTest
-    @MethodSource("groupProtocolAndProcessingThreadsParameters")
-    public void shouldNotCommitActiveTasksWithPendingInputIfRevokedTaskDidNotMakeProgress(final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldNotCommitActiveTasksWithPendingInputIfRevokedTaskDidNotMakeProgress(final String groupProtocol) throws Exception {
         // Reset static variables to ensure test isolation
         TASK_WITH_DATA.set(null);
         DID_REVOKE_IDLE_TASK.set(false);
@@ -1024,9 +1027,9 @@ public class EosIntegrationTest {
             // add second thread, to trigger rebalance
             // expect idle task to get revoked -- this should not trigger a TX commit
             streams.addStreamThread();
-
-            waitForCondition(DID_REVOKE_IDLE_TASK::get, "Idle Task was not revoked as expected.");
-
+            if (groupProtocol.equals("classic")) {
+                waitForCondition(DID_REVOKE_IDLE_TASK::get, "Idle Task was not revoked as expected.");
+            }
             // best-effort sanity check (might pass and not detect issue in slow environments)
             try {
                 readResult(SINGLE_PARTITION_OUTPUT_TOPIC, 1, "consumer", 10_000L);
