@@ -180,8 +180,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
-    public void initMetricsIfNeeded() {
-        metricsRecorder.initMetricsIfNeeded();
+    public void assignThread() {
+        metricsRecorder.assignThread();
     }
 
     @SuppressWarnings("unchecked")

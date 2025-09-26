@@ -106,6 +106,7 @@ public class MeteredKeyValueStore<K, V>
                 (query, positionBound, config, store) -> runKeyQuery(query, positionBound, config)
             )
         );
+    private Sensor restoreSensor;
 
     MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
                          final String metricsScope,
@@ -127,17 +128,13 @@ public class MeteredKeyValueStore<K, V>
         initStoreSerde(stateStoreContext);
         streamsMetrics = (StreamsMetricsImpl) stateStoreContext.metrics();
 
-        final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
-
-        // register and possibly restore the state from the logs
-        maybeMeasureLatency(() -> super.init(stateStoreContext, root), time, restoreSensor);
+        super.init(stateStoreContext, root);
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
         registerMetrics();
-        super.initMetricsIfNeeded();
+        super.assignThread();
     }
 
     private void registerMetrics() {
@@ -155,6 +152,7 @@ public class MeteredKeyValueStore<K, V>
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> openIterators.sum());
         openIterators = new OpenIterators(taskId, metricsScope, name(), streamsMetrics);
+        restoreSensor = StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
     }
 
     protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final SerdeGetter getter) {

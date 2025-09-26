@@ -273,7 +273,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
         registerMetrics();
     }
 

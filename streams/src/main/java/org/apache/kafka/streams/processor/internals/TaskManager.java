@@ -343,7 +343,7 @@ public class TaskManager {
                 final TaskId taskId = entry.getKey();
                 final Task task = stateDirectory.removeStartupTask(taskId);
                 if (task != null) {
-                    task.initializeMetricsIfNeeded();
+                    task.assignThread();
 
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
@@ -930,7 +930,7 @@ public class TaskManager {
         for (final Task task : tasks.allTasks()) {
             try {
                 task.initializeIfNeeded();
-                task.initializeMetricsIfNeeded();
+                task.assignThread();
                 task.clearTaskTimeout();
             } catch (final LockException lockException) {
                 // it is possible that if there are multiple threads within the instance that one thread
@@ -1085,7 +1085,7 @@ public class TaskManager {
         try {
             if (canTryInitializeTask(task.id(), nowMs)) {
                 task.initializeIfNeeded();
-                task.initializeMetricsIfNeeded();
+                task.assignThread();
                 taskIdToBackoffRecord.remove(task.id());
                 stateUpdater.add(task);
             } else {

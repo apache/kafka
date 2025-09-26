@@ -93,8 +93,8 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
-    public void initMetricsIfNeeded() {
-        inner.initMetricsIfNeeded();
+    public void assignThread() {
+        inner.assignThread();
     }
 
     @Override

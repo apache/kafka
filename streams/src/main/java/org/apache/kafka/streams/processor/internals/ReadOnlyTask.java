@@ -79,7 +79,7 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
-    public void initializeMetricsIfNeeded() {
+    public void assignThread() {
         throw new UnsupportedOperationException("This task is read-only");
     }
 

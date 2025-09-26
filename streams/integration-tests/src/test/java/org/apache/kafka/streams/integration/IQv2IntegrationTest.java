@@ -365,7 +365,7 @@ public class IQv2IntegrationTest {
                         }
 
                         @Override
-                        public void initMetricsIfNeeded() {
+                        public void assignThread() {
                         }
 
                         @Override

@@ -65,7 +65,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
     }
 
     @Override

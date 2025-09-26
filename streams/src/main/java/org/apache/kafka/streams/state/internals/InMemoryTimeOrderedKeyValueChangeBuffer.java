@@ -209,7 +209,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
         registerMetrics();
     }
 

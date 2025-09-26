@@ -89,7 +89,7 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
     }
 
     @Override

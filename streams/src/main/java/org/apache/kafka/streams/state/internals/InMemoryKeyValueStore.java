@@ -99,7 +99,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
     }
 
     @Override

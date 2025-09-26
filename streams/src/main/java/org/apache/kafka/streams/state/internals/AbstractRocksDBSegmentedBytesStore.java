@@ -322,7 +322,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
         registerMetrics();
     }
 

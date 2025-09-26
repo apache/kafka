@@ -129,11 +129,11 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void initializeMetricsIfNeeded() {
+    public void assignThread() {
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
         updateSensor = TaskMetrics.updateSensor(Thread.currentThread().getName(), id.toString(), streamsMetrics);
         for (final StateStore stateStore : topology.stateStores()) {
-            stateStore.initMetricsIfNeeded();
+            stateStore.assignThread();
         }
     }
 

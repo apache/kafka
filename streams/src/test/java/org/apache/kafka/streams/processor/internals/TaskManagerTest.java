@@ -4922,7 +4922,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void initializeMetricsIfNeeded() {
+        public void assignThread() {
         }
 
         @Override

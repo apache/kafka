@@ -1214,8 +1214,8 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
-        public void initMetricsIfNeeded() {
-            inner.initMetricsIfNeeded();
+        public void assignThread() {
+            inner.assignThread();
         }
 
         @Override
@@ -1283,8 +1283,8 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
-        public void initMetricsIfNeeded() {
-            inner.initMetricsIfNeeded();
+        public void assignThread() {
+            inner.assignThread();
         }
 
         @Override

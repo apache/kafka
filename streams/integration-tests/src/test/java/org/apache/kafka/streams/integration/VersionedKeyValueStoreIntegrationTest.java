@@ -821,7 +821,7 @@ public class VersionedKeyValueStoreIntegrationTest {
             }
 
             @Override
-            public void initMetricsIfNeeded() {
+            public void assignThread() {
             }
 
             @Override

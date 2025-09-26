@@ -127,8 +127,8 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     }
 
     @Override
-    public void initMetricsIfNeeded() {
-        store.initMetricsIfNeeded();
+    public void assignThread() {
+        store.assignThread();
     }
 
     @Override

@@ -65,7 +65,7 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
     @Override
     public void openExisting(final StateStoreContext context, final long streamTime) {
         metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
-        metricsRecorder.initMetricsIfNeeded();
+        metricsRecorder.assignThread();
         super.openExisting(context, streamTime);
     }
 }

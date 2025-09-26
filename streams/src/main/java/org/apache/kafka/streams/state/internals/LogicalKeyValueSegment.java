@@ -142,7 +142,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
         throw new UnsupportedOperationException("nothing to reassign");
     }
 

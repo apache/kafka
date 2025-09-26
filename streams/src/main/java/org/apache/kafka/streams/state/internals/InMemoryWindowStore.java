@@ -140,7 +140,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
         registerMetrics();
     }
 

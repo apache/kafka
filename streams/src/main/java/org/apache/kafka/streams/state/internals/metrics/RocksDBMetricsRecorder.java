@@ -150,7 +150,7 @@ public class RocksDBMetricsRecorder {
         this.streamsMetrics = streamsMetrics;
     }
 
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
         final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
         initSensors(streamsMetrics, metricContext);
         initGauges(streamsMetrics, metricContext);

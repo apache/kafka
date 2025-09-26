@@ -135,7 +135,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
         if (context != null) {
             registerMetrics();
         } else {

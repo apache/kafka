@@ -280,9 +280,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void initializeMetricsIfNeeded() {
+    public void assignThread() {
         for (final StateStore stateStore : topology.stateStores()) {
-            stateStore.initMetricsIfNeeded();
+            stateStore.assignThread();
         }
     }
 

@@ -104,6 +104,11 @@ public class CachingKeyValueStore
             }
         });
         super.init(stateStoreContext, root);
+    }
+
+    @Override
+    public void assignThread() {
+        super.assignThread();
         // save the stream thread as we only ever want to trigger a flush
         // when the stream thread is the current thread.
         streamThread = Thread.currentThread();

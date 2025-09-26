@@ -64,8 +64,8 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     }
 
     @Override
-    public void initMetricsIfNeeded() {
-        wrapped.initMetricsIfNeeded();
+    public void assignThread() {
+        wrapped.assignThread();
     }
 
     @SuppressWarnings("unchecked")

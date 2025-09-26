@@ -383,9 +383,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
         registerMetrics();
-        metricsRecorder.initMetricsIfNeeded();
+        metricsRecorder.assignThread();
     }
 
     private void registerMetrics() {

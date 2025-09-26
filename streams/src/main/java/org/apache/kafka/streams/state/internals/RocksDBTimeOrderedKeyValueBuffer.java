@@ -195,7 +195,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     }
 
     @Override
-    public void initMetricsIfNeeded() {
+    public void assignThread() {
     }
 
     @Override

@@ -161,8 +161,8 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
-    public void initMetricsIfNeeded() {
-        store.initMetricsIfNeeded();
+    public void assignThread() {
+        store.assignThread();
     }
 
     @Override
