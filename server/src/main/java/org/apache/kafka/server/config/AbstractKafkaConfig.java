@@ -206,29 +206,23 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             List<Endpoint> duplicatesWithIpHosts = partitionedByValidIp.get(true);
             List<Endpoint> duplicatesWithoutIpHosts = partitionedByValidIp.get(false);
 
-            if (requireDistinctPorts) {
-                checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners);
-            }
+            checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners);
 
             if (duplicatesWithIpHosts.isEmpty()) {
                 // No-op
             } else if (duplicatesWithIpHosts.size() == 2) {
-                if (requireDistinctPorts) {
-                    String errorMessage = "If you have two listeners on the same port then one needs to be IPv4 and the other IPv6, listeners: " + listeners + ", port: " + port;
-                    Endpoint ep1 = duplicatesWithIpHosts.get(0);
-                    Endpoint ep2 = duplicatesWithIpHosts.get(1);
-                    if (!validateOneIsIpv4AndOtherIpv6(ep1.host(), ep2.host())) {
-                        throw new IllegalArgumentException(errorMessage);
-                    }
+                String errorMessage = "If you have two listeners on the same port then one needs to be IPv4 and the other IPv6, listeners: " + listeners + ", port: " + port;
+                Endpoint ep1 = duplicatesWithIpHosts.get(0);
+                Endpoint ep2 = duplicatesWithIpHosts.get(1);
+                if (!validateOneIsIpv4AndOtherIpv6(ep1.host(), ep2.host())) {
+                    throw new IllegalArgumentException(errorMessage);
+                }
 
-                    if (!duplicatesWithoutIpHosts.isEmpty()) {
-                        throw new IllegalArgumentException(errorMessage);
-                    }
+                if (!duplicatesWithoutIpHosts.isEmpty()) {
+                    throw new IllegalArgumentException(errorMessage);
                 }
             } else {
-                if (requireDistinctPorts) {
-                    throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has an IPv4 address and the other IPv6 address, listeners: " + listeners + ", port: " + port);
-                }
+                throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has an IPv4 address and the other IPv6 address, listeners: " + listeners + ", port: " + port);
             }
         });
     }
