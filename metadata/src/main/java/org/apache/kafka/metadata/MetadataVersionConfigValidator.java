@@ -32,11 +32,11 @@ public class MetadataVersionConfigValidator implements MetadataPublisher {
     private final FaultHandler faultHandler;
 
     public MetadataVersionConfigValidator(
-        int brokerId,
+        int id,
         Supplier<Boolean> hasMultiLogDirs,
         FaultHandler faultHandler
     ) {
-        this.name = "MetadataVersionPublisher(id=" + brokerId + ")";
+        this.name = "MetadataVersionPublisher(id=" + id + ")";
         this.hasMultiLogDirs = hasMultiLogDirs;
         this.faultHandler = faultHandler;
     }
