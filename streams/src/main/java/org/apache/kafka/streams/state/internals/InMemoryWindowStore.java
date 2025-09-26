@@ -25,12 +25,10 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -81,8 +79,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private volatile boolean open = false;
 
     private final Position position;
-    private TaskId taskId;
-    private StreamsMetricsImpl streamsMetrics;
 
     public InMemoryWindowStore(final String name,
                                final long retentionPeriod,
@@ -106,9 +102,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         this.internalProcessorContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
-
-        streamsMetrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
-        taskId = stateStoreContext.taskId();
 
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
@@ -141,14 +134,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public void assignThread() {
-        registerMetrics();
-    }
-
-    private void registerMetrics() {
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
                 Thread.currentThread().getName(),
-                taskId.toString(),
-                streamsMetrics
+                internalProcessorContext.taskId().toString(),
+                ProcessorContextUtils.metricsImpl(internalProcessorContext)
         );
     }
 

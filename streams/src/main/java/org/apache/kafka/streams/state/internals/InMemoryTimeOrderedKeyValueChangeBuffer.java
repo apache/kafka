@@ -210,10 +210,6 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
     @Override
     public void assignThread() {
-        registerMetrics();
-    }
-
-    private void registerMetrics() {
         bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
             taskId,
             METRIC_SCOPE,

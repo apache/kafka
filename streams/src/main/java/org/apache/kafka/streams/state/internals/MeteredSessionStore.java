@@ -85,6 +85,7 @@ public class MeteredSessionStore<K, V>
                             (query, positionBound, config, store) -> runRangeQuery(query, positionBound, config)
                     )
             );
+    private Sensor restoreSensor;
 
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
@@ -107,12 +108,13 @@ public class MeteredSessionStore<K, V>
         initStoreSerde(stateStoreContext);
         streamsMetrics = (StreamsMetricsImpl) stateStoreContext.metrics();
 
-        registerMetrics();
-        final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        super.init(stateStoreContext, root);
+    }
 
-        // register and possibly restore the state from the logs
-        maybeMeasureLatency(() -> super.init(stateStoreContext, root), time, restoreSensor);
+    @Override
+    public void assignThread() {
+        registerMetrics();
+        super.assignThread();
     }
 
     private void registerMetrics() {
@@ -130,6 +132,8 @@ public class MeteredSessionStore<K, V>
                     return openIteratorsIterator.hasNext() ? openIteratorsIterator.next().startTimestamp() : null;
                 }
         );
+
+        restoreSensor = StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
     }
 
     private void initStoreSerde(final StateStoreContext context) {

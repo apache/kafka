@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -137,18 +136,14 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     @Override
     public void assignThread() {
         if (context != null) {
-            registerMetrics();
+            expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
+                Thread.currentThread().getName(),
+                taskId.toString(),
+                this.context.metrics()
+            );
         } else {
             expiredRecordSensor = null;
         }
-    }
-
-    private void registerMetrics() {
-        expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-            Thread.currentThread().getName(),
-            taskId.toString(),
-            this.context.metrics()
-        );
     }
 
     @Override

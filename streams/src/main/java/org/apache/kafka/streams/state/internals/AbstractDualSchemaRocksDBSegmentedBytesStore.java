@@ -24,11 +24,9 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -63,8 +61,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     protected Position position;
     protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
-    private TaskId taskId;
-    private StreamsMetricsImpl streamsMetrics;
 
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
                                                  final KeySchema baseKeySchema,
@@ -246,9 +242,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.internalProcessorContext = asInternalProcessorContext(stateStoreContext);
 
-        streamsMetrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
-        taskId = stateStoreContext.taskId();
-
         final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
@@ -274,14 +267,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     @Override
     public void assignThread() {
-        registerMetrics();
-    }
-
-    private void registerMetrics() {
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
                 Thread.currentThread().getName(),
-                taskId.toString(),
-                streamsMetrics
+                internalProcessorContext.taskId().toString(),
+                ProcessorContextUtils.metricsImpl(internalProcessorContext)
         );
     }
 

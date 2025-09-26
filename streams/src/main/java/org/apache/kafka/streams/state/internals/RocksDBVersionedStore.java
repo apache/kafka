@@ -25,12 +25,10 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -109,8 +107,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     private Position position;
     private OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
-    private TaskId taskId;
-    private StreamsMetricsImpl streamsMetrics;
 
     RocksDBVersionedStore(final String name, final String metricsScope, final long historyRetention, final long segmentInterval) {
         this.name = name;
@@ -355,10 +351,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.internalProcessorContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
 
-        streamsMetrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
-        taskId = stateStoreContext.taskId();
-
-        metricsRecorder.init(ProcessorContextUtils.metricsImpl(stateStoreContext), taskId);
+        metricsRecorder.init(ProcessorContextUtils.metricsImpl(stateStoreContext), stateStoreContext.taskId());
 
         final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
         positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
@@ -384,16 +377,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public void assignThread() {
-        registerMetrics();
-        metricsRecorder.assignThread();
-    }
-
-    private void registerMetrics() {
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
                 Thread.currentThread().getName(),
-                taskId.toString(),
-                streamsMetrics
+                internalProcessorContext.taskId().toString(),
+                ProcessorContextUtils.metricsImpl(internalProcessorContext)
         );
+        metricsRecorder.assignThread();
     }
 
     // VisibleForTesting
