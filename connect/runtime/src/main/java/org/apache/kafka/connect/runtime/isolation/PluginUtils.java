@@ -205,7 +205,8 @@ public class PluginUtils {
      * Each element may be a directory or a JAR/ZIP archive path.
      * - For a directory, returns its immediate children that are directories, archives, or .class files.
      * - For an archive, returns the archive itself.
-     * - Empty elements are interpreted as the current working directory.
+     * If the comma-separated list contains empty elements (e.g., path1,,path2), they are interpreted as
+     * the current working directory.
      * All returned paths are absolute. Non-existent or invalid elements are ignored unless {@code failFast} is true.
      *
      * @param pluginPath A comma-separated list of plugin roots; may be null
