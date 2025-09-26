@@ -2470,7 +2470,6 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testShareFetchProcessingExceptions() throws Exception {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
@@ -3232,6 +3231,7 @@ public class SharePartitionManagerTest {
         return CollectionConverters.asScala(logReadResults).toSeq();
     }
 
+    @SuppressWarnings("unchecked")
     static void mockReplicaManagerDelayedShareFetch(ReplicaManager replicaManager,
                                                     DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory) {
         doAnswer(invocationOnMock -> {

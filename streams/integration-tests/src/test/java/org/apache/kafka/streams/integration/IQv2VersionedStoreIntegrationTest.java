@@ -47,7 +47,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -57,7 +60,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.stream.Stream;
 
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
@@ -83,16 +88,25 @@ public class IQv2VersionedStoreIntegrationTest {
     private static final Long[] RECORD_TIMESTAMPS = {BASE_TIMESTAMP_LONG, BASE_TIMESTAMP_LONG + 10, BASE_TIMESTAMP_LONG + 20, BASE_TIMESTAMP_LONG + 30};
     private static final int RECORD_NUMBER = RECORD_VALUES.length;
     private static final int LAST_INDEX = RECORD_NUMBER - 1;
-    private static final Position INPUT_POSITION = Position.emptyPosition();
+    private Position inputPosition;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "true")));
 
     private KafkaStreams kafkaStreams;
+    private String groupProtocol;
 
     @BeforeAll
-    public static void before() throws Exception {
+    public static void beforeAll() throws Exception {
         CLUSTER.start();
-
+    }
+    
+    @BeforeEach
+    public void beforeEach() throws Exception {
+        // Delete and recreate the topic to ensure clean state for each test
+        CLUSTER.deleteTopic(INPUT_TOPIC_NAME);
+        CLUSTER.createTopic(INPUT_TOPIC_NAME, 1, 1);
+        
+        // Set up fresh test data
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
@@ -103,19 +117,21 @@ public class IQv2VersionedStoreIntegrationTest {
             producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[2], RECORD_KEY, RECORD_VALUES[2])).get();
             producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[3], RECORD_KEY, RECORD_VALUES[3])).get();
         }
-        INPUT_POSITION.withComponent(INPUT_TOPIC_NAME, 0, 3);
+        inputPosition = Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, 3);
     }
 
-    @BeforeEach
-    public void beforeTest() {
+    private void setup(final String groupProtocol, final TestInfo testInfo) {
+        this.groupProtocol = groupProtocol;
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(INPUT_TOPIC_NAME,
             Materialized.as(Stores.persistentVersionedKeyValueStore(STORE_NAME, HISTORY_RETENTION, SEGMENT_INTERVAL)));
         final Properties configs = new Properties();
-        configs.put(StreamsConfig.APPLICATION_ID_CONFIG, "app");
+        final String safeTestName = safeUniqueTestName(testInfo);
+        configs.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         configs.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
         configs.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
+        configs.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         kafkaStreams = IntegrationTestUtils.getStartedStreams(configs, builder, true);
     }
 
@@ -132,8 +148,19 @@ public class IQv2VersionedStoreIntegrationTest {
         CLUSTER.stop();
     }
 
-    @Test
-    public void verifyStore() {
+    private static Stream<Arguments> groupProtocolParameters() {
+        return Stream.of(
+            Arguments.of("classic", "CLASSIC protocol"),
+            Arguments.of("streams", "STREAMS protocol")
+        );
+    }
+
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("groupProtocolParameters")
+    public void verifyStore(final String groupProtocol, final String testName, final TestInfo testInfo) throws Exception {
+        // Set up streams
+        setup(groupProtocol, testInfo);
+        
         /* Test Versioned Key Queries */
         // retrieve the latest value
         shouldHandleVersionedKeyQuery(Optional.empty(), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Optional.empty());
@@ -255,7 +282,10 @@ public class IQv2VersionedStoreIntegrationTest {
     private void shouldHandleRaceCondition() {
         final MultiVersionedKeyQuery<Integer, Integer> query = defineQuery(RECORD_KEY, Optional.empty(), Optional.empty(), ResultOrder.ANY);
 
-        final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = sendRequestAndReceiveResults(query, kafkaStreams);
+        // For race condition test, we don't use position bounds since we're testing concurrent updates
+        final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
+        final StateQueryResult<VersionedRecordIterator<Integer>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+        final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = result.getPartitionResults();
 
         // verify results in two steps
         for (final Entry<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResultsEntry : partitionResults.entrySet()) {
@@ -327,14 +357,14 @@ public class IQv2VersionedStoreIntegrationTest {
         return query;
     }
 
-    private static Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> sendRequestAndReceiveResults(final MultiVersionedKeyQuery<Integer, Integer> query, final KafkaStreams kafkaStreams) {
-        final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(INPUT_POSITION));
+    private Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> sendRequestAndReceiveResults(final MultiVersionedKeyQuery<Integer, Integer> query, final KafkaStreams kafkaStreams) {
+        final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(inputPosition));
         final StateQueryResult<VersionedRecordIterator<Integer>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         return result.getPartitionResults();
     }
 
-    private static QueryResult<VersionedRecord<Integer>> sendRequestAndReceiveResults(final VersionedKeyQuery<Integer, Integer> query, final KafkaStreams kafkaStreams) {
-        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(INPUT_POSITION));
+    private QueryResult<VersionedRecord<Integer>> sendRequestAndReceiveResults(final VersionedKeyQuery<Integer, Integer> query, final KafkaStreams kafkaStreams) {
+        final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(inputPosition));
         final StateQueryResult<VersionedRecord<Integer>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         return result.getOnlyPartitionResult();
     }
@@ -352,7 +382,7 @@ public class IQv2VersionedStoreIntegrationTest {
     /**
      * This method inserts a new value (999999) for the key in the oldest timestamp (RECORD_TIMESTAMPS[0]).
      */
-    private static void updateRecordValue() {
+    private void updateRecordValue() {
         // update the record value at RECORD_TIMESTAMPS[0]
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -361,8 +391,9 @@ public class IQv2VersionedStoreIntegrationTest {
         try (final KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerProps)) {
             producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMPS[0], RECORD_KEY, 999999));
         }
-        INPUT_POSITION.withComponent(INPUT_TOPIC_NAME, 0, 4);
-        assertThat(INPUT_POSITION, equalTo(Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, 4)));
+
+        inputPosition = inputPosition.withComponent(INPUT_TOPIC_NAME, 0, 4);
+        assertThat(inputPosition, equalTo(Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, 4)));
 
         // make sure that the new value is picked up by the store
         final Properties consumerProps = new Properties();
