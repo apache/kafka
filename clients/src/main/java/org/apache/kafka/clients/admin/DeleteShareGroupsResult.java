@@ -25,7 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The result of the {@link Admin#deleteShareGroups(Collection <String>, DeleteShareGroupsOptions)} call.
+ * The result of the {@link Admin#deleteShareGroups(Collection, DeleteShareGroupsOptions)} call.
  * <p></p>
  * The API of this class is evolving, see {@link Admin} for details.
  */

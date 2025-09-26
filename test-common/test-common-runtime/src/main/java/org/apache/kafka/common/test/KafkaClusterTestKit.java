@@ -45,7 +45,6 @@ import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -182,18 +181,31 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.putIfAbsent(INTER_BROKER_LISTENER_NAME_CONFIG, brokerListenerName);
             props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, controllerListenerName);
 
-            StringBuilder quorumVoterStringBuilder = new StringBuilder();
-            String prefix = "";
-            for (int nodeId : nodes.controllerNodes().keySet()) {
-                quorumVoterStringBuilder.append(prefix).
-                    append(nodeId).
-                    append("@").
-                    append("localhost").
-                    append(":").
-                    append(socketFactoryManager.getOrCreatePortForListener(nodeId, controllerListenerName));
-                prefix = ",";
+            if (!standalone && initialVoterSet.isEmpty()) {
+                StringBuilder quorumVoterStringBuilder = new StringBuilder();
+                String prefix = "";
+                for (int nodeId : nodes.controllerNodes().keySet()) {
+                    quorumVoterStringBuilder.append(prefix).
+                        append(nodeId).
+                        append("@").
+                        append("localhost").
+                        append(":").
+                        append(socketFactoryManager.getOrCreatePortForListener(nodeId, controllerListenerName));
+                    prefix = ",";
+                }
+                props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, quorumVoterStringBuilder.toString());
+            } else {
+                StringBuilder bootstrapServersStringBuilder = new StringBuilder();
+                String prefix = "";
+                for (int nodeId : nodes.controllerNodes().keySet()) {
+                    bootstrapServersStringBuilder.append(prefix).
+                        append("localhost").
+                        append(":").
+                        append(socketFactoryManager.getOrCreatePortForListener(nodeId, controllerListenerName));
+                    prefix = ",";
+                }
+                props.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, bootstrapServersStringBuilder.toString());
             }
-            props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, quorumVoterStringBuilder.toString());
 
             // reduce log cleaner offset map memory usage
             props.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
@@ -277,7 +289,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Time.SYSTEM,
                         new Metrics(),
                         CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                        List.of(),
+                        QuorumConfig.parseBootstrapServers(config.quorumConfig().bootstrapServers()),
                         faultHandlerFactory,
                         socketFactoryManager.getOrCreateSocketFactory(node.id())
                     );
@@ -305,7 +317,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             Time.SYSTEM,
                             new Metrics(),
                             CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
-                            List.of(),
+                            QuorumConfig.parseBootstrapServers(config.quorumConfig().bootstrapServers()),
                             faultHandlerFactory,
                             socketFactoryManager.getOrCreateSocketFactory(node.id())
                         );
@@ -467,8 +479,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 return;
             }
             formatter.setReleaseVersion(nodes.bootstrapMetadata().metadataVersion());
-            formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME,
-                nodes.bootstrapMetadata().featureLevel(KRaftVersion.FEATURE_NAME));
             formatter.setUnstableFeatureVersionsEnabled(true);
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
@@ -477,53 +487,43 @@ public class KafkaClusterTestKit implements AutoCloseable {
             } else {
                 formatter.setMetadataLogDirectory(Optional.empty());
             }
-            if (nodes.bootstrapMetadata().featureLevel(KRaftVersion.FEATURE_NAME) > 0) {
-                StringBuilder dynamicVotersBuilder = new StringBuilder();
-                String prefix = "";
-                if (standalone) {
-                    if (nodeId == TestKitDefaults.CONTROLLER_ID_OFFSET) {
-                        final var controllerNode = nodes.controllerNodes().get(nodeId);
-                        dynamicVotersBuilder.append(
-                            String.format(
-                                "%d@localhost:%d:%s",
-                                controllerNode.id(),
-                                socketFactoryManager.
-                                    getOrCreatePortForListener(controllerNode.id(), controllerListenerName),
-                                controllerNode.metadataDirectoryId()
-                            )
-                        );
-                        formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
-                    } else {
-                        formatter.setNoInitialControllersFlag(true);
-                    }
-                } else if (initialVoterSet.isPresent()) {
-                    for (final var controllerNode : initialVoterSet.get().entrySet()) {
-                        final var voterId = controllerNode.getKey();
-                        final var voterDirectoryId = controllerNode.getValue();
-                        dynamicVotersBuilder.append(prefix);
-                        prefix = ",";
-                        dynamicVotersBuilder.append(
-                            String.format(
-                                "%d@localhost:%d:%s",
-                                voterId,
-                                socketFactoryManager.
-                                    getOrCreatePortForListener(voterId, controllerListenerName),
-                                voterDirectoryId
-                            )
-                        );
-                    }
-                    formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
-                } else {
-                    for (TestKitNode controllerNode : nodes.controllerNodes().values()) {
-                        int port = socketFactoryManager.
-                            getOrCreatePortForListener(controllerNode.id(), controllerListenerName);
-                        dynamicVotersBuilder.append(prefix);
-                        prefix = ",";
-                        dynamicVotersBuilder.append(String.format("%d@localhost:%d:%s",
-                            controllerNode.id(), port, controllerNode.metadataDirectoryId()));
-                    }
+            StringBuilder dynamicVotersBuilder = new StringBuilder();
+            String prefix = "";
+            if (standalone) {
+                if (nodeId == TestKitDefaults.BROKER_ID_OFFSET + TestKitDefaults.CONTROLLER_ID_OFFSET) {
+                    final var controllerNode = nodes.controllerNodes().get(nodeId);
+                    dynamicVotersBuilder.append(
+                        String.format(
+                            "%d@localhost:%d:%s",
+                            controllerNode.id(),
+                            socketFactoryManager.
+                                getOrCreatePortForListener(controllerNode.id(), controllerListenerName),
+                            controllerNode.metadataDirectoryId()
+                        )
+                    );
                     formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
                 }
+                // when the nodeId != TestKitDefaults.CONTROLLER_ID_OFFSET, the node is formatting with
+                // the --no-initial-controllers flag
+                formatter.setHasDynamicQuorum(true);
+            } else if (initialVoterSet.isPresent()) {
+                for (final var controllerNode : initialVoterSet.get().entrySet()) {
+                    final var voterId = controllerNode.getKey();
+                    final var voterDirectoryId = controllerNode.getValue();
+                    dynamicVotersBuilder.append(prefix);
+                    prefix = ",";
+                    dynamicVotersBuilder.append(
+                        String.format(
+                            "%d@localhost:%d:%s",
+                            voterId,
+                            socketFactoryManager.
+                                getOrCreatePortForListener(voterId, controllerListenerName),
+                            voterDirectoryId
+                        )
+                    );
+                }
+                formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
+                formatter.setHasDynamicQuorum(true);
             }
             formatter.run();
         } catch (Exception e) {

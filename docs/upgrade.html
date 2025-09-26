@@ -145,6 +145,26 @@
             </li>
         </ul>
     </li>
+    <li>
+        The <code>controller.quorum.auto.join.enable</code> has been added to <code>QuorumConfig</code>, enabling KRaft controllers to automatically join the cluster's voter set,
+        and defaults to false.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/nyH1D">KIP-853</a>.
+    </li>
+    <li>
+        The AppInfo metrics will deprecate the following metric names, which will be removed in Kafka 5.0:
+        <ul>
+            <li><code>[name=start-time-ms, group=app-info, description=Metric indicating start-time-ms, tags={}]</code></li>
+            <li><code>[name=commit-id, group=app-info, description=Metric indicating commit-id, tags={}]</code></li>
+            <li><code>[name=version, group=app-info, description=Metric indicating version, tags={}]</code></li>
+        </ul>
+        In addition, the <code>client-id</code> will be added to the tags of these metrics. The new metric names will be:
+        <ul>
+            <li><code>[name=start-time-ms, group=app-info, description=Metric indicating start-time-ms, tags={client-id=...}]</code></li>
+            <li><code>[name=commit-id, group=app-info, description=Metric indicating commit-id, tags={client-id=...}]</code></li>
+            <li><code>[name=version, group=app-info, description=Metric indicating version, tags={client-id=...}]</code></li>
+        </ul>
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/3gn0Ew">KIP-1120</a>.
+    </li>
 </ul>
 
 <h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0</a></h4>
@@ -257,6 +277,11 @@
         <li>
             The filename for rotated <code>state-change.log</code> files has been updated from <code>stage-change.log.[date]</code> to <code>state-change.log.[date]</code> in the log4j2.yaml configuration file.
             See <a href="https://issues.apache.org/jira/browse/KAFKA-19576">KAFKA-19576</a> for details.
+        </li>
+        <li>
+            Kafka Streams include a critical fix to upgrade from <code>KStreams#transformValues()</code> (remove with 4.0.0 release)
+            to <code>KStreams#processValues()</code>.
+            For more details, see the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a>.
         </li>
     </ul>
     <h5><a id="upgrade_servers_400_notable" href="#upgrade_servers_400_notable">Notable changes in 4.0.0</a></h5>
@@ -416,12 +441,12 @@
                         <li>The <code>--whitelist</code> option was removed from the <code>kafka-console-consumer</code> command line tool.
                             Please use <code>--include</code> instead.
                         </li>
-                        <li>Redirections from the old tools packages have been removed: 
-                            <code>kafka.admin.FeatureCommand</code>, 
-                            <code>kafka.tools.ClusterTool</code>, 
+                        <li>Redirections from the old tools packages have been removed:
+                            <code>kafka.admin.FeatureCommand</code>,
+                            <code>kafka.tools.ClusterTool</code>,
                             <code>kafka.tools.EndToEndLatency</code>,
-                            <code>kafka.tools.StateChangeLogMerger</code>, 
-                            <code>kafka.tools.StreamsResetter</code>, 
+                            <code>kafka.tools.StateChangeLogMerger</code>,
+                            <code>kafka.tools.StreamsResetter</code>,
                             <code>kafka.tools.JmxTool</code>.
                         </li>
                         <li>The <code>--authorizer</code>, <code>--authorizer-properties</code>, and <code>--zk-tls-config-file</code> options were removed from the <code>kafka-acls</code> command line tool.
@@ -485,7 +510,7 @@
                         </li>
                         <li>The deprecated <code>sendOffsetsToTransaction(Map&lt;TopicPartition, OffsetAndMetadata&gt;, String)</code> method has been removed from the Producer API.
                         </li>
-                        <li>The default <code>linger.ms</code> changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in 
+                        <li>The default <code>linger.ms</code> changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in
                             similar or lower producer latency despite the increased linger.
                         </li>
                     </ul>
@@ -541,10 +566,15 @@
 			    See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
                         </li>
                         <li>
-			    The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
+                            The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
                         </li>
                         <li>
-			    For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
+                            For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
+                        </li>
+                        <li>
+                            If you are using <code>KStream#transformValues()</code> which was removed with Apache Kafka 4.0.0 release,
+                            and you need to rewrite your program to use <code>KStreams#processValues()</code> instead,
+                            pay close attention to the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors">migration guide</a>.
                         </li>
                     </ul>
                 </li>

@@ -72,6 +72,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RaftUtilTest {
@@ -644,6 +645,30 @@ public class RaftUtilTest {
             UnsupportedVersionException.class,
             () -> AddRaftVoterRequestDataJsonConverter.write(request, (short) 0)
         );
+    }
+
+    @Test
+    public void testAddVoterResponse() {
+        for (Errors error : Errors.values()) {
+            AddRaftVoterResponseData addRaftVoterResponseData = RaftUtil.addVoterResponse(error, null);
+            assertEquals(error.code(), addRaftVoterResponseData.errorCode());
+            if (Errors.NONE.equals(error))
+                assertNull(addRaftVoterResponseData.errorMessage());
+            else
+                assertEquals(error.message(), addRaftVoterResponseData.errorMessage());
+        }
+    }
+
+    @Test
+    public void testRemoveVoterResponse() {
+        for (Errors error : Errors.values()) {
+            RemoveRaftVoterResponseData removeRaftVoterResponseData = RaftUtil.removeVoterResponse(error, null);
+            assertEquals(error.code(), removeRaftVoterResponseData.errorCode());
+            if (Errors.NONE.equals(error))
+                assertNull(removeRaftVoterResponseData.errorMessage());
+            else
+                assertEquals(error.message(), removeRaftVoterResponseData.errorMessage());
+        }
     }
 
     private Records createRecords() {

@@ -2494,8 +2494,7 @@ public class KafkaAdminClient extends AdminClient {
                     DescribeClusterResponse response = (DescribeClusterResponse) abstractResponse;
                     Errors error = Errors.forCode(response.data().errorCode());
                     if (error != Errors.NONE) {
-                        ApiError apiError = new ApiError(error, response.data().errorMessage());
-                        handleFailure(apiError.exception());
+                        handleFailure(error.exception(response.data().errorMessage()));
                         return;
                     }
 
@@ -2691,10 +2690,9 @@ public class KafkaAdminClient extends AdminClient {
                         } else {
                             List<FilterResult> filterResults = new ArrayList<>();
                             for (DeleteAclsMatchingAcl matchingAcl : filterResult.matchingAcls()) {
-                                ApiError aclError = new ApiError(Errors.forCode(matchingAcl.errorCode()),
-                                    matchingAcl.errorMessage());
+                                Errors aclError = Errors.forCode(matchingAcl.errorCode());
                                 AclBinding aclBinding = DeleteAclsResponse.aclBinding(matchingAcl);
-                                filterResults.add(new FilterResult(aclBinding, aclError.exception()));
+                                filterResults.add(new FilterResult(aclBinding, aclError.exception(matchingAcl.errorMessage())));
                             }
                             future.complete(new FilterResults(filterResults));
                         }
@@ -3995,7 +3993,7 @@ public class KafkaAdminClient extends AdminClient {
                             for (ReassignablePartitionResponse partition : topicResponse.partitions()) {
                                 errors.put(
                                     new TopicPartition(topicName, partition.partitionIndex()),
-                                    new ApiError(topLevelError, response.data().errorMessage()).exception()
+                                    topLevelError.exception(response.data().errorMessage())
                                 );
                                 receivedResponsesCount += 1;
                             }
@@ -4035,7 +4033,7 @@ public class KafkaAdminClient extends AdminClient {
                         if (partitionError == Errors.NONE) {
                             errors.put(tp, null);
                         } else {
-                            errors.put(tp, new ApiError(partitionError, partResponse.errorMessage()).exception());
+                            errors.put(tp, partitionError.exception(partResponse.errorMessage()));
                         }
                         receivedResponsesCount += 1;
                     }
@@ -4111,7 +4109,7 @@ public class KafkaAdminClient extends AdminClient {
                         handleNotControllerError(error);
                         break;
                     default:
-                        partitionReassignmentsFuture.completeExceptionally(new ApiError(error, response.data().errorMessage()).exception());
+                        partitionReassignmentsFuture.completeExceptionally(error.exception(response.data().errorMessage()));
                         break;
                 }
                 Map<TopicPartition, PartitionReassignment> reassignmentMap = new HashMap<>();
@@ -4993,14 +4991,11 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 handleNotControllerError(response);
                 AddRaftVoterResponse addResponse = (AddRaftVoterResponse) response;
-                if (addResponse.data().errorCode() != Errors.NONE.code()) {
-                    ApiError error = new ApiError(
-                        addResponse.data().errorCode(),
-                        addResponse.data().errorMessage());
-                    future.completeExceptionally(error.exception());
-                } else {
+                Errors error = Errors.forCode(addResponse.data().errorCode());
+                if (error != Errors.NONE)
+                    future.completeExceptionally(error.exception(addResponse.data().errorMessage()));
+                else
                     future.complete(null);
-                }
             }
 
             @Override
@@ -5038,14 +5033,11 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 handleNotControllerError(response);
                 RemoveRaftVoterResponse addResponse = (RemoveRaftVoterResponse) response;
-                if (addResponse.data().errorCode() != Errors.NONE.code()) {
-                    ApiError error = new ApiError(
-                        addResponse.data().errorCode(),
-                        addResponse.data().errorMessage());
-                    future.completeExceptionally(error.exception());
-                } else {
+                Errors error = Errors.forCode(addResponse.data().errorCode());
+                if (error != Errors.NONE)
+                    future.completeExceptionally(error.exception(addResponse.data().errorMessage()));
+                else
                     future.complete(null);
-                }
             }
 
             @Override
