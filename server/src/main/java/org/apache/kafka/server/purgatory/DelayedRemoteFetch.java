@@ -58,7 +58,7 @@ public class DelayedRemoteFetch extends DelayedOperation {
     // For compatibility, metrics are defined to be under `kafka.server.DelayedRemoteFetchMetrics` class
     private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup("kafka.server", "DelayedRemoteFetchMetrics");
 
-    static final Meter EXPIRED_REQUEST_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
+    private static final Meter EXPIRED_REQUEST_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
 
     private final Map<TopicIdPartition, Future<Void>> remoteFetchTasks;
     private final Map<TopicIdPartition, CompletableFuture<RemoteLogReadResult>> remoteFetchResults;
@@ -95,10 +95,13 @@ public class DelayedRemoteFetch extends DelayedOperation {
 
     /**
      * The operation can be completed if:
-     *
+     * <p>
      * Case a: This broker is no longer the leader of the partition it tries to fetch
+     * <p>
      * Case b: This broker does not know the partition it tries to fetch
-     * Case c: All the remote storage read request completed (succeeded or failed)
+     * <p>
+     * Case c: All the remote storage read requests completed (succeeded or failed)
+     * <p>
      * Case d: The partition is in an offline log directory on this broker
      *
      * Upon completion, should return whatever data is available for each valid partition
