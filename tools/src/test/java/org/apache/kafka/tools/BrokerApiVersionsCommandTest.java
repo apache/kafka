@@ -45,14 +45,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 })
 public class BrokerApiVersionsCommandTest {
     @ClusterTest
-    public void testBrokerApiVersionsCommandOutput(ClusterInstance clusterInstance) {
+    public void testSingleBrokerApiVersionsCommandOutput(ClusterInstance clusterInstance) {
+        String output = ToolsTestUtils.grabConsoleOutput(() ->
+                BrokerApiVersionsCommand.mainNoExit("--bootstrap-server", clusterInstance.bootstrapServers()));
+
+        Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();
+        validateApiVersionCommand(ApiMessageType.ListenerType.BROKER, lineIter);
+        assertFalse(lineIter.hasNext());
+    }
+
+    @ClusterTest(brokers = 3)
+    public void testMultiBrokerApiVersionsCommandOutput(ClusterInstance clusterInstance) {
         String output = ToolsTestUtils.grabConsoleOutput(() ->
                 BrokerApiVersionsCommand.mainNoExit("--bootstrap-server", clusterInstance.bootstrapServers()));
         Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();
         assertTrue(lineIter.hasNext());
-        assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
+        for (int i = 0; i < 3; i++) {
+            validateApiVersionCommand(ApiMessageType.ListenerType.BROKER, lineIter);
+        }
+        assertFalse(lineIter.hasNext());
+    }
 
-        ApiMessageType.ListenerType listenerType = ApiMessageType.ListenerType.BROKER;
+    private static void validateApiVersionCommand(ApiMessageType.ListenerType listenerType, Iterator<String> lineIter) {
+        String expectedOutput = "localhost:\\d+ \\(id: \\d+ rack: null isFenced: false\\) -> \\(";
+        assertTrue(lineIter.next().matches(expectedOutput));
 
         NodeApiVersions nodeApiVersions = new NodeApiVersions(
                 ApiVersionsResponse.filterApis(listenerType, true, true),
@@ -83,7 +99,7 @@ public class BrokerApiVersionsCommandTest {
         }
         assertTrue(lineIter.hasNext());
         assertEquals(")", lineIter.next());
-        assertFalse(lineIter.hasNext());
+
     }
 
     @ClusterTest
