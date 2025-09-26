@@ -17,6 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 
 import org.slf4j.Logger;
@@ -37,6 +38,7 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
     private final KafkaMetricsGroup deprecatedLogMetricsGroup = new KafkaMetricsGroup("org.apache.kafka.storage.internals.log", "RemoteStorageThreadPool");
     private final KafkaMetricsGroup logRemoteMetricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteStorageThreadPool");
 
+    @SuppressWarnings("deprecation")
     public RemoteStorageThreadPool(String threadNamePattern,
                                    int numThreads,
                                    int maxPendingTasks) {
@@ -48,9 +50,9 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
                 ThreadUtils.createThreadFactory(threadNamePattern, false,
                         (t, e) -> LOGGER.error("Uncaught exception in thread '{}':", t.getName(), e))
         );
-        deprecatedLogMetricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
+        deprecatedLogMetricsGroup.newGauge(RemoteStorageMetrics.DEPRECATE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
-        deprecatedLogMetricsGroup.newGauge(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
+        deprecatedLogMetricsGroup.newGauge(RemoteStorageMetrics.DEPRECATE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC.getName(),
                 () -> 1 - (double) getActiveCount() / (double) getCorePoolSize());
         logRemoteMetricsGroup.newGauge(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC.getName(),
                 () -> getQueue().size());
