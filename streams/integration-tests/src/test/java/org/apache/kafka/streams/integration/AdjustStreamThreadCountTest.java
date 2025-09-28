@@ -145,13 +145,12 @@ public class AdjustStreamThreadCountTest {
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "test-client");
         props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        try (KafkaProducer<String, String> dummyProducer = new KafkaProducer<>(props)) {
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             for (int i = 0; i < 1000; i++) {
                 final String key = "key-" + (i % 50);
                 final String value = "value-" + i;
-                dummyProducer.send(new ProducerRecord<>(inputTopic, key, value));
+                producer.send(new ProducerRecord<>(inputTopic, key, value));
             }
-            dummyProducer.close();
         } 
     }
 
