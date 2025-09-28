@@ -166,7 +166,7 @@ public class ConsumerPerformance {
                     if (showDetailedStats)
                         printConsumerProgress(0, bytesRead, lastBytesRead, recordsRead, lastRecordsRead,
                             lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound.get());
-                    joinTimeMsInSingleRound = new AtomicLong(0);
+                    joinTimeMsInSingleRound.set(0);
                     lastReportTimeMs = currentTimeMs;
                     lastRecordsRead = recordsRead;
                     lastBytesRead = bytesRead;
