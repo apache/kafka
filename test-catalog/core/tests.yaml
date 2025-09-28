@@ -626,6 +626,8 @@ kafka.cluster.PartitionTest:
 - testAppendRecordsAsFollowerBelowLogStartOffset
 - testAppendRecordsToFollowerWithNoReplicaThrowsException
 - testAtMinIsr
+- testDeleteRecordsOnLeaderWithCompactPolicy
+- testDeleteRecordsOnLeaderWithEmptyPolicy
 - testDoNotResetReplicaStateIfLeaderEpochIsNotBumped
 - testDoNotUpdateEpochStartOffsetIfLeaderEpochIsNotBumped
 - testFenceFollowerFetchWithStaleBrokerEpoch
