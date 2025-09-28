@@ -187,6 +187,9 @@ org.apache.kafka.tools.ConsumerPerformanceTest:
 - testConfigWithUnrecognizedOption
 - testConfigWithoutTopicAndInclude
 - testConsumerConfigDeprecated
+- testConsumerListenerWithAllPartitionRevokedAndAssigned
+- testConsumerListenerWithPartialPartitionRevokedAndAssigned
+- testConsumerListenerWithoutPartitionRevoked
 - testDefaultClientId
 - testDetailedHeaderMatchBody
 - testMessagesDeprecated

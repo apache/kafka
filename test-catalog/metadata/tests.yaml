@@ -712,6 +712,10 @@ org.apache.kafka.metadata.MetadataRecordSerdeTest:
 - testParsingUnsupportedApiKey
 - testParsingVersionTooLarge
 - testSerde
+org.apache.kafka.metadata.MetadataVersionConfigValidatorTest:
+- testInvokesFaultHandlerOnException
+- testValidateWithMetadataVersionJbodSupport
+- testValidatesConfigOnMetadataChange
 org.apache.kafka.metadata.MockConfigRepositoryTest:
 - testEmptyRepository
 - testSetTopicConfig

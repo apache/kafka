@@ -1043,7 +1043,6 @@ kafka.log.LogConfigTest:
 - testValidRemoteLogCopyDisabled
 - testValidRemoteLogDeleteOnDisable
 - testValidateBrokerLogConfigs
-- testValidateWithMetadataVersionJbodSupport
 kafka.log.LogLoaderTest:
 - testBogusIndexSegmentsAreRemoved
 - testCleanShutdownFile
@@ -2530,9 +2529,6 @@ kafka.server.MetadataRequestTest:
 - testRack
 - testReplicaDownResponse
 - testTopicIdsInResponse
-kafka.server.MetadataVersionConfigValidatorTest:
-- testInvokesFaultHandlerOnException
-- testValidatesConfigOnMetadataChange
 kafka.server.MultipleListenersWithAdditionalJaasContextTest:
 - testProduceConsume
 kafka.server.MultipleListenersWithDefaultJaasContextTest:
