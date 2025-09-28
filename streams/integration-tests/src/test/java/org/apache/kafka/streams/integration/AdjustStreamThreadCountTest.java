@@ -17,6 +17,9 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
@@ -37,9 +40,6 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
@@ -94,7 +94,7 @@ public class AdjustStreamThreadCountTest {
 
     @AfterAll
     public static void closeCluster() {
-        CLUSTER.stop(); 
+        CLUSTER.stop();
     }
 
     private final List<KafkaStreams.State> stateTransitionHistory = new ArrayList<>();
@@ -141,20 +141,18 @@ public class AdjustStreamThreadCountTest {
 
     private void produceTestRecords(final String inputTopic, final EmbeddedKafkaCluster cluster) {
         final Properties props = new Properties();
-        props.put("acks", "all");
-        props.put("retries", 1);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "test-client");
         props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        final KafkaProducer<String, String> dummyProducer = new KafkaProducer<>(props);
-        for (int i = 0; i < 5000; i++) {
-            final String key = "key-" + (i % 50);
-            final String value = "value-" + i;
-            dummyProducer.send(new ProducerRecord<String, String>(inputTopic, key, value));
-        }
-        dummyProducer.flush();
-        dummyProducer.close();
+        try (KafkaProducer<String, String> dummyProducer = new KafkaProducer<>(props)) {
+            for (int i = 0; i < 5000; i++) {
+                final String key = "key-" + (i % 50);
+                final String value = "value-" + i;
+                dummyProducer.send(new ProducerRecord<>(inputTopic, key, value));
+            }
+            dummyProducer.close();
+        } 
     }
 
     private void startStreamsAndWaitForRunning(final KafkaStreams kafkaStreams) throws InterruptedException {
