@@ -40,27 +40,90 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
 
+/**
+ * Handles DescribeTopicPartitions requests by performing cursor validation, authorization checks,
+ * topic filtering, and constructing the response with partition metadata.
+ */
 public class DescribeTopicPartitionsRequestHandler {
-    MetadataCache metadataCache;
-    AuthHelper authHelper;
-    KafkaConfig config;
+    private final MetadataCache metadataCache;
+    private final AuthHelper authHelper;
+    private final KafkaConfig config;
 
+    /**
+     * Creates a new request handler for DescribeTopicPartitions.
+     *
+     * @param metadataCache metadata lookup for topics
+     * @param authHelper    authorization utility
+     * @param config        broker configuration
+     */
     public DescribeTopicPartitionsRequestHandler(
-        MetadataCache metadataCache,
-        AuthHelper authHelper,
-        KafkaConfig config
-    ) {
+            final MetadataCache metadataCache,
+            final AuthHelper authHelper,
+            final KafkaConfig config) {
         this.metadataCache = metadataCache;
         this.authHelper = authHelper;
         this.config = config;
     }
 
-    public DescribeTopicPartitionsResponseData handleDescribeTopicPartitionsRequest(RequestChannel.Request abstractRequest) {
-        DescribeTopicPartitionsRequestData request = ((DescribeTopicPartitionsRequest) abstractRequest.loggableRequest()).data();
-        Set<String> topics = new HashSet<>();
-        boolean fetchAllTopics = request.topics().isEmpty();
-        DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
-        String cursorTopicName = cursor != null ? cursor.topicName() : "";
+    /**
+     * Main entry point for processing DescribeTopicPartitions requests.
+     *
+     * @param abstractRequest the incoming request
+     * @return response data containing metadata for authorized topics
+     */
+    public DescribeTopicPartitionsResponseData handleDescribeTopicPartitionsRequest(
+            final RequestChannel.Request abstractRequest) {
+
+        final DescribeTopicPartitionsRequestData requestData = getRequestData(abstractRequest);
+        final String cursorTopicName = requestData.cursor() != null ? requestData.cursor().topicName() : "";
+        final Set<String> topicsToDescribe = getTopicsToDescribe(requestData, cursorTopicName);
+
+        validateCursor(requestData.cursor());
+
+        final Set<DescribeTopicPartitionsResponseTopic> unauthorizedTopics = new HashSet<>();
+        final Stream<String> authorizedTopics = filterAuthorizedTopics(
+                abstractRequest,
+                topicsToDescribe,
+                unauthorizedTopics,
+                requestData.topics().isEmpty()
+        );
+
+        final DescribeTopicPartitionsResponseData response =
+                buildResponse(authorizedTopics, abstractRequest, requestData, cursorTopicName);
+
+        // Include authorized operations
+        response.topics().forEach(topicData ->
+                topicData.setTopicAuthorizedOperations(
+                        authHelper.authorizedOperations(abstractRequest, new Resource(TOPIC, topicData.name()))
+                )
+        );
+
+        // Include unauthorized topic metadata
+        response.topics().addAll(unauthorizedTopics);
+        return response;
+    }
+
+    /**
+     * Parses the typed request data from the raw abstract request.
+     */
+    private DescribeTopicPartitionsRequestData getRequestData(final RequestChannel.Request abstractRequest) {
+        return ((DescribeTopicPartitionsRequest) abstractRequest.loggableRequest()).data();
+    }
+
+    /**
+     * Computes the set of topics to describe based on the request and cursor.
+     * Filters out topics before the cursor topic (if present).
+     *
+     * @throws InvalidRequestException if the cursor references a topic not in the requested list
+     */
+    private Set<String> getTopicsToDescribe(
+            final DescribeTopicPartitionsRequestData requestData,
+            final String cursorTopicName
+    ) {
+        final Set<String> topics = new HashSet<>();
+        final boolean fetchAllTopics = requestData.topics().isEmpty();
+        final DescribeTopicPartitionsRequestData.Cursor cursor = requestData.cursor();
+
         if (fetchAllTopics) {
             metadataCache.getAllTopics().forEach(topicName -> {
                 if (topicName.compareTo(cursorTopicName) >= 0) {
@@ -68,7 +131,7 @@ public class DescribeTopicPartitionsRequestHandler {
                 }
             });
         } else {
-            request.topics().forEach(topic -> {
+            requestData.topics().forEach(topic -> {
                 String topicName = topic.name();
                 if (topicName.compareTo(cursorTopicName) >= 0) {
                     topics.add(topicName);
@@ -76,59 +139,94 @@ public class DescribeTopicPartitionsRequestHandler {
             });
 
             if (cursor != null && !topics.contains(cursor.topicName())) {
-                // The topic in cursor must be included in the topic list if provided.
-                throw new InvalidRequestException("DescribeTopicPartitionsRequest topic list should contain the cursor topic: " + cursor.topicName());
+                throw new InvalidRequestException(
+                        "DescribeTopicPartitionsRequest topic list should contain the cursor topic: " + cursor.topicName());
             }
         }
+        return topics;
+    }
 
+    /**
+     * Validates the cursor's partition index, if a cursor is provided.
+     *
+     * @throws InvalidRequestException if the partition index is negative
+     */
+    private void validateCursor(final DescribeTopicPartitionsRequestData.Cursor cursor) {
         if (cursor != null && cursor.partitionIndex() < 0) {
-            // The partition id in cursor must be valid.
-            throw new InvalidRequestException("DescribeTopicPartitionsRequest cursor partition must be valid: " + cursor);
+            throw new InvalidRequestException(
+                    "Invalid cursor: partition index must be non-negative. Received: " + cursor
+            );
         }
+    }
 
-        // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
-        Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
+    /**
+     * Filters the input topics based on authorization.
+     * Adds unauthorized topics to the result with masked metadata.
+     *
+     * @param abstractRequest     the request context
+     * @param topicsToDescribe    candidate topics to filter
+     * @param unauthorizedTopics  output container for unauthorized topics
+     * @param fetchAllTopics      true if request was for all topics
+     * @return a stream of authorized topic names
+     */
+    private Stream<String> filterAuthorizedTopics(
+            final RequestChannel.Request abstractRequest,
+            final Set<String> topicsToDescribe,
+            final Set<DescribeTopicPartitionsResponseTopic> unauthorizedTopics,
+            final boolean fetchAllTopics
+    ) {
+        return topicsToDescribe.stream().sorted().filter(topicName -> {
+            final boolean isAuthorized = authHelper.authorize(
+                    abstractRequest.context(), DESCRIBE, TOPIC, topicName, true, true, 1
+            );
 
-        Stream<String> authorizedTopicsStream = topics.stream().sorted().filter(topicName -> {
-            boolean isAuthorized = authHelper.authorize(
-                abstractRequest.context(), DESCRIBE, TOPIC, topicName, true, true, 1);
             if (!fetchAllTopics && !isAuthorized) {
-                // We should not return topicId when on unauthorized error, so we return zero uuid.
-                unauthorizedForDescribeTopicMetadata.add(describeTopicPartitionsResponseTopic(
-                    Errors.TOPIC_AUTHORIZATION_FAILED, topicName, Uuid.ZERO_UUID, false, List.of())
-                );
+                unauthorizedTopics.add(describeTopicPartitionsResponseTopic(
+                        Errors.TOPIC_AUTHORIZATION_FAILED, topicName, Uuid.ZERO_UUID, false, List.of()
+                ));
             }
             return isAuthorized;
         });
-
-        DescribeTopicPartitionsResponseData response = metadataCache.describeTopicResponse(
-            authorizedTopicsStream.iterator(),
-            abstractRequest.context().listenerName,
-            (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
-            Math.max(Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()), 1),
-            fetchAllTopics
-        );
-
-        // get topic authorized operations
-        response.topics().forEach(topicData ->
-            topicData.setTopicAuthorizedOperations(authHelper.authorizedOperations(abstractRequest, new Resource(TOPIC, topicData.name()))));
-
-        response.topics().addAll(unauthorizedForDescribeTopicMetadata);
-        return response;
     }
 
+    /**
+     * Builds the response containing partition metadata for authorized topics.
+     *
+     * @param authorizedTopics    stream of authorized topic names
+     * @param abstractRequest     the original request
+     * @param requestData         the parsed request data
+     * @param cursorTopicName     the topic referenced in the cursor (if any)
+     */
+    private DescribeTopicPartitionsResponseData buildResponse(
+            final Stream<String> authorizedTopics,
+            final RequestChannel.Request abstractRequest,
+            final DescribeTopicPartitionsRequestData requestData,
+            final String cursorTopicName
+    ) {
+        return metadataCache.describeTopicResponse(
+                authorizedTopics.iterator(),
+                abstractRequest.context().listenerName,
+                topicName -> topicName.equals(cursorTopicName) ? requestData.cursor().partitionIndex() : 0,
+                Math.max(Math.min(config.maxRequestPartitionSizeLimit(), requestData.responsePartitionLimit()), 1),
+                requestData.topics().isEmpty()
+        );
+    }
+
+    /**
+     * Creates a response topic object, typically used to report errors like unauthorized access.
+     */
     private DescribeTopicPartitionsResponseTopic describeTopicPartitionsResponseTopic(
-        Errors error,
-        String topic,
-        Uuid topicId,
-        Boolean isInternal,
-        List<DescribeTopicPartitionsResponsePartition> partitionData
+            final Errors error,
+            final String topic,
+            final Uuid topicId,
+            final Boolean isInternal,
+            final List<DescribeTopicPartitionsResponsePartition> partitionData
     ) {
         return new DescribeTopicPartitionsResponseTopic()
-            .setErrorCode(error.code())
-            .setName(topic)
-            .setTopicId(topicId)
-            .setIsInternal(isInternal)
-            .setPartitions(partitionData);
+                .setErrorCode(error.code())
+                .setName(topic)
+                .setTopicId(topicId)
+                .setIsInternal(isInternal)
+                .setPartitions(partitionData);
     }
 }
