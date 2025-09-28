@@ -136,9 +136,17 @@
                 settings.
             </li>
             <li>
-                The <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to true, the
+                <code>cleanup.policy</code> now supports empty values, which means infinite retention.
+                This is equivalent to setting <code>retention.ms=-1</code> and <code>retention.bytes=-1</code>
+                <br>
+                If <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to true, the
                 local log segments will be cleaned based on the values of <code>log.local.retention.bytes</code> and
                 <code>log.local.retention.ms</code>.
+                <br>
+                If <code>cleanup.policy</code> is empty and <code>remote.storage.enable</code> is set to false,
+                local log segments will not be deleted automatically. However, records can still be deleted
+                explicitly through <code>deleteRecords</code> API calls, which will advance the log start offset
+                and remove the corresponding log segments.
             </li>
         </ul>
     </li>
