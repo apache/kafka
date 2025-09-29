@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
@@ -24,6 +25,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.To
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -118,6 +120,88 @@ public class StreamsTopologyTest {
         assertEquals(mkSubtopology1(), topology.subtopologies().get(SUBTOPOLOGY_ID_1));
         assertTrue(topology.subtopologies().containsKey(SUBTOPOLOGY_ID_2));
         assertEquals(mkSubtopology2(), topology.subtopologies().get(SUBTOPOLOGY_ID_2));
+    }
+
+    @Test
+    public void asStreamsGroupDescribeTopologyShouldReturnCorrectStructure() {
+        Map<String, Subtopology> subtopologies = mkMap(
+            mkEntry(SUBTOPOLOGY_ID_1, mkSubtopology1()),
+            mkEntry(SUBTOPOLOGY_ID_2, mkSubtopology2())
+        );
+        StreamsTopology topology = new StreamsTopology(1, subtopologies);
+
+        StreamsGroupDescribeResponseData.Topology describeTopology = topology.asStreamsGroupDescribeTopology();
+
+        assertEquals(1, describeTopology.epoch());
+        assertEquals(2, describeTopology.subtopologies().size());
+
+        // Verify subtopologies are correctly converted and sorted
+        List<StreamsGroupDescribeResponseData.Subtopology> sortedSubtopologies = 
+            describeTopology.subtopologies().stream()
+                .sorted(Comparator.comparing(StreamsGroupDescribeResponseData.Subtopology::subtopologyId))
+                .toList();
+
+        // Verify first subtopology
+        StreamsGroupDescribeResponseData.Subtopology sub1 = sortedSubtopologies.get(0);
+        assertEquals(SUBTOPOLOGY_ID_1, sub1.subtopologyId());
+        // Source topics are sorted alphabetically
+        assertEquals(List.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2, SOURCE_TOPIC_1, SOURCE_TOPIC_2), 
+            sub1.sourceTopics());
+        assertEquals(List.of(REPARTITION_TOPIC_3), sub1.repartitionSinkTopics());
+        assertEquals(2, sub1.repartitionSourceTopics().size());
+        assertEquals(2, sub1.stateChangelogTopics().size());
+
+        // Verify second subtopology
+        StreamsGroupDescribeResponseData.Subtopology sub2 = sortedSubtopologies.get(1);
+        assertEquals(SUBTOPOLOGY_ID_2, sub2.subtopologyId());
+        // Source topics are sorted alphabetically
+        assertEquals(List.of(REPARTITION_TOPIC_3, SOURCE_TOPIC_3), sub2.sourceTopics());
+        assertEquals(List.of(), sub2.repartitionSinkTopics());
+        assertEquals(1, sub2.repartitionSourceTopics().size());
+        assertEquals(1, sub2.stateChangelogTopics().size());
+    }
+
+    @Test
+    public void asStreamsGroupDescribeTopicInfoShouldConvertCorrectly() {
+        Map<String, Subtopology> subtopologies = mkMap(
+            mkEntry(SUBTOPOLOGY_ID_1, mkSubtopology1())
+        );
+        StreamsTopology topology = new StreamsTopology(1, subtopologies);
+
+        StreamsGroupDescribeResponseData.Topology describeTopology = topology.asStreamsGroupDescribeTopology();
+        StreamsGroupDescribeResponseData.Subtopology describedSub = describeTopology.subtopologies().get(0);
+
+        // Verify repartition source topics are correctly converted
+        List<StreamsGroupDescribeResponseData.TopicInfo> repartitionTopics = describedSub.repartitionSourceTopics();
+        assertEquals(2, repartitionTopics.size());
+        
+        // Find the first repartition topic (they should be sorted by name)
+        StreamsGroupDescribeResponseData.TopicInfo firstTopic = repartitionTopics.stream()
+            .filter(topic -> topic.name().equals(REPARTITION_TOPIC_1))
+            .findFirst()
+            .orElseThrow();
+        assertEquals(REPARTITION_TOPIC_1, firstTopic.name());
+
+        // Verify changelog topics are correctly converted
+        List<StreamsGroupDescribeResponseData.TopicInfo> changelogTopics = describedSub.stateChangelogTopics();
+        assertEquals(2, changelogTopics.size());
+        
+        // Find the first changelog topic (they should be sorted by name)
+        StreamsGroupDescribeResponseData.TopicInfo firstChangelog = changelogTopics.stream()
+            .filter(topic -> topic.name().equals(CHANGELOG_TOPIC_1))
+            .findFirst()
+            .orElseThrow();
+        assertEquals(CHANGELOG_TOPIC_1, firstChangelog.name());
+    }
+
+    @Test
+    public void asStreamsGroupDescribeTopologyWithEmptySubtopologies() {
+        StreamsTopology topology = new StreamsTopology(0, Map.of());
+
+        StreamsGroupDescribeResponseData.Topology describeTopology = topology.asStreamsGroupDescribeTopology();
+
+        assertEquals(0, describeTopology.epoch());
+        assertEquals(0, describeTopology.subtopologies().size());
     }
 
     private Subtopology mkSubtopology1() {
