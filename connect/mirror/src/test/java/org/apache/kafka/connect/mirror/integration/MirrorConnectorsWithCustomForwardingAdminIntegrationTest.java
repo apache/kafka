@@ -151,7 +151,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         additionalBackupClusterClientsConfigs.putAll(superUserConfig());
         backupWorkerProps.putAll(superUserConfig());
 
-        HashMap<String, String> additionalConfig = new HashMap<String, String>(superUserConfig()) {{
+        Map<String, String> additionalConfig = new HashMap<>(superUserConfig()) {{
                 put(FORWARDING_ADMIN_CLASS, FakeForwardingAdminWithLocalMetadata.class.getName());
             }};
 

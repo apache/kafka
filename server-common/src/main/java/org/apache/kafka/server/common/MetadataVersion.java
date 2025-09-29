@@ -19,9 +19,11 @@ package org.apache.kafka.server.common;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * This class contains the different Kafka versions.
@@ -105,12 +107,6 @@ public enum MetadataVersion {
     // Enables async remote LIST_OFFSETS support (KIP-1075)
     IBP_4_0_IV3(25, "4.0", "IV3", false),
 
-    //
-    // NOTE: MetadataVersions after this point are unstable and may be changed.
-    // If users attempt to use an unstable MetadataVersion, they will get an error.
-    // Please move this comment when updating the LATEST_PRODUCTION constant.
-    //
-
     // Enables ELR by default for new clusters (KIP-966).
     // Share groups are preview in 4.1 (KIP-932).
     // Streams groups are early access in 4.1 (KIP-1071).
@@ -118,6 +114,12 @@ public enum MetadataVersion {
 
     // Send FETCH version 18 in the replica fetcher (KIP-1166)
     IBP_4_1_IV1(27, "4.1", "IV1", false),
+
+    //
+    // NOTE: MetadataVersions after this point are unstable and may be changed.
+    // If users attempt to use an unstable MetadataVersion, they will get an error.
+    // Please move this comment when updating the LATEST_PRODUCTION constant.
+    //
 
     // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of
     // IBP_4_2_IVx accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
@@ -157,7 +159,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV3;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_1_IV1;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
@@ -283,7 +285,9 @@ public enum MetadataVersion {
     }
 
     public short listOffsetRequestVersion() {
-        if (this.isAtLeast(IBP_4_0_IV3)) {
+        if (this.isAtLeast(IBP_4_2_IV1)) {
+            return 11;
+        } else if (this.isAtLeast(IBP_4_0_IV3)) {
             return 10;
         } else if (this.isAtLeast(IBP_3_9_IV0)) {
             return 9;
@@ -338,11 +342,12 @@ public enum MetadataVersion {
 
     /**
      * Return an `MetadataVersion` instance for `versionString`, which can be in a variety of formats (e.g. "3.8", "3.8.x",
-     * "3.8.0", "3.8-IV0"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
+     * "3.8.0", "3.8-IV0"). The `unstableFeatureVersionsEnabled` parameter determines whether unstable versions are permitted.
+     * `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
      * Note that 'misconfigured' values such as "3.8.1" will be parsed to `IBP_3_8_IV0` as we ignore anything after the first
      * two segments.
      */
-    public static MetadataVersion fromVersionString(String versionString) {
+    public static MetadataVersion fromVersionString(String versionString, boolean unstableFeatureVersionsEnabled) {
         String[] versionSegments = versionString.split(Pattern.quote("."));
         int numSegments = 2;
         String key;
@@ -351,10 +356,22 @@ public enum MetadataVersion {
         } else {
             key = String.join(".", Arrays.copyOfRange(versionSegments, 0, numSegments));
         }
-        return Optional.ofNullable(IBP_VERSIONS.get(key)).orElseThrow(() ->
-            new IllegalArgumentException("Version " + versionString + " is not a valid version. The minimum version is " + MINIMUM_VERSION
-                + " and the maximum version is " + latestTesting())
-        );
+
+        MetadataVersion metadataVersion = IBP_VERSIONS.get(key);
+        if (metadataVersion == null || (!unstableFeatureVersionsEnabled && !metadataVersion.isProduction())) {
+            String errorMsg = "Unknown metadata.version '" + versionString + "'. Supported metadata.version are: "
+                + metadataVersionsToString(MetadataVersion.MINIMUM_VERSION,
+                unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting() : MetadataVersion.latestProduction());
+            throw new IllegalArgumentException(errorMsg);
+        }
+        return metadataVersion;
+    }
+
+    public static String metadataVersionsToString(MetadataVersion first, MetadataVersion last) {
+        List<MetadataVersion> versions = List.of(MetadataVersion.VERSIONS).subList(first.ordinal(), last.ordinal() + 1);
+        return versions.stream()
+            .map(String::valueOf)
+            .collect(Collectors.joining(", "));
     }
 
     public static MetadataVersion fromFeatureLevel(short version) {

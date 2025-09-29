@@ -156,7 +156,7 @@ public final class RemoveVoterHandler {
     }
 
     public void highWatermarkUpdated(LeaderState<?> leaderState) {
-        leaderState.removeVoterHandlerState().ifPresent(current -> {
+        leaderState.removeVoterHandlerState().ifPresent(current ->
             leaderState.highWatermark().ifPresent(highWatermark -> {
                 if (highWatermark.offset() > current.lastOffset()) {
                     // VotersRecord with the removed voter was committed; complete the RPC
@@ -182,7 +182,7 @@ public final class RemoveVoterHandler {
                         leaderState.requestResign();
                     }
                 }
-            });
-        });
+            })
+        );
     }
 }

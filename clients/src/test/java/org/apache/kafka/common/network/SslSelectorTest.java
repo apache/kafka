@@ -74,11 +74,10 @@ public abstract class SslSelectorTest extends SelectorTest {
         this.server.start();
         this.time = new MockTime();
         sslClientConfigs = createSslClientConfigs(trustStoreFile);
-        LogContext logContext = new LogContext();
-        this.channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        this.channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, logContext);
+        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
     }
 
     protected abstract Map<String, Object> createSslClientConfigs(File trustStoreFile) throws GeneralSecurityException, IOException;
@@ -255,7 +254,7 @@ public abstract class SslSelectorTest extends SelectorTest {
                 .tlsProtocol(tlsProtocol)
                 .createNewTrustStore(trustStoreFile)
                 .build();
-        channelBuilder = new SslChannelBuilder(ConnectionMode.SERVER, null, false, new LogContext());
+        channelBuilder = new SslChannelBuilder(ConnectionMode.SERVER, null, false);
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
                 new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
@@ -342,7 +341,7 @@ public abstract class SslSelectorTest extends SelectorTest {
     private static class TestSslChannelBuilder extends SslChannelBuilder {
 
         public TestSslChannelBuilder(ConnectionMode connectionMode) {
-            super(connectionMode, null, false, new LogContext());
+            super(connectionMode, null, false);
         }
 
         @Override

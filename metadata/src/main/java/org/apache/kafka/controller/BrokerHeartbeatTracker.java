@@ -26,7 +26,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The BrokerheartbeatTracker stores the last time each broker sent a heartbeat to us.
+ * The BrokerHeartbeatTracker stores the last time each broker sent a heartbeat to us.
  * This class will be present only on the active controller.
  *
  * UNLIKE MOST OF THE KAFKA CONTROLLER, THIS CLASS CAN BE ACCESSED FROM MULTIPLE THREADS.

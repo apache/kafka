@@ -34,7 +34,6 @@ Usage:
 """
 
 import argparse
-from distutils.dir_util import copy_tree
 import shutil
 from common import execute
 from docker_build_test import run_docker_tests
@@ -46,10 +45,11 @@ def build_docker_official_image(image, tag, kafka_version, image_type):
     image = f'{image}:{tag}'
     current_dir = os.path.dirname(os.path.realpath(__file__))
     temp_dir_path = tempfile.mkdtemp()
-    copy_tree(f"{current_dir}/docker_official_images/{kafka_version}/{image_type}",
-              f"{temp_dir_path}/{image_type}")
-    copy_tree(f"{current_dir}/docker_official_images/{kafka_version}/jvm/resources",
-              f"{temp_dir_path}/{image_type}/resources")
+    shutil.copytree(f"{current_dir}/docker_official_images/{kafka_version}/{image_type}",
+              f"{temp_dir_path}/{image_type}", dirs_exist_ok=True)
+    shutil.copytree(f"{current_dir}/docker_official_images/{kafka_version}/jvm/resources",
+              f"{temp_dir_path}/{image_type}/resources", dirs_exist_ok=True)
+    shutil.copy(f"{current_dir}/server.properties", f"{temp_dir_path}/{image_type}")
     command = f"docker build -f $DOCKER_FILE -t {image} $DOCKER_DIR"
     command = command.replace("$DOCKER_FILE", f"{temp_dir_path}/{image_type}/Dockerfile")
     command = command.replace("$DOCKER_DIR", f"{temp_dir_path}/{image_type}")

@@ -35,7 +35,6 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Supplier;
 
 /**
  * The abstract index class which holds entry format agnostic methods.
@@ -48,7 +47,15 @@ public abstract class AbstractIndex implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractIndex.class);
 
-    // Serializes all index operations that mutate internal state
+    // Serializes all index operations that mutate internal state.
+    // Readers do not need to acquire this lock because:
+    //  1) MappedByteBuffer provides direct access to the OS-level buffer cache,
+    //     which allows concurrent reads in practice.
+    //  2) Clients only read committed data and are not affected by concurrent appends/truncates.
+    //     In the rare case when the data is truncated, the follower could read inconsistent data.
+    //     The follower has the logic to ignore the inconsistent data through crc and leader epoch.
+    //  3) Read and remap operations are coordinated via remapLock to ensure visibility of the
+    //     underlying mmap.
     private final ReentrantLock lock = new ReentrantLock();
     // Allows concurrent read operations while ensuring exclusive access if the underlying mmap is changed
     private final ReentrantReadWriteLock remapLock = new ReentrantReadWriteLock();
@@ -191,8 +198,8 @@ public abstract class AbstractIndex implements Closeable {
      * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
      */
     public boolean resize(int newSize) throws IOException {
-        return inLockThrows(() ->
-                inRemapWriteLockThrows(() -> {
+        return inLock(() ->
+                inRemapWriteLock(() -> {
                     int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
 
                     if (length == roundedNewSize) {
@@ -258,7 +265,7 @@ public abstract class AbstractIndex implements Closeable {
      * the file.
      */
     public void trimToValidSize() throws IOException {
-        inLockThrows(() -> {
+        inLock(() -> {
             if (mmap != null) {
                 resize(entrySize() * entries);
             }
@@ -282,10 +289,7 @@ public abstract class AbstractIndex implements Closeable {
         // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
         // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
         // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-        inLockThrows(() ->
-                inRemapWriteLockThrows(() -> {
-                    safeForceUnmap();
-                }));
+        inLock(() -> inRemapWriteLock(this::safeForceUnmap));
     }
 
     /**
@@ -297,8 +301,12 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     /**
-     * Get offset relative to base offset of this index
-     * @throws IndexOffsetOverflowException
+     * Gets the offset relative to the {@code baseOffset} of this index.
+     *
+     * @param offset the absolute offset to be converted into a relative offset from {@code baseOffset}
+     * @return the relative offset as an {@code int}
+     * @throws IndexOffsetOverflowException if the input offset is lesser than the base offset
+     *                                      or if the relative offset exceeds {@link Integer#MAX_VALUE}
      */
     public int relativeOffset(long offset) {
         OptionalInt relativeOffset = toRelative(offset);
@@ -412,36 +420,28 @@ public abstract class AbstractIndex implements Closeable {
         mmap.position(entries * entrySize());
     }
 
-    protected final <T> T inLock(Supplier<T> action) {
+    protected final <T, E extends Exception> T inLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
         return LockUtils.inLock(lock, action);
     }
 
-    protected final void inLock(Runnable action) {
+    protected final <E extends Exception> void inLock(LockUtils.ThrowingRunnable<E> action) throws E {
         LockUtils.inLock(lock, action);
     }
 
-    protected final <T, E extends Exception> T inLockThrows(LockUtils.ThrowingSupplier<T, E> action) throws E {
-        return LockUtils.inLockThrows(lock, action);
-    }
-
-    protected final <E extends Exception> void inLockThrows(LockUtils.ThrowingRunnable<E> action) throws E {
-        LockUtils.inLockThrows(lock, action);
-    }
-
-    protected final <T> T inRemapReadLock(Supplier<T> action) {
+    protected final <T, E extends Exception> T inRemapReadLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
         return LockUtils.inLock(remapLock.readLock(), action);
     }
 
-    protected final void inRemapReadLock(Runnable action) {
+    protected final <E extends Exception> void inRemapReadLock(LockUtils.ThrowingRunnable<E> action) throws E {
         LockUtils.inLock(remapLock.readLock(), action);
     }
 
-    protected final <T, E extends Exception> T inRemapWriteLockThrows(LockUtils.ThrowingSupplier<T, E> action) throws E {
-        return LockUtils.inLockThrows(remapLock.writeLock(), action);
+    protected final <T, E extends Exception> T inRemapWriteLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
+        return LockUtils.inLock(remapLock.writeLock(), action);
     }
 
-    protected final <E extends Exception> void inRemapWriteLockThrows(LockUtils.ThrowingRunnable<E> action) throws E {
-        LockUtils.inLockThrows(remapLock.writeLock(), action);
+    protected final <E extends Exception> void inRemapWriteLock(LockUtils.ThrowingRunnable<E> action) throws E {
+        LockUtils.inLock(remapLock.writeLock(), action);
     }
 
     /**
@@ -507,12 +507,10 @@ public abstract class AbstractIndex implements Closeable {
 
         // check if the target offset is smaller than the least offset
         if (compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0) {
-            switch (searchResultType) {
-                case LARGEST_LOWER_BOUND:
-                    return -1;
-                case SMALLEST_UPPER_BOUND:
-                    return 0;
-            }
+            return switch (searchResultType) {
+                case LARGEST_LOWER_BOUND -> -1;
+                case SMALLEST_UPPER_BOUND -> 0;
+            };
         }
 
         return binarySearch(idx, target, searchEntity, searchResultType, 0, firstHotEntry);
@@ -548,18 +546,10 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     private int compareIndexEntry(IndexEntry indexEntry, long target, IndexSearchType searchEntity) {
-        int result;
-        switch (searchEntity) {
-            case KEY:
-                result = Long.compare(indexEntry.indexKey(), target);
-                break;
-            case VALUE:
-                result = Long.compare(indexEntry.indexValue(), target);
-                break;
-            default:
-                throw new IllegalStateException("Unexpected IndexSearchType: " + searchEntity);
-        }
-        return result;
+        return switch (searchEntity) {
+            case KEY -> Long.compare(indexEntry.indexKey(), target);
+            case VALUE -> Long.compare(indexEntry.indexValue(), target);
+        };
     }
 
     private OptionalInt toRelative(long offset) {

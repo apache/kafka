@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
  * A simple Coordinator implementation that stores the records into a set.
  */
 public class MockCoordinatorShard implements CoordinatorShard<String> {
-    static record RecordAndMetadata(
+    record RecordAndMetadata(
         long offset,
         long producerId,
         short producerEpoch,

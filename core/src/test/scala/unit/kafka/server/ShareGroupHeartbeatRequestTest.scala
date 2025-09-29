@@ -472,8 +472,8 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
           .setMemberEpoch(1)
       ).build()
 
-      cluster.waitForTopic("foo", 2)
-      cluster.waitForTopic("bar", 3)
+      cluster.waitTopicCreation("foo", 2)
+      cluster.waitTopicCreation("bar", 3)
 
       TestUtils.waitUntilTrue(() => {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
@@ -933,7 +933,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   private def connectAndReceive(request: ShareGroupHeartbeatRequest): ShareGroupHeartbeatResponse = {
-    IntegrationTestUtils.connectAndReceive[ShareGroupHeartbeatResponse](request, cluster.boundPorts().get(0))
+    IntegrationTestUtils.connectAndReceive[ShareGroupHeartbeatResponse](request, cluster.brokerBoundPorts().get(0))
   }
 
   private def increasePartitions[B <: KafkaBroker](admin: Admin,

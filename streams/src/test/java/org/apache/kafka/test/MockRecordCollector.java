@@ -82,6 +82,23 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
+    public <K, V> void send(final K key,
+                            final V value,
+                            final String processorNodeId,
+                            final InternalProcessorContext<?, ?> context,
+                            final ProducerRecord<byte[], byte[]> serializedRecord) {
+        // Building a new ProducerRecord for key & value type conversion
+        collected.add(new ProducerRecord<>(
+                serializedRecord.topic(),
+                serializedRecord.partition(),
+                serializedRecord.timestamp(),
+                key,
+                value,
+                serializedRecord.headers())
+        );
+    }
+
+    @Override
     public void initialize() {}
 
     @Override
