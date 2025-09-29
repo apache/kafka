@@ -26,12 +26,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.enumOptions;
@@ -132,7 +132,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
                 .define(
                         TOPIC_CREATION_GROUPS_CONFIG,
                         ConfigDef.Type.LIST,
-                        Collections.emptyList(),
+                        List.of(),
                         ConfigDef.CompositeValidator.of(
                                 new ConfigDef.NonNullValidator(),
                                 ConfigDef.LambdaValidator.with(
@@ -240,7 +240,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
         if (topicCreationGroups.contains(DEFAULT_TOPIC_CREATION_GROUP)) {
             log.warn("'{}' topic creation group always exists and does not need to be listed explicitly",
                 DEFAULT_TOPIC_CREATION_GROUP);
-            topicCreationGroups.removeAll(Collections.singleton(DEFAULT_TOPIC_CREATION_GROUP));
+            topicCreationGroups.removeAll(Set.of(DEFAULT_TOPIC_CREATION_GROUP));
         }
 
         ConfigDef newDef = new ConfigDef(baseConfigDef);
@@ -332,7 +332,7 @@ public final class SourceConnectorConfig extends ConnectorConfig {
 
     public Map<String, Object> topicCreationOtherConfigs(String group) {
         if (enrichedSourceConfig == null) {
-            return Collections.emptyMap();
+            return Map.of();
         }
         return enrichedSourceConfig.originalsWithPrefix(TOPIC_CREATION_PREFIX + group + '.').entrySet().stream()
                 .filter(e -> {

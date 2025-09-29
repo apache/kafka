@@ -231,7 +231,7 @@ public class MirrorMaker {
     }
 
     private void addHerder(SourceAndTarget sourceAndTarget) {
-        log.info("creating herder for " + sourceAndTarget.toString());
+        log.info("creating herder for {}", sourceAndTarget.toString());
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
         String encodedSource = encodePath(sourceAndTarget.source());
         String encodedTarget = encodePath(sourceAndTarget.target());

@@ -180,8 +180,8 @@ public class DescribeStreamsGroupTest {
     public void testDescribeStreamsGroupWithMembersOption() throws Exception {
         final List<String> expectedHeader = List.of("GROUP", "MEMBER", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
         final Set<List<String>> expectedRows = Set.of(
-            List.of(APP_ID, "", "", "", "ACTIVE:", "0:[0,1];"),
-            List.of(APP_ID, "", "", "", "ACTIVE:", "1:[0,1];"));
+            List.of(APP_ID, "", "", "", "ACTIVE:", "0:[1];", "1:[1];"),
+            List.of(APP_ID, "", "", "", "ACTIVE:", "0:[0];", "1:[0];"));
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(1, 2, 3);
 
@@ -193,8 +193,8 @@ public class DescribeStreamsGroupTest {
     public void testDescribeStreamsGroupWithMembersAndVerboseOptions() throws Exception {
         final List<String> expectedHeader = List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
         final Set<List<String>> expectedRows = Set.of(
-            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "0:[0,1];", "TARGET-ACTIVE:", "0:[0,1];"),
-            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "1:[0,1];", "TARGET-ACTIVE:", "1:[0,1];"));
+            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "0:[1];", "1:[1];", "TARGET-ACTIVE:", "0:[1];", "1:[1];"),
+            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "0:[0];", "1:[0];", "TARGET-ACTIVE:", "0:[0];", "1:[0];"));
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(3, 6, 7);
 
@@ -212,8 +212,8 @@ public class DescribeStreamsGroupTest {
 
         final List<String> expectedHeader = List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
         final Set<List<String>> expectedRows1 = Set.of(
-            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "0:[0,1];", "TARGET-ACTIVE:", "0:[0,1];"),
-            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "1:[0,1];", "TARGET-ACTIVE:", "1:[0,1];"));
+            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "0:[1];", "1:[1];", "TARGET-ACTIVE:", "0:[1];", "1:[1];"),
+            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "0:[0];", "1:[0];", "TARGET-ACTIVE:", "0:[0];", "1:[0];"));
         final Set<List<String>> expectedRows2 = Set.of(
             List.of(APP_ID_2, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "1:[0];", "TARGET-ACTIVE:", "1:[0];"),
             List.of(APP_ID_2, "3", "0", "", "streams", "3", "", "", "ACTIVE:", "0:[0];", "TARGET-ACTIVE:", "0:[0];"));

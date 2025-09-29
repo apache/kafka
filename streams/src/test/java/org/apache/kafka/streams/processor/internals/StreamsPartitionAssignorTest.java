@@ -2622,7 +2622,7 @@ public class StreamsPartitionAssignorTest {
         builder = new CorruptedInternalTopologyBuilder();
         topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps(parameterizedConfig)));
 
-        final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder);
+        final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder, false);
 
         final KStream<String, String> inputTopic = streamsBuilder.stream(singleton("topic1"), new ConsumedInternal<>(Consumed.with(null, null)));
         final KTable<String, String> inputTable = streamsBuilder.table("topic2", new ConsumedInternal<>(Consumed.with(null, null)), new MaterializedInternal<>(Materialized.as("store")));
