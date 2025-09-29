@@ -144,7 +144,6 @@ public class Protocol {
                         b.append("</td>");
                         b.append("</tr>\n");
                     });
-                    b.append("</tbody></table>\n");
                 }
             } else {
                 appendFieldNameToTable(field.def.name, b);
