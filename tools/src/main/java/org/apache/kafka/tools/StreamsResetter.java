@@ -141,10 +141,7 @@ public class StreamsResetter {
             }
             Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
-            String bootstrapServerValue = "localhost:9092";
-            if (options.hasBootstrapServer()) {
-                bootstrapServerValue = options.bootstrapServer();
-            }
+            String bootstrapServerValue = options.bootstrapServer();
 
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 
@@ -590,10 +587,11 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .describedAs("id")
                 .required();
-            bootstrapServerOption = parser.accepts("bootstrap-server", "The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
+            bootstrapServerOption = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
                 .withRequiredArg()
                 .ofType(String.class)
-                .describedAs("server to connect to");
+                .describedAs("server to connect to")
+                .required();
             inputTopicsOption = parser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool by default will reset the offset to the earliest available offset. "
                     + "Reset to other offset position by appending other reset offset option, ex: --input-topics foo --shift-by 5")
                 .withRequiredArg()
@@ -679,10 +677,6 @@ public class StreamsResetter {
 
         public String commandConfig() {
             return options.valueOf(commandConfigOption);
-        }
-
-        public boolean hasBootstrapServer() {
-            return options.has(bootstrapServerOption);
         }
 
         public String bootstrapServer() {
