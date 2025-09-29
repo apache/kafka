@@ -41,7 +41,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -266,45 +265,34 @@ public class ConsumerNetworkClientTest {
         assertEquals(metadataException, exc);
     }
 
-    @Disabled("KAFKA-17554")
     @Test
     public void testFutureCompletionOutsidePoll() throws Exception {
         // Tests the scenario in which the request that is being awaited in one thread
         // is received and completed in another thread.
-        
-        final CountDownLatch t1TheardCountDownLatch = new CountDownLatch(1);
-        final CountDownLatch t2ThreadCountDownLatch = new CountDownLatch(2);
-
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.pollNoWakeup(); // dequeue and send the request
 
+        CountDownLatch bothThreadsReady = new CountDownLatch(2);
+
         client.enableBlockingUntilWakeup(2);
-        Thread t1 = new Thread(() ->  {
-            t1TheardCountDownLatch.countDown();
+
+        Thread t1 = new Thread(() -> {
+            bothThreadsReady.countDown();
             consumerClient.pollNoWakeup();
-            t2ThreadCountDownLatch.countDown();
         });
-        
-        t1.start();
 
         Thread t2 = new Thread(() -> {
-            try {
-                t2ThreadCountDownLatch.await();
-                consumerClient.poll(future);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            bothThreadsReady.countDown();
+            consumerClient.poll(future);
         });
+
+        t1.start();
         t2.start();
-        
-        // Simulate a network response and return from the poll in t1
+
+        // Wait until both threads are blocked in poll
+        bothThreadsReady.await();
         client.respond(heartbeatResponse(Errors.NONE));
-        // Wait for t1 to block in poll
-        t1TheardCountDownLatch.await();
-        
         client.wakeup();
-        // while t1 is blocked in poll, t2 should be able to complete the future
-        t2ThreadCountDownLatch.countDown();
 
         // Both threads should complete since t1 should wakeup t2
         t1.join();
