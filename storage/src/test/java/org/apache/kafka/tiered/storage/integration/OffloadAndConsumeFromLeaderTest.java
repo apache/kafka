@@ -40,14 +40,14 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker = 0;
+        final int broker = 0;
         final String topicA = "topicA";
         final String topicB = "topicB";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 1;
-        final Integer oneBatchPerSegment = 1;
-        final Integer twoBatchPerSegment = 2;
+        final int p0 = 0;
+        final int partitionCount = 1;
+        final int replicationFactor = 1;
+        final int oneBatchPerSegment = 1;
+        final int twoBatchPerSegment = 2;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
 

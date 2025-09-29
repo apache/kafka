@@ -53,10 +53,10 @@ public abstract class BaseReassignReplicaTest extends TieredStorageTestHarness {
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
         final String topicA = "topicA";
         final String topicB = "topicB";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 1;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int partitionCount = 1;
+        final int replicationFactor = 1;
+        final int maxBatchCountPerSegment = 1;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
         final List<Integer> metadataPartitions = new ArrayList<>();

@@ -19,21 +19,19 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
 /**
  * The partition assignment for a modern group member.
+ *
+ * @param partitions The partitions assigned to this member keyed by topicId.
  */
-public class MemberAssignmentImpl implements MemberAssignment {
-    /**
-     * The partitions assigned to this member keyed by topicId.
-     */
-    private final Map<Uuid, Set<Integer>> partitions;
-
-    public MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) {
-        this.partitions = Objects.requireNonNull(partitions);
+public record MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) implements MemberAssignment {
+    public MemberAssignmentImpl {
+        partitions = Collections.unmodifiableMap(Objects.requireNonNull(partitions));
     }
 
     /**
@@ -42,19 +40,6 @@ public class MemberAssignmentImpl implements MemberAssignment {
     @Override
     public Map<Uuid, Set<Integer>> partitions() {
         return this.partitions;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        MemberAssignmentImpl that = (MemberAssignmentImpl) o;
-        return partitions.equals(that.partitions);
-    }
-
-    @Override
-    public int hashCode() {
-        return partitions.hashCode();
     }
 
     @Override

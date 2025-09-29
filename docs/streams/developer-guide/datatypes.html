@@ -48,9 +48,10 @@
           <ul>
               <li><a class="reference internal" href="#primitive-and-basic-types" id="id4">Primitive and basic types</a></li>
               <li><a class="reference internal" href="#json" id="id6">JSON</a></li>
-              <li><a class="reference internal" href="#implementing-custom-serdes" id="id5">Implementing custom serdes</a></li>
+              <li><a class="reference internal" href="#window-serdes" id="id7">Window Serdes</a></li>
+              <li><a class="reference internal" href="#implementing-custom-serdes" id="id8">Implementing custom serdes</a></li>
           </ul>
-          <li><a class="reference internal" href="#scala-dsl-serdes" id="id8">Kafka Streams DSL for Scala Implicit Serdes</a></li>
+          <li><a class="reference internal" href="#scala-dsl-serdes" id="id9">Kafka Streams DSL for Scala Implicit Serdes</a></li>
       </ul>
     <div class="section" id="configuring-serdes">
       <h2>Configuring Serdes<a class="headerlink" href="#configuring-serdes" title="Permalink to this headline"></a></h2>
@@ -103,7 +104,7 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
         <pre class="line-numbers"><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
     &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-    &lt;version&gt;2.8.0&lt;/version&gt;
+    &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
 &lt;/dependency&gt;</code></pre>
         <p>This artifact provides the following serde implementations under the package <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/clients/src/main/java/org/apache/kafka/common/serialization">org.apache.kafka.common.serialization</a>, which you can leverage when e.g., defining default serializers in your Streams configuration.</p>
         <table border="1" class="docutils">
@@ -162,6 +163,76 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
         </ul>
         <p>As shown in the example, you can use JSONSerdes inner classes <code class="docutils literal"><span class="pre">Serdes.serdeFrom(&lt;serializerInstance&gt;, &lt;deserializerInstance&gt;)</span></code> to construct JSON compatible serializers and deserializers.
         </p>
+      </div>
+      <div class="section" id="window-serdes">
+        <h3>Window Serdes<a class="headerlink" href="#window-serdes" title="Permalink to this headline"></a></h3>
+        <p>Apache Kafka Streams includes serde implementations for windowed types in
+          its <code class="docutils literal"><span class="pre">kafka-streams</span></code> Maven artifact:</p>
+        <pre class="line-numbers"><code class="language-xml">&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+    &lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
+    &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+        <p>This artifact provides the following windowed serde implementations under the package <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/kstream">org.apache.kafka.streams.kstream</a>:</p>
+        
+        <p><strong>Serdes:</strong></p>
+        <ul class="simple">
+          <li><code class="docutils literal"><span class="pre">WindowedSerdes.TimeWindowedSerde&lt;T&gt;</span></code></li>
+          <li><code class="docutils literal"><span class="pre">WindowedSerdes.SessionWindowedSerde&lt;T&gt;</span></code></li>
+        </ul>
+        
+        <p><strong>Serializers:</strong></p>
+        <ul class="simple">
+          <li><code class="docutils literal"><span class="pre">TimeWindowedSerializer&lt;T&gt;</span></code></li>
+          <li><code class="docutils literal"><span class="pre">SessionWindowedSerializer&lt;T&gt;</span></code></li>
+        </ul>
+        
+        <p><strong>Deserializers:</strong></p>
+        <ul class="simple">
+          <li><code class="docutils literal"><span class="pre">TimeWindowedDeserializer&lt;T&gt;</span></code></li>
+          <li><code class="docutils literal"><span class="pre">SessionWindowedDeserializer&lt;T&gt;</span></code></li>
+        </ul>
+        <h4>Usage in Code</h4>
+        <p>When using windowed serdes in your application code, you typically create instances via constructors or factory methods:</p>
+        <pre class="line-numbers"><code class="language-java">// Time windowed serde - using factory method
+Serde&lt;Windowed&lt;String&gt;&gt; timeWindowedSerde = 
+    WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
+
+// Time windowed serde - using constructor
+Serde&lt;Windowed&lt;String&gt;&gt; timeWindowedSerde2 = 
+    new WindowedSerdes.TimeWindowedSerde&lt;&gt;(Serdes.String(), 500L);
+
+// Session windowed serde - using factory method
+Serde&lt;Windowed&lt;String&gt;&gt; sessionWindowedSerde = 
+    WindowedSerdes.sessionWindowedSerdeFrom(String.class);
+
+// Session windowed serde - using constructor  
+Serde&lt;Windowed&lt;String&gt;&gt; sessionWindowedSerde2 = 
+    new WindowedSerdes.SessionWindowedSerde&lt;&gt;(Serdes.String());
+
+// Using individual serializers/deserializers
+TimeWindowedSerializer&lt;String&gt; serializer = new TimeWindowedSerializer&lt;&gt;(Serdes.String().serializer());
+TimeWindowedDeserializer&lt;String&gt; deserializer = new TimeWindowedDeserializer&lt;&gt;(Serdes.String().deserializer(), 500L);</code></pre>
+
+        <h4>Usage in Command Line</h4>
+        <p>When using command-line tools (like <code>bin/kafka-console-consumer.sh</code>), you can configure windowed deserializers by passing the inner class and window size via configuration properties. The property names use a prefix pattern:</p>
+        <pre class="line-numbers"><code class="language-bash"># Time windowed deserializer configuration
+--property print.key=true \
+--property key.deserializer=org.apache.kafka.streams.kstream.TimeWindowedDeserializer \
+--property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer \
+--property key.deserializer.window.size.ms=500
+
+# Session windowed deserializer configuration  
+--property print.key=true \
+--property key.deserializer=org.apache.kafka.streams.kstream.SessionWindowedDeserializer \
+--property key.deserializer.windowed.inner.deserializer.class=org.apache.kafka.common.serialization.StringDeserializer</code></pre>
+
+        <h4>Deprecated Configs</h4>
+        <p>The following <code>StreamsConfig</code> parameters are deprecated in favor of passing parameters directly to serializer/deserializer constructors:</p>
+        <ul class="simple">
+          <li><code class="docutils literal"><span class="pre">StreamsConfig.WINDOWED_INNER_CLASS_SERDE</span></code> is deprecated in favor of <code class="docutils literal"><span class="pre">TimeWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS</span></code> and <code class="docutils literal"><span class="pre">TimeWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS</span></code></li>
+          <li><code class="docutils literal"><span class="pre">StreamsConfig.WINDOW_SIZE_MS_CONFIG</span></code> is deprecated in favor of <code class="docutils literal"><span class="pre">TimeWindowedDeserializer.WINDOW_SIZE_MS_CONFIG</span></code></li>
+        </ul>
       </div>
       <div class="section" id="implementing-custom-serdes">
         <span id="streams-developer-guide-serdes-custom"></span><h2>Implementing custom Serdes<a class="headerlink" href="#implementing-custom-serdes" title="Permalink to this headline"></a></h2>

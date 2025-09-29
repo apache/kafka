@@ -477,7 +477,7 @@ public class SubscriptionState {
      * Provides the number of assigned partitions in a thread safe manner.
      * @return the number of assigned partitions.
      */
-    synchronized int numAssignedPartitions() {
+    public synchronized int numAssignedPartitions() {
         return this.assignment.size();
     }
 

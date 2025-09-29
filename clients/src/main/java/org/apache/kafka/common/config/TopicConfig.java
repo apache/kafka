@@ -159,7 +159,10 @@ public class TopicConfig {
         "<a href=\"#compaction\">log compaction</a>, which retains the latest value for each key. " +
         "It is also possible to specify both policies in a comma-separated list (e.g. \"delete,compact\"). " +
         "In this case, old segments will be discarded per the retention time and size configuration, " +
-        "while retained segments will be compacted.";
+        "while retained segments will be compacted. " +
+        "An empty list means infinite retention - no cleanup policies will be applied and log segments " +
+        "will be retained indefinitely. Note that with remote storage enabled, local retention limits " +
+        "(log.local.retention.ms and log.local.retention.bytes) are still applied to local segments.";
 
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
@@ -181,7 +184,8 @@ public class TopicConfig {
         "When used together, <code>min.insync.replicas</code> and <code>acks</code> allow you to enforce greater durability guarantees. " +
         "A typical scenario would be to create a topic with a replication factor of 3, " +
         "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
-        "This will ensure that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers.";
+        "This ensures that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers." +
+        "<p>Note that when the Eligible Leader Replicas feature is enabled, the semantics of this config changes. Please refer to <a href=\"#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +

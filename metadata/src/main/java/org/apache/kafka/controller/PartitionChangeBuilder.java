@@ -421,8 +421,8 @@ public class PartitionChangeBuilder {
 
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = completedReassignmentOpt.get();
 
-        targetIsr = completedReassignment.isr;
-        targetReplicas = completedReassignment.replicas;
+        targetIsr = completedReassignment.isr();
+        targetReplicas = completedReassignment.replicas();
         targetRemoving = List.of();
         targetAdding = List.of();
     }

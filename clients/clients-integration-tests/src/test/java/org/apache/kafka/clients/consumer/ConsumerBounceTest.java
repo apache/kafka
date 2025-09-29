@@ -380,7 +380,7 @@ public class ConsumerBounceTest {
         TestUtils.waitForCondition(() -> {
             FindCoordinatorResponse response = null;
             try {
-                response = IntegrationTestUtils.connectAndReceive(request, clusterInstance.boundPorts().get(0));
+                response = IntegrationTestUtils.connectAndReceive(request, clusterInstance.brokerBoundPorts().get(0));
             } catch (IOException e) {
                 return false;
             }

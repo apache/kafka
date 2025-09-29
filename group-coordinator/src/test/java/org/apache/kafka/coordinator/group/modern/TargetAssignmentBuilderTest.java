@@ -194,12 +194,12 @@ public class TargetAssignmentBuilderTest {
                 ResolvedRegularExpression resolvedRegularExpression = resolvedRegularExpressions.get(subscribedTopicRegex);
                 if (resolvedRegularExpression != null) {
                     if (subscriptions.isEmpty()) {
-                        subscriptions = resolvedRegularExpression.topics;
-                    } else if (!resolvedRegularExpression.topics.isEmpty()) {
+                        subscriptions = resolvedRegularExpression.topics();
+                    } else if (!resolvedRegularExpression.topics().isEmpty()) {
                         // We only use a UnionSet when the member uses both type of subscriptions. The
                         // protocol allows it. However, the Apache Kafka Consumer does not support it.
                         // Other clients such as librdkafka may support it.
-                        subscriptions = new UnionSet<>(subscriptions, resolvedRegularExpression.topics);
+                        subscriptions = new UnionSet<>(subscriptions, resolvedRegularExpression.topics());
                     }
                 }
             }

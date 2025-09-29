@@ -44,7 +44,7 @@ public class AbortedTxn {
     }
 
     public AbortedTxn(CompletedTxn completedTxn, long lastStableOffset) {
-        this(completedTxn.producerId, completedTxn.firstOffset, completedTxn.lastOffset, lastStableOffset);
+        this(completedTxn.producerId(), completedTxn.firstOffset(), completedTxn.lastOffset(), lastStableOffset);
     }
 
     public AbortedTxn(long producerId, long firstOffset, long lastOffset, long lastStableOffset) {

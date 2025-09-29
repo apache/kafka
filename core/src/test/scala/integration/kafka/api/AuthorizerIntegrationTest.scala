@@ -3912,14 +3912,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     consumer.subscribe(
       if (topicAsSourceTopic || topicAsRepartitionSourceTopic) util.Set.of(sourceTopic, topic) else util.Set.of(sourceTopic),
       new StreamsRebalanceListener {
-        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Optional[Exception] =
-          Optional.empty()
-
-        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Optional[Exception] =
-          Optional.empty()
-
-        override def onAllTasksLost(): Optional[Exception] =
-          Optional.empty()
+        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Unit = ()
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Unit = ()
+        override def onAllTasksLost(): Unit = ()
       }
     )
     consumer.poll(Duration.ofMillis(500L))
